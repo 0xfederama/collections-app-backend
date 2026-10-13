@@ -26,7 +26,6 @@ const (
 // Reusable setup statements (all in workspace wsA unless stated).
 var (
 	sqlWorkspaces = `INSERT INTO workspaces (id, name) VALUES ('` + wsA + `', 'A'), ('` + wsB + `', 'B')`
-	sqlFolderA    = `INSERT INTO folders (id, workspace_id, name, sort_order) VALUES ('` + folderA + `', '` + wsA + `', 'F', 0)`
 	sqlFolderB    = `INSERT INTO folders (id, workspace_id, name, sort_order) VALUES ('` + folderB + `', '` + wsB + `', 'F', 0)`
 	sqlListA      = `INSERT INTO lists (id, workspace_id, name, sort_order) VALUES ('` + listA + `', '` + wsA + `', 'L', 0)`
 	sqlBatchA     = `INSERT INTO trash_batches (id, workspace_id, root_type, root_id, root_name, former_path)

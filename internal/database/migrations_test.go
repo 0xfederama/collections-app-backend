@@ -83,7 +83,7 @@ func newDatabase(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("connect admin: %v", err)
 	}
-	defer admin.Close(ctx)
+	defer func() { _ = admin.Close(ctx) }()
 
 	name := fmt.Sprintf("t%d", dbSeq.Add(1))
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {

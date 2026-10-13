@@ -7,7 +7,7 @@ Owns the PostgreSQL layer: the pgx connection pool, the SQL migrations that crea
 ## Key files
 
 - `internal/database/database.go`: `NewPool`, pool size and startup ping
-- `db/migrations/000001_init.up.sql`: pg_trgm extension and the 9 tables
+- `db/migrations/000001_init.up.sql`: pg_trgm extension and the 8 tables
 - `db/migrations/000001_init.down.sql`: drops everything (destructive)
 - `db/queries/schema.sql`: smoke query, sqlc input
 - `sqlc.yaml`: sqlc config (pgx/v5, uuid to google/uuid, timestamptz to time.Time)

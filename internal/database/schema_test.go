@@ -2,6 +2,7 @@ package database_test
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -50,6 +51,10 @@ func itemSQL(id, cols, vals string) string {
 func folderSQL(id, cols, vals string) string {
 	return `INSERT INTO folders (id, workspace_id, name, sort_order, ` + cols + `)
 	        VALUES ('` + id + `', '` + wsA + `', 'F', 0, ` + vals + `)`
+}
+
+func contentVersionSQL(itemID string, version int) string {
+	return fmt.Sprintf(`INSERT INTO item_content_versions (item_id, version, body, size_bytes, sha256) VALUES ('%s', %d, 'hi', 2, '\x00')`, itemID, version)
 }
 
 type schemaCase struct {
@@ -295,7 +300,6 @@ func TestSchema_D051_WorkspaceDeleteCascades(t *testing.T) {
 		`INSERT INTO items (id, workspace_id, list_id, title, sort_order, image_attachment_id)
 		   VALUES ('` + iActive + `', '` + ws + `', '` + lActive + `', 'I', 0, '00000000-0000-0000-0000-000000000501')`,
 		`INSERT INTO item_content_versions (item_id, version, body, size_bytes, sha256) VALUES ('` + iActive + `', 1, 'hi', 2, '\x00')`,
-		`INSERT INTO item_contents (item_id, current_version) VALUES ('` + iActive + `', 1)`,
 		// trashed folder > trashed list > trashed item, all in batch1
 		`INSERT INTO folders (id, workspace_id, name, sort_order, deleted_at, trash_batch_id)
 		   VALUES ('` + fTrashed + `', '` + ws + `', 'FT', 1, now(), '` + batch1 + `')`,

@@ -180,12 +180,3 @@ CREATE TABLE item_content_versions (
   CONSTRAINT item_content_versions_version_check CHECK (version >= 1),
   CONSTRAINT item_content_versions_size_bytes_check CHECK (size_bytes BETWEEN 0 AND 1048576)
 );
-
-CREATE TABLE item_contents (
-  item_id          UUID        NOT NULL,
-  current_version  INTEGER     NOT NULL,
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT item_contents_pkey PRIMARY KEY (item_id),
-  CONSTRAINT item_contents_item_id_fkey FOREIGN KEY (item_id) REFERENCES items (id) ON DELETE CASCADE,
-  CONSTRAINT item_contents_current_version_fkey FOREIGN KEY (item_id, current_version) REFERENCES item_content_versions (item_id, version)
-);

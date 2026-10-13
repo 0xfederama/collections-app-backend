@@ -61,12 +61,6 @@ type Item struct {
 	TrashBatchID       uuid.NullUUID
 }
 
-type ItemContent struct {
-	ItemID         uuid.UUID
-	CurrentVersion int32
-	UpdatedAt      time.Time
-}
-
 type ItemContentVersion struct {
 	ItemID    uuid.UUID
 	Version   int32

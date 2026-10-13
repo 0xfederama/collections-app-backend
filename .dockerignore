@@ -1,0 +1,10 @@
+.git
+.env
+data/
+bin/
+docs/
+design-docs/
+.claude/
+.github/
+*.md
+compose*.yaml

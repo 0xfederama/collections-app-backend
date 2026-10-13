@@ -1,0 +1,8 @@
+.env
+data/
+compose.override.yaml
+/bin/
+/out/
+*.test
+*.out
+.DS_Store

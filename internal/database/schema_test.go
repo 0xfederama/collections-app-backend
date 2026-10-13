@@ -165,6 +165,14 @@ func schemaCases() []schemaCase {
 			wantCode: "23505", wantConstr: "items_image_attachment_id_key",
 		},
 		{
+			name: "duplicate content version for the same item and version",
+			stmts: []string{sqlWorkspaces, sqlListA,
+				itemSQL(itemA, "", ""),
+				contentVersionSQL(itemA, 1),
+				contentVersionSQL(itemA, 1)},
+			wantCode: "23505", wantConstr: "item_content_versions_pkey",
+		},
+		{
 			name: "valid item with price range and currency",
 			stmts: with(itemParents,
 				itemSQL(itemA, "price_min, price_max, currency", "5, 10, 'EUR'")),

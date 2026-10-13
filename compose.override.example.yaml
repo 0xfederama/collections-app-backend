@@ -1,0 +1,6 @@
+# Opt-in for the host-run loop (`make run`): publishes Postgres on loopback only.
+# Copy to compose.override.yaml (gitignored); compose merges it automatically.
+services:
+  db:
+    ports:
+      - "127.0.0.1:5432:5432"

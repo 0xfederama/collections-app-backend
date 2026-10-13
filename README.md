@@ -17,7 +17,7 @@ There is no CI. Quality gates run locally with `make check` (see below).
 | `GET /readyz` | Readiness: `200 ready` only if the DB answers and `DATA_DIR` is writable, else a terse `503` (no paths or SQL) |
 | Config | Env vars validated at startup, all problems reported together |
 | Logging | `log/slog`, `LOG_FORMAT` (`json` or `text`), `LOG_LEVEL` |
-| Database | Connection pool only. Schema, migrations and sqlc arrive in B-02 |
+| Database | Connection pool, migration `000001_init` (full schema + `pg_trgm`), sqlc-generated code |
 | Everything else | Not built yet: contract (B-03), middleware/transactions (B-04), then the domain features (B-05 onward) |
 
 There is no authentication, so the API is published on `127.0.0.1` only. See the parent README, "Security boundary".
@@ -29,8 +29,8 @@ cmd/api/main.go        wiring only: config → logger → pgx pool → chi route
 internal/config        env parsing and validation
 internal/database      pgx pool constructor
 internal/httpapi       router, /healthz, /readyz
-db/migrations          golang-migrate files (empty until B-02)
-db/queries             sqlc queries (empty until B-02)
+db/migrations          golang-migrate files (`000001_init`)
+db/queries             sqlc queries (generated into internal/database/sqlc)
 scripts/               check-compose-exposure.sh, reset-dev.sh
 docs/                  one short doc per module
 ```
@@ -93,7 +93,7 @@ Environment variables are validated at startup. See `.env.example` and `design-d
 - **Port already in use:** set `API_PORT` in `.env`.
 - **`db` exits with "superuser password is not specified":** `POSTGRES_PASSWORD` is empty. Copy `.env.example` to `.env` and set it.
 - **DB connection errors:** `docker compose ps` should show `db` healthy. For the host loop, make sure `compose.override.yaml` exists and `DATABASE_URL` (if you set it) uses `localhost`.
-- **Migrations not applied:** `make migrate`, then `docker compose logs migrate`. With no migrations yet it prints "no migrations yet".
+- **Migrations not applied:** `make migrate`, then `docker compose logs migrate`. `docker compose up --build` applies 000001 on a fresh database.
 - **Storage permissions:** `DATA_DIR` must exist and be writable (the container uses UID 65532 and the `appdata` volume). `/readyz` returns 503 if it isn't.
 - **`make check` fails on tests:** Docker must be running. The first lint run compiles golangci-lint and is slow once.
-- **Stale generated code:** codegen (sqlc, OpenAPI) arrives in B-02/B-03; `make generate` is a no-op until then.
+- **Stale generated code:** run `make generate` (sqlc; OpenAPI arrives in B-03) and commit the result. `make check` fails on drift.

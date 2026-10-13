@@ -2,7 +2,6 @@ package database_test
 
 import (
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -210,17 +209,6 @@ func TestSchema_Constraints(t *testing.T) {
 	for _, c := range schemaCases() {
 		t.Run(c.name, func(t *testing.T) { runSchemaCase(t, pool, c) })
 	}
-}
-
-func TestAT07_ItemImageSourcesMutuallyExclusive(t *testing.T) {
-	pool := newMigratedPool(t)
-	for _, c := range schemaCases() {
-		if strings.HasPrefix(c.name, "AT-07 ") {
-			t.Run(c.name, func(t *testing.T) { runSchemaCase(t, pool, c) })
-			return
-		}
-	}
-	t.Fatal("AT-07 case not found")
 }
 
 func TestSchema_SettingsDefaults(t *testing.T) {

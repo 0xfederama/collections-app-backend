@@ -107,8 +107,8 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 }
 
 // Update applies a partial update. version is the caller's If-Match version.
-// Errors in order: NotFound, VersionConflict, validation of kind-dependent
-// metadata. A patch that changes nothing does not bump the version (D-059).
+// Errors in order: field rules (422), NotFound, VersionConflict, then the
+// kind-dependent metadata rules. A patch that changes nothing does not bump the version (D-059).
 // Changing kind without metadata resets metadata to {}.
 func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch) (Item, error) {
 	var errs []apperr.FieldError

@@ -2,7 +2,7 @@
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 MIGRATE_IMAGE := migrate/migrate:v4.20.1
 
-.PHONY: run test lint fmt fmt-check check check-compose check-docker audit migrate migration generate reset-dev
+.PHONY: run test lint fmt fmt-check check check-generate check-compose check-docker audit migrate migration generate reset-dev
 
 run: ## Run the API on the host (needs `docker compose up -d db` + compose.override.yaml, see README)
 	@test -f .env || { echo "missing .env: cp .env.example .env"; exit 1; }
@@ -28,7 +28,7 @@ check-compose: ## Fail if compose publishes any port outside 127.0.0.1 (AT-18)
 check-docker: ## Build the runtime image (catches Dockerfile drift, e.g. a new top-level Go dir not copied)
 	docker build -q -t collections-app-backend:check . >/dev/null && echo "docker build ok"
 
-check: fmt-check lint test check-compose check-docker ## All local gates
+check: fmt-check lint check-generate test check-compose check-docker ## All local gates
 
 audit: ## Vulnerability scan (needs network, not part of check)
 	go tool govulncheck ./...
@@ -40,8 +40,13 @@ migration: ## Create a migration pair: make migration name=create_items
 	@test -n "$(name)" || { echo "usage: make migration name=<snake_case>"; exit 1; }
 	docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR)/db/migrations:/migrations" $(MIGRATE_IMAGE) create -ext sql -dir /migrations -seq $(name)
 
-generate: ## No-op until B-02 (sqlc) and B-03 (oapi-codegen) wire their generators and drift checks
-	@echo "nothing to generate yet (sqlc arrives in B-02, oapi-codegen in B-03)"
+generate: ## Regenerate code: sqlc (B-03 appends oapi-codegen)
+	go tool sqlc generate
+
+check-generate: ## Fail if regenerating changes (or adds) tracked generated files (D-019)
+	@$(MAKE) --no-print-directory generate
+	@out="$$(git status --porcelain -- internal/database/sqlc db/queries sqlc.yaml)"; \
+	if [ -n "$$out" ]; then echo "generated code is stale or uncommitted, run 'make generate' and commit:"; echo "$$out"; exit 1; fi
 
 reset-dev: ## Delete the dev containers and volumes (asks first, refuses in production)
 	./scripts/reset-dev.sh

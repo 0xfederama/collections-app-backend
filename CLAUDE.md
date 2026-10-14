@@ -28,7 +28,7 @@ This repo is the `backend/` submodule of the parent repo `0xfederama/collections
 No CI (D-031, D-032): the gates run locally. Run `make check` before every PR and paste the output in the PR.
 | Purpose | Command |
 |---|---|
-| All checks (gofmt, golangci-lint incl. goimports, tests, compose exposure, Docker build) | `make check` |
+| All checks (gofmt, golangci-lint incl. goimports, sqlc drift, tests incl. migrations up/down/up, compose exposure, Docker build) | `make check` |
 | Start everything (db + migrate + api on 127.0.0.1:8080) | `docker compose up --build` (add `-d` to detach) |
 | Stop / logs / health | `docker compose down` / `docker compose logs -f api` / `curl -fsS http://127.0.0.1:8080/readyz` |
 | Tests (need Docker for testcontainers) | `make test` |
@@ -36,14 +36,14 @@ No CI (D-031, D-032): the gates run locally. Run `make check` before every PR an
 | Apply migrations | `make migrate` |
 | New migration | `make migration name=<snake_case>` |
 | Run API on the host (needs `compose.override.yaml` + `docker compose up -d db`) | `make run` |
-| Regenerate code | `make generate` (no-op until B-02/B-03) |
+| Regenerate code | `make generate` (sqlc; oapi-codegen joins in B-03) |
 | Vulnerability scan (network) | `make audit` |
 | Delete dev containers, volumes and `./data` | `make reset-dev` |
 
 Versions and tool choices: DECISIONS.md "Toolchain versions (R-1)" and D-035–D-041. Go tools are pinned via the `go.mod` `tool` directive (`go tool govulncheck`), golangci-lint via `go run …@v2.14.0` in the Makefile.
 
 ## Layout & conventions
-- `cmd/api`: wiring only. `internal/<domain>`: services and domain errors. `internal/httpapi`: handlers, middleware, problem mapping. `internal/database/sqlc`: generated code, **never edit**.
+- `cmd/api`: wiring only. `internal/<domain>`: services and domain errors. `internal/httpapi`: handlers, middleware, problem mapping. `internal/database/sqlc`: generated code, **never edit**; regenerate with `make generate` (config `sqlc.yaml`, schema = `db/migrations`, queries = `db/queries`).
 - SQL lives in `db/queries/*.sql` (sqlc). Every query filters by `workspace_id`. Every UPDATE sets `updated_at` and, for editable resources, `version = version + 1`.
 - Multi-statement writes go through `database.InTx`.
 - Files: write before the tx, delete after commit (ARCHITECTURE §4).
@@ -53,6 +53,9 @@ Versions and tool choices: DECISIONS.md "Toolchain versions (R-1)" and D-035–D
 
 ## Gotchas
 <!-- Add entries as discovered: one line each, with the date. -->
+- 2026-10-14: sqlc fails on an empty `db/queries` ("no queries"), so `db/queries/schema.sql` keeps one smoke query. sqlc ignores `*.down.sql`. Nullable `timestamptz` needs its own override (`*time.Time`), `emit_pointers_for_null_types` does not cover it under pgx/v5. `check-generate` compares the working tree to HEAD, so commit generated code before running it.
+- 2026-10-14: Constraint and index names are explicit (`<table>_<cols>_{pkey,key,fkey,check,idx}`), so services can map `pgconn.PgError.ConstraintName` to domain errors. `trash_batch_id` FKs have no ON DELETE action (D-051).
+- 2026-10-14: `internal/database` tests start their own Postgres and create one database per test; migration files are read from `../../db/migrations`.
 - 2026-10-13: `migrate up` exits 1 on a migrations dir with no migrations (D-037). The compose `migrate` service skips when there is no `*.up.sql`.
 - 2026-10-13: `make check` needs Docker running (testcontainers) and compiles golangci-lint on first run (slow once, then cached).
 - 2026-10-13: `make check-compose` fails if any published port is not on `127.0.0.1` (AT-18). It runs against `docker compose config`, so a local `compose.override.yaml` is included.

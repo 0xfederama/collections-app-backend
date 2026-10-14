@@ -28,8 +28,10 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 	"github.com/0xfederama/collections-app-backend/internal/testdb"
+	"github.com/0xfederama/collections-app-backend/internal/trash"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
 
@@ -93,6 +95,7 @@ func newImageEnv(t *testing.T) *imageEnv {
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: dir, Logger: quietLogger(), WorkspaceID: ws,
 		Tree: tree.New(pool, clk, ws), Items: itemSvc, Images: svc,
+		Search: search.New(pool, ws), Trash: trash.New(pool, store, clk, quietLogger(), ws),
 	})
 	return &imageEnv{treeEnv: &treeEnv{t: t, h: h, pool: pool, ws: ws}, dir: dir, clk: clk, store: store, svc: svc}
 }

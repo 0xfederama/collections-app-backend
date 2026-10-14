@@ -85,15 +85,14 @@ func payloadTooLarge() problem {
 // result tells the caller to log the underlying error.
 func toProblem(err error, requestID string) (p problem, unexpected bool) {
 	var (
-		notFound    *apperr.NotFoundError
-		stale       *apperr.VersionConflictError
-		invalid     *apperr.ValidationError
-		unknown     *apperr.UnknownFieldError
-		conflict    *apperr.ConflictError
-		tooLarge    *apperr.PayloadTooLargeError
-		badMedia    *apperr.UnsupportedMediaTypeError
-		bodyTooBig  *http.MaxBytesError
-		unsupported = errors.Is(err, apperr.ErrNotImplemented)
+		notFound   *apperr.NotFoundError
+		stale      *apperr.VersionConflictError
+		invalid    *apperr.ValidationError
+		unknown    *apperr.UnknownFieldError
+		conflict   *apperr.ConflictError
+		tooLarge   *apperr.PayloadTooLargeError
+		badMedia   *apperr.UnsupportedMediaTypeError
+		bodyTooBig *http.MaxBytesError
 	)
 	switch {
 	case errors.As(err, &notFound):
@@ -119,9 +118,6 @@ func toProblem(err error, requestID string) (p problem, unexpected bool) {
 	case errors.As(err, &badMedia):
 		return newProblem(http.StatusUnsupportedMediaType, "unsupported_media_type", "Unsupported media type",
 			"Only JPEG, PNG and WebP images are accepted."), false
-	case unsupported:
-		return newProblem(http.StatusNotImplemented, "not_implemented", "Not implemented",
-			"This endpoint is not implemented yet."), false
 	default:
 		p = newProblem(http.StatusInternalServerError, "internal", "Internal error", "Something went wrong.")
 		p.RequestID = requestID

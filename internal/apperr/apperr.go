@@ -3,10 +3,7 @@
 // (ARCHITECTURE §2 Rules, API.md §4). Use errors.As to inspect them.
 package apperr
 
-import (
-	"errors"
-	"fmt"
-)
+import "fmt"
 
 // Code is a machine-readable conflict reason (the `code` of a 409 problem).
 type Code string
@@ -109,9 +106,3 @@ func (e *UnsupportedMediaTypeError) Error() string { return "unsupported media t
 
 // UnsupportedMediaType reports an upload that is not JPEG, PNG or WebP.
 func UnsupportedMediaType(detail string) error { return &UnsupportedMediaTypeError{Detail: detail} }
-
-// ErrNotImplemented marks an operation the stub server has not implemented yet (501).
-var ErrNotImplemented = errors.New("not implemented")
-
-// NotImplemented returns ErrNotImplemented.
-func NotImplemented() error { return ErrNotImplemented }

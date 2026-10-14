@@ -91,9 +91,6 @@ func wantProblem(t *testing.T, rec *httptest.ResponseRecorder, status int, code 
 // POST …/content/restore, PUT and DELETE …/image, PATCH /settings.
 func TestAT10_IfMatchRequired(t *testing.T) {
 	h := stubRouter(t)
-	// Operations with a real handler (their behaviour is tested in tree_test.go).
-	implemented := map[string]bool{"UpdateFolder": true, "MoveFolder": true, "UpdateList": true, "MoveList": true, "UpdateItem": true, "MoveItem": true,
-		"UpdateItemContent": true, "RestoreContentVersion": true, "SetItemImage": true, "DeleteItemImage": true}
 	ops := []struct {
 		name, method, path, body, prefix string
 	}{
@@ -144,15 +141,10 @@ func TestAT10_IfMatchRequired(t *testing.T) {
 			continue // implemented (B-05): settings_test.go covers a valid If-Match
 		}
 		t.Run(op.name+"/valid-reaches-handler", func(t *testing.T) {
-			rec := call(str(`"` + op.prefix + `-1"`))
-			if implemented[op.name] {
-				// Real handler, no database behind the stub router: it got past the guard.
-				if rec.Code == 428 || rec.Code == 400 {
-					t.Fatalf("status = %d, the guard blocked a valid request; body=%s", rec.Code, rec.Body)
-				}
-				return
+			// Every operation has a real handler, with no database behind the stub router: it got past the guard.
+			if rec := call(str(`"` + op.prefix + `-1"`)); rec.Code == 428 || rec.Code == 400 {
+				t.Fatalf("status = %d, the guard blocked a valid request; body=%s", rec.Code, rec.Body)
 			}
-			wantProblem(t, rec, 501, "not_implemented")
 		})
 	}
 }
@@ -171,31 +163,15 @@ func TestIfMatchNotRequired(t *testing.T) {
 		// Items have real handlers too (items_test.go).
 		{method: "POST", path: "/api/v1/lists/" + id1 + "/items", body: `{"title":"t"}`, contentType: jsonCT},
 		{method: "PUT", path: "/api/v1/lists/" + id1 + "/items/order", body: `{"ids":[]}`, contentType: jsonCT},
+		// Trash restore and purge have real handlers too (trash_test.go).
+		{method: "POST", path: "/api/v1/trash/" + id1 + "/restore"},
+		{method: "DELETE", path: "/api/v1/trash/" + id1},
 	} {
 		t.Run(r.method+" "+r.path, func(t *testing.T) {
 			if rec := do(t, h, r); rec.Code == 428 || rec.Code == 400 {
 				t.Fatalf("status = %d, the guard blocked a request that needs no If-Match; body=%s", rec.Code, rec.Body)
 			}
 		})
-	}
-	for _, r := range []req{
-		{method: "POST", path: "/api/v1/trash/" + id1 + "/restore"},
-		{method: "DELETE", path: "/api/v1/trash/" + id1},
-	} {
-		t.Run(r.method+" "+r.path, func(t *testing.T) {
-			wantProblem(t, do(t, h, r), 501, "not_implemented")
-		})
-	}
-}
-
-func TestUnstubbedRoutesAnswer501(t *testing.T) {
-	rec := do(t, stubRouter(t), req{method: "GET", path: "/api/v1/trash"})
-	p := wantProblem(t, rec, 501, "not_implemented")
-	if rec.Header().Get("X-Request-Id") == "" {
-		t.Error("missing X-Request-Id")
-	}
-	if p.Type != "https://collection-app.invalid/problems/not-implemented" {
-		t.Errorf("type = %q", p.Type)
 	}
 }
 
@@ -243,10 +219,10 @@ func TestBadRequests(t *testing.T) {
 func TestGuardLetsValidRequestsThrough(t *testing.T) {
 	h := stubRouter(t)
 	items := "/api/v1/lists/" + id1 + "/items"
-	wantProblem(t, do(t, h, req{method: "GET", path: "/api/v1/trash?limit=1"}), 501, "not_implemented")
-	// The item handlers are real (no database behind the stub router): the guard must not answer for them.
+	// The handlers are real (no database behind the stub router): the guard must not answer for them.
 	for _, r := range []req{
 		{method: "GET", path: items + "?limit=200&offset=0&sort=title&q=dune"},
+		{method: "GET", path: "/api/v1/trash?limit=1"},
 		// metadata is free-form to the guard; per-kind validation is the items service's job
 		{method: "POST", path: items, body: `{"title":"t","metadata":{},"price":{"currency":"EUR","min":"1.00","max":null}}`, contentType: jsonCT},
 		{method: "POST", path: items, body: `{"title":"n"}`, contentType: "application/json; charset=utf-8"},
@@ -305,7 +281,7 @@ func TestBodyLimits(t *testing.T) {
 }
 
 // TestCrossCuttingHeaders checks X-Request-Id and the security headers on 2xx,
-// 404, 405, 413 and 501 responses. (500 is in the internal tests.)
+// 404, 405, 413 and 428 responses. (500 is in the internal tests.)
 func TestCrossCuttingHeaders(t *testing.T) {
 	h := stubRouter(t)
 	tests := []struct {
@@ -320,7 +296,6 @@ func TestCrossCuttingHeaders(t *testing.T) {
 		{"405 wrong method", req{method: "POST", path: "/healthz"}, 405},
 		{"413 oversize body", req{method: "POST", path: "/api/v1/folders", body: `{"name":"` + strings.Repeat("a", 70<<10) + `"}`, contentType: jsonCT}, 413},
 		{"428 precondition", req{method: "DELETE", path: "/api/v1/items/" + id1}, 428},
-		{"501 stub", req{method: "GET", path: "/api/v1/trash"}, 501},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -17,6 +17,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/search"
+	"github.com/0xfederama/collections-app-backend/internal/trash"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
@@ -46,6 +47,8 @@ type Deps struct {
 	Search *search.Service
 	// Images serves item images and attachment files (B-09).
 	Images *images.Service
+	// Trash serves deletes, the trash list, restore and purge (B-10).
+	Trash *trash.Service
 }
 
 // NewRouter builds the HTTP handler: the generated strict server mounted on

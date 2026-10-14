@@ -9,9 +9,8 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 )
 
-// Server implements oapi.StrictServerInterface. Operations not implemented yet
-// live in unimplemented.go; each endpoint task moves its methods into its own
-// file (settings.go, folders.go, …) so parallel PRs do not collide.
+// Server implements oapi.StrictServerInterface. Each endpoint group has its own
+// file (settings.go, folders.go, trash.go, …).
 type Server struct {
 	deps Deps
 }

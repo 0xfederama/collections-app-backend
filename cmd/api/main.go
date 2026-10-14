@@ -22,6 +22,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
+	"github.com/0xfederama/collections-app-backend/internal/trash"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
@@ -79,6 +80,7 @@ func run() error {
 		Content:     content.New(pool, clock.System{}, workspaceID),
 		Search:      search.New(pool, workspaceID),
 		Images:      imageSvc,
+		Trash:       trash.New(pool, store, clock.System{}, logger, workspaceID),
 	})
 	if err != nil {
 		return err

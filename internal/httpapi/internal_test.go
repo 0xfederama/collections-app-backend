@@ -58,7 +58,6 @@ func TestToProblem(t *testing.T) {
 		{"payload too large", apperr.PayloadTooLarge(1), 413, "payload_too_large", nil},
 		{"MaxBytesError from the reader", &http.MaxBytesError{Limit: 1}, 413, "payload_too_large", nil},
 		{"unsupported media type", apperr.UnsupportedMediaType("image/svg+xml"), 415, "unsupported_media_type", nil},
-		{"not implemented", apperr.NotImplemented(), 501, "not_implemented", nil},
 		{"wrapped domain error", fmt.Errorf("move: %w", apperr.Cycle()), 409, "cycle_detected", nil},
 		{"joined domain error", errors.Join(errors.New("ctx"), apperr.NotFound("list")), 404, "not_found", nil},
 	}
@@ -215,10 +214,10 @@ func assertHeaders(t *testing.T, rec *httptest.ResponseRecorder) {
 }
 
 func TestAccessLogHasNoQueryOrBody(t *testing.T) {
-	h, logs := injected(t, failingServer{err: apperr.NotImplemented()})
+	h, logs := injected(t, failingServer{err: apperr.NotFound("list")})
 	get(t, h, "/api/v1/lists/0192f4a0-1111-7000-8000-000000000001/items?q=private+words")
 	line := logs.String()
-	for _, want := range []string{`"method":"GET"`, `"route":"/api/v1/lists/{id}/items"`, `"status":501`, `"duration_ms"`, `"request_id"`} {
+	for _, want := range []string{`"method":"GET"`, `"route":"/api/v1/lists/{id}/items"`, `"status":404`, `"duration_ms"`, `"request_id"`} {
 		if !strings.Contains(line, want) {
 			t.Errorf("log lacks %s: %s", want, line)
 		}

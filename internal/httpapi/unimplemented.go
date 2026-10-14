@@ -19,27 +19,7 @@ func (*Server) GetAttachmentThumbnail(context.Context, oapi.GetAttachmentThumbna
 	return nil, apperr.NotImplemented()
 }
 
-func (*Server) CreateFolder(context.Context, oapi.CreateFolderRequestObject) (oapi.CreateFolderResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) ReorderFolders(context.Context, oapi.ReorderFoldersRequestObject) (oapi.ReorderFoldersResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
 func (*Server) DeleteFolder(context.Context, oapi.DeleteFolderRequestObject) (oapi.DeleteFolderResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) GetFolder(context.Context, oapi.GetFolderRequestObject) (oapi.GetFolderResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) UpdateFolder(context.Context, oapi.UpdateFolderRequestObject) (oapi.UpdateFolderResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) MoveFolder(context.Context, oapi.MoveFolderRequestObject) (oapi.MoveFolderResponseObject, error) {
 	return nil, apperr.NotImplemented()
 }
 
@@ -87,23 +67,7 @@ func (*Server) MoveItem(context.Context, oapi.MoveItemRequestObject) (oapi.MoveI
 	return nil, apperr.NotImplemented()
 }
 
-func (*Server) CreateList(context.Context, oapi.CreateListRequestObject) (oapi.CreateListResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) ReorderLists(context.Context, oapi.ReorderListsRequestObject) (oapi.ReorderListsResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
 func (*Server) DeleteList(context.Context, oapi.DeleteListRequestObject) (oapi.DeleteListResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) GetList(context.Context, oapi.GetListRequestObject) (oapi.GetListResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) UpdateList(context.Context, oapi.UpdateListRequestObject) (oapi.UpdateListResponseObject, error) {
 	return nil, apperr.NotImplemented()
 }
 
@@ -116,10 +80,6 @@ func (*Server) CreateItem(context.Context, oapi.CreateItemRequestObject) (oapi.C
 }
 
 func (*Server) ReorderListItems(context.Context, oapi.ReorderListItemsRequestObject) (oapi.ReorderListItemsResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) MoveList(context.Context, oapi.MoveListRequestObject) (oapi.MoveListResponseObject, error) {
 	return nil, apperr.NotImplemented()
 }
 
@@ -136,9 +96,5 @@ func (*Server) PurgeTrashBatch(context.Context, oapi.PurgeTrashBatchRequestObjec
 }
 
 func (*Server) RestoreTrashBatch(context.Context, oapi.RestoreTrashBatchRequestObject) (oapi.RestoreTrashBatchResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) GetTree(context.Context, oapi.GetTreeRequestObject) (oapi.GetTreeResponseObject, error) {
 	return nil, apperr.NotImplemented()
 }

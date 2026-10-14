@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Owns items of a list: create, get with path, paged list, partial update, move to another list and reorder within a list. Kind-specific metadata is checked by `items/kinds`. No HTTP; returns `apperr` errors. Item delete (B-10), image writes (B-09), content (B-08) and search (B-11) are not here yet. Design context: `/Users/federico/Developer/collections-app/design-docs/` (API.md §5, DATA_MODEL §2 and §7, D-062).
+Owns items of a list: create, get with path, paged list, partial update, move to another list and reorder within a list. Kind-specific metadata is checked by `items/kinds`. No HTTP; returns `apperr` errors. Item delete (B-10), image writes (B-09) and content (B-08) are not here yet; search lives in `internal/search`. Design context: `/Users/federico/Developer/collections-app/design-docs/` (API.md §5, DATA_MODEL §2 and §7, D-062).
 
 ## Key files
 
@@ -25,6 +25,8 @@ Owns items of a list: create, get with path, paged list, partial update, move to
 - `Reorder(ctx, listID, ids) error`: `ids` must be the active items of the list
 - `kinds.Validate(kind, map[string]any) (map[string]any, error)`: normalized metadata to store
 - `kinds.Known(kind) bool`; kind constants `Generic`, `Movie`, `TVShow`, `Motorcycle`, `Car`, `Camera`
+- `FromSearchRow(sqlc.SearchItemsRow) Item`: maps a search row (used by `internal/search`)
+- `EscapeLike(q) string`: LIKE-escapes `\`, `%` and `_` (exported for `internal/search`)
 
 ## Gotchas
 

@@ -15,6 +15,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/content"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
@@ -40,6 +41,8 @@ type Deps struct {
 	Items *items.Service
 	// Content serves Markdown content and its versions (B-08).
 	Content *content.Service
+	// Search serves GET /search (B-11).
+	Search *search.Service
 }
 
 // NewRouter builds the HTTP handler: the generated strict server mounted on

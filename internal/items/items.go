@@ -215,6 +215,12 @@ func (s *Service) lockTree(ctx context.Context, q *sqlc.Queries) error {
 
 func (s *Service) now() time.Time { return s.clock.Now() }
 
+// FromSearchRow maps a search row to an Item (search reuses this read model).
+func FromSearchRow(r sqlc.SearchItemsRow) Item { return itemFromRow(sqlc.ListItemsRow(r)) }
+
+// EscapeLike is escapeLike for other packages that build LIKE patterns.
+func EscapeLike(q string) string { return escapeLike(q) }
+
 // itemFromRow is the one mapper from the read-model row to an Item.
 func itemFromRow(r sqlc.ListItemsRow) Item {
 	it := Item{

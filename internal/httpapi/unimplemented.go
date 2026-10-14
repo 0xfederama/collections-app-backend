@@ -39,10 +39,6 @@ func (*Server) DeleteList(context.Context, oapi.DeleteListRequestObject) (oapi.D
 	return nil, apperr.NotImplemented()
 }
 
-func (*Server) SearchItems(context.Context, oapi.SearchItemsRequestObject) (oapi.SearchItemsResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
 func (*Server) ListTrash(context.Context, oapi.ListTrashRequestObject) (oapi.ListTrashResponseObject, error) {
 	return nil, apperr.NotImplemented()
 }

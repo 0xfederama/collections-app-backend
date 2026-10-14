@@ -7,6 +7,7 @@
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
 - [httpapi](modules/httpapi.md): HTTP router, probes, settings, tree/folder/list/item/content handlers
 - [items](modules/items.md): items CRUD, move and reorder, per-kind metadata validation (`items/kinds`)
+- [search](modules/search.md): item title search with folder and list paths (`GET /api/v1/search`)
 - [tree](modules/tree.md): folders and lists CRUD, move with cycle check, reorder, sidebar tree
 - [workspace](modules/workspace.md): single-workspace bootstrap and settings service
 

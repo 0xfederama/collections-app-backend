@@ -91,6 +91,8 @@ func wantProblem(t *testing.T, rec *httptest.ResponseRecorder, status int, code 
 // POST …/content/restore, PUT and DELETE …/image, PATCH /settings.
 func TestAT10_IfMatchRequired(t *testing.T) {
 	h := stubRouter(t)
+	// Operations with a real handler (their behaviour is tested in tree_test.go).
+	implemented := map[string]bool{"UpdateFolder": true, "MoveFolder": true, "UpdateList": true, "MoveList": true}
 	ops := []struct {
 		name, method, path, body, prefix string
 	}{
@@ -142,6 +144,13 @@ func TestAT10_IfMatchRequired(t *testing.T) {
 		}
 		t.Run(op.name+"/valid-reaches-handler", func(t *testing.T) {
 			rec := call(str(`"` + op.prefix + `-1"`))
+			if implemented[op.name] {
+				// Real handler, no database behind the stub router: it got past the guard.
+				if rec.Code == 428 || rec.Code == 400 {
+					t.Fatalf("status = %d, the guard blocked a valid request; body=%s", rec.Code, rec.Body)
+				}
+				return
+			}
 			wantProblem(t, rec, 501, "not_implemented")
 		})
 	}
@@ -151,16 +160,25 @@ func TestAT10_IfMatchRequired(t *testing.T) {
 // …/order, trash restore and purge) are not blocked by the guard.
 func TestIfMatchNotRequired(t *testing.T) {
 	h := stubRouter(t)
+	// Creates, …/order and the tree have real handlers (see tree_test.go): none of them must answer 428.
 	for _, r := range []req{
 		{method: "POST", path: "/api/v1/folders", body: `{"name":"n"}`, contentType: jsonCT},
 		{method: "POST", path: "/api/v1/lists", body: `{"name":"n"}`, contentType: jsonCT},
-		{method: "POST", path: "/api/v1/lists/" + id1 + "/items", body: `{"title":"t"}`, contentType: jsonCT},
 		{method: "PUT", path: "/api/v1/folders/order", body: `{"parent_folder_id":null,"ids":[]}`, contentType: jsonCT},
 		{method: "PUT", path: "/api/v1/lists/order", body: `{"folder_id":null,"ids":[]}`, contentType: jsonCT},
+		{method: "GET", path: "/api/v1/tree"},
+	} {
+		t.Run(r.method+" "+r.path, func(t *testing.T) {
+			if rec := do(t, h, r); rec.Code == 428 || rec.Code == 400 {
+				t.Fatalf("status = %d, the guard blocked a request that needs no If-Match; body=%s", rec.Code, rec.Body)
+			}
+		})
+	}
+	for _, r := range []req{
+		{method: "POST", path: "/api/v1/lists/" + id1 + "/items", body: `{"title":"t"}`, contentType: jsonCT},
 		{method: "PUT", path: "/api/v1/lists/" + id1 + "/items/order", body: `{"ids":[]}`, contentType: jsonCT},
 		{method: "POST", path: "/api/v1/trash/" + id1 + "/restore"},
 		{method: "DELETE", path: "/api/v1/trash/" + id1},
-		{method: "GET", path: "/api/v1/tree"},
 	} {
 		t.Run(r.method+" "+r.path, func(t *testing.T) {
 			wantProblem(t, do(t, h, r), 501, "not_implemented")
@@ -169,7 +187,7 @@ func TestIfMatchNotRequired(t *testing.T) {
 }
 
 func TestUnstubbedRoutesAnswer501(t *testing.T) {
-	rec := do(t, stubRouter(t), req{method: "GET", path: "/api/v1/tree"})
+	rec := do(t, stubRouter(t), req{method: "GET", path: "/api/v1/search?q=x"})
 	p := wantProblem(t, rec, 501, "not_implemented")
 	if rec.Header().Get("X-Request-Id") == "" {
 		t.Error("missing X-Request-Id")
@@ -228,7 +246,7 @@ func TestGuardLetsValidRequestsThrough(t *testing.T) {
 		{method: "GET", path: "/api/v1/search?q=x&limit=1"},
 		// metadata is free-form here; per-kind validation is B-07's job
 		{method: "POST", path: items, body: `{"title":"t","metadata":{"anything":{"goes":[1,2]}},"price":{"currency":"EUR","min":"1.00","max":null}}`, contentType: jsonCT},
-		{method: "POST", path: "/api/v1/folders", body: `{"name":"n"}`, contentType: "application/json; charset=utf-8"},
+		{method: "POST", path: items, body: `{"title":"n"}`, contentType: "application/json; charset=utf-8"},
 	} {
 		t.Run(r.method+" "+r.path, func(t *testing.T) { wantProblem(t, do(t, h, r), 501, "not_implemented") })
 	}
@@ -237,12 +255,13 @@ func TestGuardLetsValidRequestsThrough(t *testing.T) {
 func TestBodyLimits(t *testing.T) {
 	h := stubRouter(t)
 	jsonBody := func(n int) string { return `{"name":"` + strings.Repeat("a", n) + `"}` }
+	titleBody := func(n int) string { return `{"title":"` + strings.Repeat("a", n) + `"}` }
 	contentBody := func(n int) string { return `{"body":"` + strings.Repeat("a", n) + `"}` }
 	ifMatch := func(v string) map[string]string { return map[string]string{"If-Match": v} }
 
 	t.Run("default JSON limit is 64 KiB", func(t *testing.T) {
 		wantProblem(t, do(t, h, req{method: "POST", path: "/api/v1/folders", body: jsonBody(64 << 10), contentType: jsonCT}), 413, "payload_too_large")
-		wantProblem(t, do(t, h, req{method: "POST", path: "/api/v1/folders", body: jsonBody(64<<10 - 20), contentType: jsonCT}), 501, "not_implemented")
+		wantProblem(t, do(t, h, req{method: "POST", path: "/api/v1/lists/" + id1 + "/items", body: titleBody(64<<10 - 20), contentType: jsonCT}), 501, "not_implemented")
 	})
 	t.Run("chunked JSON without Content-Length is limited too", func(t *testing.T) {
 		r := httptest.NewRequestWithContext(t.Context(), "POST", "/api/v1/folders", io.NopCloser(strings.NewReader(jsonBody(64<<10))))
@@ -288,7 +307,7 @@ func TestCrossCuttingHeaders(t *testing.T) {
 		{"405 wrong method", req{method: "POST", path: "/healthz"}, 405},
 		{"413 oversize body", req{method: "POST", path: "/api/v1/folders", body: `{"name":"` + strings.Repeat("a", 70<<10) + `"}`, contentType: jsonCT}, 413},
 		{"428 precondition", req{method: "DELETE", path: "/api/v1/items/" + id1}, 428},
-		{"501 stub", req{method: "GET", path: "/api/v1/tree"}, 501},
+		{"501 stub", req{method: "GET", path: "/api/v1/search?q=x"}, 501},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

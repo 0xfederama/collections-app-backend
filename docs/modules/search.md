@@ -1,0 +1,31 @@
+# search
+
+## Purpose
+
+Finds active items by title (case-insensitive literal substring) across the workspace and returns each match with its folder and list path. Read-only; no HTTP, returns typed errors. Design context: `/Users/federico/Developer/collections-app/design-docs/` (API.md §5, DATA_MODEL §6, D-004).
+
+## Key files
+
+- `internal/search/search.go`: `Service`, `Search`, path building from folders and lists (`tree`, `of`)
+- `db/queries/search.sql`: `SearchItems`, `CountSearchItems`, `ListSearchFolders`, `ListSearchLists`
+- `internal/httpapi/search.go`: `SearchItems` handler, 400 mapping, path body
+- `internal/httpapi/search_test.go`: `TestAT12_*` tests
+
+## Interfaces
+
+- `New(db sqlc.DBTX, workspaceID uuid.UUID) *Service`
+- `(*Service).Search(ctx, Params{Q, Limit, Offset}) (Page, error)`: limit default 50, max 200
+- `Page{Results []Result, Limit, Offset, Total}`; `Result{Item items.Item, Path []items.PathSegment}`
+- `ErrInvalidQuery`: `q` is empty after trimming or over 200 characters
+- `GET /api/v1/search?q=&limit=&offset=`: 200 page; 400 `invalid_parameter` for blank `q`
+
+## Gotchas
+
+- Matches titles only. `%`, `_` and `\` are escaped in Go with `items.EscapeLike`.
+- Order: exact title match (case-insensitive) first, then `lower(title)`, then id.
+- Only active items. Batch cascade (D-004) trashes children with their list or folder, so there is no ancestor check and no join with lists.
+- Paths come from all active folders and lists, loaded once per request (no N+1). Root folder first, list last.
+- A row whose list vanished between reads is skipped, so a page can hold fewer rows than `limit`. `Total` still counts it.
+- `Total` comes from a separate count, so it stays right past the last page.
+- The request guard rejects an empty or too long raw `q`; whitespace-only `q` is caught by the service.
+- Trigram index `items_title_trgm_idx`: Postgres uses it only for patterns with 3+ useful characters on large tables. At about 5k rows a seq scan (~3 ms) wins; an index scan appears near 55k rows for rare terms.

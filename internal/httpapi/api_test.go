@@ -189,7 +189,7 @@ func TestIfMatchNotRequired(t *testing.T) {
 }
 
 func TestUnstubbedRoutesAnswer501(t *testing.T) {
-	rec := do(t, stubRouter(t), req{method: "GET", path: "/api/v1/search?q=x"})
+	rec := do(t, stubRouter(t), req{method: "GET", path: "/api/v1/trash"})
 	p := wantProblem(t, rec, 501, "not_implemented")
 	if rec.Header().Get("X-Request-Id") == "" {
 		t.Error("missing X-Request-Id")
@@ -243,7 +243,7 @@ func TestBadRequests(t *testing.T) {
 func TestGuardLetsValidRequestsThrough(t *testing.T) {
 	h := stubRouter(t)
 	items := "/api/v1/lists/" + id1 + "/items"
-	wantProblem(t, do(t, h, req{method: "GET", path: "/api/v1/search?q=x&limit=1"}), 501, "not_implemented")
+	wantProblem(t, do(t, h, req{method: "GET", path: "/api/v1/trash?limit=1"}), 501, "not_implemented")
 	// The item handlers are real (no database behind the stub router): the guard must not answer for them.
 	for _, r := range []req{
 		{method: "GET", path: items + "?limit=200&offset=0&sort=title&q=dune"},
@@ -316,7 +316,7 @@ func TestCrossCuttingHeaders(t *testing.T) {
 		{"405 wrong method", req{method: "POST", path: "/healthz"}, 405},
 		{"413 oversize body", req{method: "POST", path: "/api/v1/folders", body: `{"name":"` + strings.Repeat("a", 70<<10) + `"}`, contentType: jsonCT}, 413},
 		{"428 precondition", req{method: "DELETE", path: "/api/v1/items/" + id1}, 428},
-		{"501 stub", req{method: "GET", path: "/api/v1/search?q=x"}, 501},
+		{"501 stub", req{method: "GET", path: "/api/v1/trash"}, 501},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

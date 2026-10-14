@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Serves the HTTP API: the generated strict server mounted on chi, behind request id, security headers, access log and panic recovery. A per-operation guard enforces rules the generated code skips. Health, settings, tree, folder, list and item (list, create, get, patch, move, reorder) and content ops are implemented; every other operation answers 501 until its task lands. Design context: `/Users/federico/Developer/collections-app/design-docs/`.
+Serves the HTTP API: the generated strict server mounted on chi, behind request id, security headers, access log and panic recovery. A per-operation guard enforces rules the generated code skips. Health, settings, tree, folder, list and item (list, create, get, patch, move, reorder) content and search ops are implemented; every other operation answers 501 until its task lands. Design context: `/Users/federico/Developer/collections-app/design-docs/`.
 
 ## Key files
 
@@ -12,6 +12,7 @@ Serves the HTTP API: the generated strict server mounted on chi, behind request 
 - `internal/httpapi/tree.go`, `folders.go`, `lists.go`: tree, folder and list handlers, body mapping
 - `internal/httpapi/items.go`: item handlers, `itemBody` and `itemSummaryBody` mapping
 - `internal/httpapi/content.go`: content and content version handlers, `contentBody` mapping
+- `internal/httpapi/search.go`: search handler, maps `search.Page` to the response
 - `internal/httpapi/unimplemented.go`: 501 stubs for all other operations
 - `internal/httpapi/middleware.go`: request id, security headers, access log, recovery, `IfMatchVersion`
 - `internal/httpapi/guard.go`: query schemas, If-Match, media type, body limits, unknown fields
@@ -24,7 +25,7 @@ Serves the HTTP API: the generated strict server mounted on chi, behind request 
 ## Interfaces
 
 - `NewRouter(d Deps) (http.Handler, error)`: defaults `Clock` to `clock.System{}`; fails if the embedded spec does not load
-- `Deps`: `DB Pinger`, `DataDir string`, `Logger *slog.Logger`, `Clock clock.Clock`, `WorkspaceID uuid.UUID`, `Settings *workspace.Service`, `Tree *tree.Service`, `Items *items.Service`, `Content *content.Service`
+- `Deps`: `DB Pinger`, `DataDir string`, `Logger *slog.Logger`, `Clock clock.Clock`, `WorkspaceID uuid.UUID`, `Settings *workspace.Service`, `Tree *tree.Service`, `Items *items.Service`, `Content *content.Service`, `Search *search.Service`
 - `Pinger`: `Ping(ctx) error`; satisfied by `*pgxpool.Pool`
 - `IfMatchVersion(ctx) int`: version N of the validated `If-Match` in guarded handlers
 - `GET /healthz`: 200 `ok`, liveness only
@@ -41,8 +42,9 @@ Serves the HTTP API: the generated strict server mounted on chi, behind request 
 - `GET /api/v1/items/{id}/content/versions`: `listContentVersions`
 - `GET /api/v1/items/{id}/content/versions/{version}`: `getContentVersion`
 - `POST /api/v1/items/{id}/content/restore`: `restoreContentVersion` (If-Match `"c-N"`)
+- `GET /api/v1/search`: paged title search via `search.Service`
 - Unknown route or method: 404 `not_found` / 405 `method_not_allowed` problem
-- Any other operation (item DELETE, image, search, trash, attachments, folder and list DELETE): 501 `not_implemented`
+- Any other operation (item DELETE, image, trash, attachments, folder and list DELETE): 501 `not_implemented`
 
 ## Gotchas
 

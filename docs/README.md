@@ -3,8 +3,9 @@
 - [api-contract](modules/api-contract.md): OpenAPI contract and generated Go server stubs
 - [apperr](modules/apperr.md): typed domain errors, no HTTP imports
 - [config](modules/config.md): env var parsing and startup validation
+- [content](modules/content.md): item Markdown content, versions, restore and retention
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
-- [httpapi](modules/httpapi.md): HTTP router, probes, settings, tree/folder/list/item handlers
+- [httpapi](modules/httpapi.md): HTTP router, probes, settings, tree/folder/list/item/content handlers
 - [items](modules/items.md): items CRUD, move and reorder, per-kind metadata validation (`items/kinds`)
 - [tree](modules/tree.md): folders and lists CRUD, move with cycle check, reorder, sidebar tree
 - [workspace](modules/workspace.md): single-workspace bootstrap and settings service

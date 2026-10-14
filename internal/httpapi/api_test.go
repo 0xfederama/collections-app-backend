@@ -93,7 +93,7 @@ func TestAT10_IfMatchRequired(t *testing.T) {
 	h := stubRouter(t)
 	// Operations with a real handler (their behaviour is tested in tree_test.go).
 	implemented := map[string]bool{"UpdateFolder": true, "MoveFolder": true, "UpdateList": true, "MoveList": true, "UpdateItem": true, "MoveItem": true,
-		"UpdateItemContent": true, "RestoreContentVersion": true}
+		"UpdateItemContent": true, "RestoreContentVersion": true, "SetItemImage": true, "DeleteItemImage": true}
 	ops := []struct {
 		name, method, path, body, prefix string
 	}{
@@ -290,7 +290,11 @@ func TestBodyLimits(t *testing.T) {
 		mp := func(n int) req {
 			return req{method: "PUT", path: path, body: strings.Repeat(bigBody, n), contentType: "multipart/form-data; boundary=b", headers: ifMatch(`"i-1"`)}
 		}
-		wantProblem(t, do(t, h, mp(1<<20)), 501, "not_implemented")
+		// The image handler is real now and the stub router has no database: a request that
+		// passes the guard reaches it (any answer but the guard's 4xx).
+		if rec := do(t, h, mp(1<<20)); rec.Code == 413 || rec.Code == 428 || rec.Code == 415 || rec.Code == 400 {
+			t.Fatalf("a 1 MiB upload was blocked by the guard: %d %s", rec.Code, rec.Body)
+		}
 		wantProblem(t, do(t, h, mp(10<<20+64<<10+1)), 413, "payload_too_large")
 		big := `{"url":"https://img.example/` + strings.Repeat("a", 64<<10) + `"}`
 		wantProblem(t, do(t, h, req{method: "PUT", path: path, body: big, contentType: jsonCT, headers: ifMatch(`"i-1"`)}), 413, "payload_too_large")

@@ -6,8 +6,10 @@
 - [content](modules/content.md): item Markdown content, versions, restore and retention
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
 - [httpapi](modules/httpapi.md): HTTP router, probes, settings, tree/folder/list/item/content handlers
+- [images](modules/images.md): item image upload/URL/delete, validation, thumbnails, serving, orphan sweeper
 - [items](modules/items.md): items CRUD, move and reorder, per-kind metadata validation (`items/kinds`)
 - [search](modules/search.md): item title search with folder and list paths (`GET /api/v1/search`)
+- [storage](modules/storage.md): local file store under DATA_DIR (`os.Root`, generated keys)
 - [tree](modules/tree.md): folders and lists CRUD, move with cycle check, reorder, sidebar tree
 - [workspace](modules/workspace.md): single-workspace bootstrap and settings service
 

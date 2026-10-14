@@ -18,8 +18,10 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/content"
 	"github.com/0xfederama/collections-app-backend/internal/database"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
+	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/search"
+	"github.com/0xfederama/collections-app-backend/internal/storage"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
@@ -56,6 +58,15 @@ func run() error {
 		return err
 	}
 
+	store, err := storage.NewLocal(cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = store.Close() }()
+	itemSvc := items.New(pool, clock.System{}, workspaceID)
+	imageSvc := images.New(pool, store, clock.System{}, itemSvc, logger, workspaceID)
+	go imageSvc.RunSweeper(ctx, images.SweepInterval) // stops when ctx is cancelled on shutdown
+
 	handler, err := httpapi.NewRouter(httpapi.Deps{
 		DB:          pool,
 		DataDir:     cfg.DataDir,
@@ -64,9 +75,10 @@ func run() error {
 		WorkspaceID: workspaceID,
 		Settings:    workspace.NewService(pool),
 		Tree:        tree.New(pool, clock.System{}, workspaceID),
-		Items:       items.New(pool, clock.System{}, workspaceID),
+		Items:       itemSvc,
 		Content:     content.New(pool, clock.System{}, workspaceID),
 		Search:      search.New(pool, workspaceID),
+		Images:      imageSvc,
 	})
 	if err != nil {
 		return err

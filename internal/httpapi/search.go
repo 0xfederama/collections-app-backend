@@ -34,11 +34,32 @@ func (s *Server) SearchItems(ctx context.Context, r oapi.SearchItemsRequestObjec
 		Page: oapi.Page{Limit: page.Limit, Offset: page.Offset, Total: page.Total},
 	}
 	for _, res := range page.Results {
-		path := make([]oapi.PathSegment, 0, len(res.Path))
-		for _, seg := range res.Path {
-			path = append(path, oapi.PathSegment{Type: oapi.PathSegmentType(seg.Type), Id: seg.ID, Name: seg.Name})
-		}
-		out.Data = append(out.Data, oapi.SearchResult{Item: itemSummaryBody(res.Item), Path: path})
+		out.Data = append(out.Data, searchResultBody(res))
 	}
 	return out, nil
+}
+
+func (s *Server) ListRecentItems(ctx context.Context, r oapi.ListRecentItemsRequestObject) (oapi.ListRecentItemsResponseObject, error) {
+	limit := 0
+	if r.Params.Limit != nil {
+		limit = *r.Params.Limit
+	}
+	results, err := s.deps.Search.Recent(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := oapi.ListRecentItems200JSONResponse{Data: make([]oapi.SearchResult, 0, len(results))}
+	for _, res := range results {
+		out.Data = append(out.Data, searchResultBody(res))
+	}
+	return out, nil
+}
+
+// searchResultBody maps a service result (item and path) to the shared SearchResult body.
+func searchResultBody(res search.Result) oapi.SearchResult {
+	path := make([]oapi.PathSegment, 0, len(res.Path))
+	for _, seg := range res.Path {
+		path = append(path, oapi.PathSegment{Type: oapi.PathSegmentType(seg.Type), Id: seg.ID, Name: seg.Name})
+	}
+	return oapi.SearchResult{Item: itemSummaryBody(res.Item), Path: path}
 }

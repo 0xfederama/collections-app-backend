@@ -9,7 +9,7 @@
 - [httpapi](modules/httpapi.md): HTTP router, probes, settings, tree/folder/list/item/content handlers
 - [images](modules/images.md): item image upload/URL/delete, validation, thumbnails, serving, orphan sweeper
 - [items](modules/items.md): items CRUD, move and reorder, per-kind metadata validation (`items/kinds`)
-- [search](modules/search.md): item title search with folder and list paths (`GET /api/v1/search`)
+- [search](modules/search.md): item title search with folder and list paths (`GET /api/v1/search`) and recent items (`GET /api/v1/recent-items`)
 - [storage](modules/storage.md): local file store under DATA_DIR (`os.Root`, generated keys)
 - [trash](modules/trash.md): delete into trash batches, trash list, restore, purge
 - [tree](modules/tree.md): folders and lists CRUD, move with cycle check, reorder, sidebar tree

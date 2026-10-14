@@ -30,3 +30,18 @@ WHERE workspace_id = @workspace_id AND deleted_at IS NULL;
 -- Active lists, just enough to name the last path segment and find its folder.
 SELECT id, name, folder_id FROM lists
 WHERE workspace_id = @workspace_id AND deleted_at IS NULL;
+
+-- name: ListRecentItems :many
+-- Recently updated active items (Home, B-12). The columns match ListItems, like SearchItems. No ancestor
+-- check: an item in a trashed list or folder is trashed itself (batch cascade). Not paginated, so no
+-- index: at MVP scale the sort over active items is a few ms (EXPLAIN in the PR).
+SELECT i.*,
+       a.width             AS image_width,
+       a.height            AS image_height,
+       a.original_filename AS image_original_filename,
+       COALESCE((SELECT max(v.version) FROM item_content_versions v WHERE v.item_id = i.id), 0)::int AS content_version
+FROM items i
+LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
+WHERE i.workspace_id = @workspace_id AND i.deleted_at IS NULL
+ORDER BY i.updated_at DESC, i.id
+LIMIT @page_limit;

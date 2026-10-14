@@ -31,6 +31,99 @@ func (q *Queries) CountSearchItems(ctx context.Context, arg CountSearchItemsPara
 	return total, err
 }
 
+const listRecentItems = `-- name: ListRecentItems :many
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.kind, i.summary, i.status, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.official_website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+       a.width             AS image_width,
+       a.height            AS image_height,
+       a.original_filename AS image_original_filename,
+       COALESCE((SELECT max(v.version) FROM item_content_versions v WHERE v.item_id = i.id), 0)::int AS content_version
+FROM items i
+LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
+WHERE i.workspace_id = $1 AND i.deleted_at IS NULL
+ORDER BY i.updated_at DESC, i.id
+LIMIT $2
+`
+
+type ListRecentItemsParams struct {
+	WorkspaceID uuid.UUID
+	PageLimit   int32
+}
+
+type ListRecentItemsRow struct {
+	ID                    uuid.UUID
+	WorkspaceID           uuid.UUID
+	ListID                uuid.UUID
+	Title                 string
+	Kind                  string
+	Summary               *string
+	Status                *string
+	ImageUrl              *string
+	ImageAttachmentID     uuid.NullUUID
+	PriceMin              pgtype.Numeric
+	PriceMax              pgtype.Numeric
+	Currency              *string
+	OfficialWebsiteUrl    *string
+	Metadata              []byte
+	SortOrder             int32
+	Version               int32
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	DeletedAt             *time.Time
+	TrashBatchID          uuid.NullUUID
+	ImageWidth            *int32
+	ImageHeight           *int32
+	ImageOriginalFilename *string
+	ContentVersion        int32
+}
+
+// Recently updated active items (Home, B-12). The columns match ListItems, like SearchItems. No ancestor
+// check: an item in a trashed list or folder is trashed itself (batch cascade). Not paginated, so no
+// index: at MVP scale the sort over active items is a few ms (EXPLAIN in the PR).
+func (q *Queries) ListRecentItems(ctx context.Context, arg ListRecentItemsParams) ([]ListRecentItemsRow, error) {
+	rows, err := q.db.Query(ctx, listRecentItems, arg.WorkspaceID, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRecentItemsRow{}
+	for rows.Next() {
+		var i ListRecentItemsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ListID,
+			&i.Title,
+			&i.Kind,
+			&i.Summary,
+			&i.Status,
+			&i.ImageUrl,
+			&i.ImageAttachmentID,
+			&i.PriceMin,
+			&i.PriceMax,
+			&i.Currency,
+			&i.OfficialWebsiteUrl,
+			&i.Metadata,
+			&i.SortOrder,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.TrashBatchID,
+			&i.ImageWidth,
+			&i.ImageHeight,
+			&i.ImageOriginalFilename,
+			&i.ContentVersion,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSearchFolders = `-- name: ListSearchFolders :many
 SELECT id, name, parent_folder_id FROM folders
 WHERE workspace_id = $1 AND deleted_at IS NULL

@@ -92,7 +92,8 @@ func wantProblem(t *testing.T, rec *httptest.ResponseRecorder, status int, code 
 func TestAT10_IfMatchRequired(t *testing.T) {
 	h := stubRouter(t)
 	// Operations with a real handler (their behaviour is tested in tree_test.go).
-	implemented := map[string]bool{"UpdateFolder": true, "MoveFolder": true, "UpdateList": true, "MoveList": true, "UpdateItem": true, "MoveItem": true}
+	implemented := map[string]bool{"UpdateFolder": true, "MoveFolder": true, "UpdateList": true, "MoveList": true, "UpdateItem": true, "MoveItem": true,
+		"UpdateItemContent": true, "RestoreContentVersion": true}
 	ops := []struct {
 		name, method, path, body, prefix string
 	}{
@@ -281,7 +282,7 @@ func TestBodyLimits(t *testing.T) {
 	})
 	t.Run("content PUT allows 2 MiB", func(t *testing.T) {
 		path := "/api/v1/items/" + id1 + "/content"
-		wantProblem(t, do(t, h, req{method: "PUT", path: path, body: contentBody(1536 << 10), contentType: jsonCT, headers: ifMatch(`"c-1"`)}), 501, "not_implemented")
+		// Just under the limit is covered with a real database in content_test.go (the handler answers 413 itself above 1 MiB of text).
 		wantProblem(t, do(t, h, req{method: "PUT", path: path, body: contentBody(2 << 20), contentType: jsonCT, headers: ifMatch(`"c-1"`)}), 413, "payload_too_large")
 	})
 	t.Run("image PUT: multipart up to 10 MiB + 64 KiB, JSON url 64 KiB", func(t *testing.T) {

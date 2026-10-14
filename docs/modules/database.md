@@ -33,6 +33,7 @@ Owns the PostgreSQL layer: the pgx connection pool, the transaction helper, the 
 - The down migration drops all tables and the pg_trgm extension, so it erases all data.
 - `make check-generate` fails if regenerated files differ from the committed ones; run `make generate` and commit.
 - sqlc errors on an empty `db/queries` dir, which is why `schema.sql` exists.
+- sqlc fails on a recursive CTE whose outer SELECT filters with a plain `@param`: use `sqlc.arg(x)::uuid` and `UNION ALL` (see `folders.sql`). Put query comments after the `-- name:` line.
 - Constraint names follow `<table>_<cols>_{pkey,key,fkey,check,idx}`; tests assert on them.
 - Migration tests use the `pgx5://` scheme and a testcontainers Postgres with one database per test.
 - `internal/testdb` shares one container per test binary (`testdb.Terminate` from `TestMain`); the `database` package tests still start their own.

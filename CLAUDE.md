@@ -73,6 +73,8 @@ Versions and tool choices: DECISIONS.md "Toolchain versions (R-1)" and D-035–D
 - 2026-10-14: In OpenAPI 3.0.3 `nullable: true` next to `allOf: [$ref]` makes Redocly reject `null` examples, so `Price`, `ImageSummary` and the `Image` union carry `nullable: true` themselves. Descriptions with `: ` or a leading backtick must be quoted in the YAML.
 - 2026-10-14: Tests needing Postgres use `internal/testdb` (`AdminURL`, `NewMigrated`, `Terminate` from `TestMain`): one shared container per test binary, one migrated database per test. `httpapi` tests reuse their own `sharedPostgres(t)` URL with `testdb.NewMigrated`.
 - 2026-10-14: `workspace.Bootstrap` runs in `cmd/api` before the router and its ID goes into `Deps.WorkspaceID`. Services take the workspace ID as an argument. A PATCH that changes nothing answers 200 with the current version and no bump. `docker compose up` needs a local `.env` with `POSTGRES_PASSWORD` set, or the db container is unhealthy.
+- 2026-10-14: sqlc (v1.31) rejects a recursive CTE whose outer `SELECT` filters on a plain `@param` ("column reference is ambiguous"): write `sqlc.arg(x)::uuid` there. Put explanatory comments after the `-- name:` line, not before it.
+- 2026-10-14: Structural writes on folders/lists (create, move, reorder) call `lockTree` first (one advisory lock per workspace, D-060); the cycle check relies on it. Trash delete/restore (B-10) must take it too.
 
 ## Adding an endpoint (B-05+)
 1. Delete the operation's method from `internal/httpapi/unimplemented.go` and implement it in a file of its own (`settings.go`, `folders.go`, …) on `*Server`. Add the service dependency to `Deps`/`Server`.

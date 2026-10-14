@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Owns items of a list: create, get with path, paged list, partial update, move to another list and reorder within a list. Kind-specific metadata is checked by `items/kinds`. No HTTP; returns `apperr` errors. Item delete (B-10), image writes (B-09) and content (B-08) are not here yet; search lives in `internal/search`. Design context: `/Users/federico/Developer/collections-app/design-docs/` (API.md §5, DATA_MODEL §2 and §7, D-062).
+Owns items of a list: create, get with path, paged list, partial update, move to another list and reorder within a list. Kind-specific metadata is checked by `items/kinds`. No HTTP; returns `apperr` errors. Item delete (B-10), is not here yet; image writes live in `internal/images`; content is in `internal/content`; search lives in `internal/search`. Design context: `/Users/federico/Developer/collections-app/design-docs/` (API.md §5, DATA_MODEL §2 and §7, D-062).
 
 ## Key files
 

@@ -40,6 +40,9 @@ No CI (D-031, D-032): the gates run locally. Run `make check` before every PR an
 | Lint the API spec (needs Node >= 24, runs Redocly via `npx`) | `make lint-api` |
 | Vulnerability scan (network) | `make audit` |
 | Delete dev containers, volumes and `./data` | `make reset-dev` |
+| Backup / restore / verify (Postgres + images, D-066) | `scripts/backup.sh [dest]`, `scripts/restore.sh <dir> [--force]`, `scripts/verify-restore.sh <dir>` |
+| AT-17 backup round trip (isolated compose project, ~1 min, not in `make check`) | `make test-backup` |
+| shellcheck of `scripts/` (pinned Docker image, part of `make check`) | `make lint-scripts` |
 
 Versions and tool choices: DECISIONS.md "Toolchain versions (R-1)" and D-035–D-041. Go tools are pinned via the `go.mod` `tool` directive (`go tool govulncheck`), golangci-lint via `go run …@v2.14.0` in the Makefile.
 
@@ -80,6 +83,8 @@ Versions and tool choices: DECISIONS.md "Toolchain versions (R-1)" and D-035–D
 - 2026-10-14: Search (`internal/search`) reads items by title only (`deleted_at IS NULL`, no ancestor check: batch cascade). `q` is trimmed in the service (blank → `search.ErrInvalidQuery` → 400 `invalid_parameter` from the handler; the guard already rejects empty/too long raw `q`) and escaped with `items.EscapeLike`. Paths come from all active folders+lists loaded once per request. The trigram index only kicks in on larger tables for 3+ char terms (seq scan below ~tens of thousands of rows is expected).
 - 2026-10-14: Images (B-09, D-064): files are written **before** the tx and deleted **after** commit (the previous attachment *row* goes inside the tx). `images.Process` sniffs magic bytes and checks `DecodeConfig` (40 MP) before decoding. Storage keys are generated (`images/xx/yy/<uuid>.<ext>`), never user-derived. A failed delete only leaves orphan files, which `Service.Sweep` removes after 1 h (injected clock; tests advance it). `nosniff`/CSP on served files come from `securityHeaders`; `Content-Disposition` is added in `httpapi/images.go`. JPEG EXIF orientation is applied to thumbnails by an own parser, PNG/WebP orientation is not.
 - 2026-10-14: Trash (B-10, `internal/trash`, D-065): delete, restore and purge all take the tree lock. Delete marks the root and every *active* descendant with one `trash_batch_id` (folders, then lists in them, then items in the batch's lists); older nested batches keep theirs. Restore clears the root first (parent, `sort_order` appended last, `version + 1`), then the rest of the batch, then deletes the batch row (D-051: never delete a batch row that rows still reference). Purge collects attachment keys of the whole subtree, any batch, hard-deletes the root (FK cascades), deletes the attachment rows and the batch plus batches whose root is gone, commits, then deletes files (failures are logged, the images sweeper retries). Trash queries use `UNION` (not `UNION ALL`) in recursive CTEs so corrupt cycles still terminate. The 501 stub path is gone (`apperr.NotImplemented`, `not_implemented`).
+
+- 2026-10-14: Backup scripts (Q-02, `scripts/lib/backup-common.sh`): never write `-v appdata:/data` for a one-off container, a bare name is a different, global volume (use `appdata_volume`/`carrier`). Containers that must not eat the script's stdin need `</dev/null` (`docker compose run/exec -T` forwards it, which broke the `--force` prompt). The db image's init phase runs a temporary server that answers `pg_isready` on the socket, so wait over TCP (`wait_for_db`).
 
 ## Adding an endpoint (B-05+)
 1. Implement the operation's method in a file of its own (`settings.go`, `folders.go`, `trash.go`, …) on `*Server` (the generated strict interface has no stub left: a missing method is a compile error). Add the service dependency to `Deps`/`Server`.

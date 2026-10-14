@@ -2,8 +2,9 @@
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 MIGRATE_IMAGE := migrate/migrate:v4.20.1
 REDOCLY_VERSION := 2.63.0
+SHELLCHECK_IMAGE := koalaman/shellcheck:v0.11.0
 
-.PHONY: run test lint lint-api fmt fmt-check check check-generate check-compose check-docker audit migrate migration generate reset-dev
+.PHONY: run test lint lint-api fmt fmt-check check check-generate check-compose check-docker lint-scripts test-backup audit migrate migration generate reset-dev
 
 run: ## Run the API on the host (needs `docker compose up -d db` + compose.override.yaml, see README)
 	@test -f .env || { echo "missing .env: cp .env.example .env"; exit 1; }
@@ -32,7 +33,14 @@ check-compose: ## Fail if compose publishes any port outside 127.0.0.1 (AT-18)
 check-docker: ## Build the runtime image (catches Dockerfile drift, e.g. a new top-level Go dir not copied)
 	docker build -q -t collections-app-backend:check . >/dev/null && echo "docker build ok"
 
-check: fmt-check lint lint-api check-generate test check-compose check-docker ## All local gates
+lint-scripts: ## shellcheck every script through its pinned Docker image
+	docker run --rm -v "$(CURDIR)/scripts:/mnt/scripts:ro" -w /mnt $(SHELLCHECK_IMAGE) -x -P SCRIPTDIR scripts/*.sh scripts/lib/*.sh
+	@echo "shellcheck ok"
+
+test-backup: ## AT-17 backup/restore round trip on an isolated compose project (Docker, jq, curl, nc; not part of check)
+	./scripts/test-backup.sh
+
+check: fmt-check lint lint-api lint-scripts check-generate test check-compose check-docker ## All local gates
 
 audit: ## Vulnerability scan (needs network, not part of check)
 	go tool govulncheck ./...

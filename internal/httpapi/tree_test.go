@@ -5,23 +5,18 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"os"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/0xfederama/collections-app-backend/internal/clock"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
+	"github.com/0xfederama/collections-app-backend/internal/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
-
-var dbSeq atomic.Int64
 
 // treeEnv is a router on a fresh migrated database with one workspace.
 type treeEnv struct {
@@ -34,40 +29,13 @@ type treeEnv struct {
 func newTreeEnv(t *testing.T) *treeEnv {
 	t.Helper()
 	ctx := t.Context()
-	adminURL := sharedPostgres(t)
-	admin, err := pgx.Connect(ctx, adminURL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = admin.Close(ctx) }()
-	name := fmt.Sprintf("tree%d", dbSeq.Add(1))
-	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
-		t.Fatal(err)
-	}
-	u, err := url.Parse(adminURL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	u.Path = "/" + name
-	pool, err := pgxpool.New(ctx, u.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
-
-	up, err := os.ReadFile("../../db/migrations/000001_init.up.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, string(up)); err != nil {
-		t.Fatalf("apply migration: %v", err)
-	}
+	pool := testdb.NewMigrated(t, sharedPostgres(t))
 	ws := uuid.New()
 	if _, err := pool.Exec(ctx, "INSERT INTO workspaces (id, name) VALUES ($1, 'W')", ws); err != nil {
 		t.Fatal(err)
 	}
 	h := newRouter(t, httpapi.Deps{
-		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(),
+		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: ws,
 		Tree: tree.New(pool, clock.System{}, ws),
 	})
 	return &treeEnv{t: t, h: h, pool: pool, ws: ws}

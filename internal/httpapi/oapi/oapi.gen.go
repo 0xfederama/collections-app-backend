@@ -4179,18 +4179,18 @@ func (response CreateFolder400ApplicationProblemPlusJSONResponse) VisitCreateFol
 	return err
 }
 
-type CreateFolder404ApplicationProblemPlusJSONResponse struct {
-	NotFoundApplicationProblemPlusJSONResponse
+type CreateFolder409ApplicationProblemPlusJSONResponse struct {
+	DestinationUnavailableApplicationProblemPlusJSONResponse
 }
 
-func (response CreateFolder404ApplicationProblemPlusJSONResponse) VisitCreateFolderResponse(w http.ResponseWriter) error {
+func (response CreateFolder409ApplicationProblemPlusJSONResponse) VisitCreateFolderResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -6148,18 +6148,18 @@ func (response CreateList400ApplicationProblemPlusJSONResponse) VisitCreateListR
 	return err
 }
 
-type CreateList404ApplicationProblemPlusJSONResponse struct {
-	NotFoundApplicationProblemPlusJSONResponse
+type CreateList409ApplicationProblemPlusJSONResponse struct {
+	DestinationUnavailableApplicationProblemPlusJSONResponse
 }
 
-func (response CreateList404ApplicationProblemPlusJSONResponse) VisitCreateListResponse(w http.ResponseWriter) error {
+func (response CreateList409ApplicationProblemPlusJSONResponse) VisitCreateListResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }

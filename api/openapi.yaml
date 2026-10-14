@@ -150,7 +150,7 @@ paths:
       tags: [folders]
       operationId: createFolder
       summary: Create a folder
-      description: Appended to the end of its siblings. `parent_folder_id` absent or `null` creates it at the root. A missing or trashed parent returns 404.
+      description: Appended to the end of its siblings. `parent_folder_id` absent or `null` creates it at the root. A missing or trashed parent returns `409 destination_unavailable`.
       requestBody:
         required: true
         content:
@@ -171,7 +171,7 @@ paths:
               examples:
                 default: { $ref: '#/components/examples/Folder' }
         '400': { $ref: '#/components/responses/BadRequest' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/DestinationUnavailable' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -309,7 +309,7 @@ paths:
       tags: [lists]
       operationId: createList
       summary: Create a list
-      description: Appended to the end of its siblings. `folder_id` absent or `null` creates it at the root. A missing or trashed folder returns 404.
+      description: Appended to the end of its siblings. `folder_id` absent or `null` creates it at the root. A missing or trashed folder returns `409 destination_unavailable`.
       requestBody:
         required: true
         content:
@@ -335,7 +335,7 @@ paths:
               examples:
                 default: { $ref: '#/components/examples/List' }
         '400': { $ref: '#/components/responses/BadRequest' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/DestinationUnavailable' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -1117,7 +1117,7 @@ components:
                 type: https://collection-app.invalid/problems/destination-unavailable
                 title: Destination unavailable
                 status: 409
-                detail: The destination list does not exist or is in the trash.
+                detail: The destination folder or list does not exist or is in the trash.
                 code: destination_unavailable
     OrderStale:
       description: '`ids` is not exactly the current set of active siblings'

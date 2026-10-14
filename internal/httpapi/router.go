@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/clock"
+	"github.com/0xfederama/collections-app-backend/internal/content"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
@@ -37,6 +38,8 @@ type Deps struct {
 	Tree *tree.Service
 	// Items serves items (B-07).
 	Items *items.Service
+	// Content serves Markdown content and its versions (B-08).
+	Content *content.Service
 }
 
 // NewRouter builds the HTTP handler: the generated strict server mounted on

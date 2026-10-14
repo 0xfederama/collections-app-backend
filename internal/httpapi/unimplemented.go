@@ -27,26 +27,6 @@ func (*Server) DeleteItem(context.Context, oapi.DeleteItemRequestObject) (oapi.D
 	return nil, apperr.NotImplemented()
 }
 
-func (*Server) GetItemContent(context.Context, oapi.GetItemContentRequestObject) (oapi.GetItemContentResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) UpdateItemContent(context.Context, oapi.UpdateItemContentRequestObject) (oapi.UpdateItemContentResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) RestoreContentVersion(context.Context, oapi.RestoreContentVersionRequestObject) (oapi.RestoreContentVersionResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) ListContentVersions(context.Context, oapi.ListContentVersionsRequestObject) (oapi.ListContentVersionsResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) GetContentVersion(context.Context, oapi.GetContentVersionRequestObject) (oapi.GetContentVersionResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
 func (*Server) DeleteItemImage(context.Context, oapi.DeleteItemImageRequestObject) (oapi.DeleteItemImageResponseObject, error) {
 	return nil, apperr.NotImplemented()
 }

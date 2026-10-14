@@ -52,6 +52,16 @@ func (e *ValidationError) Error() string {
 // Validation reports failed field rules. Pass at least one.
 func Validation(errs ...FieldError) error { return &ValidationError{Errors: errs} }
 
+// UnknownFieldError means a request carried a key the schema does not declare
+// and the generic body guard could not see (free-form `metadata`). Path is the
+// dotted path, e.g. "metadata.runtime".
+type UnknownFieldError struct{ Path string }
+
+func (e *UnknownFieldError) Error() string { return "unknown field " + e.Path }
+
+// UnknownField reports an undeclared key at path (400 `unknown_field`).
+func UnknownField(path string) error { return &UnknownFieldError{Path: path} }
+
 // BlockingParent names the trashed ancestor that blocks a restore.
 type BlockingParent struct {
 	Type string // "folder" or "list"

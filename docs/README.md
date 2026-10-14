@@ -4,7 +4,8 @@
 - [apperr](modules/apperr.md): typed domain errors, no HTTP imports
 - [config](modules/config.md): env var parsing and startup validation
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
-- [httpapi](modules/httpapi.md): HTTP router, probes, settings, tree/folder/list handlers
+- [httpapi](modules/httpapi.md): HTTP router, probes, settings, tree/folder/list/item handlers
+- [items](modules/items.md): items CRUD, move and reorder, per-kind metadata validation (`items/kinds`)
 - [tree](modules/tree.md): folders and lists CRUD, move with cycle check, reorder, sidebar tree
 - [workspace](modules/workspace.md): single-workspace bootstrap and settings service
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/clock"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
+	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
@@ -34,6 +35,8 @@ type Deps struct {
 	Settings    *workspace.Service
 	// Tree serves folders, lists and the sidebar tree (B-06).
 	Tree *tree.Service
+	// Items serves items (B-07).
+	Items *items.Service
 }
 
 // NewRouter builds the HTTP handler: the generated strict server mounted on

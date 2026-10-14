@@ -92,7 +92,7 @@ func wantProblem(t *testing.T, rec *httptest.ResponseRecorder, status int, code 
 func TestAT10_IfMatchRequired(t *testing.T) {
 	h := stubRouter(t)
 	// Operations with a real handler (their behaviour is tested in tree_test.go).
-	implemented := map[string]bool{"UpdateFolder": true, "MoveFolder": true, "UpdateList": true, "MoveList": true}
+	implemented := map[string]bool{"UpdateFolder": true, "MoveFolder": true, "UpdateList": true, "MoveList": true, "UpdateItem": true, "MoveItem": true}
 	ops := []struct {
 		name, method, path, body, prefix string
 	}{
@@ -167,6 +167,9 @@ func TestIfMatchNotRequired(t *testing.T) {
 		{method: "PUT", path: "/api/v1/folders/order", body: `{"parent_folder_id":null,"ids":[]}`, contentType: jsonCT},
 		{method: "PUT", path: "/api/v1/lists/order", body: `{"folder_id":null,"ids":[]}`, contentType: jsonCT},
 		{method: "GET", path: "/api/v1/tree"},
+		// Items have real handlers too (items_test.go).
+		{method: "POST", path: "/api/v1/lists/" + id1 + "/items", body: `{"title":"t"}`, contentType: jsonCT},
+		{method: "PUT", path: "/api/v1/lists/" + id1 + "/items/order", body: `{"ids":[]}`, contentType: jsonCT},
 	} {
 		t.Run(r.method+" "+r.path, func(t *testing.T) {
 			if rec := do(t, h, r); rec.Code == 428 || rec.Code == 400 {
@@ -175,8 +178,6 @@ func TestIfMatchNotRequired(t *testing.T) {
 		})
 	}
 	for _, r := range []req{
-		{method: "POST", path: "/api/v1/lists/" + id1 + "/items", body: `{"title":"t"}`, contentType: jsonCT},
-		{method: "PUT", path: "/api/v1/lists/" + id1 + "/items/order", body: `{"ids":[]}`, contentType: jsonCT},
 		{method: "POST", path: "/api/v1/trash/" + id1 + "/restore"},
 		{method: "DELETE", path: "/api/v1/trash/" + id1},
 	} {
@@ -241,14 +242,19 @@ func TestBadRequests(t *testing.T) {
 func TestGuardLetsValidRequestsThrough(t *testing.T) {
 	h := stubRouter(t)
 	items := "/api/v1/lists/" + id1 + "/items"
+	wantProblem(t, do(t, h, req{method: "GET", path: "/api/v1/search?q=x&limit=1"}), 501, "not_implemented")
+	// The item handlers are real (no database behind the stub router): the guard must not answer for them.
 	for _, r := range []req{
 		{method: "GET", path: items + "?limit=200&offset=0&sort=title&q=dune"},
-		{method: "GET", path: "/api/v1/search?q=x&limit=1"},
-		// metadata is free-form here; per-kind validation is B-07's job
-		{method: "POST", path: items, body: `{"title":"t","metadata":{"anything":{"goes":[1,2]}},"price":{"currency":"EUR","min":"1.00","max":null}}`, contentType: jsonCT},
+		// metadata is free-form to the guard; per-kind validation is the items service's job
+		{method: "POST", path: items, body: `{"title":"t","metadata":{},"price":{"currency":"EUR","min":"1.00","max":null}}`, contentType: jsonCT},
 		{method: "POST", path: items, body: `{"title":"n"}`, contentType: "application/json; charset=utf-8"},
 	} {
-		t.Run(r.method+" "+r.path, func(t *testing.T) { wantProblem(t, do(t, h, r), 501, "not_implemented") })
+		t.Run(r.method+" "+r.path, func(t *testing.T) {
+			if rec := do(t, h, r); rec.Code == 400 || rec.Code == 413 || rec.Code == 415 || rec.Code == 428 {
+				t.Fatalf("status = %d, the guard blocked a valid request; body=%s", rec.Code, rec.Body)
+			}
+		})
 	}
 }
 
@@ -261,7 +267,9 @@ func TestBodyLimits(t *testing.T) {
 
 	t.Run("default JSON limit is 64 KiB", func(t *testing.T) {
 		wantProblem(t, do(t, h, req{method: "POST", path: "/api/v1/folders", body: jsonBody(64 << 10), contentType: jsonCT}), 413, "payload_too_large")
-		wantProblem(t, do(t, h, req{method: "POST", path: "/api/v1/lists/" + id1 + "/items", body: titleBody(64<<10 - 20), contentType: jsonCT}), 501, "not_implemented")
+		if rec := do(t, h, req{method: "POST", path: "/api/v1/lists/" + id1 + "/items", body: titleBody(64<<10 - 20), contentType: jsonCT}); rec.Code == 413 {
+			t.Fatalf("a body just under the limit answered 413: %s", rec.Body)
+		}
 	})
 	t.Run("chunked JSON without Content-Length is limited too", func(t *testing.T) {
 		r := httptest.NewRequestWithContext(t.Context(), "POST", "/api/v1/folders", io.NopCloser(strings.NewReader(jsonBody(64<<10))))

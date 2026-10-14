@@ -13,6 +13,7 @@ Typed domain errors that services return and that `internal/httpapi` maps to pro
 - `NotFound(resource string) error`: missing or trashed resource (`*NotFoundError`)
 - `VersionConflict(current int) error`: stale If-Match; carries `Current` (`*VersionConflictError`)
 - `Validation(errs ...FieldError) error`: failed field rules (`*ValidationError`)
+- `UnknownField(path string) error`: undeclared key at a dotted path, e.g. `metadata.runtime` (`*UnknownFieldError`, 400 `unknown_field`)
 - `Cycle() error`: 409 `cycle_detected`
 - `ParentInTrash(b BlockingParent) error`: 409 `parent_in_trash` with the blocking ancestor
 - `DestinationUnavailable() error`: 409 `destination_unavailable`

@@ -2,20 +2,22 @@
 
 ## Purpose
 
-Finds active items by title (case-insensitive literal substring) across the workspace and returns each match with its folder and list path. Read-only; no HTTP, returns typed errors. Design context: `/Users/federico/Developer/collections-app/design-docs/` (API.md §5, DATA_MODEL §6, D-004).
+Finds active items by title (case-insensitive literal substring) across the workspace and returns each match with its folder and list path. Also lists the most recently updated items for Home (B-12, D-070). Read-only; no HTTP, returns typed errors. Design context: `/Users/federico/Developer/collections-app/design-docs/` (API.md §5, DATA_MODEL §6, D-004).
 
 ## Key files
 
 - `internal/search/search.go`: `Service`, `Search`, path building from folders and lists (`tree`, `of`)
-- `db/queries/search.sql`: `SearchItems`, `CountSearchItems`, `ListSearchFolders`, `ListSearchLists`
-- `internal/httpapi/search.go`: `SearchItems` handler, 400 mapping, path body
-- `internal/httpapi/search_test.go`: `TestAT12_*` tests
+- `db/queries/search.sql`: `SearchItems`, `CountSearchItems`, `ListRecentItems`, `ListSearchFolders`, `ListSearchLists`
+- `internal/httpapi/search.go`: `SearchItems` and `ListRecentItems` handlers, 400 mapping, path body
+- `internal/httpapi/search_test.go`: `TestAT12_*` tests; `recent_test.go`: `TestB12_*` tests
 
 ## Interfaces
 
 - `New(db sqlc.DBTX, workspaceID uuid.UUID) *Service`
 - `(*Service).Search(ctx, Params{Q, Limit, Offset}) (Page, error)`: limit default 50, max 200
 - `Page{Results []Result, Limit, Offset, Total}`; `Result{Item items.Item, Path []items.PathSegment}`
+- `(*Service).Recent(ctx, limit) ([]Result, error)`: limit default 12, max 50, newest `updated_at` first, then id
+- `GET /api/v1/recent-items?limit=`: 200 `{ data: [SearchResult] }`, no `page`; 400 `invalid_parameter` for a limit outside 1–50 (the guard answers)
 - `ErrInvalidQuery`: `q` is empty after trimming or over 200 characters
 - `GET /api/v1/search?q=&limit=&offset=`: 200 page; 400 `invalid_parameter` for blank `q`
 
@@ -29,3 +31,4 @@ Finds active items by title (case-insensitive literal substring) across the work
 - `Total` comes from a separate count, so it stays right past the last page.
 - The request guard rejects an empty or too long raw `q`; whitespace-only `q` is caught by the service.
 - Trigram index `items_title_trgm_idx`: Postgres uses it only for patterns with 3+ useful characters on large tables. At about 5k rows a seq scan (~3 ms) wins; an index scan appears near 55k rows for rare terms.
+- `Recent` is read-only and reuses the search read model and path building. A PATCH or a content save moves an item up (both bump `updated_at`). No index: a seq scan plus top-N sort took about 4 ms at 20k items.

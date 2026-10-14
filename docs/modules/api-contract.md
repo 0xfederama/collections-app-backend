@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`api/openapi.yaml` is the canonical OpenAPI 3.0.3 contract (37 operations, tagged health, settings, tree, folders, lists, items, image, content, search, trash). Go models and server stubs are generated from it into `internal/httpapi/oapi`. The contract is not mounted in the router yet (B-04). Design context lives in `/Users/federico/Developer/collections-app/design-docs/`.
+`api/openapi.yaml` is the canonical OpenAPI 3.0.3 contract (38 operations, tagged health, settings, tree, folders, lists, items, image, content, search, trash). Go models and server stubs are generated from it into `internal/httpapi/oapi`. The contract is not mounted in the router yet (B-04). Design context lives in `/Users/federico/Developer/collections-app/design-docs/`.
 
 ## Key files
 

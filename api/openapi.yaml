@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -926,6 +926,29 @@ paths:
                 default: { $ref: '#/components/examples/SearchPage' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/recent-items:
+    get:
+      tags: [search]
+      operationId: listRecentItems
+      summary: List recently updated items
+      description: |
+        Active items across the workspace, most recently updated first (a PATCH or a content save moves an item up), with their paths.
+        Not paginated: it feeds the Home block.
+      parameters:
+        - name: limit
+          in: query
+          description: Number of items to return.
+          schema: { type: integer, minimum: 1, maximum: 50, default: 12 }
+      responses:
+        '200':
+          description: The most recently updated items with their paths
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecentItems' }
+              examples:
+                default: { $ref: '#/components/examples/RecentItems' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/v1/trash:
     get:
       tags: [trash]
@@ -1452,6 +1475,28 @@ components:
             created_at: '2026-10-14T09:35:00Z'
             updated_at: '2026-10-14T09:35:00Z'
         page: { limit: 50, offset: 0, total: 2 }
+    RecentItems:
+      value:
+        data:
+          - item:
+              id: 7c1e5a10-0000-4000-8000-000000000101
+              list_id: 7c1e5a10-0000-4000-8000-000000000011
+              title: The Matrix
+              kind: movie
+              summary: A hacker learns the truth about reality.
+              status: Watched
+              image: null
+              price: null
+              official_website_url: null
+              content_version: 2
+              sort_order: 0
+              version: 3
+              created_at: '2026-10-14T09:31:00Z'
+              updated_at: '2026-10-14T10:00:00Z'
+            path:
+              - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000001, name: Media }
+              - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000002, name: Movies }
+              - { type: list, id: 7c1e5a10-0000-4000-8000-000000000011, name: Watchlist }
     SearchPage:
       value:
         data:
@@ -1903,6 +1948,13 @@ components:
           type: array
           items: { $ref: '#/components/schemas/SearchResult' }
         page: { $ref: '#/components/schemas/Page' }
+    RecentItems:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/SearchResult' }
     CreateItemRequest:
       type: object
       additionalProperties: false

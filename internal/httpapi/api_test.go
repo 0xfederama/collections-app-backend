@@ -201,6 +201,8 @@ func TestBadRequests(t *testing.T) {
 		{"search without q", req{method: "GET", path: "/api/v1/search"}, "invalid_parameter", `"q"`},
 		{"search with empty q", req{method: "GET", path: "/api/v1/search?q="}, "invalid_parameter", `"q"`},
 		{"search with long q", req{method: "GET", path: "/api/v1/search?q=" + strings.Repeat("a", 201)}, "invalid_parameter", `"q"`},
+		{"recent limit too large", req{method: "GET", path: "/api/v1/recent-items?limit=51"}, "invalid_parameter", `"limit"`},
+		{"recent limit zero", req{method: "GET", path: "/api/v1/recent-items?limit=0"}, "invalid_parameter", `"limit"`},
 		{"path id not a uuid", req{method: "GET", path: "/api/v1/folders/not-a-uuid"}, "invalid_parameter", `"id"`},
 	}
 	for _, tt := range tests {
@@ -223,6 +225,7 @@ func TestGuardLetsValidRequestsThrough(t *testing.T) {
 	for _, r := range []req{
 		{method: "GET", path: items + "?limit=200&offset=0&sort=title&q=dune"},
 		{method: "GET", path: "/api/v1/trash?limit=1"},
+		{method: "GET", path: "/api/v1/recent-items?limit=50"},
 		// metadata is free-form to the guard; per-kind validation is the items service's job
 		{method: "POST", path: items, body: `{"title":"t","metadata":{},"price":{"currency":"EUR","min":"1.00","max":null}}`, contentType: jsonCT},
 		{method: "POST", path: items, body: `{"title":"n"}`, contentType: "application/json; charset=utf-8"},

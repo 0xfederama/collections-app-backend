@@ -24,6 +24,10 @@ const (
 	DefaultLimit = items.DefaultLimit
 	MaxLimit     = items.MaxLimit
 
+	// DefaultRecentLimit and MaxRecentLimit bound Recent (API.md §5, D-070).
+	DefaultRecentLimit = 12
+	MaxRecentLimit     = 50
+
 	// maxPathDepth stops the parent walk if the data ever holds a cycle.
 	maxPathDepth = 10000
 )
@@ -113,6 +117,38 @@ func (s *Service) Search(ctx context.Context, p Params) (Page, error) {
 		page.Results = append(page.Results, Result{Item: it, Path: path})
 	}
 	return page, nil
+}
+
+// Recent returns the active items updated last, newest first (ties by id),
+// each with its path. Zero limit means DefaultRecentLimit. It shares the path
+// building of Search, so a row whose list vanished between reads is skipped.
+func (s *Service) Recent(ctx context.Context, limit int) ([]Result, error) {
+	if limit <= 0 {
+		limit = DefaultRecentLimit
+	}
+	if limit > MaxRecentLimit {
+		limit = MaxRecentLimit
+	}
+	db := sqlc.New(s.db)
+	rows, err := db.ListRecentItems(ctx, sqlc.ListRecentItemsParams{WorkspaceID: s.workspaceID, PageLimit: int32(limit)}) //nolint:gosec // bounded above
+	if err != nil {
+		return nil, fmt.Errorf("list recent items: %w", err)
+	}
+	results := make([]Result, 0, len(rows))
+	if len(rows) == 0 {
+		return results, nil
+	}
+	paths, err := s.loadPaths(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		it := items.FromRecentRow(r)
+		if path, ok := paths.of(it.ListID); ok {
+			results = append(results, Result{Item: it, Path: path})
+		}
+	}
+	return results, nil
 }
 
 // tree holds the active folders and lists, enough to build any item's path.

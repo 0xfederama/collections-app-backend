@@ -127,14 +127,6 @@ func (*Server) SearchItems(context.Context, oapi.SearchItemsRequestObject) (oapi
 	return nil, apperr.NotImplemented()
 }
 
-func (*Server) GetSettings(context.Context, oapi.GetSettingsRequestObject) (oapi.GetSettingsResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) UpdateSettings(context.Context, oapi.UpdateSettingsRequestObject) (oapi.UpdateSettingsResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
 func (*Server) ListTrash(context.Context, oapi.ListTrashRequestObject) (oapi.ListTrashResponseObject, error) {
 	return nil, apperr.NotImplemented()
 }

@@ -137,6 +137,9 @@ func TestAT10_IfMatchRequired(t *testing.T) {
 				wantProblem(t, call(str(`"`+other+`-1"`)), 428, "precondition_required")
 			})
 		}
+		if op.name == "UpdateSettings" {
+			continue // implemented (B-05): settings_test.go covers a valid If-Match
+		}
 		t.Run(op.name+"/valid-reaches-handler", func(t *testing.T) {
 			rec := call(str(`"` + op.prefix + `-1"`))
 			wantProblem(t, rec, 501, "not_implemented")

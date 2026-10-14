@@ -11,6 +11,8 @@ Owns the PostgreSQL layer: the pgx connection pool, the transaction helper, the 
 - `db/migrations/000001_init.up.sql`: pg_trgm extension and the 8 tables
 - `db/migrations/000001_init.down.sql`: drops everything (destructive)
 - `db/queries/schema.sql`: smoke query, sqlc input
+- `db/queries/workspace.sql`: workspace bootstrap and settings queries (see `workspace` module)
+- `internal/testdb/testdb.go`: test-only shared testcontainers Postgres, `NewMigrated`, `Terminate`
 - `sqlc.yaml`: sqlc config (pgx/v5, uuid to google/uuid, timestamptz to time.Time)
 - `internal/database/sqlc/`: generated code, never edit
 - `internal/database/migrations_test.go`: up, down, up cycle and down with data
@@ -33,3 +35,4 @@ Owns the PostgreSQL layer: the pgx connection pool, the transaction helper, the 
 - sqlc errors on an empty `db/queries` dir, which is why `schema.sql` exists.
 - Constraint names follow `<table>_<cols>_{pkey,key,fkey,check,idx}`; tests assert on them.
 - Migration tests use the `pgx5://` scheme and a testcontainers Postgres with one database per test.
+- `internal/testdb` shares one container per test binary (`testdb.Terminate` from `TestMain`); the `database` package tests still start their own.

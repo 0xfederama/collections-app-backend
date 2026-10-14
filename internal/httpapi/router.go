@@ -9,9 +9,11 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/clock"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
+	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
 // Pinger is satisfied by *pgxpool.Pool.
@@ -25,6 +27,10 @@ type Deps struct {
 	DataDir string
 	Logger  *slog.Logger
 	Clock   clock.Clock
+
+	// WorkspaceID is the single workspace, from workspace.Bootstrap.
+	WorkspaceID uuid.UUID
+	Settings    *workspace.Service
 }
 
 // NewRouter builds the HTTP handler: the generated strict server mounted on

@@ -17,6 +17,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/config"
 	"github.com/0xfederama/collections-app-backend/internal/database"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
+	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
 func main() {
@@ -46,7 +47,19 @@ func run() error {
 	}
 	defer pool.Close()
 
-	handler, err := httpapi.NewRouter(httpapi.Deps{DB: pool, DataDir: cfg.DataDir, Logger: logger, Clock: clock.System{}})
+	workspaceID, err := workspace.Bootstrap(ctx, pool, cfg.WorkspaceName)
+	if err != nil {
+		return err
+	}
+
+	handler, err := httpapi.NewRouter(httpapi.Deps{
+		DB:          pool,
+		DataDir:     cfg.DataDir,
+		Logger:      logger,
+		Clock:       clock.System{},
+		WorkspaceID: workspaceID,
+		Settings:    workspace.NewService(pool),
+	})
 	if err != nil {
 		return err
 	}

@@ -66,6 +66,15 @@ type fakePinger struct{ err error }
 
 func (f fakePinger) Ping(context.Context) error { return f.err }
 
+func newRouter(t *testing.T, d httpapi.Deps) http.Handler {
+	t.Helper()
+	h, err := httpapi.NewRouter(d)
+	if err != nil {
+		t.Fatalf("NewRouter: %v", err)
+	}
+	return h
+}
+
 func quietLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 
 func get(t *testing.T, h http.Handler, method, path string) (int, string) {
@@ -77,7 +86,7 @@ func get(t *testing.T, h http.Handler, method, path string) (int, string) {
 
 func TestHealthz(t *testing.T) {
 	// healthz must not depend on DB or storage.
-	h := httpapi.NewRouter(httpapi.Deps{
+	h := newRouter(t, httpapi.Deps{
 		DB:      fakePinger{err: errors.New("down")},
 		DataDir: "/nonexistent",
 		Logger:  quietLogger(),
@@ -95,7 +104,7 @@ func TestReadyz_OKWithRealPostgres(t *testing.T) {
 	}
 	t.Cleanup(pool.Close)
 
-	h := httpapi.NewRouter(httpapi.Deps{DB: pool, DataDir: t.TempDir(), Logger: quietLogger()})
+	h := newRouter(t, httpapi.Deps{DB: pool, DataDir: t.TempDir(), Logger: quietLogger()})
 	code, body := get(t, h, http.MethodGet, "/readyz")
 	if code != http.StatusOK {
 		t.Fatalf("status = %d body=%q, want 200", code, body)
@@ -104,7 +113,7 @@ func TestReadyz_OKWithRealPostgres(t *testing.T) {
 
 func TestReadyz_DatabaseDown(t *testing.T) {
 	dir := t.TempDir()
-	h := httpapi.NewRouter(httpapi.Deps{
+	h := newRouter(t, httpapi.Deps{
 		DB:      fakePinger{err: errors.New(`pq: password authentication failed for user "collection" SQLSTATE 28P01`)},
 		DataDir: dir,
 		Logger:  quietLogger(),
@@ -141,7 +150,7 @@ func TestReadyz_StoppedPostgresContainer(t *testing.T) {
 	t.Cleanup(pool.Close)
 
 	dir := t.TempDir()
-	h := httpapi.NewRouter(httpapi.Deps{DB: pool, DataDir: dir, Logger: quietLogger()})
+	h := newRouter(t, httpapi.Deps{DB: pool, DataDir: dir, Logger: quietLogger()})
 	if code, body := get(t, h, http.MethodGet, "/readyz"); code != http.StatusOK {
 		t.Fatalf("before stop: status = %d body=%q, want 200", code, body)
 	}
@@ -159,7 +168,7 @@ func TestReadyz_StoppedPostgresContainer(t *testing.T) {
 
 func TestReadyz_DataDirMissing(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "does", "not", "exist")
-	h := httpapi.NewRouter(httpapi.Deps{DB: fakePinger{}, DataDir: missing, Logger: quietLogger()})
+	h := newRouter(t, httpapi.Deps{DB: fakePinger{}, DataDir: missing, Logger: quietLogger()})
 	code, body := get(t, h, http.MethodGet, "/readyz")
 	if code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", code)
@@ -177,7 +186,7 @@ func TestReadyz_DataDirUnwritable(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
 
-	h := httpapi.NewRouter(httpapi.Deps{DB: fakePinger{}, DataDir: dir, Logger: quietLogger()})
+	h := newRouter(t, httpapi.Deps{DB: fakePinger{}, DataDir: dir, Logger: quietLogger()})
 	code, body := get(t, h, http.MethodGet, "/readyz")
 	if code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", code)
@@ -187,7 +196,7 @@ func TestReadyz_DataDirUnwritable(t *testing.T) {
 
 func TestReadyz_LeavesNoProbeFilesBehind(t *testing.T) {
 	dir := t.TempDir()
-	h := httpapi.NewRouter(httpapi.Deps{DB: fakePinger{}, DataDir: dir, Logger: quietLogger()})
+	h := newRouter(t, httpapi.Deps{DB: fakePinger{}, DataDir: dir, Logger: quietLogger()})
 	if code, _ := get(t, h, http.MethodGet, "/readyz"); code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", code)
 	}

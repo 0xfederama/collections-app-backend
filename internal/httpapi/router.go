@@ -1,4 +1,5 @@
-// Package httpapi holds the HTTP router, handlers and middleware.
+// Package httpapi holds the HTTP router, middleware, problem+json mapping and
+// the handlers behind the generated strict server.
 package httpapi
 
 import (
@@ -6,10 +7,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/0xfederama/collections-app-backend/internal/clock"
+	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 )
 
 // Pinger is satisfied by *pgxpool.Pool.
@@ -22,57 +24,54 @@ type Deps struct {
 	DB      Pinger
 	DataDir string
 	Logger  *slog.Logger
+	Clock   clock.Clock
 }
 
-// NewRouter builds the HTTP handler. Further middleware lands in B-04.
-func NewRouter(d Deps) http.Handler {
-	r := chi.NewRouter()
-	r.Get("/healthz", handleHealthz)
-	r.Get("/readyz", readyHandler(d))
-	return r
-}
-
-func handleHealthz(w http.ResponseWriter, _ *http.Request) {
-	writeText(w, http.StatusOK, "ok")
-}
-
-// readyHandler reports 200 only when the database answers and DATA_DIR is
-// writable. Failures return a terse body: no paths, SQL or driver errors.
-func readyHandler(d Deps) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-
-		if err := d.DB.Ping(ctx); err != nil {
-			d.Logger.Warn("readiness: database ping failed", "err", err)
-			writeText(w, http.StatusServiceUnavailable, "database unavailable")
-			return
-		}
-		if err := checkWritable(d.DataDir); err != nil {
-			d.Logger.Warn("readiness: data dir not writable", "err", err)
-			writeText(w, http.StatusServiceUnavailable, "storage unavailable")
-			return
-		}
-		writeText(w, http.StatusOK, "ready")
+// NewRouter builds the HTTP handler: the generated strict server mounted on
+// chi, behind request id, security headers, access log and panic recovery.
+func NewRouter(d Deps) (http.Handler, error) {
+	if d.Clock == nil {
+		d.Clock = clock.System{}
 	}
+	return newHandler(newServer(d), d)
 }
 
-func checkWritable(dir string) error {
-	f, err := os.CreateTemp(dir, ".readyz-*")
+// newHandler mounts any strict server implementation; tests use it to inject
+// handlers that fail or panic.
+func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
+	doc, err := oapi.GetSpec()
 	if err != nil {
-		return fmt.Errorf("create probe file: %w", err)
+		return nil, fmt.Errorf("load embedded openapi spec: %w", err)
 	}
-	name := f.Name()
-	if err := f.Close(); err != nil {
-		_ = os.Remove(name)
-		return fmt.Errorf("close probe file: %w", err)
-	}
-	return os.Remove(name)
+
+	errs := handlerErrors{log: d.Logger}
+	strict := oapi.NewStrictHandlerWithOptions(si, nil, oapi.StrictHTTPServerOptions{
+		RequestErrorHandlerFunc:  errs.request,
+		ResponseErrorHandlerFunc: errs.response,
+	})
+
+	r := chi.NewRouter()
+	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
+		writeProblem(w, newProblem(http.StatusNotFound, "not_found", "Not found", "No such endpoint."))
+	})
+	r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
+		writeProblem(w, newProblem(http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed",
+			"This endpoint does not support that method."))
+	})
+	oapi.HandlerWithOptions(strict, oapi.ChiServerOptions{
+		BaseRouter:       r,
+		Middlewares:      []oapi.MiddlewareFunc{newGuard(doc).middleware},
+		ErrorHandlerFunc: errs.parameter,
+	})
+
+	return wrap(r, d.Logger), nil
 }
 
-func writeText(w http.ResponseWriter, status int, body string) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.WriteHeader(status)
-	_, _ = w.Write([]byte(body + "\n"))
+// wrap adds the cross-cutting middleware, outermost first: request id,
+// security headers, access log, panic recovery.
+func wrap(h http.Handler, log *slog.Logger) http.Handler {
+	h = recoverer(log)(h)
+	h = accessLog(log)(h)
+	h = securityHeaders(h)
+	return requestID(h)
 }

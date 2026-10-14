@@ -88,6 +88,7 @@ func toProblem(err error, requestID string) (p problem, unexpected bool) {
 		notFound    *apperr.NotFoundError
 		stale       *apperr.VersionConflictError
 		invalid     *apperr.ValidationError
+		unknown     *apperr.UnknownFieldError
 		conflict    *apperr.ConflictError
 		tooLarge    *apperr.PayloadTooLargeError
 		badMedia    *apperr.UnsupportedMediaTypeError
@@ -109,6 +110,8 @@ func toProblem(err error, requestID string) (p problem, unexpected bool) {
 			p.Errors = append(p.Errors, fieldProblem{Field: fe.Field, Message: fe.Message})
 		}
 		return p, false
+	case errors.As(err, &unknown):
+		return unknownField(unknown.Path), false
 	case errors.As(err, &conflict):
 		return conflictProblem(conflict), false
 	case errors.As(err, &tooLarge), errors.As(err, &bodyTooBig):

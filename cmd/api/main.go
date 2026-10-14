@@ -17,6 +17,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/config"
 	"github.com/0xfederama/collections-app-backend/internal/database"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
+	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
@@ -61,6 +62,7 @@ func run() error {
 		WorkspaceID: workspaceID,
 		Settings:    workspace.NewService(pool),
 		Tree:        tree.New(pool, clock.System{}, workspaceID),
+		Items:       items.New(pool, clock.System{}, workspaceID),
 	})
 	if err != nil {
 		return err

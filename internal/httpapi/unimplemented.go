@@ -27,14 +27,6 @@ func (*Server) DeleteItem(context.Context, oapi.DeleteItemRequestObject) (oapi.D
 	return nil, apperr.NotImplemented()
 }
 
-func (*Server) GetItem(context.Context, oapi.GetItemRequestObject) (oapi.GetItemResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) UpdateItem(context.Context, oapi.UpdateItemRequestObject) (oapi.UpdateItemResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
 func (*Server) GetItemContent(context.Context, oapi.GetItemContentRequestObject) (oapi.GetItemContentResponseObject, error) {
 	return nil, apperr.NotImplemented()
 }
@@ -63,23 +55,7 @@ func (*Server) SetItemImage(context.Context, oapi.SetItemImageRequestObject) (oa
 	return nil, apperr.NotImplemented()
 }
 
-func (*Server) MoveItem(context.Context, oapi.MoveItemRequestObject) (oapi.MoveItemResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
 func (*Server) DeleteList(context.Context, oapi.DeleteListRequestObject) (oapi.DeleteListResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) ListItems(context.Context, oapi.ListItemsRequestObject) (oapi.ListItemsResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) CreateItem(context.Context, oapi.CreateItemRequestObject) (oapi.CreateItemResponseObject, error) {
-	return nil, apperr.NotImplemented()
-}
-
-func (*Server) ReorderListItems(context.Context, oapi.ReorderListItemsRequestObject) (oapi.ReorderListItemsResponseObject, error) {
 	return nil, apperr.NotImplemented()
 }
 

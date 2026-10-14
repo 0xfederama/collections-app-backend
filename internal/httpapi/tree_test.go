@@ -14,6 +14,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/clock"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
+	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
@@ -36,7 +37,7 @@ func newTreeEnv(t *testing.T) *treeEnv {
 	}
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: ws,
-		Tree: tree.New(pool, clock.System{}, ws),
+		Tree: tree.New(pool, clock.System{}, ws), Items: items.New(pool, clock.System{}, ws),
 	})
 	return &treeEnv{t: t, h: h, pool: pool, ws: ws}
 }

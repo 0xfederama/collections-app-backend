@@ -6,3 +6,4 @@ compose.override.yaml
 *.test
 *.out
 .DS_Store
+/backups/

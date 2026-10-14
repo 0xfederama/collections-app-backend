@@ -4,6 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if [ -f .env ]; then
+  # shellcheck source=/dev/null
   set -a && . ./.env && set +a
 fi
 if [ "${APP_ENV:-development}" = "production" ]; then

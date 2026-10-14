@@ -75,8 +75,30 @@ This starts `db`, runs `migrate` once, then starts `api` on `http://127.0.0.1:80
 | All gates | `make check` (needs Docker running) |
 | Vulnerability scan | `make audit` |
 | Safe reset (deletes DB + uploads) | `make reset-dev` (asks first, refuses when `APP_ENV=production`) |
+| Backup / restore / verify | `scripts/backup.sh`, `scripts/restore.sh`, `scripts/verify-restore.sh` (see [Backup and restore](#backup-and-restore)) |
+| Backup round-trip test (AT-17) | `make test-backup` (about a minute, not part of `make check`) |
 
-`make check` = gofmt check, golangci-lint (including goimports), the Redocly spec lint, a generated-code drift check, `go test ./...` (testcontainers Postgres), a check that compose publishes ports on `127.0.0.1` only, and a Docker image build.
+`make check` = gofmt check, golangci-lint (including goimports), the Redocly spec lint, shellcheck on `scripts/` (pinned Docker image), a generated-code drift check, `go test ./...` (testcontainers Postgres), a check that compose publishes ports on `127.0.0.1` only, and a Docker image build.
+
+## Backup and restore
+
+The data lives in two places, the Postgres volume and the uploaded images (`appdata` volume). A backup always takes both; a database-only backup is not enough. Needs Docker Compose, `jq` and (preferably) `zstd` on the host (without `zstd`, `gzip` is used).
+
+```bash
+scripts/backup.sh                    # -> ./backups/<UTC timestamp>/{db.dump,files.tar.zst,manifest.json}
+scripts/backup.sh /mnt/usb/backups   # another destination
+scripts/verify-restore.sh ./backups/<timestamp>
+scripts/restore.sh ./backups/<timestamp>           # into EMPTY volumes
+scripts/restore.sh ./backups/<timestamp> --force   # deletes the current data first (asks you to type "restore")
+```
+
+- `backup.sh` stops the `api` for a few seconds so nothing is written while it copies, and always starts it again, even when a step fails. A failed run leaves no half-written backup behind.
+- `restore.sh` checks the checksums in the manifest, restores the database and the images, verifies the result, applies any newer migrations and starts the `api`. It refuses non-empty volumes unless you pass `--force`.
+- `verify-restore.sh` compares row counts per table, the latest Markdown body of every item and every attachment (original and thumbnail present, original checksum matching) with the manifest, and exits non-zero with a list of what differs. Run it right after a restore: edits made since the backup show up as differences.
+- Run the scripts from any directory; set `COMPOSE_PROJECT_NAME` if your stack uses a non-default project name.
+- **Back up before every migration in production** (upgrade steps: backup, pull new images, `migrate up`, restart, check `/readyz`). To roll back, restore the backup taken before the upgrade: a migration `down` does not bring the files back and can lose data.
+- **Retention:** keep at least 7 daily and 4 weekly copies **off the device** (another disk, NAS or cloud of your choice). Backups hold all your data and the images unencrypted; keep them private and never commit them (`backups/` is gitignored).
+- Only restore backups you made yourself: the manifest checksums detect corruption, not a malicious archive.
 
 ## Host-run loop (faster iteration)
 

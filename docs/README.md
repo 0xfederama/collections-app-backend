@@ -2,6 +2,7 @@
 
 - [api-contract](modules/api-contract.md): OpenAPI contract and generated Go server stubs
 - [apperr](modules/apperr.md): typed domain errors, no HTTP imports
+- [backup](modules/backup.md): Postgres plus images backup, restore and verify scripts (`scripts/`)
 - [config](modules/config.md): env var parsing and startup validation
 - [content](modules/content.md): item Markdown content, versions, restore and retention
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen

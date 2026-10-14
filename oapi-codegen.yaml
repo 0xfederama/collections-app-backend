@@ -1,0 +1,9 @@
+# oapi-codegen config (D-041). Run through `make generate`.
+package: oapi
+output: internal/httpapi/oapi/oapi.gen.go
+generate:
+  models: true
+  chi-server: true
+  strict-server: true
+output-options:
+  nullable-type: true

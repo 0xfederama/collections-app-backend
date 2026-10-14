@@ -1,7 +1,7 @@
 # collections-app-backend
 
 Go REST API + PostgreSQL for the Collection App (private, two-person collection manager). It owns the canonical API
-contract (`api/openapi.yaml`, arrives in B-03). Design docs: `/Users/federico/Developer/collections-app/design-docs/`.
+contract (`api/openapi.yaml`, OpenAPI 3.0.3). Design docs: `/Users/federico/Developer/collections-app/design-docs/`.
 
 This repo is the `backend/` submodule of the parent repo [collections-app](https://github.com/0xfederama/collections-app),
 next to `frontend-web/` (the React app, repo `collections-app-frontend-web`). From the parent folder,
@@ -18,7 +18,8 @@ There is no CI. Quality gates run locally with `make check` (see below).
 | Config | Env vars validated at startup, all problems reported together |
 | Logging | `log/slog`, `LOG_FORMAT` (`json` or `text`), `LOG_LEVEL` |
 | Database | Connection pool, migration `000001_init` (full schema + `pg_trgm`), sqlc-generated code |
-| Everything else | Not built yet: contract (B-03), middleware/transactions (B-04), then the domain features (B-05 onward) |
+| Contract | `api/openapi.yaml` describes the whole API; generated strict chi server types in `internal/httpapi/oapi` (not mounted yet) |
+| Everything else | Not built yet: middleware/transactions (B-04), then the domain features (B-05 onward) |
 
 There is no authentication, so the API is published on `127.0.0.1` only. See the parent README, "Security boundary".
 
@@ -29,6 +30,8 @@ cmd/api/main.go        wiring only: config → logger → pgx pool → chi route
 internal/config        env parsing and validation
 internal/database      pgx pool constructor
 internal/httpapi       router, /healthz, /readyz
+internal/httpapi/oapi  GENERATED from api/openapi.yaml (models, chi server, strict interface). Never edit
+api/openapi.yaml       the canonical API contract (spec wins over design-docs/API.md)
 db/migrations          golang-migrate files (`000001_init`)
 db/queries             sqlc queries (generated into internal/database/sqlc)
 scripts/               check-compose-exposure.sh, reset-dev.sh
@@ -44,6 +47,7 @@ distroless runtime image has no shell or curl.
 |---|---|
 | Go | 1.27.2 |
 | Docker with Compose v2 | any recent (Docker Desktop 28 tested) |
+| Node | 24+ (only for `make lint-api`, which runs Redocly through `npx`) |
 | Git, `gh` | for PRs |
 
 Postgres 18.6 and golang-migrate 4.20.1 run as pinned Docker images, so there's nothing else to install.
@@ -66,11 +70,13 @@ This starts `db`, runs `migrate` once, then starts `api` on `http://127.0.0.1:80
 | Migrate | `make migrate` |
 | New migration | `make migration name=<snake_case>` |
 | Test / lint / format | `make test` / `make lint` / `make fmt` |
+| Lint the API spec | `make lint-api` (Redocly, config in `redocly.yaml`) |
+| Regenerate code | `make generate` (sqlc + oapi-codegen) |
 | All gates | `make check` (needs Docker running) |
 | Vulnerability scan | `make audit` |
 | Safe reset (deletes DB + uploads) | `make reset-dev` (asks first, refuses when `APP_ENV=production`) |
 
-`make check` = gofmt check, golangci-lint (including goimports), `go test ./...` (testcontainers Postgres), a check that compose publishes ports on `127.0.0.1` only, and a Docker image build.
+`make check` = gofmt check, golangci-lint (including goimports), the Redocly spec lint, a generated-code drift check, `go test ./...` (testcontainers Postgres), a check that compose publishes ports on `127.0.0.1` only, and a Docker image build.
 
 ## Host-run loop (faster iteration)
 
@@ -82,6 +88,13 @@ make run                                                 # uses .env, DATA_DIR=.
 ```
 
 `make run` reads `.env` and builds `DATABASE_URL` for `localhost:5432` from `POSTGRES_PASSWORD` (set `DATABASE_URL` in `.env` to override).
+
+## API contract
+
+`api/openapi.yaml` is the source of truth for every endpoint, schema, header and error. Change the spec first, then run
+`make generate` to refresh `internal/httpapi/oapi/oapi.gen.go` (committed, never hand-edited), and commit both. `make check` lints the
+spec with Redocly and fails if the generated code is out of date. The web repo vendors a pinned copy of the spec
+(`api/openapi.lock.json` there); contract changes follow `design-docs/AGENT_WORKFLOW.md` §6.
 
 ## Configuration
 
@@ -96,4 +109,4 @@ Environment variables are validated at startup. See `.env.example` and `design-d
 - **Migrations not applied:** `make migrate`, then `docker compose logs migrate`. `docker compose up --build` applies 000001 on a fresh database.
 - **Storage permissions:** `DATA_DIR` must exist and be writable (the container uses UID 65532 and the `appdata` volume). `/readyz` returns 503 if it isn't.
 - **`make check` fails on tests:** Docker must be running. The first lint run compiles golangci-lint and is slow once.
-- **Stale generated code:** run `make generate` (sqlc; OpenAPI arrives in B-03) and commit the result. `make check` fails on drift.
+- **Stale generated code:** run `make generate` (sqlc and oapi-codegen) and commit the result. `make check` fails on drift.

@@ -1,0 +1,15 @@
+extends:
+  - recommended
+rules:
+  # Examples must match their schemas: W-02 builds MSW mocks from them.
+  no-invalid-media-type-examples:
+    severity: error
+    allowAdditionalProperties: false
+  no-invalid-schema-examples: error
+  no-invalid-parameter-examples: error
+  # The MVP has no auth (PRODUCT §7); it stays on a private network.
+  security-defined: off
+  # License is still open (DECISIONS Q-4).
+  info-license: off
+  # Probes, settings GET and tree GET have no client-error case in API.md §4.
+  operation-4xx-response: off

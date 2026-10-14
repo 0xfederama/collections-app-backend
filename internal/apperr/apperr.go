@@ -1,0 +1,107 @@
+// Package apperr holds the typed domain errors services return. It knows
+// nothing about HTTP: internal/httpapi alone maps these to problem+json
+// (ARCHITECTURE §2 Rules, API.md §4). Use errors.As to inspect them.
+package apperr
+
+import (
+	"errors"
+	"fmt"
+)
+
+// Code is a machine-readable conflict reason (the `code` of a 409 problem).
+type Code string
+
+const (
+	CodeCycleDetected          Code = "cycle_detected"
+	CodeParentInTrash          Code = "parent_in_trash"
+	CodeDestinationUnavailable Code = "destination_unavailable"
+	CodeOrderStale             Code = "order_stale"
+)
+
+// NotFoundError means the resource is missing or trashed.
+type NotFoundError struct{ Resource string }
+
+func (e *NotFoundError) Error() string { return e.Resource + " not found" }
+
+// NotFound reports a missing (or trashed) resource such as "folder" or "item".
+func NotFound(resource string) error { return &NotFoundError{Resource: resource} }
+
+// VersionConflictError means a stale If-Match; Current is the stored version.
+type VersionConflictError struct{ Current int }
+
+func (e *VersionConflictError) Error() string {
+	return fmt.Sprintf("version conflict: current version is %d", e.Current)
+}
+
+// VersionConflict reports a stale write against the current stored version.
+func VersionConflict(current int) error { return &VersionConflictError{Current: current} }
+
+// FieldError is one failed field rule (API.md §4, 422 `errors[]`).
+type FieldError struct {
+	Field   string
+	Message string
+}
+
+// ValidationError carries every failed field rule of a request.
+type ValidationError struct{ Errors []FieldError }
+
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("validation failed: %d field error(s)", len(e.Errors))
+}
+
+// Validation reports failed field rules. Pass at least one.
+func Validation(errs ...FieldError) error { return &ValidationError{Errors: errs} }
+
+// BlockingParent names the trashed ancestor that blocks a restore.
+type BlockingParent struct {
+	Type string // "folder" or "list"
+	ID   string
+	Name string
+}
+
+// ConflictError is a 409 with a stable Code.
+type ConflictError struct {
+	Code Code
+	// Blocking is set for CodeParentInTrash only.
+	Blocking *BlockingParent
+}
+
+func (e *ConflictError) Error() string { return "conflict: " + string(e.Code) }
+
+// Cycle reports a folder moved into itself or a descendant.
+func Cycle() error { return &ConflictError{Code: CodeCycleDetected} }
+
+// ParentInTrash reports a restore without destination whose parent is trashed.
+func ParentInTrash(b BlockingParent) error {
+	return &ConflictError{Code: CodeParentInTrash, Blocking: &b}
+}
+
+// DestinationUnavailable reports a move, restore or create target that is missing or trashed.
+func DestinationUnavailable() error { return &ConflictError{Code: CodeDestinationUnavailable} }
+
+// OrderStale reports a reorder whose id set no longer matches the stored one.
+func OrderStale() error { return &ConflictError{Code: CodeOrderStale} }
+
+// PayloadTooLargeError means a body or upload exceeded its limit.
+type PayloadTooLargeError struct{ Limit int64 }
+
+func (e *PayloadTooLargeError) Error() string {
+	return fmt.Sprintf("payload larger than %d bytes", e.Limit)
+}
+
+// PayloadTooLarge reports a body over limit bytes.
+func PayloadTooLarge(limit int64) error { return &PayloadTooLargeError{Limit: limit} }
+
+// UnsupportedMediaTypeError means an upload is not an accepted image type.
+type UnsupportedMediaTypeError struct{ Detail string }
+
+func (e *UnsupportedMediaTypeError) Error() string { return "unsupported media type: " + e.Detail }
+
+// UnsupportedMediaType reports an upload that is not JPEG, PNG or WebP.
+func UnsupportedMediaType(detail string) error { return &UnsupportedMediaTypeError{Detail: detail} }
+
+// ErrNotImplemented marks an operation the stub server has not implemented yet (501).
+var ErrNotImplemented = errors.New("not implemented")
+
+// NotImplemented returns ErrNotImplemented.
+func NotImplemented() error { return ErrNotImplemented }

@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/0xfederama/collections-app-backend/internal/clock"
 	"github.com/0xfederama/collections-app-backend/internal/config"
 	"github.com/0xfederama/collections-app-backend/internal/database"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
@@ -45,9 +46,16 @@ func run() error {
 	}
 	defer pool.Close()
 
+	handler, err := httpapi.NewRouter(httpapi.Deps{DB: pool, DataDir: cfg.DataDir, Logger: logger, Clock: clock.System{}})
+	if err != nil {
+		return err
+	}
+
+	// ReadTimeout/WriteTimeout are the defaults; the request guard extends both
+	// for multipart image uploads (see internal/httpapi/guard.go).
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.NewRouter(httpapi.Deps{DB: pool, DataDir: cfg.DataDir, Logger: logger}),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,

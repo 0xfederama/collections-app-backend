@@ -1,0 +1,2116 @@
+openapi: 3.0.3
+info:
+  title: Collection App API
+  version: 0.1.0
+  description: |
+    Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
+
+    **Conventions**
+    - Bodies are JSON (`application/json`) unless noted. Field names are `snake_case`, IDs are UUIDs, timestamps are RFC 3339 UTC.
+    - Money is a decimal string with 2 decimals (`"1299.00"`).
+    - Unknown request fields return `400 unknown_field`. `PATCH` is a partial update: send `null` explicitly to clear a nullable field. `PUT` replaces a sub-resource.
+    - Create returns `201` with the resource and a `Location` header. Delete and purge return `204`.
+    - Every response to a `GET` of a single resource, and to a mutation that returns one, carries an `ETag` header.
+    - **Every response carries an `X-Request-Id` header** (set by middleware, so it is not repeated on each operation).
+
+    **Optimistic concurrency.** ETags are typed and derived from `version`: folder `"f-N"`, list `"l-N"`, item `"i-N"`,
+    content `"c-N"`, settings `"s-N"`. Operations marked *requires `If-Match`* answer `428 precondition_required` when the header is
+    missing (or is `*`) and `412 version_conflict` (with `current_version`) when it is stale. Creates, the three `…/order` endpoints and
+    trash restore/purge do not take `If-Match`.
+
+    **Errors** are RFC 9457 `application/problem+json` with a stable `code` (see the `Problem` schema). A missing **or trashed** resource is
+    `404 not_found` on every non-trash endpoint.
+
+    **Limits.** JSON bodies: 64 KiB (2 MiB on the content `PUT`). Multipart image upload: 10 MiB plus 64 KiB overhead. Markdown: 1 MiB UTF-8.
+    Item pages: `limit` 1–200 (default 50), `offset` ≥ 0.
+servers:
+  - url: /
+tags:
+  - name: health
+    description: Liveness and readiness probes (outside `/api/v1`).
+  - name: settings
+    description: Workspace name and settings (one resource, one ETag).
+  - name: tree
+    description: The sidebar tree of active folders and lists.
+  - name: folders
+    description: Folders, their moves and ordering.
+  - name: lists
+    description: Lists, their moves and ordering.
+  - name: items
+    description: Items and their metadata.
+  - name: image
+    description: Item images (upload or URL) and attachment files.
+  - name: content
+    description: Markdown content of an item and its version history.
+  - name: search
+    description: Title search across all active items.
+  - name: trash
+    description: Deleted folders, lists and items, addressed by trash batch.
+paths:
+  /healthz:
+    get:
+      tags: [health]
+      operationId: checkHealth
+      summary: Liveness probe
+      description: 200 if the process is up.
+      responses:
+        '200':
+          description: The process is up
+          content:
+            text/plain:
+              schema: { type: string }
+              examples:
+                ok: { value: ok }
+  /readyz:
+    get:
+      tags: [health]
+      operationId: checkReadiness
+      summary: Readiness probe
+      description: 200 if the database is reachable and `DATA_DIR` is writable, else 503.
+      responses:
+        '200':
+          description: Ready
+          content:
+            text/plain:
+              schema: { type: string }
+              examples:
+                ready: { value: ready }
+        '503':
+          description: Database or storage unavailable
+          content:
+            text/plain:
+              schema: { type: string }
+              examples:
+                database: { value: database unavailable }
+  /api/v1/settings:
+    get:
+      tags: [settings]
+      operationId: getSettings
+      summary: Get workspace settings
+      responses:
+        '200':
+          description: The settings, including the workspace name
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Settings' }
+              examples:
+                default: { $ref: '#/components/examples/Settings' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    patch:
+      tags: [settings]
+      operationId: updateSettings
+      summary: Update workspace settings
+      description: |
+        Requires `If-Match` (`"s-N"`). Lowering `markdown_history_limit` prunes on the next save per item, not immediately.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateSettingsRequest' }
+            examples:
+              rename:
+                value: { workspace_name: Our Collection, markdown_history_limit: 30 }
+      responses:
+        '200':
+          description: The updated settings
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Settings' }
+              examples:
+                default: { $ref: '#/components/examples/Settings' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/tree:
+    get:
+      tags: [tree]
+      operationId: getTree
+      summary: Get the sidebar tree
+      description: All **active** folders and lists, flat and unpaginated. The client builds the tree.
+      responses:
+        '200':
+          description: Active folders and lists
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tree' }
+              examples:
+                default: { $ref: '#/components/examples/Tree' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/folders:
+    post:
+      tags: [folders]
+      operationId: createFolder
+      summary: Create a folder
+      description: Appended to the end of its siblings. `parent_folder_id` absent or `null` creates it at the root. A missing or trashed parent returns 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateFolderRequest' }
+            examples:
+              nested:
+                value: { name: Movies, parent_folder_id: 7c1e5a10-0000-4000-8000-000000000001 }
+      responses:
+        '201':
+          description: Created
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Location: { $ref: '#/components/headers/Location' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Folder' }
+              examples:
+                default: { $ref: '#/components/examples/Folder' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/folders/order:
+    put:
+      tags: [folders]
+      operationId: reorderFolders
+      summary: Reorder the child folders of a parent
+      description: |
+        `ids` must be **all** active child folders of `parent_folder_id` (`null` = root), in the new order. A set mismatch returns
+        `409 order_stale`. No `If-Match`. Sibling versions are not bumped.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderFoldersRequest' }
+            examples:
+              root:
+                value:
+                  parent_folder_id: null
+                  ids: [7c1e5a10-0000-4000-8000-000000000002, 7c1e5a10-0000-4000-8000-000000000001]
+      responses:
+        '204': { description: Reordered }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/OrderStale' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/folders/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [folders]
+      operationId: getFolder
+      summary: Get a folder
+      responses:
+        '200':
+          description: The folder
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Folder' }
+              examples:
+                default: { $ref: '#/components/examples/Folder' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    patch:
+      tags: [folders]
+      operationId: updateFolder
+      summary: Rename a folder
+      description: Requires `If-Match` (`"f-N"`).
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateFolderRequest' }
+            examples:
+              rename: { value: { name: Films } }
+      responses:
+        '200':
+          description: The updated folder
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Folder' }
+              examples:
+                default: { $ref: '#/components/examples/Folder' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [folders]
+      operationId: deleteFolder
+      summary: Move a folder and its subtree to the trash
+      description: Requires `If-Match` (`"f-N"`).
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': { description: Moved to the trash }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/folders/{id}/move:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [folders]
+      operationId: moveFolder
+      summary: Move a folder under another parent
+      description: |
+        Requires `If-Match` (`"f-N"`). `parent_folder_id: null` moves it to the root. The folder is appended to the end of the new
+        siblings and its `version` is bumped. Moving into itself or a descendant returns `409 cycle_detected`; a missing or trashed
+        destination returns `409 destination_unavailable`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoveFolderRequest' }
+            examples:
+              toRoot: { value: { parent_folder_id: null } }
+      responses:
+        '200':
+          description: The moved folder
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Folder' }
+              examples:
+                default: { $ref: '#/components/examples/Folder' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/FolderMoveConflict' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/lists:
+    post:
+      tags: [lists]
+      operationId: createList
+      summary: Create a list
+      description: Appended to the end of its siblings. `folder_id` absent or `null` creates it at the root. A missing or trashed folder returns 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateListRequest' }
+            examples:
+              watchlist:
+                value:
+                  name: Watchlist
+                  folder_id: 7c1e5a10-0000-4000-8000-000000000001
+                  description: Films to watch
+                  display_mode: thumbnail
+                  sort_mode: manual
+      responses:
+        '201':
+          description: Created
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Location: { $ref: '#/components/headers/Location' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/List' }
+              examples:
+                default: { $ref: '#/components/examples/List' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/lists/order:
+    put:
+      tags: [lists]
+      operationId: reorderLists
+      summary: Reorder the child lists of a folder
+      description: |
+        `ids` must be **all** active child lists of `folder_id` (`null` = root), in the new order. A set mismatch returns
+        `409 order_stale`. No `If-Match`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderListsRequest' }
+            examples:
+              inFolder:
+                value:
+                  folder_id: 7c1e5a10-0000-4000-8000-000000000001
+                  ids: [7c1e5a10-0000-4000-8000-000000000012, 7c1e5a10-0000-4000-8000-000000000011]
+      responses:
+        '204': { description: Reordered }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/OrderStale' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/lists/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [lists]
+      operationId: getList
+      summary: Get a list
+      description: Includes `path` (the ancestor folders).
+      responses:
+        '200':
+          description: The list
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/List' }
+              examples:
+                withPath: { $ref: '#/components/examples/ListWithPath' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    patch:
+      tags: [lists]
+      operationId: updateList
+      summary: Update a list
+      description: 'Requires `If-Match` (`"l-N"`). Send `description: null` to clear it.'
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateListRequest' }
+            examples:
+              viewMode: { value: { display_mode: grid, sort_mode: title } }
+      responses:
+        '200':
+          description: The updated list
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/List' }
+              examples:
+                default: { $ref: '#/components/examples/List' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [lists]
+      operationId: deleteList
+      summary: Move a list and its items to the trash
+      description: Requires `If-Match` (`"l-N"`).
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': { description: Moved to the trash }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/lists/{id}/move:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [lists]
+      operationId: moveList
+      summary: Move a list to another folder
+      description: |
+        Requires `If-Match` (`"l-N"`). `folder_id: null` moves it to the root. Appended to the end of the new siblings.
+        A missing or trashed destination returns `409 destination_unavailable`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoveListRequest' }
+            examples:
+              toFolder: { value: { folder_id: 7c1e5a10-0000-4000-8000-000000000002 } }
+      responses:
+        '200':
+          description: The moved list
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/List' }
+              examples:
+                default: { $ref: '#/components/examples/List' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/DestinationUnavailable' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/lists/{id}/items:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [items]
+      operationId: listItems
+      summary: List the items of a list
+      description: "Sorted by `sort` (default: the list's `sort_mode`), tie-break `id`. `q` filters by title."
+      parameters:
+        - name: sort
+          in: query
+          description: Defaults to the list's `sort_mode`.
+          schema: { type: string, enum: [manual, title, updated] }
+        - name: q
+          in: query
+          description: Case-insensitive title filter.
+          schema: { type: string, minLength: 1, maxLength: 200 }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: A page of item summaries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ItemPage' }
+              examples:
+                default: { $ref: '#/components/examples/ItemPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [items]
+      operationId: createItem
+      summary: Create an item
+      description: |
+        Appended to the end of the list. `kind` defaults to `generic`. Image and Markdown content are set through their own endpoints
+        after creation. `metadata` is validated per kind (see the `*Metadata` schemas).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateItemRequest' }
+            examples:
+              movie:
+                value:
+                  title: The Matrix
+                  kind: movie
+                  summary: A hacker learns the truth about reality.
+                  status: Watched
+                  price: null
+                  official_website_url: https://www.warnerbros.com/movies/matrix
+                  metadata:
+                    release_year: 1999
+                    runtime_minutes: 136
+                    imdb_url: https://www.imdb.com/title/tt0133093/
+                    streaming: { country: IT, platforms: [Netflix, Prime Video] }
+      responses:
+        '201':
+          description: Created
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Location: { $ref: '#/components/headers/Location' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Item' }
+              examples:
+                movie: { $ref: '#/components/examples/ItemMovie' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/lists/{id}/items/order:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    put:
+      tags: [items]
+      operationId: reorderListItems
+      summary: Reorder the items of a list
+      description: |
+        `ids` must be **all** active items of the list, in the new order. Allowed regardless of `sort_mode`. A set mismatch returns
+        `409 order_stale`. No `If-Match`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderItemsRequest' }
+            examples:
+              two:
+                value: { ids: [7c1e5a10-0000-4000-8000-000000000102, 7c1e5a10-0000-4000-8000-000000000101] }
+      responses:
+        '204': { description: Reordered }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/OrderStale' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/items/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [items]
+      operationId: getItem
+      summary: Get an item
+      description: Includes `path` (the ancestor folders and the list).
+      responses:
+        '200':
+          description: The item
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Item' }
+              examples:
+                movie: { $ref: '#/components/examples/ItemMovieWithPath' }
+                motorcycle: { $ref: '#/components/examples/ItemMotorcycle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    patch:
+      tags: [items]
+      operationId: updateItem
+      summary: Update an item
+      description: |
+        Requires `If-Match` (`"i-N"`). Any of `title, kind, summary, status, price, official_website_url, metadata`; send `null` to clear
+        a nullable field. If `kind` changes and `metadata` is absent, metadata resets to `{}`. Image changes go through the image endpoints.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateItemRequest' }
+            examples:
+              price:
+                value: { status: Owned, price: { min: '12000.00', max: '13500.00', currency: EUR } }
+      responses:
+        '200':
+          description: The updated item
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Item' }
+              examples:
+                motorcycle: { $ref: '#/components/examples/ItemMotorcycle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [items]
+      operationId: deleteItem
+      summary: Move an item to the trash
+      description: Requires `If-Match` (`"i-N"`).
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': { description: Moved to the trash }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/items/{id}/move:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [items]
+      operationId: moveItem
+      summary: Move an item to another list
+      description: Requires `If-Match` (`"i-N"`). Appended to the end of the destination list. A missing or trashed list returns `409 destination_unavailable`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoveItemRequest' }
+            examples:
+              toList: { value: { list_id: 7c1e5a10-0000-4000-8000-000000000012 } }
+      responses:
+        '200':
+          description: The moved item
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Item' }
+              examples:
+                motorcycle: { $ref: '#/components/examples/ItemMotorcycle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/DestinationUnavailable' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/items/{id}/image:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    put:
+      tags: [image]
+      operationId: setItemImage
+      summary: Set the item image (upload or URL)
+      description: |
+        Requires `If-Match` (`"i-N"`). Replaces any existing image of either source. Send **either** `multipart/form-data` with a `file`
+        field (up to 10 MiB, JPEG/PNG/WebP detected by content sniffing, SVG always rejected) **or** JSON `{ "url": "https://…" }`.
+        Returns the updated item.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/UploadImageRequest' }
+          application/json:
+            schema: { $ref: '#/components/schemas/SetImageUrlRequest' }
+            examples:
+              url: { value: { url: 'https://image.tmdb.org/t/p/w500/matrix.jpg' } }
+      responses:
+        '200':
+          description: The updated item
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Item' }
+              examples:
+                upload: { $ref: '#/components/examples/ItemMovie' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [image]
+      operationId: deleteItemImage
+      summary: Remove the item image
+      description: Requires `If-Match` (`"i-N"`). Returns the updated item.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: The updated item
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Item' }
+              examples:
+                motorcycle: { $ref: '#/components/examples/ItemMotorcycle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/attachments/{id}/file:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [image]
+      operationId: getAttachmentFile
+      summary: Download the original image
+      description: A replacement always creates a new attachment ID, so the response is cacheable forever.
+      responses:
+        '200':
+          description: The original image
+          headers:
+            Cache-Control: { $ref: '#/components/headers/ImmutableCacheControl' }
+          content:
+            image/jpeg: { schema: { $ref: '#/components/schemas/BinaryFile' } }
+            image/png: { schema: { $ref: '#/components/schemas/BinaryFile' } }
+            image/webp: { schema: { $ref: '#/components/schemas/BinaryFile' } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/attachments/{id}/thumbnail:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [image]
+      operationId: getAttachmentThumbnail
+      summary: Download the JPEG thumbnail
+      description: Longest side 640 px. Same caching as the original.
+      responses:
+        '200':
+          description: The thumbnail
+          headers:
+            Cache-Control: { $ref: '#/components/headers/ImmutableCacheControl' }
+          content:
+            image/jpeg: { schema: { $ref: '#/components/schemas/BinaryFile' } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/items/{id}/content:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [content]
+      operationId: getItemContent
+      summary: Get the current Markdown content
+      description: Version 0 with an empty body if the item was never saved.
+      responses:
+        '200':
+          description: The current content
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Content' }
+              examples:
+                saved: { $ref: '#/components/examples/Content' }
+                empty: { $ref: '#/components/examples/ContentEmpty' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    put:
+      tags: [content]
+      operationId: updateItemContent
+      summary: Save the Markdown content
+      description: |
+        Requires `If-Match` (`"c-N"`, the current content version). The body is at most 1 MiB UTF-8. An identical body returns 200 with the
+        same version. Bumps the item's `updated_at` but not its `version`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateContentRequest' }
+            examples:
+              notes: { value: { body: "# Notes\n\nGreat film, rewatch in 4K." } }
+      responses:
+        '200':
+          description: The saved content
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Content' }
+              examples:
+                saved: { $ref: '#/components/examples/Content' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/items/{id}/content/versions:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [content]
+      operationId: listContentVersions
+      summary: List the saved content versions
+      description: Newest first, unpaginated (at most 201).
+      responses:
+        '200':
+          description: The version list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentVersionList' }
+              examples:
+                default: { $ref: '#/components/examples/ContentVersionList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/items/{id}/content/versions/{version}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Version'
+    get:
+      tags: [content]
+      operationId: getContentVersion
+      summary: Get one content version (for preview)
+      description: Returns 404 if that version never existed or was pruned. The `ETag` is that version's (`"c-N"`).
+      responses:
+        '200':
+          description: The content of that version
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Content' }
+              examples:
+                saved: { $ref: '#/components/examples/Content' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/items/{id}/content/restore:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [content]
+      operationId: restoreContentVersion
+      summary: Restore an older content version
+      description: |
+        Requires `If-Match` (`"c-N"`, the **current** version). Creates a new version with the body of `version` and returns it.
+        404 if that version was pruned.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RestoreContentRequest' }
+            examples:
+              v1: { value: { version: 1 } }
+      responses:
+        '200':
+          description: The new current content
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Content' }
+              examples:
+                saved: { $ref: '#/components/examples/Content' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/search:
+    get:
+      tags: [search]
+      operationId: searchItems
+      summary: Search items by title
+      description: Case-insensitive substring match. Exact matches first, then alphabetical.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 200 }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: A page of matches with their paths
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchPage' }
+              examples:
+                default: { $ref: '#/components/examples/SearchPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/trash:
+    get:
+      tags: [trash]
+      operationId: listTrash
+      summary: List trash entries
+      description: One entry per user-initiated delete, newest first.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: A page of trash entries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TrashPage' }
+              examples:
+                default: { $ref: '#/components/examples/TrashPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/trash/{batch_id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/BatchId'
+    post:
+      tags: [trash]
+      operationId: restoreTrashBatch
+      summary: Restore a trash batch
+      description: |
+        No `If-Match`. The body is optional. Without a destination the root returns to its original parent; if that parent is trashed or
+        gone the call returns `409 parent_in_trash` (with `blocking_parent`). With a destination the root is re-parented and appended
+        to the end: `destination.folder_id` for folders and lists (`null` = root), `destination.list_id` for items.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RestoreTrashRequest' }
+            examples:
+              toRoot: { value: { destination: { folder_id: null } } }
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RestoreResult' }
+              examples:
+                default: { value: { root_type: list, root_id: 7c1e5a10-0000-4000-8000-000000000012 } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/RestoreConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/trash/{batch_id}:
+    parameters:
+      - $ref: '#/components/parameters/BatchId'
+    delete:
+      tags: [trash]
+      operationId: purgeTrashBatch
+      summary: Purge a trash batch permanently
+      description: Deletes the subtree and its files. No `If-Match`.
+      responses:
+        '204': { description: Purged }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      description: Resource ID.
+      schema: { type: string, format: uuid }
+    BatchId:
+      name: batch_id
+      in: path
+      required: true
+      description: Trash batch ID (`TrashEntry.id`).
+      schema: { type: string, format: uuid }
+    Version:
+      name: version
+      in: path
+      required: true
+      description: Content version number.
+      schema: { type: integer, minimum: 1 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: |
+        **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
+        does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
+      schema: { type: string, maxLength: 64 }
+      example: '"i-7"'
+    Limit:
+      name: limit
+      in: query
+      description: Page size.
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Offset:
+      name: offset
+      in: query
+      description: Number of rows to skip.
+      schema: { type: integer, minimum: 0, default: 0 }
+  headers:
+    ETag:
+      description: Typed ETag derived from `version` (`"f-N"`, `"l-N"`, `"i-N"`, `"c-N"`, `"s-N"`). Use it as `If-Match`.
+      required: true
+      schema: { type: string }
+      example: '"i-3"'
+    Location:
+      description: URL of the created resource.
+      required: true
+      schema: { type: string }
+      example: /api/v1/items/7c1e5a10-0000-4000-8000-000000000101
+    ImmutableCacheControl:
+      description: Always `private, max-age=31536000, immutable`.
+      required: true
+      schema: { type: string }
+      example: private, max-age=31536000, immutable
+  responses:
+    BadRequest:
+      description: Malformed JSON, unknown field or invalid path/query parameter
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            malformed_request:
+              value:
+                type: https://collection-app.invalid/problems/malformed-request
+                title: Malformed request
+                status: 400
+                detail: The request body is not valid JSON.
+                code: malformed_request
+            unknown_field:
+              value:
+                type: https://collection-app.invalid/problems/unknown-field
+                title: Unknown field
+                status: 400
+                detail: 'Unknown field "colour".'
+                code: unknown_field
+            invalid_parameter:
+              value:
+                type: https://collection-app.invalid/problems/invalid-parameter
+                title: Invalid parameter
+                status: 400
+                detail: '"limit" must be between 1 and 200.'
+                code: invalid_parameter
+    NotFound:
+      description: The resource is missing or trashed
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            not_found:
+              value:
+                type: https://collection-app.invalid/problems/not-found
+                title: Not found
+                status: 404
+                detail: Item not found.
+                code: not_found
+    FolderMoveConflict:
+      description: The destination is the folder itself or a descendant, or is missing or trashed
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            cycle_detected:
+              value:
+                type: https://collection-app.invalid/problems/cycle-detected
+                title: Cycle detected
+                status: 409
+                detail: A folder cannot be moved into itself or one of its descendants.
+                code: cycle_detected
+            destination_unavailable:
+              value:
+                type: https://collection-app.invalid/problems/destination-unavailable
+                title: Destination unavailable
+                status: 409
+                detail: The destination folder does not exist or is in the trash.
+                code: destination_unavailable
+    DestinationUnavailable:
+      description: The destination folder or list is missing or trashed
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            destination_unavailable:
+              value:
+                type: https://collection-app.invalid/problems/destination-unavailable
+                title: Destination unavailable
+                status: 409
+                detail: The destination list does not exist or is in the trash.
+                code: destination_unavailable
+    OrderStale:
+      description: '`ids` is not exactly the current set of active siblings'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            order_stale:
+              value:
+                type: https://collection-app.invalid/problems/order-stale
+                title: Order is stale
+                status: 409
+                detail: The list of items changed. Reload and try again.
+                code: order_stale
+    RestoreConflict:
+      description: The original parent is in the trash (or gone), or the chosen destination is unusable
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/RestoreConflictProblem' }
+          examples:
+            parent_in_trash:
+              value:
+                type: https://collection-app.invalid/problems/parent-in-trash
+                title: Parent is in the trash
+                status: 409
+                detail: Restore the parent first, or choose a destination.
+                code: parent_in_trash
+                blocking_parent:
+                  type: folder
+                  id: 7c1e5a10-0000-4000-8000-000000000003
+                  name: Vehicles
+            destination_unavailable:
+              value:
+                type: https://collection-app.invalid/problems/destination-unavailable
+                title: Destination unavailable
+                status: 409
+                detail: The destination folder does not exist or is in the trash.
+                code: destination_unavailable
+            cycle_detected:
+              value:
+                type: https://collection-app.invalid/problems/cycle-detected
+                title: Cycle detected
+                status: 409
+                detail: A folder cannot be restored into itself or one of its descendants.
+                code: cycle_detected
+    VersionConflict:
+      description: '`If-Match` is stale'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/VersionConflictProblem' }
+          examples:
+            version_conflict:
+              value:
+                type: https://collection-app.invalid/problems/version-conflict
+                title: Resource was modified
+                status: 412
+                detail: Item was changed by someone else.
+                code: version_conflict
+                current_version: 8
+    PayloadTooLarge:
+      description: JSON body over the route limit, Markdown over 1 MiB, or image over 10 MiB
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            payload_too_large:
+              value:
+                type: https://collection-app.invalid/problems/payload-too-large
+                title: Payload too large
+                status: 413
+                detail: The request body exceeds the limit for this route.
+                code: payload_too_large
+    UnsupportedMediaType:
+      description: The upload is not a JPEG, PNG or WebP image (SVG is always rejected)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            unsupported_media_type:
+              value:
+                type: https://collection-app.invalid/problems/unsupported-media-type
+                title: Unsupported media type
+                status: 415
+                detail: Only JPEG, PNG and WebP images are accepted.
+                code: unsupported_media_type
+    ValidationFailed:
+      description: A field rule was violated
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ValidationProblem' }
+          examples:
+            validation_failed:
+              value:
+                type: https://collection-app.invalid/problems/validation-failed
+                title: Validation failed
+                status: 422
+                detail: One or more fields are invalid.
+                code: validation_failed
+                errors:
+                  - { field: price.max, message: must be greater than or equal to price.min }
+    PreconditionRequired:
+      description: '`If-Match` is missing (or `*`)'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            precondition_required:
+              value:
+                type: https://collection-app.invalid/problems/precondition-required
+                title: Precondition required
+                status: 428
+                detail: Send the resource ETag in the If-Match header.
+                code: precondition_required
+    InternalError:
+      description: Unexpected server error. Never contains SQL, paths or stack traces
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            internal:
+              value:
+                type: https://collection-app.invalid/problems/internal
+                title: Internal error
+                status: 500
+                detail: Something went wrong.
+                code: internal
+                request_id: 5b0c1d52-7f10-4e0e-9a55-3b2d3c0f6a11
+  examples:
+    Settings:
+      value:
+        workspace_name: Our Collection
+        streaming_country_code: IT
+        default_currency: EUR
+        markdown_history_limit: 20
+        version: 4
+    Folder:
+      value:
+        id: 7c1e5a10-0000-4000-8000-000000000002
+        parent_folder_id: 7c1e5a10-0000-4000-8000-000000000001
+        name: Movies
+        sort_order: 0
+        version: 1
+        created_at: '2026-10-14T09:30:00Z'
+        updated_at: '2026-10-14T09:30:00Z'
+    List:
+      value:
+        id: 7c1e5a10-0000-4000-8000-000000000011
+        folder_id: 7c1e5a10-0000-4000-8000-000000000002
+        name: Watchlist
+        description: Films to watch
+        display_mode: thumbnail
+        sort_mode: manual
+        sort_order: 0
+        item_count: 2
+        version: 1
+        created_at: '2026-10-14T09:30:00Z'
+        updated_at: '2026-10-14T09:30:00Z'
+    ListWithPath:
+      value:
+        id: 7c1e5a10-0000-4000-8000-000000000011
+        folder_id: 7c1e5a10-0000-4000-8000-000000000002
+        name: Watchlist
+        description: Films to watch
+        display_mode: thumbnail
+        sort_mode: manual
+        sort_order: 0
+        item_count: 2
+        version: 1
+        created_at: '2026-10-14T09:30:00Z'
+        updated_at: '2026-10-14T09:30:00Z'
+        path:
+          - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000001, name: Media }
+          - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000002, name: Movies }
+    Tree:
+      value:
+        folders:
+          - id: 7c1e5a10-0000-4000-8000-000000000001
+            parent_folder_id: null
+            name: Media
+            sort_order: 0
+            version: 1
+            created_at: '2026-10-14T09:00:00Z'
+            updated_at: '2026-10-14T09:00:00Z'
+          - id: 7c1e5a10-0000-4000-8000-000000000002
+            parent_folder_id: 7c1e5a10-0000-4000-8000-000000000001
+            name: Movies
+            sort_order: 0
+            version: 1
+            created_at: '2026-10-14T09:30:00Z'
+            updated_at: '2026-10-14T09:30:00Z'
+          - id: 7c1e5a10-0000-4000-8000-000000000003
+            parent_folder_id: null
+            name: Vehicles
+            sort_order: 1
+            version: 1
+            created_at: '2026-10-14T09:05:00Z'
+            updated_at: '2026-10-14T09:05:00Z'
+        lists:
+          - id: 7c1e5a10-0000-4000-8000-000000000011
+            folder_id: 7c1e5a10-0000-4000-8000-000000000002
+            name: Watchlist
+            description: Films to watch
+            display_mode: thumbnail
+            sort_mode: manual
+            sort_order: 0
+            item_count: 2
+            version: 1
+            created_at: '2026-10-14T09:30:00Z'
+            updated_at: '2026-10-14T09:30:00Z'
+          - id: 7c1e5a10-0000-4000-8000-000000000012
+            folder_id: 7c1e5a10-0000-4000-8000-000000000003
+            name: Motorbikes
+            description: null
+            display_mode: grid
+            sort_mode: title
+            sort_order: 0
+            item_count: 1
+            version: 2
+            created_at: '2026-10-14T09:10:00Z'
+            updated_at: '2026-10-14T09:40:00Z'
+    ItemMovie:
+      value:
+        id: 7c1e5a10-0000-4000-8000-000000000101
+        list_id: 7c1e5a10-0000-4000-8000-000000000011
+        title: The Matrix
+        kind: movie
+        summary: A hacker learns the truth about reality.
+        status: Watched
+        image:
+          source: upload
+          attachment_id: 7c1e5a10-0000-4000-8000-000000000201
+          url: /api/v1/attachments/7c1e5a10-0000-4000-8000-000000000201/file
+          thumbnail_url: /api/v1/attachments/7c1e5a10-0000-4000-8000-000000000201/thumbnail
+          width: 1000
+          height: 1500
+          original_filename: matrix.jpg
+        price: null
+        official_website_url: https://www.warnerbros.com/movies/matrix
+        metadata:
+          release_year: 1999
+          runtime_minutes: 136
+          imdb_url: https://www.imdb.com/title/tt0133093/
+          streaming: { country: IT, platforms: [Netflix, Prime Video] }
+        content_version: 2
+        sort_order: 0
+        version: 3
+        created_at: '2026-10-14T09:31:00Z'
+        updated_at: '2026-10-14T10:00:00Z'
+    ItemMovieWithPath:
+      value:
+        id: 7c1e5a10-0000-4000-8000-000000000101
+        list_id: 7c1e5a10-0000-4000-8000-000000000011
+        title: The Matrix
+        kind: movie
+        summary: A hacker learns the truth about reality.
+        status: Watched
+        image: null
+        price: null
+        official_website_url: null
+        metadata:
+          release_year: 1999
+          runtime_minutes: 136
+          imdb_url: https://www.imdb.com/title/tt0133093/
+          streaming: { country: IT, platforms: [Netflix, Prime Video] }
+        content_version: 2
+        sort_order: 0
+        version: 3
+        created_at: '2026-10-14T09:31:00Z'
+        updated_at: '2026-10-14T10:00:00Z'
+        path:
+          - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000001, name: Media }
+          - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000002, name: Movies }
+          - { type: list, id: 7c1e5a10-0000-4000-8000-000000000011, name: Watchlist }
+    ItemMotorcycle:
+      value:
+        id: 7c1e5a10-0000-4000-8000-000000000102
+        list_id: 7c1e5a10-0000-4000-8000-000000000012
+        title: Ducati Monster
+        kind: motorcycle
+        summary: Naked bike with a 937 cc twin.
+        status: Owned
+        image: { source: url, url: 'https://example.org/images/monster.jpg' }
+        price: { min: '12000.00', max: '13500.00', currency: EUR }
+        official_website_url: https://www.ducati.com/
+        metadata:
+          make: Ducati
+          model: Monster
+          model_year: 2024
+          segment: naked
+          displacement_cc: 937
+          power_hp: 111
+          torque_nm: 93
+          wet_weight_kg: 188
+          seat_height_mm: 820
+          license_class: A
+        content_version: 0
+        sort_order: 0
+        version: 2
+        created_at: '2026-10-14T09:20:00Z'
+        updated_at: '2026-10-14T09:40:00Z'
+    ItemPage:
+      value:
+        data:
+          - id: 7c1e5a10-0000-4000-8000-000000000101
+            list_id: 7c1e5a10-0000-4000-8000-000000000011
+            title: The Matrix
+            kind: movie
+            summary: A hacker learns the truth about reality.
+            status: Watched
+            image:
+              url: /api/v1/attachments/7c1e5a10-0000-4000-8000-000000000201/file
+              thumbnail_url: /api/v1/attachments/7c1e5a10-0000-4000-8000-000000000201/thumbnail
+            price: null
+            official_website_url: null
+            content_version: 2
+            sort_order: 0
+            version: 3
+            created_at: '2026-10-14T09:31:00Z'
+            updated_at: '2026-10-14T10:00:00Z'
+          - id: 7c1e5a10-0000-4000-8000-000000000103
+            list_id: 7c1e5a10-0000-4000-8000-000000000011
+            title: Blade Runner 2049
+            kind: movie
+            summary: null
+            status: To watch
+            image: { url: 'https://example.org/images/br2049.jpg' }
+            price: null
+            official_website_url: null
+            content_version: 0
+            sort_order: 1
+            version: 1
+            created_at: '2026-10-14T09:35:00Z'
+            updated_at: '2026-10-14T09:35:00Z'
+        page: { limit: 50, offset: 0, total: 2 }
+    SearchPage:
+      value:
+        data:
+          - item:
+              id: 7c1e5a10-0000-4000-8000-000000000101
+              list_id: 7c1e5a10-0000-4000-8000-000000000011
+              title: The Matrix
+              kind: movie
+              summary: A hacker learns the truth about reality.
+              status: Watched
+              image: null
+              price: null
+              official_website_url: null
+              content_version: 2
+              sort_order: 0
+              version: 3
+              created_at: '2026-10-14T09:31:00Z'
+              updated_at: '2026-10-14T10:00:00Z'
+            path:
+              - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000001, name: Media }
+              - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000002, name: Movies }
+              - { type: list, id: 7c1e5a10-0000-4000-8000-000000000011, name: Watchlist }
+        page: { limit: 50, offset: 0, total: 1 }
+    Content:
+      value:
+        item_id: 7c1e5a10-0000-4000-8000-000000000101
+        version: 2
+        body: "# Notes\n\nGreat film, rewatch in 4K."
+        updated_at: '2026-10-14T10:00:00Z'
+    ContentEmpty:
+      value:
+        item_id: 7c1e5a10-0000-4000-8000-000000000102
+        version: 0
+        body: ''
+        updated_at: null
+    ContentVersionList:
+      value:
+        data:
+          - { version: 2, size_bytes: 36, created_at: '2026-10-14T10:00:00Z' }
+          - { version: 1, size_bytes: 8, created_at: '2026-10-14T09:45:00Z' }
+    TrashPage:
+      value:
+        data:
+          - id: 7c1e5a10-0000-4000-8000-000000000301
+            root_type: list
+            root_id: 7c1e5a10-0000-4000-8000-000000000013
+            root_name: Old cameras
+            former_path:
+              - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000003, name: Vehicles }
+            deleted_at: '2026-10-14T11:00:00Z'
+            counts: { folders: 0, lists: 1, items: 17 }
+            restorable_in_place: true
+          - id: 7c1e5a10-0000-4000-8000-000000000302
+            root_type: item
+            root_id: 7c1e5a10-0000-4000-8000-000000000104
+            root_name: Heat
+            former_path:
+              - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000001, name: Media }
+              - { type: list, id: 7c1e5a10-0000-4000-8000-000000000014, name: Crime }
+            deleted_at: '2026-10-13T18:20:00Z'
+            counts: { folders: 0, lists: 0, items: 1 }
+            restorable_in_place: false
+        page: { limit: 50, offset: 0, total: 2 }
+  schemas:
+    # ---- Errors ----
+    Problem:
+      type: object
+      description: RFC 9457 problem details.
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, description: 'URI identifying the problem, e.g. https://collection-app.invalid/problems/version-conflict.' }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code:
+          type: string
+          description: Stable machine-readable code.
+          enum:
+            - malformed_request
+            - unknown_field
+            - invalid_parameter
+            - not_found
+            - cycle_detected
+            - parent_in_trash
+            - destination_unavailable
+            - order_stale
+            - version_conflict
+            - payload_too_large
+            - unsupported_media_type
+            - validation_failed
+            - precondition_required
+            - internal
+        request_id: { type: string, description: Only on `internal` problems. Matches the `X-Request-Id` header. }
+    VersionConflictProblem:
+      description: '`412 version_conflict`.'
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [current_version]
+          properties:
+            current_version: { type: integer, description: The resource's current `version`. }
+    ValidationProblem:
+      description: '`422 validation_failed`.'
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [errors]
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                required: [field, message]
+                properties:
+                  field: { type: string, description: 'Dotted path, e.g. `price.max`.' }
+                  message: { type: string }
+    RestoreConflictProblem:
+      description: '`409` from a trash restore. `blocking_parent` is present for `parent_in_trash`.'
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            blocking_parent: { $ref: '#/components/schemas/PathSegment' }
+    # ---- Shared ----
+    Page:
+      type: object
+      required: [limit, offset, total]
+      properties:
+        limit: { type: integer }
+        offset: { type: integer }
+        total: { type: integer, description: "Total rows matching, ignoring limit and offset." }
+    PathSegment:
+      type: object
+      required: [type, id, name]
+      properties:
+        type: { type: string, enum: [folder, list] }
+        id: { type: string, format: uuid }
+        name: { type: string }
+    Price:
+      type: object
+      nullable: true
+      description: At least one of `min` and `max` is set when a price exists. `min` must not exceed `max`.
+      additionalProperties: false
+      required: [min, max, currency]
+      properties:
+        min: { type: string, nullable: true, pattern: '^\d{1,10}\.\d{2}$', example: '12.00' }
+        max: { type: string, nullable: true, pattern: '^\d{1,10}\.\d{2}$', example: '15.00' }
+        currency: { type: string, pattern: '^[A-Z]{3}$', example: EUR }
+    UrlImage:
+      type: object
+      required: [source, url]
+      properties:
+        source: { type: string, enum: [url] }
+        url: { type: string, maxLength: 2048 }
+    UploadImage:
+      type: object
+      required: [source, attachment_id, url, thumbnail_url, width, height, original_filename]
+      properties:
+        source: { type: string, enum: [upload] }
+        attachment_id: { type: string, format: uuid }
+        url: { type: string, description: 'Always `/api/v1/attachments/{id}/file`.' }
+        thumbnail_url: { type: string, description: 'Always `/api/v1/attachments/{id}/thumbnail`.' }
+        width: { type: integer }
+        height: { type: integer }
+        original_filename: { type: string, nullable: true, maxLength: 255 }
+    Image:
+      description: An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
+      type: object
+      nullable: true
+      oneOf:
+        - $ref: '#/components/schemas/UrlImage'
+        - $ref: '#/components/schemas/UploadImage'
+      discriminator:
+        propertyName: source
+        mapping:
+          url: '#/components/schemas/UrlImage'
+          upload: '#/components/schemas/UploadImage'
+    ImageSummary:
+      type: object
+      nullable: true
+      description: The image reduced for list rows and search. `thumbnail_url` is present for uploads only.
+      required: [url]
+      properties:
+        url: { type: string }
+        thumbnail_url: { type: string }
+    BinaryFile:
+      type: string
+      format: binary
+    # ---- Settings, tree ----
+    Settings:
+      type: object
+      required: [workspace_name, streaming_country_code, default_currency, markdown_history_limit, version]
+      properties:
+        workspace_name: { type: string, minLength: 1, maxLength: 200 }
+        streaming_country_code: { type: string, pattern: '^[A-Z]{2}$' }
+        default_currency: { type: string, pattern: '^[A-Z]{3}$' }
+        markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
+        version: { type: integer }
+    UpdateSettingsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        workspace_name: { type: string, minLength: 1, maxLength: 200 }
+        streaming_country_code: { type: string, pattern: '^[A-Z]{2}$' }
+        default_currency: { type: string, pattern: '^[A-Z]{3}$' }
+        markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
+    Tree:
+      type: object
+      required: [folders, lists]
+      properties:
+        folders:
+          type: array
+          items: { $ref: '#/components/schemas/Folder' }
+        lists:
+          type: array
+          items: { $ref: '#/components/schemas/List' }
+    # ---- Folders ----
+    Folder:
+      type: object
+      required: [id, parent_folder_id, name, sort_order, version, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        parent_folder_id: { type: string, format: uuid, nullable: true }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        sort_order: { type: integer }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreateFolderRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        parent_folder_id: { type: string, format: uuid, nullable: true }
+    UpdateFolderRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+    MoveFolderRequest:
+      type: object
+      additionalProperties: false
+      required: [parent_folder_id]
+      properties:
+        parent_folder_id: { type: string, format: uuid, nullable: true, description: '`null` = root.' }
+    ReorderFoldersRequest:
+      type: object
+      additionalProperties: false
+      required: [parent_folder_id, ids]
+      properties:
+        parent_folder_id: { type: string, format: uuid, nullable: true, description: '`null` = root.' }
+        ids:
+          type: array
+          maxItems: 10000
+          items: { type: string, format: uuid }
+    # ---- Lists ----
+    DisplayMode:
+      type: string
+      enum: [compact, thumbnail, grid]
+    SortMode:
+      type: string
+      enum: [manual, title, updated]
+    List:
+      type: object
+      required: [id, folder_id, name, description, display_mode, sort_mode, sort_order, item_count, version, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        folder_id: { type: string, format: uuid, nullable: true }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, nullable: true, maxLength: 2000 }
+        display_mode: { $ref: '#/components/schemas/DisplayMode' }
+        sort_mode: { $ref: '#/components/schemas/SortMode' }
+        sort_order: { type: integer }
+        item_count: { type: integer, description: Number of active items. }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        path:
+          type: array
+          description: Ancestor folders. Present on `getList` only.
+          items: { $ref: '#/components/schemas/PathSegment' }
+    CreateListRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        folder_id: { type: string, format: uuid, nullable: true }
+        description: { type: string, nullable: true, maxLength: 2000 }
+        display_mode: { $ref: '#/components/schemas/DisplayMode' }
+        sort_mode: { $ref: '#/components/schemas/SortMode' }
+    UpdateListRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, nullable: true, maxLength: 2000 }
+        display_mode: { $ref: '#/components/schemas/DisplayMode' }
+        sort_mode: { $ref: '#/components/schemas/SortMode' }
+    MoveListRequest:
+      type: object
+      additionalProperties: false
+      required: [folder_id]
+      properties:
+        folder_id: { type: string, format: uuid, nullable: true, description: '`null` = root.' }
+    ReorderListsRequest:
+      type: object
+      additionalProperties: false
+      required: [folder_id, ids]
+      properties:
+        folder_id: { type: string, format: uuid, nullable: true, description: '`null` = root.' }
+        ids:
+          type: array
+          maxItems: 10000
+          items: { type: string, format: uuid }
+    # ---- Items ----
+    ItemKind:
+      type: string
+      enum: [generic, movie, tv_show, motorcycle, car, camera]
+    ItemBase:
+      type: object
+      description: Fields shared by every item kind. `kind` and `metadata` are added by the per-kind schemas.
+      required: [id, list_id, title, summary, status, image, price, official_website_url, content_version, sort_order, version, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        list_id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 300 }
+        summary: { type: string, nullable: true, maxLength: 1000 }
+        status: { type: string, nullable: true, maxLength: 100 }
+        image: { $ref: '#/components/schemas/Image' }
+        price: { $ref: '#/components/schemas/Price' }
+        official_website_url: { type: string, nullable: true, maxLength: 2048 }
+        content_version: { type: integer, description: 'Current Markdown version (0 = empty). For display only; use the content endpoints to edit.' }
+        sort_order: { type: integer }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        path:
+          type: array
+          description: Ancestor folders and the list. Present on `getItem` only.
+          items: { $ref: '#/components/schemas/PathSegment' }
+    GenericItem:
+      allOf:
+        - $ref: '#/components/schemas/ItemBase'
+        - type: object
+          required: [kind, metadata]
+          properties:
+            kind: { type: string, enum: [generic] }
+            metadata: { $ref: '#/components/schemas/GenericMetadata' }
+    MovieItem:
+      allOf:
+        - $ref: '#/components/schemas/ItemBase'
+        - type: object
+          required: [kind, metadata]
+          properties:
+            kind: { type: string, enum: [movie] }
+            metadata: { $ref: '#/components/schemas/MovieMetadata' }
+    TvShowItem:
+      allOf:
+        - $ref: '#/components/schemas/ItemBase'
+        - type: object
+          required: [kind, metadata]
+          properties:
+            kind: { type: string, enum: [tv_show] }
+            metadata: { $ref: '#/components/schemas/TvShowMetadata' }
+    MotorcycleItem:
+      allOf:
+        - $ref: '#/components/schemas/ItemBase'
+        - type: object
+          required: [kind, metadata]
+          properties:
+            kind: { type: string, enum: [motorcycle] }
+            metadata: { $ref: '#/components/schemas/MotorcycleMetadata' }
+    CarItem:
+      allOf:
+        - $ref: '#/components/schemas/ItemBase'
+        - type: object
+          required: [kind, metadata]
+          properties:
+            kind: { type: string, enum: [car] }
+            metadata: { $ref: '#/components/schemas/CarMetadata' }
+    CameraItem:
+      allOf:
+        - $ref: '#/components/schemas/ItemBase'
+        - type: object
+          required: [kind, metadata]
+          properties:
+            kind: { type: string, enum: [camera] }
+            metadata: { $ref: '#/components/schemas/CameraMetadata' }
+    Item:
+      description: An item. `metadata` has the shape of its `kind` (discriminated union).
+      oneOf:
+        - $ref: '#/components/schemas/GenericItem'
+        - $ref: '#/components/schemas/MovieItem'
+        - $ref: '#/components/schemas/TvShowItem'
+        - $ref: '#/components/schemas/MotorcycleItem'
+        - $ref: '#/components/schemas/CarItem'
+        - $ref: '#/components/schemas/CameraItem'
+      discriminator:
+        propertyName: kind
+        mapping:
+          generic: '#/components/schemas/GenericItem'
+          movie: '#/components/schemas/MovieItem'
+          tv_show: '#/components/schemas/TvShowItem'
+          motorcycle: '#/components/schemas/MotorcycleItem'
+          car: '#/components/schemas/CarItem'
+          camera: '#/components/schemas/CameraItem'
+    ItemSummary:
+      type: object
+      description: "An item row in lists and search: no `metadata`, and the image is reduced."
+      required: [id, list_id, title, kind, summary, status, image, price, official_website_url, content_version, sort_order, version, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        list_id: { type: string, format: uuid }
+        title: { type: string }
+        kind: { $ref: '#/components/schemas/ItemKind' }
+        summary: { type: string, nullable: true }
+        status: { type: string, nullable: true }
+        image: { $ref: '#/components/schemas/ImageSummary' }
+        price: { $ref: '#/components/schemas/Price' }
+        official_website_url: { type: string, nullable: true }
+        content_version: { type: integer }
+        sort_order: { type: integer }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ItemPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/ItemSummary' }
+        page: { $ref: '#/components/schemas/Page' }
+    SearchResult:
+      type: object
+      required: [item, path]
+      properties:
+        item: { $ref: '#/components/schemas/ItemSummary' }
+        path:
+          type: array
+          items: { $ref: '#/components/schemas/PathSegment' }
+    SearchPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/SearchResult' }
+        page: { $ref: '#/components/schemas/Page' }
+    CreateItemRequest:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 300 }
+        kind: { type: string, pattern: '^[a-z][a-z0-9_]{0,31}$', default: generic, description: 'One of the `ItemKind` values; validated in Go.' }
+        summary: { type: string, nullable: true, maxLength: 1000 }
+        status: { type: string, nullable: true, maxLength: 100 }
+        price: { $ref: '#/components/schemas/Price' }
+        official_website_url: { type: string, nullable: true, maxLength: 2048 }
+        metadata:
+          type: object
+          description: 'Free-form here because `kind` may be absent. Validated per kind: see the `*Metadata` schemas.'
+          additionalProperties: true
+    UpdateItemRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 300 }
+        kind: { type: string, pattern: '^[a-z][a-z0-9_]{0,31}$' }
+        summary: { type: string, nullable: true, maxLength: 1000 }
+        status: { type: string, nullable: true, maxLength: 100 }
+        price: { $ref: '#/components/schemas/Price' }
+        official_website_url: { type: string, nullable: true, maxLength: 2048 }
+        metadata:
+          type: object
+          description: 'Free-form here because `kind` may be absent. Validated per kind: see the `*Metadata` schemas.'
+          additionalProperties: true
+    MoveItemRequest:
+      type: object
+      additionalProperties: false
+      required: [list_id]
+      properties:
+        list_id: { type: string, format: uuid }
+    ReorderItemsRequest:
+      type: object
+      additionalProperties: false
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          maxItems: 10000
+          items: { type: string, format: uuid }
+    # ---- Kind metadata (DATA_MODEL §2.1). All keys optional; text is trimmed, max 100 chars unless noted. ----
+    Streaming:
+      type: object
+      additionalProperties: false
+      required: [country]
+      properties:
+        country: { type: string, pattern: '^[A-Z]{2}$', description: ISO 3166-1 alpha-2. }
+        platforms:
+          type: array
+          maxItems: 30
+          description: Unique case-insensitively.
+          items: { type: string, maxLength: 60 }
+    GenericMetadata:
+      type: object
+      description: Must be `{}`.
+      additionalProperties: false
+      maxProperties: 0
+    MovieMetadata:
+      type: object
+      additionalProperties: false
+      properties:
+        release_year: { type: integer, minimum: 1870, maximum: 2100 }
+        runtime_minutes: { type: integer, minimum: 1, maximum: 1000 }
+        imdb_url: { type: string, pattern: '^https://(www\.|m\.)?imdb\.com/title/tt\d{7,10}/?$' }
+        streaming: { $ref: '#/components/schemas/Streaming' }
+    TvShowMetadata:
+      type: object
+      additionalProperties: false
+      properties:
+        first_air_year: { type: integer, minimum: 1920, maximum: 2100 }
+        end_year: { type: integer, minimum: 1920, maximum: 2100, description: 'At least `first_air_year`. Absent = ongoing.' }
+        seasons: { type: integer, minimum: 1, maximum: 200 }
+        imdb_url: { type: string, pattern: '^https://(www\.|m\.)?imdb\.com/title/tt\d{7,10}/?$' }
+        streaming: { $ref: '#/components/schemas/Streaming' }
+    MotorcycleMetadata:
+      type: object
+      additionalProperties: false
+      properties:
+        make: { type: string, maxLength: 100 }
+        model: { type: string, maxLength: 100 }
+        model_year: { type: integer, minimum: 1885, maximum: 2100 }
+        segment: { type: string, maxLength: 50, description: 'E.g. naked, adventure, sport-touring.' }
+        displacement_cc: { type: integer, minimum: 1, maximum: 5000 }
+        power_hp: { type: number, minimum: 0, maximum: 1000, description: One decimal. }
+        torque_nm: { type: number, minimum: 0, maximum: 1000, description: One decimal. }
+        wet_weight_kg: { type: integer, minimum: 1, maximum: 1000 }
+        seat_height_mm: { type: integer, minimum: 300, maximum: 1200 }
+        license_class: { type: string, enum: [AM, A1, A2, A] }
+    CarMetadata:
+      type: object
+      additionalProperties: false
+      properties:
+        make: { type: string, maxLength: 100 }
+        model: { type: string, maxLength: 100 }
+        trim: { type: string, maxLength: 100 }
+        model_year: { type: integer, minimum: 1885, maximum: 2100 }
+        body_type: { type: string, maxLength: 50, description: 'E.g. hatchback, SUV, estate.' }
+        fuel_type: { type: string, enum: [petrol, diesel, hybrid, plugin_hybrid, electric, lpg, cng, hydrogen, other] }
+        transmission: { type: string, enum: [manual, automatic] }
+        power_hp: { type: number, minimum: 0, maximum: 2000, description: One decimal. }
+        seats: { type: integer, minimum: 1, maximum: 9 }
+        electric_range_km: { type: integer, minimum: 1, maximum: 2000, description: Only allowed when `fuel_type` is `electric` or `plugin_hybrid` (or absent). }
+    CameraMetadata:
+      type: object
+      additionalProperties: false
+      properties:
+        make: { type: string, maxLength: 100 }
+        model: { type: string, maxLength: 100 }
+        release_year: { type: integer, minimum: 1900, maximum: 2100 }
+        camera_type: { type: string, enum: [mirrorless, dslr, compact, rangefinder, medium_format, film, action, other] }
+        sensor_format: { type: string, enum: [full_frame, aps_c, micro_four_thirds, one_inch, medium_format, film_35mm, other] }
+        megapixels: { type: number, minimum: 0.1, maximum: 500, description: One decimal. }
+        lens_mount: { type: string, maxLength: 50, description: 'E.g. Sony E, Fujifilm X.' }
+        weight_g: { type: integer, minimum: 1, maximum: 10000 }
+    # ---- Image requests ----
+    UploadImageRequest:
+      type: object
+      required: [file]
+      properties:
+        file: { type: string, format: binary, description: "JPEG, PNG or WebP, up to 10 MiB." }
+    SetImageUrlRequest:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url: { type: string, maxLength: 2048, description: An https URL. }
+    # ---- Content ----
+    Content:
+      type: object
+      required: [item_id, version, body, updated_at]
+      properties:
+        item_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 0, description: 0 = never saved. }
+        body: { type: string, description: "Markdown source, up to 1 MiB UTF-8." }
+        updated_at: { type: string, format: date-time, nullable: true, description: When this version was saved. `null` for version 0. }
+    UpdateContentRequest:
+      type: object
+      additionalProperties: false
+      required: [body]
+      properties:
+        body: { type: string, maxLength: 1048576, description: Up to 1 MiB UTF-8 (the server checks bytes). }
+    RestoreContentRequest:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer, minimum: 1 }
+    ContentVersionInfo:
+      type: object
+      required: [version, size_bytes, created_at]
+      properties:
+        version: { type: integer, minimum: 1 }
+        size_bytes: { type: integer, minimum: 0 }
+        created_at: { type: string, format: date-time }
+    ContentVersionList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/ContentVersionInfo' }
+    # ---- Trash ----
+    TrashEntry:
+      type: object
+      required: [id, root_type, root_id, root_name, former_path, deleted_at, counts, restorable_in_place]
+      properties:
+        id: { type: string, format: uuid, description: The trash batch ID. }
+        root_type: { type: string, enum: [folder, list, item] }
+        root_id: { type: string, format: uuid }
+        root_name: { type: string }
+        former_path:
+          type: array
+          items: { $ref: '#/components/schemas/PathSegment' }
+        deleted_at: { type: string, format: date-time }
+        counts:
+          type: object
+          required: [folders, lists, items]
+          properties:
+            folders: { type: integer }
+            lists: { type: integer }
+            items: { type: integer }
+        restorable_in_place: { type: boolean, description: False when the original parent is trashed or gone. }
+    TrashPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/TrashEntry' }
+        page: { $ref: '#/components/schemas/Page' }
+    RestoreTrashRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        destination:
+          type: object
+          additionalProperties: false
+          description: '`folder_id` for a folder or list root (`null` = workspace root), `list_id` for an item root.'
+          properties:
+            folder_id: { type: string, format: uuid, nullable: true }
+            list_id: { type: string, format: uuid }
+    RestoreResult:
+      type: object
+      required: [root_type, root_id]
+      properties:
+        root_type: { type: string, enum: [folder, list, item] }
+        root_id: { type: string, format: uuid }

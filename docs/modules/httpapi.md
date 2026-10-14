@@ -2,63 +2,40 @@
 
 ## Purpose
 
-Serves the HTTP API: the generated strict server mounted on chi, behind request id, security headers, access log and panic recovery. A per-operation guard enforces rules the generated code skips. Health, settings, tree, folder, list and item (list, create, get, patch, move, reorder) content, search and image / attachment file ops are implemented; every other operation answers 501 until its task lands. Design context: `/Users/federico/Developer/collections-app/design-docs/`.
+Serves the HTTP API: the generated strict server mounted on chi, behind request id, security headers, access log and panic recovery. A per-operation guard enforces rules the generated code skips. Every operation in the spec is implemented. Design context: `/Users/federico/Developer/collections-app/design-docs/`.
 
 ## Key files
 
 - `internal/httpapi/router.go`: `NewRouter`, `Deps`, middleware order, chi mounting
 - `internal/httpapi/server.go`: `Server`, `/healthz` and `/readyz` handlers, DATA_DIR probe
-- `internal/httpapi/settings.go`: `GetSettings` and `UpdateSettings` handlers
-- `internal/httpapi/tree.go`, `folders.go`, `lists.go`: tree, folder and list handlers, body mapping
-- `internal/httpapi/items.go`: item handlers, `itemBody` and `itemSummaryBody` mapping
-- `internal/httpapi/content.go`: content and content version handlers, `contentBody` mapping
-- `internal/httpapi/search.go`: search handler, maps `search.Page` to the response
-- `internal/httpapi/images.go`: item image and attachment file handlers, inline `Content-Disposition`
-- `internal/httpapi/unimplemented.go`: 501 stubs for all other operations
+- `internal/httpapi/settings.go`, `tree.go`, `folders.go`, `lists.go`: settings, tree, folder and list handlers
+- `internal/httpapi/items.go`, `content.go`, `search.go`, `images.go`: item, content, search and file handlers
+- `internal/httpapi/trash.go`: DELETE folder/list/item, trash list, restore and purge handlers
 - `internal/httpapi/middleware.go`: request id, security headers, access log, recovery, `IfMatchVersion`
 - `internal/httpapi/guard.go`: query schemas, If-Match, media type, body limits, unknown fields
-- `internal/httpapi/problem.go`, `paramerr.go`: problem+json writer, `toProblem` (the only apperr mapper), binding error text
+- `internal/httpapi/problem.go`, `paramerr.go`: problem+json writer, `toProblem` (the only apperr mapper)
 - `internal/httpapi/etag/etag.go`: `Format` and `Parse` for `"<prefix>-N"`
 - `internal/httpapi/oapi/oapi.gen.go`: generated, never edit (embeds the spec)
-- `internal/httpapi/*_test.go`: router, handler, guard and tree tests
 - `cmd/api/main.go`: wires the router and the `healthcheck` subcommand
 
 ## Interfaces
 
 - `NewRouter(d Deps) (http.Handler, error)`: defaults `Clock` to `clock.System{}`; fails if the embedded spec does not load
-- `Deps`: `DB Pinger`, `DataDir string`, `Logger *slog.Logger`, `Clock clock.Clock`, `WorkspaceID uuid.UUID`, `Settings *workspace.Service`, `Tree *tree.Service`, `Items *items.Service`, `Content *content.Service`, `Search *search.Service`, `Images *images.Service`
-- `Pinger`: `Ping(ctx) error`; satisfied by `*pgxpool.Pool`
+- `Deps`: `DB`, `DataDir`, `Logger`, `Clock`, `WorkspaceID`, `Settings`, `Tree`, `Items`, `Content`, `Search`, `Images`, `Trash`
 - `IfMatchVersion(ctx) int`: version N of the validated `If-Match` in guarded handlers
-- `GET /healthz`: 200 `ok`, liveness only
-- `GET /readyz`: 200 `ready` when the DB ping (2s) and DATA_DIR probe pass
-- `GET /readyz`: 503 `database unavailable` (checked first) or `storage unavailable`
-- `GET /api/v1/settings`: 200 settings, `ETag: "s-N"`; via `workspace.Service.Get`
-- `PATCH /api/v1/settings`: 200 updated settings; needs If-Match (412 when stale); via `workspace.Service.Update`
-- `GET /api/v1/tree`: all active folders and lists, flat
-- `POST /api/v1/folders`, `PUT /api/v1/folders/order`, `GET|PATCH /api/v1/folders/{id}`, `POST /api/v1/folders/{id}/move`
-- `POST /api/v1/lists`, `PUT /api/v1/lists/order`, `GET|PATCH /api/v1/lists/{id}`, `POST /api/v1/lists/{id}/move`
-- `GET|POST /api/v1/lists/{id}/items`, `PUT /api/v1/lists/{id}/items/order`
-- `GET|PATCH /api/v1/items/{id}`, `POST /api/v1/items/{id}/move`
-- `GET|PUT /api/v1/items/{id}/content`: `getItemContent`, `updateItemContent` (If-Match `"c-N"`)
-- `GET /api/v1/items/{id}/content/versions`: `listContentVersions`
-- `GET /api/v1/items/{id}/content/versions/{version}`: `getContentVersion`
-- `POST /api/v1/items/{id}/content/restore`: `restoreContentVersion` (If-Match `"c-N"`)
-- `GET /api/v1/search`: paged title search via `search.Service`
-- `PUT|DELETE /api/v1/items/{id}/image`: multipart `file` or JSON `{url}`; needs If-Match
-- `GET /api/v1/attachments/{id}/file`, `GET /api/v1/attachments/{id}/thumbnail`: streamed files
+- `GET /healthz`: 200 `ok`, liveness only; `GET /readyz`: 200 `ready` or 503 (DB ping, DATA_DIR probe)
+- Settings, tree, folder, list, item, content, search and attachment routes: see `api/openapi.yaml`
+- `DELETE /api/v1/folders/{id}`, `DELETE /api/v1/lists/{id}`, `DELETE /api/v1/items/{id}`: 204, If-Match required
+- `GET /api/v1/trash`, `POST /api/v1/trash/{batch_id}/restore`, `DELETE /api/v1/trash/{batch_id}`
 - Unknown route or method: 404 `not_found` / 405 `method_not_allowed` problem
-- Any other operation (item DELETE, trash, folder and list DELETE): 501 `not_implemented`
 
 ## Gotchas
 
-- `/healthz` ignores the DB and storage. Use `/readyz` for readiness.
-- 503 bodies are fixed strings; driver errors are logged server-side at WARN.
-- Every `/readyz` call creates and deletes a `.readyz-*` file in DATA_DIR.
-- `/app/api healthcheck` GETs `/readyz` on `127.0.0.1` (port from `HTTP_ADDR`) and exits 0 only on 200.
-- The guard, not the generated server, enforces: body limits (413; 64 KiB JSON, 2 MiB content, 10 MiB + 64 KiB multipart), unknown JSON fields (400 `unknown_field`), missing If-Match (428), and query schema ranges (400).
-- Move and reorder bodies must carry the nullable parent field (`parent_folder_id` or `folder_id`): absent is 422, null means root. Item move takes a required `list_id` (zero is 422).
-- Attachment responses set `Cache-Control: private, max-age=31536000, immutable` and `Content-Disposition: inline` (the spec declares only the former); nosniff and CSP come from middleware.
-- Item `metadata` keys are checked by `items/kinds`, not the guard; an undeclared key is also 400 `unknown_field`.
+- `/healthz` ignores the DB and storage. Use `/readyz`; every `/readyz` call creates and deletes a `.readyz-*` file in DATA_DIR.
+- The guard, not the generated server, enforces: body limits (413), unknown JSON fields (400 `unknown_field`), missing If-Match (428), and query schema ranges (400).
+- Move and reorder bodies must carry the nullable parent field (`parent_folder_id` or `folder_id`): absent is 422, null means root.
+- Attachment responses set `Cache-Control: private, max-age=31536000, immutable` and `Content-Disposition: inline`; nosniff and CSP come from middleware.
+- Item `metadata` keys are checked by `items/kinds`, not the guard.
 - Errors outside `apperr` become 500 `internal` with only the request id; the stack goes to the log.
-- Access log has no bodies or query string; probe routes log at DEBUG.
+- `ifMatchPrefix` in `guard.go` must be extended by hand for any new operation that requires If-Match.
 - No CORS (D-033). Decisions D-055 to D-057 are in `/Users/federico/Developer/collections-app/design-docs/DECISIONS.md`.

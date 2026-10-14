@@ -20,11 +20,10 @@ Typed domain errors that services return and that `internal/httpapi` maps to pro
 - `OrderStale() error`: 409 `order_stale`
 - `PayloadTooLarge(limit int64) error`: over-limit body or upload
 - `UnsupportedMediaType(detail string) error`: upload not JPEG, PNG or WebP
-- `NotImplemented() error` and `ErrNotImplemented`: sentinel for 501 stubs
 
 ## Gotchas
 
-- Inspect with `errors.As` for the typed errors and `errors.Is` for `ErrNotImplemented`.
+- Inspect with `errors.As` for the typed errors.
 - `Validation` should get at least one `FieldError`.
 - Only the `CodeParentInTrash` conflict carries `Blocking`; the other codes leave it nil.
 - Messages here are for logs. Clients never see them: `httpapi` maps each type to a fixed title and detail.

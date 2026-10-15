@@ -41,42 +41,6 @@ func (e CameraItemKind) Valid() bool {
 	}
 }
 
-// Defines values for CameraMetadataCameraType.
-const (
-	CameraMetadataCameraTypeAction       CameraMetadataCameraType = "action"
-	CameraMetadataCameraTypeCompact      CameraMetadataCameraType = "compact"
-	CameraMetadataCameraTypeDslr         CameraMetadataCameraType = "dslr"
-	CameraMetadataCameraTypeFilm         CameraMetadataCameraType = "film"
-	CameraMetadataCameraTypeMediumFormat CameraMetadataCameraType = "medium_format"
-	CameraMetadataCameraTypeMirrorless   CameraMetadataCameraType = "mirrorless"
-	CameraMetadataCameraTypeOther        CameraMetadataCameraType = "other"
-	CameraMetadataCameraTypeRangefinder  CameraMetadataCameraType = "rangefinder"
-)
-
-// Valid indicates whether the value is a known member of the CameraMetadataCameraType enum.
-func (e CameraMetadataCameraType) Valid() bool {
-	switch e {
-	case CameraMetadataCameraTypeAction:
-		return true
-	case CameraMetadataCameraTypeCompact:
-		return true
-	case CameraMetadataCameraTypeDslr:
-		return true
-	case CameraMetadataCameraTypeFilm:
-		return true
-	case CameraMetadataCameraTypeMediumFormat:
-		return true
-	case CameraMetadataCameraTypeMirrorless:
-		return true
-	case CameraMetadataCameraTypeOther:
-		return true
-	case CameraMetadataCameraTypeRangefinder:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for CameraMetadataSensorFormat.
 const (
 	CameraMetadataSensorFormatApsC            CameraMetadataSensorFormat = "aps_c"
@@ -164,39 +128,21 @@ func (e CarMetadataFuelType) Valid() bool {
 	}
 }
 
-// Defines values for CarMetadataTransmission.
-const (
-	CarMetadataTransmissionAutomatic CarMetadataTransmission = "automatic"
-	CarMetadataTransmissionManual    CarMetadataTransmission = "manual"
-)
-
-// Valid indicates whether the value is a known member of the CarMetadataTransmission enum.
-func (e CarMetadataTransmission) Valid() bool {
-	switch e {
-	case CarMetadataTransmissionAutomatic:
-		return true
-	case CarMetadataTransmissionManual:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for DisplayMode.
 const (
-	DisplayModeCompact   DisplayMode = "compact"
-	DisplayModeGrid      DisplayMode = "grid"
-	DisplayModeThumbnail DisplayMode = "thumbnail"
+	Compact   DisplayMode = "compact"
+	Grid      DisplayMode = "grid"
+	Thumbnail DisplayMode = "thumbnail"
 )
 
 // Valid indicates whether the value is a known member of the DisplayMode enum.
 func (e DisplayMode) Valid() bool {
 	switch e {
-	case DisplayModeCompact:
+	case Compact:
 		return true
-	case DisplayModeGrid:
+	case Grid:
 		return true
-	case DisplayModeThumbnail:
+	case Thumbnail:
 		return true
 	default:
 		return false
@@ -326,6 +272,7 @@ const (
 	ProblemCodeDestinationUnavailable ProblemCode = "destination_unavailable"
 	ProblemCodeInternal               ProblemCode = "internal"
 	ProblemCodeInvalidParameter       ProblemCode = "invalid_parameter"
+	ProblemCodeKindMismatch           ProblemCode = "kind_mismatch"
 	ProblemCodeMalformedRequest       ProblemCode = "malformed_request"
 	ProblemCodeNotFound               ProblemCode = "not_found"
 	ProblemCodeOrderStale             ProblemCode = "order_stale"
@@ -348,6 +295,8 @@ func (e ProblemCode) Valid() bool {
 	case ProblemCodeInternal:
 		return true
 	case ProblemCodeInvalidParameter:
+		return true
+	case ProblemCodeKindMismatch:
 		return true
 	case ProblemCodeMalformedRequest:
 		return true
@@ -380,6 +329,7 @@ const (
 	RestoreConflictProblemCodeDestinationUnavailable RestoreConflictProblemCode = "destination_unavailable"
 	RestoreConflictProblemCodeInternal               RestoreConflictProblemCode = "internal"
 	RestoreConflictProblemCodeInvalidParameter       RestoreConflictProblemCode = "invalid_parameter"
+	RestoreConflictProblemCodeKindMismatch           RestoreConflictProblemCode = "kind_mismatch"
 	RestoreConflictProblemCodeMalformedRequest       RestoreConflictProblemCode = "malformed_request"
 	RestoreConflictProblemCodeNotFound               RestoreConflictProblemCode = "not_found"
 	RestoreConflictProblemCodeOrderStale             RestoreConflictProblemCode = "order_stale"
@@ -402,6 +352,8 @@ func (e RestoreConflictProblemCode) Valid() bool {
 	case RestoreConflictProblemCodeInternal:
 		return true
 	case RestoreConflictProblemCodeInvalidParameter:
+		return true
+	case RestoreConflictProblemCodeKindMismatch:
 		return true
 	case RestoreConflictProblemCodeMalformedRequest:
 		return true
@@ -451,19 +403,22 @@ func (e RestoreResultRootType) Valid() bool {
 
 // Defines values for SortMode.
 const (
-	SortModeManual  SortMode = "manual"
-	SortModeTitle   SortMode = "title"
-	SortModeUpdated SortMode = "updated"
+	KindKey SortMode = "kind_key"
+	Manual  SortMode = "manual"
+	Title   SortMode = "title"
+	Updated SortMode = "updated"
 )
 
 // Valid indicates whether the value is a known member of the SortMode enum.
 func (e SortMode) Valid() bool {
 	switch e {
-	case SortModeManual:
+	case KindKey:
 		return true
-	case SortModeTitle:
+	case Manual:
 		return true
-	case SortModeUpdated:
+	case Title:
+		return true
+	case Updated:
 		return true
 	default:
 		return false
@@ -542,6 +497,7 @@ const (
 	ValidationProblemCodeDestinationUnavailable ValidationProblemCode = "destination_unavailable"
 	ValidationProblemCodeInternal               ValidationProblemCode = "internal"
 	ValidationProblemCodeInvalidParameter       ValidationProblemCode = "invalid_parameter"
+	ValidationProblemCodeKindMismatch           ValidationProblemCode = "kind_mismatch"
 	ValidationProblemCodeMalformedRequest       ValidationProblemCode = "malformed_request"
 	ValidationProblemCodeNotFound               ValidationProblemCode = "not_found"
 	ValidationProblemCodeOrderStale             ValidationProblemCode = "order_stale"
@@ -564,6 +520,8 @@ func (e ValidationProblemCode) Valid() bool {
 	case ValidationProblemCodeInternal:
 		return true
 	case ValidationProblemCodeInvalidParameter:
+		return true
+	case ValidationProblemCodeKindMismatch:
 		return true
 	case ValidationProblemCodeMalformedRequest:
 		return true
@@ -596,6 +554,7 @@ const (
 	VersionConflictProblemCodeDestinationUnavailable VersionConflictProblemCode = "destination_unavailable"
 	VersionConflictProblemCodeInternal               VersionConflictProblemCode = "internal"
 	VersionConflictProblemCodeInvalidParameter       VersionConflictProblemCode = "invalid_parameter"
+	VersionConflictProblemCodeKindMismatch           VersionConflictProblemCode = "kind_mismatch"
 	VersionConflictProblemCodeMalformedRequest       VersionConflictProblemCode = "malformed_request"
 	VersionConflictProblemCodeNotFound               VersionConflictProblemCode = "not_found"
 	VersionConflictProblemCodeOrderStale             VersionConflictProblemCode = "order_stale"
@@ -618,6 +577,8 @@ func (e VersionConflictProblemCode) Valid() bool {
 	case VersionConflictProblemCodeInternal:
 		return true
 	case VersionConflictProblemCodeInvalidParameter:
+		return true
+	case VersionConflictProblemCodeKindMismatch:
 		return true
 	case VersionConflictProblemCodeMalformedRequest:
 		return true
@@ -644,27 +605,6 @@ func (e VersionConflictProblemCode) Valid() bool {
 	}
 }
 
-// Defines values for ListItemsParamsSort.
-const (
-	ListItemsParamsSortManual  ListItemsParamsSort = "manual"
-	ListItemsParamsSortTitle   ListItemsParamsSort = "title"
-	ListItemsParamsSortUpdated ListItemsParamsSort = "updated"
-)
-
-// Valid indicates whether the value is a known member of the ListItemsParamsSort enum.
-func (e ListItemsParamsSort) Valid() bool {
-	switch e {
-	case ListItemsParamsSortManual:
-		return true
-	case ListItemsParamsSortTitle:
-		return true
-	case ListItemsParamsSortUpdated:
-		return true
-	default:
-		return false
-	}
-}
-
 // BinaryFile defines model for BinaryFile.
 type BinaryFile = openapi_types.File
 
@@ -676,23 +616,22 @@ type CameraItem struct {
 	Id             openapi_types.UUID `json:"id"`
 
 	// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
-	Image              nullable.Nullable[Image]  `json:"image"`
-	Kind               CameraItemKind            `json:"kind"`
-	ListId             openapi_types.UUID        `json:"list_id"`
-	Metadata           CameraMetadata            `json:"metadata"`
-	OfficialWebsiteUrl nullable.Nullable[string] `json:"official_website_url"`
+	Image    nullable.Nullable[Image] `json:"image"`
+	Kind     *CameraItemKind          `json:"kind,omitempty"`
+	ListId   openapi_types.UUID       `json:"list_id"`
+	Metadata CameraMetadata           `json:"metadata"`
 
 	// Path Ancestor folders and the list. Present on `getItem` only.
 	Path *[]PathSegment `json:"path,omitempty"`
 
-	// Price At least one of `min` and `max` is set when a price exists. `min` must not exceed `max`.
+	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
+	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
 	Price     nullable.Nullable[Price]  `json:"price"`
 	SortOrder int                       `json:"sort_order"`
-	Status    nullable.Nullable[string] `json:"status"`
-	Summary   nullable.Nullable[string] `json:"summary"`
 	Title     string                    `json:"title"`
 	UpdatedAt time.Time                 `json:"updated_at"`
 	Version   int                       `json:"version"`
+	Website   nullable.Nullable[string] `json:"website"`
 }
 
 // CameraItemKind defines model for CameraItem.Kind.
@@ -700,22 +639,14 @@ type CameraItemKind string
 
 // CameraMetadata defines model for CameraMetadata.
 type CameraMetadata struct {
-	CameraType *CameraMetadataCameraType `json:"camera_type,omitempty"`
-
-	// LensMount E.g. Sony E, Fujifilm X.
-	LensMount *string `json:"lens_mount,omitempty"`
-	Make      *string `json:"make,omitempty"`
+	Make *string `json:"make,omitempty"`
 
 	// Megapixels One decimal.
 	Megapixels   *float32                    `json:"megapixels,omitempty"`
 	Model        *string                     `json:"model,omitempty"`
 	ReleaseYear  *int                        `json:"release_year,omitempty"`
 	SensorFormat *CameraMetadataSensorFormat `json:"sensor_format,omitempty"`
-	WeightG      *int                        `json:"weight_g,omitempty"`
 }
-
-// CameraMetadataCameraType defines model for CameraMetadata.CameraType.
-type CameraMetadataCameraType string
 
 // CameraMetadataSensorFormat defines model for CameraMetadata.SensorFormat.
 type CameraMetadataSensorFormat string
@@ -728,23 +659,22 @@ type CarItem struct {
 	Id             openapi_types.UUID `json:"id"`
 
 	// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
-	Image              nullable.Nullable[Image]  `json:"image"`
-	Kind               CarItemKind               `json:"kind"`
-	ListId             openapi_types.UUID        `json:"list_id"`
-	Metadata           CarMetadata               `json:"metadata"`
-	OfficialWebsiteUrl nullable.Nullable[string] `json:"official_website_url"`
+	Image    nullable.Nullable[Image] `json:"image"`
+	Kind     *CarItemKind             `json:"kind,omitempty"`
+	ListId   openapi_types.UUID       `json:"list_id"`
+	Metadata CarMetadata              `json:"metadata"`
 
 	// Path Ancestor folders and the list. Present on `getItem` only.
 	Path *[]PathSegment `json:"path,omitempty"`
 
-	// Price At least one of `min` and `max` is set when a price exists. `min` must not exceed `max`.
+	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
+	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
 	Price     nullable.Nullable[Price]  `json:"price"`
 	SortOrder int                       `json:"sort_order"`
-	Status    nullable.Nullable[string] `json:"status"`
-	Summary   nullable.Nullable[string] `json:"summary"`
 	Title     string                    `json:"title"`
 	UpdatedAt time.Time                 `json:"updated_at"`
 	Version   int                       `json:"version"`
+	Website   nullable.Nullable[string] `json:"website"`
 }
 
 // CarItemKind defines model for CarItem.Kind.
@@ -752,28 +682,17 @@ type CarItemKind string
 
 // CarMetadata defines model for CarMetadata.
 type CarMetadata struct {
-	// BodyType E.g. hatchback, SUV, estate.
-	BodyType *string `json:"body_type,omitempty"`
-
-	// ElectricRangeKm Only allowed when `fuel_type` is `electric` or `plugin_hybrid` (or absent).
-	ElectricRangeKm *int                 `json:"electric_range_km,omitempty"`
-	FuelType        *CarMetadataFuelType `json:"fuel_type,omitempty"`
-	Make            *string              `json:"make,omitempty"`
-	Model           *string              `json:"model,omitempty"`
-	ModelYear       *int                 `json:"model_year,omitempty"`
+	FuelType  *CarMetadataFuelType `json:"fuel_type,omitempty"`
+	Make      *string              `json:"make,omitempty"`
+	Model     *string              `json:"model,omitempty"`
+	ModelYear *int                 `json:"model_year,omitempty"`
 
 	// PowerHp One decimal.
-	PowerHp      *float32                 `json:"power_hp,omitempty"`
-	Seats        *int                     `json:"seats,omitempty"`
-	Transmission *CarMetadataTransmission `json:"transmission,omitempty"`
-	Trim         *string                  `json:"trim,omitempty"`
+	PowerHp *float32 `json:"power_hp,omitempty"`
 }
 
 // CarMetadataFuelType defines model for CarMetadata.FuelType.
 type CarMetadataFuelType string
-
-// CarMetadataTransmission defines model for CarMetadata.Transmission.
-type CarMetadataTransmission string
 
 // Content defines model for Content.
 type Content struct {
@@ -808,27 +727,33 @@ type CreateFolderRequest struct {
 
 // CreateItemRequest defines model for CreateItemRequest.
 type CreateItemRequest struct {
-	// Kind One of the `ItemKind` values; validated in Go.
-	Kind *string `json:"kind,omitempty"`
+	// Metadata Free-form here because its shape depends on the list's kind. Validated against that kind: see the `*Metadata` schemas.
+	Metadata *map[string]interface{} `json:"metadata,omitempty"`
 
-	// Metadata Free-form here because `kind` may be absent. Validated per kind: see the `*Metadata` schemas.
-	Metadata           *map[string]interface{}   `json:"metadata,omitempty"`
-	OfficialWebsiteUrl nullable.Nullable[string] `json:"official_website_url,omitempty"`
-
-	// Price At least one of `min` and `max` is set when a price exists. `min` must not exceed `max`.
-	Price   nullable.Nullable[Price]  `json:"price,omitempty"`
-	Status  nullable.Nullable[string] `json:"status,omitempty"`
-	Summary nullable.Nullable[string] `json:"summary,omitempty"`
-	Title   string                    `json:"title"`
+	// Price A price in requests, either a single price `{amount, currency}` or a range `{min, max, currency}`. `amount` and `min`/`max`
+	// are mutually exclusive (`422 validation_failed` when mixed); `min` must not exceed `max`; a range needs at least one bound.
+	// `null` clears the price. Money is a decimal string (D-062).
+	Price   nullable.Nullable[PriceInput] `json:"price,omitempty"`
+	Title   string                        `json:"title"`
+	Website nullable.Nullable[string]     `json:"website,omitempty"`
 }
 
 // CreateListRequest defines model for CreateListRequest.
 type CreateListRequest struct {
+	// Description Markdown, up to 64 KiB (UTF-8 bytes).
 	Description nullable.Nullable[string]             `json:"description,omitempty"`
 	DisplayMode *DisplayMode                          `json:"display_mode,omitempty"`
 	FolderId    nullable.Nullable[openapi_types.UUID] `json:"folder_id,omitempty"`
-	Name        string                                `json:"name"`
-	SortMode    *SortMode                             `json:"sort_mode,omitempty"`
+
+	// Kind The kind of a list. Items have no kind of their own: theirs is read-only and derived from their list. Changing the kind of a
+	// list that has items clears the `metadata` of all its items.
+	Kind ItemKind `json:"kind"`
+	Name string   `json:"name"`
+
+	// SortMode `kind_key` sorts by the kind's sort key (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
+	// car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists. The manual order is kept
+	// when the mode changes.
+	SortMode *SortMode `json:"sort_mode,omitempty"`
 }
 
 // DisplayMode defines model for DisplayMode.
@@ -854,24 +779,23 @@ type GenericItem struct {
 
 	// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
 	Image  nullable.Nullable[Image] `json:"image"`
-	Kind   GenericItemKind          `json:"kind"`
+	Kind   *GenericItemKind         `json:"kind,omitempty"`
 	ListId openapi_types.UUID       `json:"list_id"`
 
 	// Metadata Must be `{}`.
-	Metadata           GenericMetadata           `json:"metadata"`
-	OfficialWebsiteUrl nullable.Nullable[string] `json:"official_website_url"`
+	Metadata GenericMetadata `json:"metadata"`
 
 	// Path Ancestor folders and the list. Present on `getItem` only.
 	Path *[]PathSegment `json:"path,omitempty"`
 
-	// Price At least one of `min` and `max` is set when a price exists. `min` must not exceed `max`.
+	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
+	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
 	Price     nullable.Nullable[Price]  `json:"price"`
 	SortOrder int                       `json:"sort_order"`
-	Status    nullable.Nullable[string] `json:"status"`
-	Summary   nullable.Nullable[string] `json:"summary"`
 	Title     string                    `json:"title"`
 	UpdatedAt time.Time                 `json:"updated_at"`
 	Version   int                       `json:"version"`
+	Website   nullable.Nullable[string] `json:"website"`
 }
 
 // GenericItemKind defines model for GenericItem.Kind.
@@ -891,12 +815,12 @@ type ImageSummary struct {
 	Url          string  `json:"url"`
 }
 
-// Item An item. `metadata` has the shape of its `kind` (discriminated union).
+// Item An item. `kind` is read-only and derived from the item's list; `metadata` has the shape of that kind (discriminated union).
 type Item struct {
 	union json.RawMessage
 }
 
-// ItemBase Fields shared by every item kind. `kind` and `metadata` are added by the per-kind schemas.
+// ItemBase Fields shared by every item kind. `kind` (read-only, derived from the list) and `metadata` are added by the per-kind schemas.
 type ItemBase struct {
 	// ContentVersion Current Markdown version (0 = empty). For display only; use the content endpoints to edit.
 	ContentVersion int                `json:"content_version"`
@@ -904,24 +828,24 @@ type ItemBase struct {
 	Id             openapi_types.UUID `json:"id"`
 
 	// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
-	Image              nullable.Nullable[Image]  `json:"image"`
-	ListId             openapi_types.UUID        `json:"list_id"`
-	OfficialWebsiteUrl nullable.Nullable[string] `json:"official_website_url"`
+	Image  nullable.Nullable[Image] `json:"image"`
+	ListId openapi_types.UUID       `json:"list_id"`
 
 	// Path Ancestor folders and the list. Present on `getItem` only.
 	Path *[]PathSegment `json:"path,omitempty"`
 
-	// Price At least one of `min` and `max` is set when a price exists. `min` must not exceed `max`.
+	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
+	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
 	Price     nullable.Nullable[Price]  `json:"price"`
 	SortOrder int                       `json:"sort_order"`
-	Status    nullable.Nullable[string] `json:"status"`
-	Summary   nullable.Nullable[string] `json:"summary"`
 	Title     string                    `json:"title"`
 	UpdatedAt time.Time                 `json:"updated_at"`
 	Version   int                       `json:"version"`
+	Website   nullable.Nullable[string] `json:"website"`
 }
 
-// ItemKind defines model for ItemKind.
+// ItemKind The kind of a list. Items have no kind of their own: theirs is read-only and derived from their list. Changing the kind of a
+// list that has items clears the `metadata` of all its items.
 type ItemKind string
 
 // ItemPage defines model for ItemPage.
@@ -937,39 +861,51 @@ type ItemSummary struct {
 	Id             openapi_types.UUID `json:"id"`
 
 	// Image The image reduced for list rows and search. `thumbnail_url` is present for uploads only.
-	Image              nullable.Nullable[ImageSummary] `json:"image"`
-	Kind               ItemKind                        `json:"kind"`
-	ListId             openapi_types.UUID              `json:"list_id"`
-	OfficialWebsiteUrl nullable.Nullable[string]       `json:"official_website_url"`
+	Image nullable.Nullable[ImageSummary] `json:"image"`
 
-	// Price At least one of `min` and `max` is set when a price exists. `min` must not exceed `max`.
+	// Kind The kind of a list. Items have no kind of their own: theirs is read-only and derived from their list. Changing the kind of a
+	// list that has items clears the `metadata` of all its items.
+	Kind   ItemKind           `json:"kind"`
+	ListId openapi_types.UUID `json:"list_id"`
+
+	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
+	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
 	Price     nullable.Nullable[Price]  `json:"price"`
 	SortOrder int                       `json:"sort_order"`
-	Status    nullable.Nullable[string] `json:"status"`
-	Summary   nullable.Nullable[string] `json:"summary"`
 	Title     string                    `json:"title"`
 	UpdatedAt time.Time                 `json:"updated_at"`
 	Version   int                       `json:"version"`
+	Website   nullable.Nullable[string] `json:"website"`
 }
 
 // List defines model for List.
 type List struct {
-	CreatedAt   time.Time                             `json:"created_at"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// Description Markdown, up to 64 KiB (UTF-8 bytes).
 	Description nullable.Nullable[string]             `json:"description"`
 	DisplayMode DisplayMode                           `json:"display_mode"`
 	FolderId    nullable.Nullable[openapi_types.UUID] `json:"folder_id"`
 	Id          openapi_types.UUID                    `json:"id"`
 
 	// ItemCount Number of active items.
-	ItemCount int    `json:"item_count"`
-	Name      string `json:"name"`
+	ItemCount int `json:"item_count"`
+
+	// Kind The kind of a list. Items have no kind of their own: theirs is read-only and derived from their list. Changing the kind of a
+	// list that has items clears the `metadata` of all its items.
+	Kind ItemKind `json:"kind"`
+	Name string   `json:"name"`
 
 	// Path Ancestor folders. Present on `getList` only.
-	Path      *[]PathSegment `json:"path,omitempty"`
-	SortMode  SortMode       `json:"sort_mode"`
-	SortOrder int            `json:"sort_order"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	Version   int            `json:"version"`
+	Path *[]PathSegment `json:"path,omitempty"`
+
+	// SortMode `kind_key` sorts by the kind's sort key (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
+	// car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists. The manual order is kept
+	// when the mode changes.
+	SortMode  SortMode  `json:"sort_mode"`
+	SortOrder int       `json:"sort_order"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Version   int       `json:"version"`
 }
 
 // MotorcycleItem defines model for MotorcycleItem.
@@ -980,23 +916,22 @@ type MotorcycleItem struct {
 	Id             openapi_types.UUID `json:"id"`
 
 	// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
-	Image              nullable.Nullable[Image]  `json:"image"`
-	Kind               MotorcycleItemKind        `json:"kind"`
-	ListId             openapi_types.UUID        `json:"list_id"`
-	Metadata           MotorcycleMetadata        `json:"metadata"`
-	OfficialWebsiteUrl nullable.Nullable[string] `json:"official_website_url"`
+	Image    nullable.Nullable[Image] `json:"image"`
+	Kind     *MotorcycleItemKind      `json:"kind,omitempty"`
+	ListId   openapi_types.UUID       `json:"list_id"`
+	Metadata MotorcycleMetadata       `json:"metadata"`
 
 	// Path Ancestor folders and the list. Present on `getItem` only.
 	Path *[]PathSegment `json:"path,omitempty"`
 
-	// Price At least one of `min` and `max` is set when a price exists. `min` must not exceed `max`.
+	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
+	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
 	Price     nullable.Nullable[Price]  `json:"price"`
 	SortOrder int                       `json:"sort_order"`
-	Status    nullable.Nullable[string] `json:"status"`
-	Summary   nullable.Nullable[string] `json:"summary"`
 	Title     string                    `json:"title"`
 	UpdatedAt time.Time                 `json:"updated_at"`
 	Version   int                       `json:"version"`
+	Website   nullable.Nullable[string] `json:"website"`
 }
 
 // MotorcycleItemKind defines model for MotorcycleItem.Kind.
@@ -1011,15 +946,7 @@ type MotorcycleMetadata struct {
 	ModelYear      *int                            `json:"model_year,omitempty"`
 
 	// PowerHp One decimal.
-	PowerHp      *float32 `json:"power_hp,omitempty"`
-	SeatHeightMm *int     `json:"seat_height_mm,omitempty"`
-
-	// Segment E.g. naked, adventure, sport-touring.
-	Segment *string `json:"segment,omitempty"`
-
-	// TorqueNm One decimal.
-	TorqueNm    *float32 `json:"torque_nm,omitempty"`
-	WetWeightKg *int     `json:"wet_weight_kg,omitempty"`
+	PowerHp *float32 `json:"power_hp,omitempty"`
 }
 
 // MotorcycleMetadataLicenseClass defines model for MotorcycleMetadata.LicenseClass.
@@ -1050,23 +977,22 @@ type MovieItem struct {
 	Id             openapi_types.UUID `json:"id"`
 
 	// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
-	Image              nullable.Nullable[Image]  `json:"image"`
-	Kind               MovieItemKind             `json:"kind"`
-	ListId             openapi_types.UUID        `json:"list_id"`
-	Metadata           MovieMetadata             `json:"metadata"`
-	OfficialWebsiteUrl nullable.Nullable[string] `json:"official_website_url"`
+	Image    nullable.Nullable[Image] `json:"image"`
+	Kind     *MovieItemKind           `json:"kind,omitempty"`
+	ListId   openapi_types.UUID       `json:"list_id"`
+	Metadata MovieMetadata            `json:"metadata"`
 
 	// Path Ancestor folders and the list. Present on `getItem` only.
 	Path *[]PathSegment `json:"path,omitempty"`
 
-	// Price At least one of `min` and `max` is set when a price exists. `min` must not exceed `max`.
+	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
+	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
 	Price     nullable.Nullable[Price]  `json:"price"`
 	SortOrder int                       `json:"sort_order"`
-	Status    nullable.Nullable[string] `json:"status"`
-	Summary   nullable.Nullable[string] `json:"summary"`
 	Title     string                    `json:"title"`
 	UpdatedAt time.Time                 `json:"updated_at"`
 	Version   int                       `json:"version"`
+	Website   nullable.Nullable[string] `json:"website"`
 }
 
 // MovieItemKind defines model for MovieItem.Kind.
@@ -1099,7 +1025,8 @@ type PathSegment struct {
 // PathSegmentType defines model for PathSegment.Type.
 type PathSegmentType string
 
-// Price At least one of `min` and `max` is set when a price exists. `min` must not exceed `max`.
+// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
+// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
 type Price struct {
 	// Currency Example: EUR
 	Currency string `json:"currency"`
@@ -1109,6 +1036,25 @@ type Price struct {
 
 	// Min Example: 12.00
 	Min nullable.Nullable[string] `json:"min"`
+}
+
+// PriceInput A price in requests, either a single price `{amount, currency}` or a range `{min, max, currency}`. `amount` and `min`/`max`
+// are mutually exclusive (`422 validation_failed` when mixed); `min` must not exceed `max`; a range needs at least one bound.
+// `null` clears the price. Money is a decimal string (D-062).
+type PriceInput struct {
+	// Amount Single price. Stored as `min` = `max`.
+	//
+	// Example: 12.00
+	Amount *string `json:"amount,omitempty"`
+
+	// Currency Example: EUR
+	Currency string `json:"currency"`
+
+	// Max Example: 15.00
+	Max nullable.Nullable[string] `json:"max,omitempty"`
+
+	// Min Example: 12.00
+	Min nullable.Nullable[string] `json:"min,omitempty"`
 }
 
 // Problem RFC 9457 problem details.
@@ -1218,14 +1164,15 @@ type SetImageUrlRequest struct {
 
 // Settings defines model for Settings.
 type Settings struct {
-	DefaultCurrency      string `json:"default_currency"`
 	MarkdownHistoryLimit int    `json:"markdown_history_limit"`
 	StreamingCountryCode string `json:"streaming_country_code"`
 	Version              int    `json:"version"`
 	WorkspaceName        string `json:"workspace_name"`
 }
 
-// SortMode defines model for SortMode.
+// SortMode `kind_key` sorts by the kind's sort key (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
+// car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists. The manual order is kept
+// when the mode changes.
 type SortMode string
 
 // Streaming defines model for Streaming.
@@ -1280,23 +1227,22 @@ type TvShowItem struct {
 	Id             openapi_types.UUID `json:"id"`
 
 	// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
-	Image              nullable.Nullable[Image]  `json:"image"`
-	Kind               TvShowItemKind            `json:"kind"`
-	ListId             openapi_types.UUID        `json:"list_id"`
-	Metadata           TvShowMetadata            `json:"metadata"`
-	OfficialWebsiteUrl nullable.Nullable[string] `json:"official_website_url"`
+	Image    nullable.Nullable[Image] `json:"image"`
+	Kind     *TvShowItemKind          `json:"kind,omitempty"`
+	ListId   openapi_types.UUID       `json:"list_id"`
+	Metadata TvShowMetadata           `json:"metadata"`
 
 	// Path Ancestor folders and the list. Present on `getItem` only.
 	Path *[]PathSegment `json:"path,omitempty"`
 
-	// Price At least one of `min` and `max` is set when a price exists. `min` must not exceed `max`.
+	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
+	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
 	Price     nullable.Nullable[Price]  `json:"price"`
 	SortOrder int                       `json:"sort_order"`
-	Status    nullable.Nullable[string] `json:"status"`
-	Summary   nullable.Nullable[string] `json:"summary"`
 	Title     string                    `json:"title"`
 	UpdatedAt time.Time                 `json:"updated_at"`
 	Version   int                       `json:"version"`
+	Website   nullable.Nullable[string] `json:"website"`
 }
 
 // TvShowItemKind defines model for TvShowItem.Kind.
@@ -1325,30 +1271,36 @@ type UpdateFolderRequest struct {
 
 // UpdateItemRequest defines model for UpdateItemRequest.
 type UpdateItemRequest struct {
-	Kind *string `json:"kind,omitempty"`
+	// Metadata Free-form here because its shape depends on the list's kind. Validated against that kind: see the `*Metadata` schemas.
+	Metadata *map[string]interface{} `json:"metadata,omitempty"`
 
-	// Metadata Free-form here because `kind` may be absent. Validated per kind: see the `*Metadata` schemas.
-	Metadata           *map[string]interface{}   `json:"metadata,omitempty"`
-	OfficialWebsiteUrl nullable.Nullable[string] `json:"official_website_url,omitempty"`
-
-	// Price At least one of `min` and `max` is set when a price exists. `min` must not exceed `max`.
-	Price   nullable.Nullable[Price]  `json:"price,omitempty"`
-	Status  nullable.Nullable[string] `json:"status,omitempty"`
-	Summary nullable.Nullable[string] `json:"summary,omitempty"`
-	Title   *string                   `json:"title,omitempty"`
+	// Price A price in requests, either a single price `{amount, currency}` or a range `{min, max, currency}`. `amount` and `min`/`max`
+	// are mutually exclusive (`422 validation_failed` when mixed); `min` must not exceed `max`; a range needs at least one bound.
+	// `null` clears the price. Money is a decimal string (D-062).
+	Price   nullable.Nullable[PriceInput] `json:"price,omitempty"`
+	Title   *string                       `json:"title,omitempty"`
+	Website nullable.Nullable[string]     `json:"website,omitempty"`
 }
 
 // UpdateListRequest defines model for UpdateListRequest.
 type UpdateListRequest struct {
+	// Description Markdown, up to 64 KiB (UTF-8 bytes).
 	Description nullable.Nullable[string] `json:"description,omitempty"`
 	DisplayMode *DisplayMode              `json:"display_mode,omitempty"`
-	Name        *string                   `json:"name,omitempty"`
-	SortMode    *SortMode                 `json:"sort_mode,omitempty"`
+
+	// Kind The kind of a list. Items have no kind of their own: theirs is read-only and derived from their list. Changing the kind of a
+	// list that has items clears the `metadata` of all its items.
+	Kind *ItemKind `json:"kind,omitempty"`
+	Name *string   `json:"name,omitempty"`
+
+	// SortMode `kind_key` sorts by the kind's sort key (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
+	// car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists. The manual order is kept
+	// when the mode changes.
+	SortMode *SortMode `json:"sort_mode,omitempty"`
 }
 
 // UpdateSettingsRequest defines model for UpdateSettingsRequest.
 type UpdateSettingsRequest struct {
-	DefaultCurrency      *string `json:"default_currency,omitempty"`
 	MarkdownHistoryLimit *int    `json:"markdown_history_limit,omitempty"`
 	StreamingCountryCode *string `json:"streaming_country_code,omitempty"`
 	WorkspaceName        *string `json:"workspace_name,omitempty"`
@@ -1461,6 +1413,9 @@ type FolderMoveConflict = Problem
 // InternalError RFC 9457 problem details.
 type InternalError = Problem
 
+// ItemMoveConflict RFC 9457 problem details.
+type ItemMoveConflict = Problem
+
 // NotFound RFC 9457 problem details.
 type NotFound = Problem
 
@@ -1572,7 +1527,7 @@ type UpdateListParams struct {
 // ListItemsParams defines parameters for ListItems.
 type ListItemsParams struct {
 	// Sort Defaults to the list's `sort_mode`.
-	Sort *ListItemsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+	Sort *SortMode `form:"sort,omitempty" json:"sort,omitempty"`
 
 	// Q Case-insensitive title filter.
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
@@ -1583,9 +1538,6 @@ type ListItemsParams struct {
 	// Offset Number of rows to skip.
 	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
 }
-
-// ListItemsParamsSort defines parameters for ListItems.
-type ListItemsParamsSort string
 
 // MoveListParams defines parameters for MoveList.
 type MoveListParams struct {
@@ -3968,6 +3920,8 @@ type FolderMoveConflictApplicationProblemPlusJSONResponse Problem
 
 type InternalErrorApplicationProblemPlusJSONResponse Problem
 
+type ItemMoveConflictApplicationProblemPlusJSONResponse Problem
+
 type NotFoundApplicationProblemPlusJSONResponse Problem
 
 type OrderStaleApplicationProblemPlusJSONResponse Problem
@@ -6066,7 +6020,7 @@ func (response MoveItem404ApplicationProblemPlusJSONResponse) VisitMoveItemRespo
 }
 
 type MoveItem409ApplicationProblemPlusJSONResponse struct {
-	DestinationUnavailableApplicationProblemPlusJSONResponse
+	ItemMoveConflictApplicationProblemPlusJSONResponse
 }
 
 func (response MoveItem409ApplicationProblemPlusJSONResponse) VisitMoveItemResponse(w http.ResponseWriter) error {
@@ -9044,205 +8998,212 @@ func (sh *strictHandler) CheckReadiness(w http.ResponseWriter, r *http.Request) 
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"PwA=",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

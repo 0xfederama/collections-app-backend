@@ -358,13 +358,16 @@ const maxPinnedPerSlot = 6
 const PriceKey = "price"
 
 // PinnableKeys returns the field keys a list of this kind can pin, sorted: the
-// kind's metadata keys plus "price". Keys are looked up through the registry,
+// kind's metadata keys plus "price" (generic has none). Keys are looked up through the registry,
 // so a field added to a kind (or, later, a custom field) is pinnable at once.
 // An unknown kind has none.
 func PinnableKeys(kind string) []string {
 	sc, ok := registry[kind]
 	if !ok {
 		return nil
+	}
+	if kind == Generic {
+		return nil // generic lists have no fields at all, price included (F008-B1)
 	}
 	return slices.Sorted(maps.Keys(withPrice(sc.fields)))
 }
@@ -396,6 +399,8 @@ func ValidatePinned(kind string, under, right []string) (u, r []string, err erro
 		for i, k := range keys {
 			field := fmt.Sprintf("%s[%d]", base, i)
 			switch {
+			case len(allowed) == 0:
+				errs = append(errs, apperr.FieldError{Field: field, Message: "lists of this kind have no pinnable fields"})
 			case !slices.Contains(allowed, k):
 				errs = append(errs, apperr.FieldError{Field: field, Message: "must be one of " + strings.Join(allowed, ", ")})
 			case seen[k]:

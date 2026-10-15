@@ -33,6 +33,26 @@ func (q *Queries) ClearListItemsMetadata(ctx context.Context, arg ClearListItems
 	return result.RowsAffected(), nil
 }
 
+const clearListItemsPrice = `-- name: ClearListItemsPrice :execrows
+UPDATE items SET price_min = NULL, price_max = NULL, currency = NULL, version = version + 1, updated_at = $1
+WHERE list_id = $2 AND workspace_id = $3 AND (price_min IS NOT NULL OR price_max IS NOT NULL)
+`
+
+type ClearListItemsPriceParams struct {
+	Now         time.Time
+	ListID      uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+// A kind change to generic removes the price of every item of the list (trashed ones too; generic has no price, F008-B1).
+func (q *Queries) ClearListItemsPrice(ctx context.Context, arg ClearListItemsPriceParams) (int64, error) {
+	result, err := q.db.Exec(ctx, clearListItemsPrice, arg.Now, arg.ListID, arg.WorkspaceID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countItems = `-- name: CountItems :one
 SELECT count(*)::int AS total FROM items i
 WHERE i.list_id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL

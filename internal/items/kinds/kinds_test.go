@@ -306,7 +306,7 @@ func TestF002B3_PinnableKeysPerKind(t *testing.T) {
 		kind string
 		want []string
 	}{
-		{"generic", []string{"price"}},
+		{"generic", nil},
 		{"movie", []string{"imdb_url", "price", "release_year", "runtime_minutes", "streaming"}},
 		{"tv_show", []string{"end_year", "episode_minutes", "episodes_per_season", "first_air_year", "imdb_url", "price", "seasons", "streaming"}},
 		{"motorcycle", []string{"displacement_cc", "license_class", "model_year", "power_hp", "price"}},
@@ -330,6 +330,8 @@ func TestF002B3_ValidatePinned(t *testing.T) {
 	}{
 		{"ok", "movie", []string{"release_year", "streaming"}, []string{"price"}, nil},
 		{"nil slots", "movie", nil, nil, nil},
+		{"TestF008B1 generic has no pinnable price", "generic", nil, []string{"price"}, []string{"pinned_fields.right[0]"}},
+		{"TestF008B1 generic empty slots", "generic", nil, nil, nil},
 		{"unknown under", "movie", []string{"release_year", "make"}, nil, []string{"pinned_fields.under[1]"}},
 		{"unknown right", "car", nil, []string{"nope"}, []string{"pinned_fields.right[0]"}},
 		{"both slots", "movie", []string{"price"}, []string{"release_year", "price"}, []string{"pinned_fields.right[1]"}},

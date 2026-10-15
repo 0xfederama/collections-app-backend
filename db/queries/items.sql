@@ -121,6 +121,11 @@ SELECT id FROM items
 WHERE list_id = @list_id AND workspace_id = @workspace_id
 ORDER BY sort_order, id;
 
+-- name: ClearListItemsPrice :execrows
+-- A kind change to generic removes the price of every item of the list (trashed ones too; generic has no price, F008-B1).
+UPDATE items SET price_min = NULL, price_max = NULL, currency = NULL, version = version + 1, updated_at = @now
+WHERE list_id = @list_id AND workspace_id = @workspace_id AND (price_min IS NOT NULL OR price_max IS NOT NULL);
+
 -- name: ClearListItemsMetadata :execrows
 -- A kind change empties the kind fields of every item of the list (trashed ones too).
 UPDATE items SET metadata = '{}', version = version + 1, updated_at = @now

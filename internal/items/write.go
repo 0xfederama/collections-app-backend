@@ -66,6 +66,11 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 		if err != nil {
 			return notFoundOr(err, "list")
 		}
+		if in.Price != nil {
+			if err := genericPriceError(list.Kind); err != nil {
+				return err
+			}
+		}
 		meta, merrs, err := validateMetadata(list.Kind, in.Metadata)
 		if err != nil {
 			return err
@@ -132,6 +137,11 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 		if err != nil {
 			return notFoundOr(err, "list")
 		}
+		if p.Price.Set && p.Price.Value != nil {
+			if err := genericPriceError(list.Kind); err != nil {
+				return err
+			}
+		}
 		arg, changed, err := mergePatch(cur, list.Kind, p)
 		if err != nil {
 			return err
@@ -149,6 +159,15 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 		return Item{}, err
 	}
 	return s.get(ctx, id, false)
+}
+
+// genericPriceError rejects a price on an item of a generic list (F008-B1, 422).
+// Clearing a price (null) never gets here.
+func genericPriceError(kind string) error {
+	if kind != kinds.Generic {
+		return nil
+	}
+	return apperr.Validation(apperr.FieldError{Field: "price", Message: "generic items have no price"})
 }
 
 // mergePatch applies a validated patch to the locked row. It returns the full

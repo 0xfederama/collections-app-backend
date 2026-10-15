@@ -5,36 +5,43 @@ contract (`api/openapi.yaml`, OpenAPI 3.0.3). Design docs: `/Users/federico/Deve
 
 This repo is the `backend/` submodule of the parent repo [collections-app](https://github.com/0xfederama/collections-app),
 next to `frontend-web/` (the React app, repo `collections-app-frontend-web`). From the parent folder,
-`docker compose up --build` starts both together. Everything below also works standalone in this repo.
+`./deploy/dev up -d` starts both together (see the parent README). Everything below also works standalone in this repo.
 
 There is no CI. Quality gates run locally with `make check` (see below).
 
-## What exists today (M0 skeleton)
+## What exists today
 
-| Piece | State |
+The whole API in `api/openapi.yaml` is implemented (spec `0.2.0`, tag `api-v0.2.0`):
+
+| Area | State |
 |---|---|
-| `GET /healthz` | Liveness: always `200 ok` while the process runs |
-| `GET /readyz` | Readiness: `200 ready` only if the DB answers and `DATA_DIR` is writable, else a terse `503` (no paths or SQL) |
-| Config | Env vars validated at startup, all problems reported together |
-| Logging | `log/slog`, `LOG_FORMAT` (`json` or `text`), `LOG_LEVEL` |
-| Database | Connection pool, migration `000001_init` (full schema + `pg_trgm`), sqlc-generated code |
-| Contract | `api/openapi.yaml` describes the whole API; generated strict chi server types in `internal/httpapi/oapi` (not mounted yet) |
-| Everything else | Not built yet: middleware/transactions (B-04), then the domain features (B-05 onward) |
+| Health | `GET /healthz` liveness (`200 ok`), `GET /readyz` readiness (`200 ready` only if the DB answers and `DATA_DIR` is writable, else a terse `503`, no paths or SQL) |
+| Data | Settings, tree, folders, lists, items (six kinds), Markdown content with versions, one image per item, search, recent items, trash with restore and purge |
+| Cross-cutting | Request IDs, access log, panic recovery, security headers, request guard (`If-Match`, body limits, unknown fields), problem+json errors |
+| Operations | Config validated at startup, `log/slog`, migrations, backup/restore/verify scripts |
 
 There is no authentication, so the API is published on `127.0.0.1` only. See the parent README, "Security boundary".
 
 ## Layout
 
 ```text
-cmd/api/main.go        wiring only: config → logger → pgx pool → chi router → http.Server (graceful shutdown)
+cmd/api/main.go        wiring only: config → logger → pgx pool → services → chi router → http.Server (graceful shutdown)
 internal/config        env parsing and validation
-internal/database      pgx pool constructor
-internal/httpapi       router, /healthz, /readyz
-internal/httpapi/oapi  GENERATED from api/openapi.yaml (models, chi server, strict interface). Never edit
+internal/database      pgx pool, InTx; sqlc/ is GENERATED (never edit)
+internal/apperr        typed domain errors (no HTTP)
+internal/tree          folders and lists
+internal/items         items; items/kinds validates per-kind metadata
+internal/content       Markdown content and versions
+internal/images        upload validation, thumbnails, serving, orphan sweeper
+internal/storage       FileStore (local files)
+internal/trash         delete, list, restore, purge
+internal/search        search and recent items
+internal/workspace     bootstrap of the single workspace
+internal/httpapi       router, handlers, middleware, problem mapping; oapi/ is GENERATED from api/openapi.yaml (never edit)
 api/openapi.yaml       the canonical API contract (spec wins over design-docs/API.md)
-db/migrations          golang-migrate files (`000001_init`)
+db/migrations          golang-migrate files
 db/queries             sqlc queries (generated into internal/database/sqlc)
-scripts/               check-compose-exposure.sh, reset-dev.sh
+scripts/               backup, restore, verify, compose exposure check, reset-dev
 docs/                  one short doc per module
 ```
 
@@ -47,8 +54,9 @@ distroless runtime image has no shell or curl.
 |---|---|
 | Go | 1.27.2 |
 | Docker with Compose v2 | any recent (Docker Desktop 28 tested) |
-| Node | 24+ (only for `make lint-api`, which runs Redocly through `npx`) |
+| Node | 24+ (for `make lint-api`, which runs Redocly through `npx`; `make check` includes it, so it is needed for the gate) |
 | Git, `gh` | for PRs |
+| `jq`, optionally `zstd` | for the backup scripts |
 
 Postgres 18.6 and golang-migrate 4.20.1 run as pinned Docker images, so there's nothing else to install.
 

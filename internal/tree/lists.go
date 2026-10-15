@@ -202,6 +202,7 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		if !kindChanged && !fieldsSet {
 			return nil
 		}
+		resetSort := false
 		if kindChanged {
 			// The sort mode that applies after the PATCH must still exist for the new kind.
 			sortMode := cur.SortMode
@@ -212,6 +213,12 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 			if p.SortMode != nil {
 				field = "sort_mode"
 			}
+			// A stored price sort on a list that becomes generic falls back to manual (F008-B1).
+			if p.SortMode == nil && sortMode == "price" && *p.Kind == kinds.Generic {
+				sortMode = "manual"
+				resetSort = true
+				fieldsSet = true
+			}
 			if errs := sortKindErrors(*p.Kind, sortMode, field); len(errs) > 0 {
 				return apperr.Validation(errs...)
 			}
@@ -220,6 +227,11 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 			}
 			if _, err := q.ClearListItemsMetadata(ctx, sqlc.ClearListItemsMetadataParams{Now: s.now(), ListID: id, WorkspaceID: s.workspaceID}); err != nil {
 				return fmt.Errorf("clear items metadata: %w", err)
+			}
+			if *p.Kind == kinds.Generic {
+				if _, err := q.ClearListItemsPrice(ctx, sqlc.ClearListItemsPriceParams{Now: s.now(), ListID: id, WorkspaceID: s.workspaceID}); err != nil {
+					return fmt.Errorf("clear items price: %w", err)
+				}
 			}
 		} else if p.SortMode != nil {
 			if errs := sortKindErrors(cur.Kind, *p.SortMode, "sort_mode"); len(errs) > 0 {
@@ -254,6 +266,8 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		}
 		if p.SortMode != nil {
 			arg.SortMode = *p.SortMode
+		} else if resetSort {
+			arg.SortMode = "manual"
 		}
 		if _, err := q.UpdateList(ctx, arg); err != nil {
 			return fmt.Errorf("update list: %w", err)
@@ -369,8 +383,12 @@ func kindErrors(kind *string) []apperr.FieldError {
 	return nil
 }
 
-// sortKindErrors rejects the kind_key sort mode on a kind without a sort key.
+// sortKindErrors rejects the kind_key sort mode on a kind without a sort key
+// and the price sort mode on generic (no price, F008-B1).
 func sortKindErrors(kind, sortMode, field string) []apperr.FieldError {
+	if sortMode == "price" && kind == kinds.Generic {
+		return []apperr.FieldError{{Field: field, Message: "price is not available on generic lists"}}
+	}
 	if sortMode != "kind_key" {
 		return nil
 	}

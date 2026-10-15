@@ -46,6 +46,7 @@ No CI (D-031, D-032): the gates run locally. Run `make check` before every PR an
 | Delete dev containers, volumes and `./data` | `make reset-dev` |
 | Backup / restore / verify (Postgres + images, D-066) | `scripts/backup.sh [dest]`, `scripts/restore.sh <dir> [--force]`, `scripts/verify-restore.sh <dir>` |
 | AT-17 backup round trip (isolated compose project, ~1 min, not in `make check`) | `make test-backup` |
+| API smoke over HTTP (curl+jq; `API_URL` default `http://localhost:8090`; run against `./deploy/test up -d --fresh`, never dev data; not in `make check`) | `make smoke` |
 | shellcheck of `scripts/` (pinned Docker image, part of `make check`) | `make lint-scripts` |
 
 Versions and tool choices: DECISIONS.md "Toolchain versions (R-1)" and D-035–D-041. Go tools are pinned via the `go.mod` `tool` directive (`go tool govulncheck`), golangci-lint via `go run …@v2.14.0` in the Makefile.

@@ -26,6 +26,7 @@ Owns folders and lists of the single workspace: create, read, rename, move, reor
 - `UpdateList(ctx, id, version, ListPatch) (List, error)`: `Kind` change clears the items' metadata
 - `MoveList(ctx, id, version, folder *uuid.UUID) (List, error)`
 - `ReorderLists(ctx, folder *uuid.UUID, ids []uuid.UUID) error`
+- `PinnedFields{Under, Right}`: list pinned keys, nil = kind default; validated by `kinds.ValidatePinned`
 - `Optional[T]` (`Set`, `Value`): PATCH field that tells absent from null
 
 ## Gotchas
@@ -36,6 +37,7 @@ Owns folders and lists of the single workspace: create, read, rename, move, reor
 - Reorder `ids` must equal the active siblings as a set, else 409 `order_stale`. A missing or trashed parent is 404.
 - Move checks in order: 404, 412 `version_conflict`, 409 `destination_unavailable`, 409 `cycle_detected` (walks up from the destination).
 - A PATCH with no fields succeeds and does not bump the version. A `kind` equal to the stored one is a no-op.
-- A kind change runs under the tree lock: it updates the list and clears the metadata of its items (trashed ones too, which bumps their versions) in one transaction.
-- `kind` is one of the six kinds (422 otherwise). `sort_mode: kind_key` is 422 on a `generic` list, and so is a change to `generic` while the list is on `kind_key`.
+- A kind change runs under the tree lock: it updates the list, resets `pinned_fields` to NULL and clears the metadata of its items (trashed ones too, which bumps their versions) in one transaction. A `pinned_fields` sent in the same PATCH is kept.
+- `pinned_fields` is `{under, right}` (migration 000004, a nullable JSONB). Keys are the kind's metadata keys plus `price`, at most 6 per slot, and a key sits in one slot only (422 on `pinned_fields.under[i]`).
+- `kind` is one of the six kinds (422 otherwise). `sort_mode: kind_key` is 422 on a `generic` list, and so is a change to `generic` while the list is on `kind_key`. `sort_mode: price` (migration 000005) is valid for every kind.
 - Description is Markdown, at most 64 KiB (413 over); invalid UTF-8 or NUL is 422. Name is trimmed to 1-200 characters; enum violations are 422.

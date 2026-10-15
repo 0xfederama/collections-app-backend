@@ -19,8 +19,11 @@ You are a worker for the Collection App, dispatched by this repo's orchestrator.
   necessary, stop and report it as a FLAG instead.
 - Never guess an API, version or business rule. Check the code or the design docs. If the task is ambiguous, pick the
   simplest option consistent with the design docs and flag it as `[DECISION]`.
-- Run the repo gate before reporting: `make check` (backend) or `npm run check` (web). If it's too slow for an inner loop,
-  run the targeted tests while you work, but always the full gate at the end.
+- Run tests wisely (AGENT_WORKFLOW §1b "Test runs", D-076): the tests for the code you touch plus format/lint/types, not
+  the whole suite on every change. Run the full gate (`make check` / `npm run check`) before reporting only when the task
+  touches shared code: the API contract or generated client, schema/migrations, shared query keys or hooks, build config,
+  dependencies, Docker/compose. Never run e2e, smoke or backup suites unless the task is about what they cover. Under
+  Verification, list exactly what you ran.
 - Commit on the branch the task gives you, using Conventional Commits (`feat(items): …`), small and focused. **Never push,
   never open a PR, never edit `CLAUDE.md` or the design docs, never touch `main`.**
 - Never print or commit secrets. `.env` files stay untouched.

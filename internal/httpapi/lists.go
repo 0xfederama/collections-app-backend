@@ -17,6 +17,7 @@ func (s *Server) CreateList(ctx context.Context, r oapi.CreateListRequestObject)
 		DisplayMode: derefOr(enumPtr(b.DisplayMode)),
 		SortMode:    derefOr(enumPtr(b.SortMode)),
 	}
+	in.PinnedFields = optionalPinned(b.PinnedFields).Value
 	l, err := s.deps.Tree.CreateList(ctx, in)
 	if err != nil {
 		return nil, err
@@ -38,11 +39,12 @@ func (s *Server) GetList(ctx context.Context, r oapi.GetListRequestObject) (oapi
 func (s *Server) UpdateList(ctx context.Context, r oapi.UpdateListRequestObject) (oapi.UpdateListResponseObject, error) {
 	b := r.Body
 	l, err := s.deps.Tree.UpdateList(ctx, r.Id, IfMatchVersion(ctx), tree.ListPatch{
-		Name:        b.Name,
-		Kind:        enumPtr(b.Kind),
-		Description: optionalString(b.Description),
-		DisplayMode: enumPtr(b.DisplayMode),
-		SortMode:    enumPtr(b.SortMode),
+		Name:         b.Name,
+		Kind:         enumPtr(b.Kind),
+		Description:  optionalString(b.Description),
+		DisplayMode:  enumPtr(b.DisplayMode),
+		SortMode:     enumPtr(b.SortMode),
+		PinnedFields: optionalPinned(b.PinnedFields),
 	})
 	if err != nil {
 		return nil, err

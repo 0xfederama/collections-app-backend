@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -297,5 +298,65 @@ func TestF007_SortKey(t *testing.T) {
 		if key != tt.key || ok != tt.ok {
 			t.Errorf("SortKey(%q) = %q, %v; want %q, %v", tt.kind, key, ok, tt.key, tt.ok)
 		}
+	}
+}
+
+func TestF002B3_PinnableKeysPerKind(t *testing.T) {
+	tests := []struct {
+		kind string
+		want []string
+	}{
+		{"generic", []string{"price"}},
+		{"movie", []string{"imdb_url", "price", "release_year", "runtime_minutes", "streaming"}},
+		{"tv_show", []string{"end_year", "episode_minutes", "episodes_per_season", "first_air_year", "imdb_url", "price", "seasons", "streaming"}},
+		{"motorcycle", []string{"displacement_cc", "license_class", "model_year", "power_hp", "price"}},
+		{"car", []string{"fuel_type", "make", "model", "model_year", "power_hp", "price"}},
+		{"camera", []string{"camera_type", "megapixels", "price", "release_year", "sensor_format"}},
+		{"book", nil},
+	}
+	for _, tt := range tests {
+		if got := kinds.PinnableKeys(tt.kind); !slices.Equal(got, tt.want) {
+			t.Errorf("PinnableKeys(%q) = %v, want %v", tt.kind, got, tt.want)
+		}
+	}
+}
+
+func TestF002B3_ValidatePinned(t *testing.T) {
+	tests := []struct {
+		name         string
+		kind         string
+		under, right []string
+		wantFields   []string
+	}{
+		{"ok", "movie", []string{"release_year", "streaming"}, []string{"price"}, nil},
+		{"nil slots", "movie", nil, nil, nil},
+		{"unknown under", "movie", []string{"release_year", "make"}, nil, []string{"pinned_fields.under[1]"}},
+		{"unknown right", "car", nil, []string{"nope"}, []string{"pinned_fields.right[0]"}},
+		{"both slots", "movie", []string{"price"}, []string{"release_year", "price"}, []string{"pinned_fields.right[1]"}},
+		{"duplicate", "movie", []string{"price", "price"}, nil, []string{"pinned_fields.under[1]"}},
+		{"too many", "tv_show", []string{"end_year", "episode_minutes", "episodes_per_season", "first_air_year", "imdb_url", "price", "seasons"}, nil, []string{"pinned_fields.under"}},
+		{"six is fine", "tv_show", []string{"end_year", "episode_minutes", "episodes_per_season", "first_air_year", "imdb_url", "price"}, nil, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u, r, err := kinds.ValidatePinned(tt.kind, tt.under, tt.right)
+			if tt.wantFields == nil {
+				if err != nil || u == nil || r == nil {
+					t.Fatalf("got %v %v %v", u, r, err)
+				}
+				return
+			}
+			var ve *apperr.ValidationError
+			if !errors.As(err, &ve) {
+				t.Fatalf("err = %v, want validation", err)
+			}
+			var got []string
+			for _, fe := range ve.Errors {
+				got = append(got, fe.Field)
+			}
+			if !slices.Equal(got, tt.wantFields) {
+				t.Errorf("fields = %v, want %v", got, tt.wantFields)
+			}
+		})
 	}
 }

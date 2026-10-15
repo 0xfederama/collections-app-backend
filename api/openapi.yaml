@@ -400,7 +400,9 @@ paths:
 
         Changing `kind` on a list that has items **clears the `metadata` of all its items** (trashed ones too; their `version` is bumped),
         because the kind fields differ per kind. Clients should warn first. If the list is left on `sort_mode: kind_key` and the new
-        kind is `generic`, the request is rejected with `422 validation_failed`.
+        kind is `generic`, the request is rejected with `422 validation_failed`. A kind change also resets `pinned_fields` to `null` (unless
+        the same request sets it, which is then validated against the new kind). Send `pinned_fields: null` to reset it to the kind default;
+        absent leaves it unchanged.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -411,6 +413,8 @@ paths:
             examples:
               viewMode: { value: { display_mode: grid, sort_mode: title } }
               changeKind: { value: { kind: car } }
+              pinFields: { value: { pinned_fields: { under: [release_year], right: [price] } } }
+              resetPinnedFields: { value: { pinned_fields: null } }
       responses:
         '200':
           description: The updated list
@@ -1330,6 +1334,7 @@ components:
         description: Films to watch
         display_mode: thumbnail
         sort_mode: manual
+        pinned_fields: { under: [release_year], right: [price] }
         sort_order: 0
         item_count: 2
         version: 1
@@ -1344,6 +1349,7 @@ components:
         description: Films to watch
         display_mode: thumbnail
         sort_mode: manual
+        pinned_fields: { under: [release_year], right: [price] }
         sort_order: 0
         item_count: 2
         version: 1
@@ -1384,6 +1390,7 @@ components:
             description: Films to watch
             display_mode: thumbnail
             sort_mode: manual
+            pinned_fields: { under: [release_year], right: [price] }
             sort_order: 0
             item_count: 2
             version: 1
@@ -1396,6 +1403,7 @@ components:
             description: null
             display_mode: grid
             sort_mode: title
+            pinned_fields: null
             sort_order: 0
             item_count: 1
             version: 2
@@ -1799,9 +1807,29 @@ components:
         `kind_key` sorts by the kind's sort key (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
         car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists. The manual order is kept
         when the mode changes.
+    PinnedFields:
+      type: object
+      nullable: true
+      additionalProperties: false
+      description: |
+        The fields a list shows in its rows, by field key: `under` (under the title) and `right` (on the right), in order. `null` means the
+        kind default (the web app owns the defaults). `{}` or two empty slots pin nothing, which is different from `null`. Allowed keys: the
+        keys of the kind's `metadata` fields plus `price` (`streaming` is a movie and tv_show field). Each slot holds at most 6 unique
+        keys and a key is in at most one slot, else `422 validation_failed` on `pinned_fields.under[i]` / `pinned_fields.right[i]`.
+        Responses always carry both slots. Changing the list's `kind` resets it to `null`.
+      properties:
+        under:
+          type: array
+          maxItems: 6
+          items: { type: string, maxLength: 60 }
+        right:
+          type: array
+          maxItems: 6
+          items: { type: string, maxLength: 60 }
+      example: { under: [release_year, runtime_minutes], right: [price] }
     List:
       type: object
-      required: [id, folder_id, name, kind, description, display_mode, sort_mode, sort_order, item_count, version, created_at, updated_at]
+      required: [id, folder_id, name, kind, description, display_mode, sort_mode, pinned_fields, sort_order, item_count, version, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         folder_id: { type: string, format: uuid, nullable: true }
@@ -1810,6 +1838,7 @@ components:
         description: { type: string, nullable: true, maxLength: 65536, description: 'Markdown, up to 64 KiB (UTF-8 bytes).' }
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
         sort_mode: { $ref: '#/components/schemas/SortMode' }
+        pinned_fields: { $ref: '#/components/schemas/PinnedFields' }
         sort_order: { type: integer }
         item_count: { type: integer, description: Number of active items. }
         version: { type: integer }
@@ -1830,6 +1859,7 @@ components:
         description: { type: string, nullable: true, maxLength: 65536, description: 'Markdown, up to 64 KiB (UTF-8 bytes).' }
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
         sort_mode: { $ref: '#/components/schemas/SortMode' }
+        pinned_fields: { $ref: '#/components/schemas/PinnedFields' }
     UpdateListRequest:
       type: object
       additionalProperties: false
@@ -1839,6 +1869,7 @@ components:
         description: { type: string, nullable: true, maxLength: 65536, description: 'Markdown, up to 64 KiB (UTF-8 bytes).' }
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
         sort_mode: { $ref: '#/components/schemas/SortMode' }
+        pinned_fields: { $ref: '#/components/schemas/PinnedFields' }
     MoveListRequest:
       type: object
       additionalProperties: false

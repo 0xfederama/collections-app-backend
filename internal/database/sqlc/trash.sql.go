@@ -227,7 +227,7 @@ func (q *Queries) GetTrashedItem(ctx context.Context, arg GetTrashedItemParams) 
 }
 
 const getTrashedList = `-- name: GetTrashedList :one
-SELECT id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, kind FROM lists WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
+SELECT id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, kind, pinned_fields FROM lists WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
 `
 
 type GetTrashedListParams struct {
@@ -254,6 +254,7 @@ func (q *Queries) GetTrashedList(ctx context.Context, arg GetTrashedListParams) 
 		&i.DeletedAt,
 		&i.TrashBatchID,
 		&i.Kind,
+		&i.PinnedFields,
 	)
 	return i, err
 }

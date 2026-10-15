@@ -82,6 +82,7 @@ type List struct {
 	DeletedAt    *time.Time
 	TrashBatchID uuid.NullUUID
 	Kind         string
+	PinnedFields []byte
 }
 
 type TrashBatch struct {

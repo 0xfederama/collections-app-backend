@@ -350,3 +350,67 @@ func platformList(path string, raw any) ([]string, []apperr.FieldError) {
 	}
 	return out, nil
 }
+
+// maxPinnedPerSlot is the most field keys a list can pin in one slot (F-002).
+const maxPinnedPerSlot = 6
+
+// PriceKey is the item column that can be pinned next to a kind's metadata fields.
+const PriceKey = "price"
+
+// PinnableKeys returns the field keys a list of this kind can pin, sorted: the
+// kind's metadata keys plus "price". Keys are looked up through the registry,
+// so a field added to a kind (or, later, a custom field) is pinnable at once.
+// An unknown kind has none.
+func PinnableKeys(kind string) []string {
+	sc, ok := registry[kind]
+	if !ok {
+		return nil
+	}
+	return slices.Sorted(maps.Keys(withPrice(sc.fields)))
+}
+
+func withPrice(fields map[string]rule) map[string]rule {
+	out := make(map[string]rule, len(fields)+1)
+	maps.Copy(out, fields)
+	out[PriceKey] = nil
+	return out
+}
+
+// ValidatePinned checks the two pinned-field slots of a list of this kind: each
+// slot is an ordered list of at most 6 unique pinnable keys, and a key is in at
+// most one slot. Errors are on "pinned_fields.under[i]" / "pinned_fields.right[i]".
+// Nil slots are returned as empty ones.
+func ValidatePinned(kind string, under, right []string) (u, r []string, err error) {
+	if !Known(kind) {
+		return nil, nil, apperr.Validation(apperr.FieldError{Field: "kind", Message: "is not a known item kind"})
+	}
+	allowed := PinnableKeys(kind)
+	var errs []apperr.FieldError
+	check := func(slot string, keys []string, other map[string]bool) map[string]bool {
+		seen := make(map[string]bool, len(keys))
+		base := "pinned_fields." + slot
+		if len(keys) > maxPinnedPerSlot {
+			errs = append(errs, apperr.FieldError{Field: base, Message: fmt.Sprintf("must have at most %d entries", maxPinnedPerSlot)})
+			return seen
+		}
+		for i, k := range keys {
+			field := fmt.Sprintf("%s[%d]", base, i)
+			switch {
+			case !slices.Contains(allowed, k):
+				errs = append(errs, apperr.FieldError{Field: field, Message: "must be one of " + strings.Join(allowed, ", ")})
+			case seen[k]:
+				errs = append(errs, apperr.FieldError{Field: field, Message: "is a duplicate key"})
+			case other[k]:
+				errs = append(errs, apperr.FieldError{Field: field, Message: "is already pinned in the other slot"})
+			}
+			seen[k] = true
+		}
+		return seen
+	}
+	inUnder := check("under", under, nil)
+	check("right", right, inUnder)
+	if len(errs) > 0 {
+		return nil, nil, apperr.Validation(errs...)
+	}
+	return append([]string{}, under...), append([]string{}, right...), nil
+}

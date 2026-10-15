@@ -259,7 +259,7 @@ func imdbURL(path string, v any) outcome {
 	return outcome{val: s}
 }
 
-// streaming checks {country (required), platforms}. Undeclared keys inside it
+// streaming checks {country (required), platforms, paid_platforms}. Undeclared keys inside it
 // are reported as unknown fields too.
 func streaming(path string, v any) outcome {
 	obj, ok := v.(map[string]any)
@@ -267,7 +267,7 @@ func streaming(path string, v any) outcome {
 		return fail(path, "must be an object")
 	}
 	for _, key := range slices.Sorted(maps.Keys(obj)) {
-		if key != "country" && key != "platforms" {
+		if key != "country" && key != "platforms" && key != "paid_platforms" {
 			return outcome{unknown: path + "." + key}
 		}
 	}
@@ -290,6 +290,29 @@ func streaming(path string, v any) outcome {
 		errs = append(errs, perrs...)
 		if len(perrs) == 0 {
 			out["platforms"] = platforms
+		}
+	}
+	if raw, present := obj["paid_platforms"]; present && raw != nil {
+		paid, perrs := platformList(path+".paid_platforms", raw)
+		if len(perrs) == 0 {
+			// Every paid platform must be one of platforms; store the platform's casing.
+			offered, _ := out["platforms"].([]string)
+			byKey := make(map[string]string, len(offered))
+			for _, p := range offered {
+				byKey[strings.ToLower(p)] = p
+			}
+			for i, p := range paid {
+				match, ok := byKey[strings.ToLower(p)]
+				if !ok {
+					perrs = append(perrs, apperr.FieldError{Field: fmt.Sprintf("%s.paid_platforms[%d]", path, i), Message: "must be one of platforms"})
+					continue
+				}
+				paid[i] = match
+			}
+		}
+		errs = append(errs, perrs...)
+		if len(perrs) == 0 && len(paid) > 0 {
+			out["paid_platforms"] = paid
 		}
 	}
 	if len(errs) > 0 {

@@ -121,6 +121,22 @@ func TestAT05_CreateItem(t *testing.T) {
 		}
 	})
 
+	t.Run("TestF002B1_paid platforms round trip", func(t *testing.T) {
+		it := e.newItem(lid, `{"title":"Paid","metadata":{"streaming":{"country":"IT","platforms":["Netflix","Prime Video"],"paid_platforms":["prime video"]}}}`)
+		stream := e.fetchItem(it["id"])["metadata"].(map[string]any)["streaming"].(map[string]any)
+		if !reflect.DeepEqual(stream["paid_platforms"], []any{"Prime Video"}) || !reflect.DeepEqual(stream["platforms"], []any{"Netflix", "Prime Video"}) {
+			t.Fatalf("streaming = %v", stream)
+		}
+	})
+
+	t.Run("TestF002B1_legacy item without paid platforms", func(t *testing.T) {
+		it := e.newItem(lid, matrix)
+		stream := e.fetchItem(it["id"])["metadata"].(map[string]any)["streaming"].(map[string]any)
+		if _, has := stream["paid_platforms"]; has {
+			t.Fatalf("streaming = %v", stream)
+		}
+	})
+
 	t.Run("appended last", func(t *testing.T) {
 		a := e.titled(lid, "A")
 		b := e.titled(lid, "B")

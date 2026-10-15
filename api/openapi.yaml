@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -535,7 +535,7 @@ paths:
                     release_year: 1999
                     runtime_minutes: 136
                     imdb_url: https://www.imdb.com/title/tt0133093/
-                    streaming: { country: IT, platforms: [Netflix, Prime Video] }
+                    streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
       responses:
         '201':
           description: Created
@@ -1421,7 +1421,7 @@ components:
           release_year: 1999
           runtime_minutes: 136
           imdb_url: https://www.imdb.com/title/tt0133093/
-          streaming: { country: IT, platforms: [Netflix, Prime Video] }
+          streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
         content_version: 2
         sort_order: 0
         version: 3
@@ -1440,7 +1440,7 @@ components:
           release_year: 1999
           runtime_minutes: 136
           imdb_url: https://www.imdb.com/title/tt0133093/
-          streaming: { country: IT, platforms: [Netflix, Prime Video] }
+          streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
         content_version: 2
         sort_order: 0
         version: 3
@@ -2047,6 +2047,11 @@ components:
           type: array
           maxItems: 30
           description: Unique case-insensitively.
+          items: { type: string, maxLength: 60 }
+        paid_platforms:
+          type: array
+          maxItems: 30
+          description: Platforms offered only for payment. Each entry must match (case-insensitively) an entry of `platforms` and is stored with that entry's casing. Unique case-insensitively. Omitted, null or empty means none paid.
           items: { type: string, maxLength: 60 }
     GenericMetadata:
       type: object

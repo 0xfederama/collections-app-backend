@@ -63,9 +63,9 @@ step "starting an isolated stack ($COMPOSE_PROJECT_NAME, port $API_PORT)"
 docker compose up -d --build --wait >/dev/null
 curl -fsS "$BASE/readyz" >/dev/null || fail "api is not ready"
 
-# new_item <list-id> <title> <kind>: sets ITEM_ID.
+# new_item <list-id> <title>: sets ITEM_ID.
 new_item() {
-  json 201 POST "/api/v1/lists/$1/items" -d "{\"title\": \"$2\", \"kind\": \"$3\"}"
+  json 201 POST "/api/v1/lists/$1/items" -d "{\"title\": \"$2\"}"
   ITEM_ID="$(field .id)"
 }
 # set_image <item-id> <file> <mime>: uploads through the API.
@@ -88,22 +88,22 @@ step "seeding through the API"
 json 201 POST /api/v1/folders -d '{"name": "Media"}'
 folder="$(field .id)"
 json 201 POST /api/v1/folders -d "{\"name\": \"Sci-Fi\", \"parent_folder_id\": \"$folder\"}"
-json 201 POST /api/v1/lists -d "{\"name\": \"Watchlist\", \"folder_id\": \"$folder\"}"
+json 201 POST /api/v1/lists -d "{\"name\": \"Watchlist\", \"kind\": \"movie\", \"folder_id\": \"$folder\"}"
 watchlist="$(field .id)"
-json 201 POST /api/v1/lists -d '{"name": "Wishlist"}'
+json 201 POST /api/v1/lists -d '{"name": "Wishlist", "kind": "generic"}'
 wishlist="$(field .id)"
-json 201 POST /api/v1/lists -d '{"name": "Old stuff"}'
+json 201 POST /api/v1/lists -d '{"name": "Old stuff", "kind": "generic"}'
 old_list="$(field .id)"
 
-new_item "$watchlist" "The Matrix" movie
+new_item "$watchlist" "The Matrix"
 matrix="$ITEM_ID"
-new_item "$watchlist" "Blade Runner" movie
+new_item "$watchlist" "Blade Runner"
 runner="$ITEM_ID"
-new_item "$wishlist" "Keyboard" generic
+new_item "$wishlist" "Keyboard"
 keyboard="$ITEM_ID"
-new_item "$wishlist" "Thrown away" generic
+new_item "$wishlist" "Thrown away"
 thrown="$ITEM_ID"
-new_item "$old_list" "Inside a trashed list" generic
+new_item "$old_list" "Inside a trashed list"
 inside="$ITEM_ID"
 
 set_image "$matrix" "$T/red.png" image/png

@@ -43,4 +43,5 @@ Owns items of a list: create, get with path, paged list, partial update, move an
 - `streaming.paid_platforms` is optional; each entry must match a `platforms` entry (case-insensitive) and is stored in the platform's casing.
 - Price: `amount` (one price, stored as min = max) or min/max, never both; two decimals, no floats; currency is 3 uppercase letters.
 - `website` (was `official_website_url`) accepts only absolute http and https URLs; `summary` and `status` are gone (F-007, moved to content by 000002).
+- Item summaries (list rows, search results, recent items) carry the item's `metadata` since F002-B5 (spec 0.5.0), so the web can show pinned fields.
 - Image is read-only here (URLs `/api/v1/attachments/{id}/file` and `/thumbnail`).

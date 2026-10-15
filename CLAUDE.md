@@ -15,12 +15,14 @@ This repo is the `backend/` submodule of the parent repo `0xfederama/collections
 ## Session rules (summary of AGENT_WORKFLOW)
 
 - **Never push to `main`.** Branch `<feature|fix|hotfix|refactor|test|docs|chore|ci>/<desc>` from `origin/main`, use Conventional Commits, push the branch, and open a PR with `gh pr create`. Don't merge unless the user says so.
-- **Dispatch cheaper subagents** (`.claude/agents/`):
+- **Workflow v2 (AGENT_WORKFLOW §1b, D-074).** This session is the **repo orchestrator** (Opus 5.5, medium effort): it splits
+  the repo's stories from `design-docs/features/F-NNN-*.md` into tasks and dispatches agents from `.claude/agents/`:
+  - `worker` (Sonnet 5.5, medium): implements one task with its tests, runs the gate, commits, and reports **FLAGS**.
+    Review **only flagged items**, and run the gate yourself once before each PR.
   - `researcher` (sonnet): versions, library docs, "how does X work here". Must cite sources.
-  - `test-writer` (sonnet): writes tests. **You review and run them yourself.**
   - `docs-keeper` (haiku): updates `docs/` before every PR.
   - Built-in `Explore` handles broad code search.
-  - Keep schema, concurrency, trash, storage, and security logic in the main session.
+  - Keep schema, concurrency, trash, storage, and security logic as `[CRUCIAL]` flags you always review.
 - Update **this file** in the same PR when commands, layout, conventions, or gotchas change. Keep it under ~200 lines.
 - MVP scope fence: no auth, TMDB, AI, public-API features, WebSockets, ORM, Redis, or queues (ORCHESTRATOR_BRIEF §2).
 

@@ -91,8 +91,8 @@ func TestB12_RecentItemsOrderAndPath(t *testing.T) {
 	if !reflect.DeepEqual(got.Data[0].Path, wantPath) {
 		t.Fatalf("path = %v, want %v", got.Data[0].Path, wantPath)
 	}
-	if _, ok := got.Data[0].Item["metadata"]; ok {
-		t.Error("item summary must not carry metadata")
+	if m, ok := got.Data[0].Item["metadata"].(map[string]any); !ok || len(m) != 0 {
+		t.Errorf("item summary metadata = %v, want {}", got.Data[0].Item["metadata"])
 	}
 	if got.Data[0].Item["kind"] != "movie" {
 		t.Errorf("TestF007 kind = %v, want the list's kind", got.Data[0].Item["kind"])

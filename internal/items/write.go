@@ -305,14 +305,6 @@ func cleanText(field, s string, minLen, maxLen int) (string, *apperr.FieldError)
 	return s, nil
 }
 
-func optionalText(errs []apperr.FieldError, field string, in *string, maxLen int) (*string, []apperr.FieldError) {
-	if in == nil {
-		return nil, errs
-	}
-	s, fe := cleanText(field, *in, 0, maxLen)
-	return &s, appendIf(errs, fe)
-}
-
 func optionalWebsite(errs []apperr.FieldError, in *string) (*string, []apperr.FieldError) {
 	if in == nil {
 		return nil, errs

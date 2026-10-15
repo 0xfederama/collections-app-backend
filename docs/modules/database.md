@@ -14,6 +14,7 @@ Owns the PostgreSQL layer: the pgx connection pool, the transaction helper, the 
 - `db/migrations/000003_kind_fields.{up,down}.sql`: drops motorcycle/camera make and model into content (F-002)
 - `db/migrations/000004_list_pinned_fields.{up,down}.sql`: `lists.pinned_fields` JSONB (F-002)
 - `db/migrations/000005_sort_price.{up,down}.sql`: `lists.sort_mode` accepts `price` (F-002)
+- `db/migrations/000006_generic_no_price.{up,down}.sql`: generic items' price moves into a "From 1.2" content block and is cleared; generic lists lose pinned `price` and the price sort (F008-B1, down is a no-op)
 - `internal/database/migration_f007_test.go`: `TestF007_MigrationRestructure` fixture test for 000002
 - `internal/database/migration_f002b2_test.go`: `TestF002B2_MigrationKindFields` fixture test for 000003
 - `db/queries/schema.sql`: smoke query, sqlc input

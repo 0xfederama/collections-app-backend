@@ -494,6 +494,7 @@ paths:
         Sorted by `sort` (default: the list's `sort_mode`), tie-break `id`. `q` filters by title. `sort=kind_key` sorts by the kind's
         sort key ascending, empty values last (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
         car: `power_hp`, camera: `megapixels`); on a `generic` list it returns `400 invalid_parameter`.
+        `sort=price` sorts by `price.min` ascending, items without a price last, ties by title then `id` (no currency conversion).
       parameters:
         - name: sort
           in: query
@@ -1802,11 +1803,12 @@ components:
       enum: [compact, thumbnail, grid]
     SortMode:
       type: string
-      enum: [manual, title, updated, kind_key]
+      enum: [manual, title, updated, kind_key, price]
       description: |
         `kind_key` sorts by the kind's sort key (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
-        car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists. The manual order is kept
-        when the mode changes.
+        car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists.
+        `price` sorts by the lowest price (`price.min`) ascending, items without a price last, ties by title and then id. Currencies are not
+        converted, so mixed currencies compare by amount only. The manual order is kept when the mode changes.
     PinnedFields:
       type: object
       nullable: true

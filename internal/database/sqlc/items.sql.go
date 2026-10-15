@@ -296,6 +296,8 @@ ORDER BY
   CASE WHEN $4::text = 'manual' THEN i.sort_order END ASC,
   CASE WHEN $4::text = 'title' THEN lower(i.title) END ASC,
   CASE WHEN $4::text = 'updated' THEN i.updated_at END DESC,
+  CASE WHEN $4::text = 'price' THEN i.price_min END ASC NULLS LAST,
+  CASE WHEN $4::text = 'price' THEN lower(i.title) END ASC,
   i.id
 LIMIT $6 OFFSET $5
 `
@@ -334,7 +336,7 @@ type ListItemsRow struct {
 	ContentVersion        int32
 }
 
-// @sort is manual, title or updated (kind_key has its own query, ListItemsByKindKey); @q is an already escaped LIKE fragment (” = no filter).
+// @sort is manual, title, updated or price (price: price_min ascending, no price last, then title; currencies are not converted) (kind_key has its own query, ListItemsByKindKey); @q is an already escaped LIKE fragment (” = no filter).
 func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListItemsRow, error) {
 	rows, err := q.db.Query(ctx, listItems,
 		arg.ListID,

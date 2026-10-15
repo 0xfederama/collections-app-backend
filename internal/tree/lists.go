@@ -413,7 +413,7 @@ func enumErrors(displayMode, sortMode *string) []apperr.FieldError {
 		errs = append(errs, apperr.FieldError{Field: "display_mode", Message: "must be one of compact, thumbnail, grid"})
 	}
 	if sortMode != nil && !sortModes[*sortMode] {
-		errs = append(errs, apperr.FieldError{Field: "sort_mode", Message: "must be one of manual, title, updated, kind_key"})
+		errs = append(errs, apperr.FieldError{Field: "sort_mode", Message: "must be one of manual, title, updated, kind_key, price"})
 	}
 	return errs
 }

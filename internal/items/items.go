@@ -111,7 +111,7 @@ var ErrInvalidSort = errors.New("items: kind_key sort is not available on this l
 
 // ListParams are the query options of ListItems. Zero values mean the defaults.
 type ListParams struct {
-	Sort   string // manual, title, updated or kind_key; "" = the list's sort_mode
+	Sort   string // manual, title, updated, price or kind_key; "" = the list's sort_mode
 	Q      string // case-insensitive title substring; "" = no filter
 	Limit  int
 	Offset int

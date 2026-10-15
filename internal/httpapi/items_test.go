@@ -979,3 +979,83 @@ func TestF007_ListItemsSortByKindKey(t *testing.T) {
 		wantProblem(t, e.call("GET", "/api/v1/lists/"+g["id"].(string)+"/items?sort=kind_key", "", ""), 400, "invalid_parameter")
 	})
 }
+
+func TestF002B4_ListItemsSortByPrice(t *testing.T) {
+	e := newTreeEnv(t)
+	l := e.list("Wishlist", nil)
+	lid := l["id"].(string)
+	mk := func(title string, min, max any) obj {
+		body := obj{"title": title}
+		if min != nil {
+			body["price"] = obj{"min": min, "max": max, "currency": "EUR"}
+		}
+		b, _ := json.Marshal(body)
+		return e.newItem(lid, string(b))
+	}
+	nopriceB := mk("b-none", nil, nil)
+	nopriceA := mk("A-none", nil, nil)
+	exp := mk("expensive", "1299.00", nil)
+	rng := mk("range", "20.50", "500.00") // min 20.50 sorts before a single 25.00
+	cheap := mk("Cheap", "9.99", nil)
+	tieB := mk("tie-b", "25.00", nil)
+	tieA := mk("Tie-a", "25.00", "25.00")
+	want := []string{"Cheap", "range", "Tie-a", "tie-b", "expensive", "A-none", "b-none"}
+	_ = []obj{nopriceB, nopriceA, exp, rng, cheap, tieB, tieA}
+
+	t.Run("order: min ascending, no price last, ties by title", func(t *testing.T) {
+		rows, _ := e.page(lid, "?sort=price")
+		if got := titlesOf(rows); !reflect.DeepEqual(got, want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("paging is stable", func(t *testing.T) {
+		var got []string
+		for off := 0; off < len(want); off += 3 {
+			rows, page := e.page(lid, fmt.Sprintf("?sort=price&limit=3&offset=%d", off))
+			if page["total"].(float64) != float64(len(want)) {
+				t.Fatalf("total = %v", page["total"])
+			}
+			got = append(got, titlesOf(rows)...)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("paged: got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("stored sort_mode price is the default, override wins", func(t *testing.T) {
+		cur := e.fetch("lists", lid)
+		rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"price"}`, etagOf("l", cur))
+		wantStatus(t, rec, 200)
+		if decode(t, rec)["sort_mode"] != "price" {
+			t.Fatalf("sort_mode not stored: %s", rec.Body)
+		}
+		rows, _ := e.page(lid, "")
+		if got := titlesOf(rows); !reflect.DeepEqual(got, want) {
+			t.Fatalf("default price: got %v", got)
+		}
+		rows, _ = e.page(lid, "?sort=title")
+		if got := titlesOf(rows); got[0] != "A-none" {
+			t.Fatalf("override title: got %v", got)
+		}
+	})
+
+	t.Run("?sort=price works on a list stored as manual, and create accepts it", func(t *testing.T) {
+		other := e.list("Other", nil)
+		oid := other["id"].(string)
+		e.titled(oid, "x")
+		rows, _ := e.page(oid, "?sort=price")
+		if len(rows) != 1 {
+			t.Fatalf("got %d rows", len(rows))
+		}
+		rec := e.call("POST", "/api/v1/lists", `{"name":"P","kind":"generic","sort_mode":"price"}`, "")
+		wantStatus(t, rec, 201)
+		if decode(t, rec)["sort_mode"] != "price" {
+			t.Fatalf("created sort_mode: %s", rec.Body)
+		}
+	})
+
+	t.Run("invalid sort is still 400", func(t *testing.T) {
+		wantProblem(t, e.call("GET", "/api/v1/lists/"+lid+"/items?sort=cost", "", ""), 400, "invalid_parameter")
+	})
+}

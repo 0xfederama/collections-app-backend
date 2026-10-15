@@ -32,10 +32,6 @@ type ListPatch struct {
 	SortMode    *string
 }
 
-func (p ListPatch) empty() bool {
-	return p.Name == nil && p.Kind == nil && !p.Description.Set && p.DisplayMode == nil && p.SortMode == nil
-}
-
 // CreateList appends a list after its active siblings. A missing or trashed
 // folder is DestinationUnavailable.
 func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, error) {

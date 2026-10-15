@@ -59,6 +59,11 @@ func TestValidatePrice(t *testing.T) {
 		{"neither", Price{Currency: "EUR"}, []string{"price"}},
 		{"bad currency", Price{Min: s("1.00"), Currency: "eur"}, []string{"price.currency"}},
 		{"all bad", Price{Min: s("1"), Max: s("x"), Currency: ""}, []string{"price.min", "price.max", "price.currency"}},
+		{"TestF007 ok amount", Price{Amount: s("1299.00"), Currency: "EUR"}, nil},
+		{"TestF007 amount bad format", Price{Amount: s("12.5"), Currency: "EUR"}, []string{"price.amount"}},
+		{"TestF007 amount bad currency", Price{Amount: s("12.50"), Currency: "eur"}, []string{"price.currency"}},
+		{"TestF007 amount with min", Price{Amount: s("12.50"), Min: s("10.00"), Currency: "EUR"}, []string{"price"}},
+		{"TestF007 amount with max", Price{Amount: s("12.50"), Max: s("15.00"), Currency: "EUR"}, []string{"price"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -91,5 +96,31 @@ func TestCleanWebsite(t *testing.T) {
 		if _, fe := cleanWebsite(bad); fe == nil {
 			t.Errorf("%q accepted", bad)
 		}
+	}
+}
+
+func TestF007_AmountIsStoredAsMinEqualsMax(t *testing.T) {
+	amount := "1200.00"
+	p := Price{Amount: &amount, Currency: "EUR"}
+	minV, maxV, cur := priceColumns(&p)
+	for name, n := range map[string]pgtype.Numeric{"min": minV, "max": maxV} {
+		if got := numericToMoney(n); got == nil || *got != amount {
+			t.Errorf("%s = %v, want %s", name, got, amount)
+		}
+	}
+	if cur == nil || *cur != "EUR" {
+		t.Errorf("currency = %v", cur)
+	}
+	// What is read back never carries an amount: min and max are equal, and the same price compares equal.
+	back := priceFromRow(minV, maxV, cur)
+	if back.Amount != nil || back.Min == nil || back.Max == nil || *back.Min != *back.Max {
+		t.Fatalf("read back %+v", back)
+	}
+	if !samePrice(&p, back) {
+		t.Error("an amount price must equal the same min == max price")
+	}
+	other := "1200.01"
+	if samePrice(&p, &Price{Amount: &other, Currency: "EUR"}) || samePrice(&p, &Price{Amount: &amount, Currency: "USD"}) {
+		t.Error("different amounts or currencies must differ")
 	}
 }

@@ -201,9 +201,9 @@ func seedAllTables(ctx context.Context, tx pgx.Tx) error {
 		`INSERT INTO workspace_settings (workspace_id) VALUES ('00000000-0000-0000-0000-000000000001')`,
 		`INSERT INTO folders (id, workspace_id, name, sort_order)
 		   VALUES ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'F', 0)`,
-		`INSERT INTO lists (id, workspace_id, folder_id, name, sort_order)
+		`INSERT INTO lists (id, workspace_id, folder_id, name, kind, sort_order)
 		   VALUES ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001',
-		           '00000000-0000-0000-0000-000000000002', 'L', 0)`,
+		           '00000000-0000-0000-0000-000000000002', 'L', 'movie', 0)`,
 		`INSERT INTO attachments (id, workspace_id, storage_key, thumbnail_storage_key, media_type, size_bytes, width, height, sha256)
 		   VALUES ('00000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000001',
 		           'images/00/00/a.webp', 'images/00/00/a.thumb.jpg', 'image/webp', 10, 1, 1, '\x00')`,
@@ -215,8 +215,8 @@ func seedAllTables(ctx context.Context, tx pgx.Tx) error {
 		`INSERT INTO trash_batches (id, workspace_id, root_type, root_id, root_name, former_path)
 		   VALUES ('00000000-0000-0000-0000-000000000006', '00000000-0000-0000-0000-000000000001',
 		           'list', '00000000-0000-0000-0000-000000000007', 'Trashed', '[]')`,
-		`INSERT INTO lists (id, workspace_id, name, sort_order, deleted_at, trash_batch_id)
-		   VALUES ('00000000-0000-0000-0000-000000000007', '00000000-0000-0000-0000-000000000001', 'Trashed', 1,
+		`INSERT INTO lists (id, workspace_id, name, kind, sort_order, deleted_at, trash_batch_id)
+		   VALUES ('00000000-0000-0000-0000-000000000007', '00000000-0000-0000-0000-000000000001', 'Trashed', 'generic', 1,
 		           now(), '00000000-0000-0000-0000-000000000006')`,
 	}
 	for _, s := range stmts {

@@ -61,7 +61,7 @@ func (e *treeEnv) recent(query string) searchRows {
 func TestB12_RecentItemsOrderAndPath(t *testing.T) {
 	e := newRecentEnv(t)
 	media := e.folder("Media", nil)
-	watch := e.list("Watchlist", media["id"])
+	watch := e.listOfKind("Watchlist", media["id"], "movie")
 	wid := watch["id"].(string)
 
 	a := e.titled(wid, "A")
@@ -93,6 +93,9 @@ func TestB12_RecentItemsOrderAndPath(t *testing.T) {
 	}
 	if _, ok := got.Data[0].Item["metadata"]; ok {
 		t.Error("item summary must not carry metadata")
+	}
+	if got.Data[0].Item["kind"] != "movie" {
+		t.Errorf("TestF007 kind = %v, want the list's kind", got.Data[0].Item["kind"])
 	}
 	if got.Data[0].Item["content_version"] != float64(1) {
 		t.Errorf("content_version = %v", got.Data[0].Item["content_version"])

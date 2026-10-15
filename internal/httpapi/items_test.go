@@ -75,18 +75,19 @@ func idsJSON(ids ...string) string {
 	return string(b)
 }
 
-const matrix = `{"title":"The Matrix","kind":"movie","summary":"A hacker.","status":"Watched","official_website_url":"https://www.warnerbros.com/movies/matrix",
+// matrix is the body of a movie item: create it in a list of kind movie.
+const matrix = `{"title":"The Matrix","website":"https://www.warnerbros.com/movies/matrix",
 	"price":{"min":"1299.00","max":null,"currency":"EUR"},
 	"metadata":{"release_year":1999,"runtime_minutes":136,"imdb_url":"https://www.imdb.com/title/tt0133093/","streaming":{"country":"IT","platforms":["Netflix","Prime Video"]}}}`
 
 func TestAT05_CreateItem(t *testing.T) {
 	e := newTreeEnv(t)
-	list := e.list("Watchlist", nil)
+	list := e.listOfKind("Watchlist", nil, "movie")
 	lid := list["id"].(string)
 
 	t.Run("defaults", func(t *testing.T) {
 		it := e.titled(lid, "  Plain  ")
-		want := obj{"title": "Plain", "kind": "generic", "summary": nil, "status": nil, "image": nil, "price": nil, "official_website_url": nil,
+		want := obj{"title": "Plain", "kind": "movie", "image": nil, "price": nil, "website": nil,
 			"content_version": float64(0), "sort_order": float64(0), "version": float64(1), "list_id": lid, "metadata": map[string]any{}}
 		for k, v := range want {
 			if !reflect.DeepEqual(it[k], v) {
@@ -95,6 +96,11 @@ func TestAT05_CreateItem(t *testing.T) {
 		}
 		if _, hasPath := it["path"]; hasPath {
 			t.Error("create must not return a path")
+		}
+		for _, gone := range []string{"summary", "status", "official_website_url"} {
+			if _, has := it[gone]; has {
+				t.Errorf("item still carries %q", gone)
+			}
 		}
 	})
 
@@ -137,49 +143,58 @@ func TestAT05_CreateItem(t *testing.T) {
 
 func TestAT05_ItemFieldRules(t *testing.T) {
 	e := newTreeEnv(t)
-	lid := e.list("L", nil)["id"].(string)
+	lid := e.listOfKind("L", nil, "movie")["id"].(string)
+	tv := e.listOfKind("TV", nil, "tv_show")["id"].(string)
+	car := e.listOfKind("Cars", nil, "car")["id"].(string)
+	gen := e.list("Generic", nil)["id"].(string)
 	long := func(n int) string { return strings.Repeat("a", n) }
 	tests := []struct {
-		name, body string
-		status     int
-		code       string
-		field      string
+		name, list, body string
+		status           int
+		code             string
+		field            string
 	}{
-		{"title empty", `{"title":""}`, 422, "validation_failed", "title"},
-		{"title blank", `{"title":"   "}`, 422, "validation_failed", "title"},
-		{"title 301", `{"title":"` + long(301) + `"}`, 422, "validation_failed", "title"},
-		{"summary 1001", `{"title":"t","summary":"` + long(1001) + `"}`, 422, "validation_failed", "summary"},
-		{"status 101", `{"title":"t","status":"` + long(101) + `"}`, 422, "validation_failed", "status"},
-		{"url javascript", `{"title":"t","official_website_url":"javascript:alert(1)"}`, 422, "validation_failed", "official_website_url"},
-		{"url data", `{"title":"t","official_website_url":"data:text/html,x"}`, 422, "validation_failed", "official_website_url"},
-		{"url ftp", `{"title":"t","official_website_url":"ftp://example.com/a"}`, 422, "validation_failed", "official_website_url"},
-		{"url no scheme", `{"title":"t","official_website_url":"example.com"}`, 422, "validation_failed", "official_website_url"},
-		{"url no host", `{"title":"t","official_website_url":"https://"}`, 422, "validation_failed", "official_website_url"},
-		{"url empty", `{"title":"t","official_website_url":""}`, 422, "validation_failed", "official_website_url"},
-		{"url too long", `{"title":"t","official_website_url":"https://example.com/` + long(2040) + `"}`, 422, "validation_failed", "official_website_url"},
-		{"price min format", `{"title":"t","price":{"min":"12.5","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
-		{"price comma", `{"title":"t","price":{"min":"12,50","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
-		{"price negative", `{"title":"t","price":{"min":"-1.00","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
-		{"price 11 digits", `{"title":"t","price":{"min":"12345678901.00","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
-		{"price max format", `{"title":"t","price":{"min":null,"max":"abc","currency":"EUR"}}`, 422, "validation_failed", "price.max"},
-		{"price min above max", `{"title":"t","price":{"min":"20.00","max":"10.00","currency":"EUR"}}`, 422, "validation_failed", "price.max"},
-		{"price both null", `{"title":"t","price":{"min":null,"max":null,"currency":"EUR"}}`, 422, "validation_failed", "price"},
-		{"currency missing", `{"title":"t","price":{"min":"1.00","max":null}}`, 422, "validation_failed", "price.currency"},
-		{"currency lowercase", `{"title":"t","price":{"min":"1.00","max":null,"currency":"eur"}}`, 422, "validation_failed", "price.currency"},
-		{"currency 2 letters", `{"title":"t","price":{"min":"1.00","max":null,"currency":"EU"}}`, 422, "validation_failed", "price.currency"},
-		{"unknown kind", `{"title":"t","kind":"book"}`, 422, "validation_failed", "kind"},
-		{"metadata wrong value", `{"title":"t","kind":"movie","metadata":{"release_year":1700}}`, 422, "validation_failed", "metadata.release_year"},
-		{"metadata cross-field", `{"title":"t","kind":"tv_show","metadata":{"first_air_year":2010,"end_year":2000}}`, 422, "validation_failed", "metadata.end_year"},
-		{"metadata electric range", `{"title":"t","kind":"car","metadata":{"fuel_type":"diesel","electric_range_km":10}}`, 422, "validation_failed", "metadata.electric_range_km"},
-		{"metadata bad imdb", `{"title":"t","kind":"movie","metadata":{"imdb_url":"http://imdb.com/title/tt1234567/"}}`, 422, "validation_failed", "metadata.imdb_url"},
-		{"generic with a key", `{"title":"t","metadata":{"release_year":1999}}`, 400, "unknown_field", "metadata.release_year"},
-		{"unknown metadata key", `{"title":"t","kind":"movie","metadata":{"director":"x"}}`, 400, "unknown_field", "metadata.director"},
-		{"unknown nested streaming key", `{"title":"t","kind":"movie","metadata":{"streaming":{"country":"IT","x":1}}}`, 400, "unknown_field", "metadata.streaming.x"},
-		{"unknown top-level key", `{"title":"t","colour":"red"}`, 400, "unknown_field", "colour"},
+		{"title empty", lid, `{"title":""}`, 422, "validation_failed", "title"},
+		{"title blank", lid, `{"title":"   "}`, 422, "validation_failed", "title"},
+		{"title 301", lid, `{"title":"` + long(301) + `"}`, 422, "validation_failed", "title"},
+		{"url javascript", lid, `{"title":"t","website":"javascript:alert(1)"}`, 422, "validation_failed", "website"},
+		{"url data", lid, `{"title":"t","website":"data:text/html,x"}`, 422, "validation_failed", "website"},
+		{"url ftp", lid, `{"title":"t","website":"ftp://example.com/a"}`, 422, "validation_failed", "website"},
+		{"url no scheme", lid, `{"title":"t","website":"example.com"}`, 422, "validation_failed", "website"},
+		{"url no host", lid, `{"title":"t","website":"https://"}`, 422, "validation_failed", "website"},
+		{"url empty", lid, `{"title":"t","website":""}`, 422, "validation_failed", "website"},
+		{"url too long", lid, `{"title":"t","website":"https://example.com/` + long(2040) + `"}`, 422, "validation_failed", "website"},
+		{"price min format", lid, `{"title":"t","price":{"min":"12.5","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
+		{"price comma", lid, `{"title":"t","price":{"min":"12,50","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
+		{"price negative", lid, `{"title":"t","price":{"min":"-1.00","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
+		{"price 11 digits", lid, `{"title":"t","price":{"min":"12345678901.00","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
+		{"price max format", lid, `{"title":"t","price":{"min":null,"max":"abc","currency":"EUR"}}`, 422, "validation_failed", "price.max"},
+		{"price min above max", lid, `{"title":"t","price":{"min":"20.00","max":"10.00","currency":"EUR"}}`, 422, "validation_failed", "price.max"},
+		{"price both null", lid, `{"title":"t","price":{"min":null,"max":null,"currency":"EUR"}}`, 422, "validation_failed", "price"},
+		{"currency missing", lid, `{"title":"t","price":{"min":"1.00","max":null}}`, 422, "validation_failed", "price.currency"},
+		{"currency lowercase", lid, `{"title":"t","price":{"min":"1.00","max":null,"currency":"eur"}}`, 422, "validation_failed", "price.currency"},
+		{"currency 2 letters", lid, `{"title":"t","price":{"min":"1.00","max":null,"currency":"EU"}}`, 422, "validation_failed", "price.currency"},
+		{"TestF007 amount format", lid, `{"title":"t","price":{"amount":"12.5","currency":"EUR"}}`, 422, "validation_failed", "price.amount"},
+		{"TestF007 amount without currency", lid, `{"title":"t","price":{"amount":"12.50"}}`, 422, "validation_failed", "price.currency"},
+		{"TestF007 amount with min", lid, `{"title":"t","price":{"amount":"12.50","min":"10.00","currency":"EUR"}}`, 422, "validation_failed", "price"},
+		{"TestF007 amount with max", lid, `{"title":"t","price":{"amount":"12.50","max":"15.00","currency":"EUR"}}`, 422, "validation_failed", "price"},
+		{"metadata wrong value", lid, `{"title":"t","metadata":{"release_year":1700}}`, 422, "validation_failed", "metadata.release_year"},
+		{"metadata cross-field", tv, `{"title":"t","metadata":{"first_air_year":2010,"end_year":2000}}`, 422, "validation_failed", "metadata.end_year"},
+		{"metadata bad imdb", lid, `{"title":"t","metadata":{"imdb_url":"http://imdb.com/title/tt1234567/"}}`, 422, "validation_failed", "metadata.imdb_url"},
+		{"generic with a key", gen, `{"title":"t","metadata":{"release_year":1999}}`, 400, "unknown_field", "metadata.release_year"},
+		{"unknown metadata key", lid, `{"title":"t","metadata":{"director":"x"}}`, 400, "unknown_field", "metadata.director"},
+		{"unknown nested streaming key", lid, `{"title":"t","metadata":{"streaming":{"country":"IT","x":1}}}`, 400, "unknown_field", "metadata.streaming.x"},
+		{"unknown top-level key", lid, `{"title":"t","colour":"red"}`, 400, "unknown_field", "colour"},
+		{"TestF007 kind is no longer sent", lid, `{"title":"t","kind":"movie"}`, 400, "unknown_field", "kind"},
+		{"TestF007 summary is gone", lid, `{"title":"t","summary":"x"}`, 400, "unknown_field", "summary"},
+		{"TestF007 status is gone", lid, `{"title":"t","status":"x"}`, 400, "unknown_field", "status"},
+		{"TestF007 official_website_url is renamed", lid, `{"title":"t","official_website_url":"https://example.com"}`, 400, "unknown_field", "official_website_url"},
+		{"TestF007 metadata is checked against the list kind", lid, `{"title":"t","metadata":{"make":"VW"}}`, 400, "unknown_field", "metadata.make"},
+		{"TestF007 dropped car key", car, `{"title":"t","metadata":{"electric_range_km":400}}`, 400, "unknown_field", "metadata.electric_range_km"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := wantProblem(t, e.call("POST", "/api/v1/lists/"+lid+"/items", tt.body, ""), tt.status, tt.code)
+			p := wantProblem(t, e.call("POST", "/api/v1/lists/"+tt.list+"/items", tt.body, ""), tt.status, tt.code)
 			if tt.status == 400 {
 				if !strings.Contains(p.Detail, `"`+tt.field+`"`) {
 					t.Errorf("detail = %q, want it to name %q", p.Detail, tt.field)
@@ -202,16 +217,55 @@ func TestAT05_ItemFieldRules(t *testing.T) {
 	t.Run("accepted edge values", func(t *testing.T) {
 		for _, body := range []string{
 			`{"title":"` + long(300) + `"}`,
-			`{"title":"t","summary":"` + long(1000) + `","status":"` + long(100) + `"}`,
-			`{"title":"t","official_website_url":"HTTP://Example.com/a?b=c#d"}`,
+			`{"title":"t","website":"HTTP://Example.com/a?b=c#d"}`,
 			`{"title":"t","price":{"min":"0.00","max":"9999999999.99","currency":"JPY"}}`,
 			`{"title":"t","price":{"min":"5.00","max":"5.00","currency":"EUR"}}`,
 			`{"title":"t","price":{"min":null,"max":"5.00","currency":"EUR"}}`,
-			`{"title":"t","price":null,"summary":null,"status":null,"official_website_url":null}`,
+			`{"title":"t","price":{"amount":"5.00","currency":"EUR"}}`,
+			`{"title":"t","price":null,"website":null}`,
 		} {
 			wantStatus(t, e.call("POST", "/api/v1/lists/"+lid+"/items", body, ""), 201)
 		}
 	})
+}
+
+func TestF007_PriceAmountIsASinglePrice(t *testing.T) {
+	e := newTreeEnv(t)
+	lid := e.list("L", nil)["id"].(string)
+
+	it := e.newItem(lid, `{"title":"single","price":{"amount":"1200.00","currency":"EUR"}}`)
+	p := it["price"].(map[string]any)
+	if p["min"] != "1200.00" || p["max"] != "1200.00" || p["currency"] != "EUR" {
+		t.Fatalf("price = %v, want min == max == 1200.00", p)
+	}
+	if _, has := p["amount"]; has {
+		t.Error("responses carry min and max, not amount")
+	}
+	var minV, maxV string
+	e.queryRow(`SELECT price_min::text, price_max::text FROM items WHERE id = $1`, []any{it["id"]}, &minV, &maxV)
+	if minV != "1200.00" || maxV != "1200.00" {
+		t.Fatalf("stored %s/%s", minV, maxV)
+	}
+
+	// PATCH: an amount replaces the whole price; the same single price again changes nothing.
+	got := decode(t, e.patchItem(it, `{"price":{"amount":"999.90","currency":"USD"}}`))
+	if p := got["price"].(map[string]any); p["min"] != "999.90" || p["max"] != "999.90" || p["currency"] != "USD" || got["version"] != float64(2) {
+		t.Fatalf("patched: %v", got)
+	}
+	same := decode(t, e.patchItem(got, `{"price":{"amount":"999.90","currency":"USD"}}`))
+	if same["version"] != float64(2) {
+		t.Fatalf("an identical price bumped the version: %v", same["version"])
+	}
+	// The equal min/max form is the same price as the amount form.
+	same = decode(t, e.patchItem(got, `{"price":{"min":"999.90","max":"999.90","currency":"USD"}}`))
+	if same["version"] != float64(2) {
+		t.Fatalf("min == max is the amount price, but the version bumped: %v", same["version"])
+	}
+	wantProblem(t, e.patchItem(got, `{"price":{"amount":"1.00","max":"2.00","currency":"USD"}}`), 422, "validation_failed")
+	got = decode(t, e.patchItem(got, `{"price":null}`))
+	if got["price"] != nil {
+		t.Fatalf("price = %v, want cleared", got["price"])
+	}
 }
 
 func TestPriceRoundTripIsExact(t *testing.T) {
@@ -240,7 +294,7 @@ func (e *treeEnv) queryRow(sql string, args []any, dest ...any) {
 
 func TestAT05_UpdateItem(t *testing.T) {
 	e := newTreeEnv(t)
-	lid := e.list("L", nil)["id"].(string)
+	lid := e.listOfKind("L", nil, "movie")["id"].(string)
 
 	t.Run("only supplied fields change and the version bumps", func(t *testing.T) {
 		it := e.newItem(lid, matrix)
@@ -250,7 +304,7 @@ func TestAT05_UpdateItem(t *testing.T) {
 		if got["title"] != "The Matrix Reloaded" || got["version"] != float64(2) || rec.Header().Get("ETag") != `"i-2"` {
 			t.Fatalf("patched: %v etag=%s", got, rec.Header().Get("ETag"))
 		}
-		if got["status"] != "Watched" || got["price"] == nil || got["metadata"].(map[string]any)["release_year"] != float64(1999) {
+		if got["website"] != "https://www.warnerbros.com/movies/matrix" || got["price"] == nil || got["metadata"].(map[string]any)["release_year"] != float64(1999) {
 			t.Fatalf("untouched fields changed: %v", got)
 		}
 		if got["updated_at"] == it["updated_at"] {
@@ -260,10 +314,10 @@ func TestAT05_UpdateItem(t *testing.T) {
 
 	t.Run("null clears, absent keeps", func(t *testing.T) {
 		it := e.newItem(lid, matrix)
-		rec := e.patchItem(it, `{"summary":null,"price":null,"official_website_url":null}`)
+		rec := e.patchItem(it, `{"price":null,"website":null}`)
 		wantStatus(t, rec, 200)
 		got := decode(t, rec)
-		if got["summary"] != nil || got["price"] != nil || got["official_website_url"] != nil || got["status"] != "Watched" {
+		if got["price"] != nil || got["website"] != nil || got["title"] != "The Matrix" {
 			t.Fatalf("after null patch: %v", got)
 		}
 		var minV, maxV, cur *string
@@ -282,28 +336,26 @@ func TestAT05_UpdateItem(t *testing.T) {
 		}
 	})
 
-	t.Run("kind change without metadata resets metadata", func(t *testing.T) {
+	t.Run("TestF007 kind is read-only: a kind in the patch is an unknown field", func(t *testing.T) {
 		it := e.newItem(lid, matrix)
-		got := decode(t, e.patchItem(it, `{"kind":"car"}`))
-		if got["kind"] != "car" || !reflect.DeepEqual(got["metadata"], map[string]any{}) || got["version"] != float64(2) {
-			t.Fatalf("after kind change: %v", got)
+		wantProblem(t, e.patchItem(it, `{"kind":"car"}`), 400, "unknown_field")
+		for _, gone := range []string{`{"summary":"x"}`, `{"status":"x"}`, `{"official_website_url":"https://example.com"}`} {
+			wantProblem(t, e.patchItem(it, gone), 400, "unknown_field")
+		}
+		if after := e.fetchItem(it["id"]); after["kind"] != "movie" || after["version"] != float64(1) {
+			t.Fatalf("rejected patch changed the item: %v", after)
 		}
 	})
 
-	t.Run("kind and metadata together validate against the new kind", func(t *testing.T) {
+	t.Run("TestF007 metadata is validated against the list kind", func(t *testing.T) {
 		it := e.newItem(lid, matrix)
-		got := decode(t, e.patchItem(it, `{"kind":"car","metadata":{"make":"VW","fuel_type":"electric","electric_range_km":400}}`))
-		if got["kind"] != "car" || got["metadata"].(map[string]any)["make"] != "VW" {
-			t.Fatalf("got %v", got)
-		}
-		// The old kind's keys are unknown for the new kind.
-		it2 := e.newItem(lid, matrix)
-		p := wantProblem(t, e.patchItem(it2, `{"kind":"car","metadata":{"release_year":1999}}`), 400, "unknown_field")
-		if !strings.Contains(p.Detail, "metadata.release_year") {
+		p := wantProblem(t, e.patchItem(it, `{"metadata":{"make":"VW"}}`), 400, "unknown_field")
+		if !strings.Contains(p.Detail, "metadata.make") {
 			t.Errorf("detail = %q", p.Detail)
 		}
-		if after := e.fetchItem(it2["id"]); after["kind"] != "movie" || after["version"] != float64(1) {
-			t.Fatalf("rejected patch changed the item: %v", after)
+		got := decode(t, e.patchItem(it, `{"metadata":{"release_year":2001}}`))
+		if got["kind"] != "movie" || got["metadata"].(map[string]any)["release_year"] != float64(2001) {
+			t.Fatalf("got %v", got)
 		}
 	})
 
@@ -324,7 +376,7 @@ func TestAT05_UpdateItem(t *testing.T) {
 	t.Run("field rules apply to patches", func(t *testing.T) {
 		it := e.titled(lid, "rules")
 		for _, body := range []string{
-			`{"title":""}`, `{"kind":"book"}`, `{"official_website_url":"javascript:alert(1)"}`,
+			`{"title":""}`, `{"website":"javascript:alert(1)"}`,
 			`{"price":{"min":"2.00","max":"1.00","currency":"EUR"}}`, `{"price":{"min":"1.00","max":null}}`,
 		} {
 			wantProblem(t, e.patchItem(it, body), 422, "validation_failed")
@@ -338,9 +390,9 @@ func TestAT05_UpdateItem(t *testing.T) {
 	t.Run("a patch that changes nothing does not bump", func(t *testing.T) {
 		it := e.newItem(lid, matrix)
 		for _, body := range []string{
-			`{}`, `{"title":"The Matrix"}`, `{"kind":"movie"}`, `{"summary":"A hacker."}`, `{"price":{"min":"1299.00","max":null,"currency":"EUR"}}`,
+			`{}`, `{"title":"The Matrix"}`, `{"price":{"min":"1299.00","max":null,"currency":"EUR"}}`,
 			`{"metadata":{"release_year":1999,"runtime_minutes":136,"imdb_url":"https://www.imdb.com/title/tt0133093/","streaming":{"platforms":["Netflix","Prime Video"],"country":"IT"}}}`,
-			`{"official_website_url":"https://www.warnerbros.com/movies/matrix"}`,
+			`{"website":"https://www.warnerbros.com/movies/matrix"}`,
 		} {
 			rec := e.patchItem(it, body)
 			wantStatus(t, rec, 200)
@@ -360,7 +412,7 @@ func TestAT05_UpdateItem(t *testing.T) {
 		if got := e.fetchItem(it["id"]); got["title"] != "fresh" {
 			t.Fatalf("stale write applied: %v", got)
 		}
-		wantProblem(t, e.patchItem(it, `{"kind":"movie","metadata":{"bad":1}}`), 412, "version_conflict")
+		wantProblem(t, e.patchItem(it, `{"metadata":{"bad":1}}`), 412, "version_conflict")
 	})
 
 	t.Run("missing or trashed item is 404", func(t *testing.T) {
@@ -471,7 +523,7 @@ func TestListItems(t *testing.T) {
 	apple := e.titled(lid, "Apple")
 	cherry := e.titled(lid, "cherry")
 	// Touch the first one so "updated" differs from the creation order.
-	banana = decode(t, e.patchItem(banana, `{"summary":"touched"}`))
+	banana = decode(t, e.patchItem(banana, `{"website":"https://touched.example"}`))
 
 	t.Run("sorts", func(t *testing.T) {
 		tests := []struct{ query, want string }{
@@ -507,7 +559,7 @@ func TestListItems(t *testing.T) {
 		if _, has := first["metadata"]; has {
 			t.Error("ItemSummary must not carry metadata")
 		}
-		if first["id"] != banana["id"] || first["version"] != float64(2) || first["summary"] != "touched" || first["kind"] != "generic" || first["image"] != nil || first["price"] != nil {
+		if first["id"] != banana["id"] || first["version"] != float64(2) || first["website"] != "https://touched.example" || first["kind"] != "generic" || first["image"] != nil || first["price"] != nil {
 			t.Fatalf("row = %v", first)
 		}
 		_ = apple
@@ -799,4 +851,36 @@ func TestItemsConcurrentCreatesGetDistinctOrder(t *testing.T) {
 	if len(seen) != n {
 		t.Fatalf("sort_order values not distinct: %v", seen)
 	}
+}
+
+func TestF007_MoveItemAcrossKinds(t *testing.T) {
+	e := newTreeEnv(t)
+	films := e.listOfKind("Films", nil, "movie")["id"].(string)
+	moreFilms := e.listOfKind("More films", nil, "movie")["id"].(string)
+	shows := e.listOfKind("Shows", nil, "tv_show")["id"].(string)
+	plain := e.list("Plain", nil)["id"].(string)
+	it := e.newItem(films, matrix)
+	move := func(it obj, list string) *httptest.ResponseRecorder {
+		return e.call("POST", "/api/v1/items/"+it["id"].(string)+"/move", fmt.Sprintf(`{"list_id":%q}`, list), etagOf("i", it))
+	}
+
+	for _, dest := range []string{shows, plain} {
+		p := wantProblem(t, move(it, dest), 409, "kind_mismatch")
+		if p.Type != "https://collection-app.invalid/problems/kind-mismatch" {
+			t.Errorf("type = %q", p.Type)
+		}
+		got := e.fetchItem(it["id"])
+		if got["list_id"] != films || got["version"] != float64(1) || got["metadata"].(map[string]any)["release_year"] != float64(1999) {
+			t.Fatalf("a rejected move changed the item: %v", got)
+		}
+	}
+
+	rec := move(it, moreFilms)
+	wantStatus(t, rec, 200)
+	if moved := decode(t, rec); moved["list_id"] != moreFilms || moved["kind"] != "movie" || moved["metadata"].(map[string]any)["release_year"] != float64(1999) {
+		t.Fatalf("moved: %v", moved)
+	}
+
+	// A destination that is missing is still destination_unavailable, not a kind mismatch.
+	wantProblem(t, move(e.fetchItem(it["id"]), uuid.NewString()), 409, "destination_unavailable")
 }

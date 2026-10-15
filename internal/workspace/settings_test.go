@@ -12,7 +12,7 @@ import (
 func ptr[T any](v T) *T { return &v }
 
 func TestService_Update(t *testing.T) {
-	base := workspace.Settings{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", DefaultCurrency: "EUR", MarkdownHistoryLimit: 20, Version: 1}
+	base := workspace.Settings{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MarkdownHistoryLimit: 20, Version: 1}
 	tests := []struct {
 		name  string
 		patch workspace.SettingsPatch
@@ -20,13 +20,12 @@ func TestService_Update(t *testing.T) {
 	}{
 		{"name is trimmed", workspace.SettingsPatch{WorkspaceName: ptr("  Home  ")}, with(base, func(s *workspace.Settings) { s.WorkspaceName = "Home"; s.Version = 2 })},
 		{"country", workspace.SettingsPatch{StreamingCountryCode: ptr("US")}, with(base, func(s *workspace.Settings) { s.StreamingCountryCode = "US"; s.Version = 2 })},
-		{"currency", workspace.SettingsPatch{DefaultCurrency: ptr("USD")}, with(base, func(s *workspace.Settings) { s.DefaultCurrency = "USD"; s.Version = 2 })},
 		{"limit zero", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(0)}, with(base, func(s *workspace.Settings) { s.MarkdownHistoryLimit = 0; s.Version = 2 })},
 		{"limit max", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(200)}, with(base, func(s *workspace.Settings) { s.MarkdownHistoryLimit = 200; s.Version = 2 })},
-		{"all fields bump once", workspace.SettingsPatch{WorkspaceName: ptr("X"), StreamingCountryCode: ptr("DE"), DefaultCurrency: ptr("GBP"), MarkdownHistoryLimit: ptr(5)},
-			workspace.Settings{WorkspaceName: "X", StreamingCountryCode: "DE", DefaultCurrency: "GBP", MarkdownHistoryLimit: 5, Version: 2}},
+		{"all fields bump once", workspace.SettingsPatch{WorkspaceName: ptr("X"), StreamingCountryCode: ptr("DE"), MarkdownHistoryLimit: ptr(5)},
+			workspace.Settings{WorkspaceName: "X", StreamingCountryCode: "DE", MarkdownHistoryLimit: 5, Version: 2}},
 		{"empty patch is a no-op", workspace.SettingsPatch{}, base},
-		{"same values are a no-op", workspace.SettingsPatch{WorkspaceName: ptr(" Our Collection "), DefaultCurrency: ptr("EUR")}, base},
+		{"same values are a no-op", workspace.SettingsPatch{WorkspaceName: ptr(" Our Collection "), StreamingCountryCode: ptr("IT")}, base},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -77,12 +76,10 @@ func TestService_Update_Validation(t *testing.T) {
 		{"name too long", workspace.SettingsPatch{WorkspaceName: ptr(string(long))}, []string{"workspace_name"}},
 		{"country lowercase", workspace.SettingsPatch{StreamingCountryCode: ptr("it")}, []string{"streaming_country_code"}},
 		{"country three letters", workspace.SettingsPatch{StreamingCountryCode: ptr("ITA")}, []string{"streaming_country_code"}},
-		{"currency two letters", workspace.SettingsPatch{DefaultCurrency: ptr("EU")}, []string{"default_currency"}},
-		{"currency digits", workspace.SettingsPatch{DefaultCurrency: ptr("E1R")}, []string{"default_currency"}},
 		{"limit negative", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(-1)}, []string{"markdown_history_limit"}},
 		{"limit too high", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(201)}, []string{"markdown_history_limit"}},
-		{"every field reported", workspace.SettingsPatch{WorkspaceName: ptr(""), StreamingCountryCode: ptr("x"), DefaultCurrency: ptr("y"), MarkdownHistoryLimit: ptr(999)},
-			[]string{"workspace_name", "streaming_country_code", "default_currency", "markdown_history_limit"}},
+		{"every field reported", workspace.SettingsPatch{WorkspaceName: ptr(""), StreamingCountryCode: ptr("x"), MarkdownHistoryLimit: ptr(999)},
+			[]string{"workspace_name", "streaming_country_code", "markdown_history_limit"}},
 	}
 	pool := newPool(t)
 	id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")
@@ -124,12 +121,12 @@ func TestService_Update_StaleVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := workspace.NewService(pool)
-	if _, err := svc.Update(t.Context(), id, 1, workspace.SettingsPatch{DefaultCurrency: ptr("USD")}); err != nil {
+	if _, err := svc.Update(t.Context(), id, 1, workspace.SettingsPatch{StreamingCountryCode: ptr("US")}); err != nil {
 		t.Fatal(err)
 	}
 
 	// A stale version loses even when the patch would change nothing.
-	for _, p := range []workspace.SettingsPatch{{DefaultCurrency: ptr("GBP")}, {}} {
+	for _, p := range []workspace.SettingsPatch{{StreamingCountryCode: ptr("GB")}, {}} {
 		_, err := svc.Update(t.Context(), id, 1, p)
 		var vc *apperr.VersionConflictError
 		if !errors.As(err, &vc) || vc.Current != 2 {
@@ -137,7 +134,7 @@ func TestService_Update_StaleVersion(t *testing.T) {
 		}
 	}
 	got, _ := svc.Get(t.Context(), id)
-	if got.DefaultCurrency != "USD" || got.Version != 2 {
+	if got.StreamingCountryCode != "US" || got.Version != 2 {
 		t.Errorf("stored = %+v, want the stale write ignored", got)
 	}
 }

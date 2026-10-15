@@ -60,19 +60,16 @@ func TestAT05_AcceptedMetadata(t *testing.T) {
 		{"tv_show open end", "tv_show", `{"first_air_year":2008,"seasons":5}`, m{"first_air_year": 2008, "seasons": 5}},
 		{"tv_show end equals first", "tv_show", `{"first_air_year":2008,"end_year":2008}`, m{"first_air_year": 2008, "end_year": 2008}},
 		{"tv_show end without first", "tv_show", `{"end_year":2013}`, m{"end_year": 2013}},
-		{"motorcycle full", "motorcycle", `{"make":" Ducati ","model":"Monster","model_year":2021,"segment":"naked","displacement_cc":937,"power_hp":111.0,"torque_nm":93.0,"wet_weight_kg":188,"seat_height_mm":820,"license_class":"A2"}`,
-			m{"make": "Ducati", "model": "Monster", "model_year": 2021, "segment": "naked", "displacement_cc": 937, "power_hp": 111.0, "torque_nm": 93.0,
-				"wet_weight_kg": 188, "seat_height_mm": 820, "license_class": "A2"}},
+		{"motorcycle full", "motorcycle", `{"make":" Ducati ","model":"Monster","model_year":2021,"displacement_cc":937,"power_hp":111.0,"license_class":"A2"}`,
+			m{"make": "Ducati", "model": "Monster", "model_year": 2021, "displacement_cc": 937, "power_hp": 111.0, "license_class": "A2"}},
 		{"motorcycle one decimal", "motorcycle", `{"power_hp":95.5}`, m{"power_hp": 95.5}},
-		{"motorcycle bounds", "motorcycle", `{"power_hp":0,"torque_nm":1000,"seat_height_mm":300,"displacement_cc":5000}`, m{"power_hp": 0.0, "torque_nm": 1000.0, "seat_height_mm": 300, "displacement_cc": 5000}},
+		{"motorcycle bounds", "motorcycle", `{"power_hp":0,"displacement_cc":5000}`, m{"power_hp": 0.0, "displacement_cc": 5000}},
 		{"text at the limit", "motorcycle", `{"make":"` + long + `"}`, m{"make": long}},
-		{"car electric with range", "car", `{"fuel_type":"electric","electric_range_km":500,"seats":5}`, m{"fuel_type": "electric", "electric_range_km": 500, "seats": 5}},
-		{"car plugin hybrid with range", "car", `{"fuel_type":"plugin_hybrid","electric_range_km":60}`, m{"fuel_type": "plugin_hybrid", "electric_range_km": 60}},
-		{"car range without fuel", "car", `{"electric_range_km":400}`, m{"electric_range_km": 400}},
-		{"car petrol", "car", `{"make":"VW","model":"Golf","trim":"GTI","model_year":2019,"body_type":"hatchback","fuel_type":"petrol","transmission":"manual","power_hp":245.0,"seats":5}`,
-			m{"make": "VW", "model": "Golf", "trim": "GTI", "model_year": 2019, "body_type": "hatchback", "fuel_type": "petrol", "transmission": "manual", "power_hp": 245.0, "seats": 5}},
-		{"camera full", "camera", `{"make":"Sony","model":"A7","release_year":2013,"camera_type":"mirrorless","sensor_format":"full_frame","megapixels":24.3,"lens_mount":"Sony E","weight_g":474}`,
-			m{"make": "Sony", "model": "A7", "release_year": 2013, "camera_type": "mirrorless", "sensor_format": "full_frame", "megapixels": 24.3, "lens_mount": "Sony E", "weight_g": 474}},
+		{"car electric", "car", `{"fuel_type":"electric","model_year":2023}`, m{"fuel_type": "electric", "model_year": 2023}},
+		{"car petrol", "car", `{"make":"VW","model":"Golf","model_year":2019,"fuel_type":"petrol","power_hp":245.0}`,
+			m{"make": "VW", "model": "Golf", "model_year": 2019, "fuel_type": "petrol", "power_hp": 245.0}},
+		{"camera full", "camera", `{"make":"Sony","model":"A7","release_year":2013,"sensor_format":"full_frame","megapixels":24.3}`,
+			m{"make": "Sony", "model": "A7", "release_year": 2013, "sensor_format": "full_frame", "megapixels": 24.3}},
 		{"camera megapixel bounds", "camera", `{"megapixels":0.1}`, m{"megapixels": 0.1}},
 	}
 	for _, tt := range tests {
@@ -95,8 +92,6 @@ func TestAT05_EveryEnumValueIsAccepted(t *testing.T) {
 	}{
 		{"motorcycle", "license_class", []string{"AM", "A1", "A2", "A"}},
 		{"car", "fuel_type", []string{"petrol", "diesel", "hybrid", "plugin_hybrid", "electric", "lpg", "cng", "hydrogen", "other"}},
-		{"car", "transmission", []string{"manual", "automatic"}},
-		{"camera", "camera_type", []string{"mirrorless", "dslr", "compact", "rangefinder", "medium_format", "film", "action", "other"}},
 		{"camera", "sensor_format", []string{"full_frame", "aps_c", "micro_four_thirds", "one_inch", "medium_format", "film_35mm", "other"}},
 	}
 	for _, e := range enums {
@@ -154,33 +149,18 @@ func TestAT05_RejectedValues(t *testing.T) {
 		{"moto make empty", "motorcycle", `{"make":"   "}`, []string{"metadata.make"}},
 		{"moto make too long", "motorcycle", `{"make":"` + strings.Repeat("a", 101) + `"}`, []string{"metadata.make"}},
 		{"moto make number", "motorcycle", `{"make":7}`, []string{"metadata.make"}},
-		{"moto segment 51", "motorcycle", `{"segment":"` + strings.Repeat("a", 51) + `"}`, []string{"metadata.segment"}},
 		{"moto year below", "motorcycle", `{"model_year":1884}`, []string{"metadata.model_year"}},
 		{"moto displacement zero", "motorcycle", `{"displacement_cc":0}`, []string{"metadata.displacement_cc"}},
 		{"moto displacement above", "motorcycle", `{"displacement_cc":5001}`, []string{"metadata.displacement_cc"}},
 		{"moto power two decimals", "motorcycle", `{"power_hp":95.55}`, []string{"metadata.power_hp"}},
 		{"moto power negative", "motorcycle", `{"power_hp":-1}`, []string{"metadata.power_hp"}},
 		{"moto power above", "motorcycle", `{"power_hp":1000.1}`, []string{"metadata.power_hp"}},
-		{"moto torque above", "motorcycle", `{"torque_nm":1001}`, []string{"metadata.torque_nm"}},
-		{"moto weight zero", "motorcycle", `{"wet_weight_kg":0}`, []string{"metadata.wet_weight_kg"}},
-		{"moto seat below", "motorcycle", `{"seat_height_mm":299}`, []string{"metadata.seat_height_mm"}},
-		{"moto seat above", "motorcycle", `{"seat_height_mm":1201}`, []string{"metadata.seat_height_mm"}},
 		{"car power above", "car", `{"power_hp":2000.1}`, []string{"metadata.power_hp"}},
-		{"car seats zero", "car", `{"seats":0}`, []string{"metadata.seats"}},
-		{"car seats ten", "car", `{"seats":10}`, []string{"metadata.seats"}},
-		{"car body type 51", "car", `{"body_type":"` + strings.Repeat("a", 51) + `"}`, []string{"metadata.body_type"}},
-		{"car range with petrol", "car", `{"fuel_type":"petrol","electric_range_km":400}`, []string{"metadata.electric_range_km"}},
-		{"car range with hybrid", "car", `{"fuel_type":"hybrid","electric_range_km":10}`, []string{"metadata.electric_range_km"}},
-		{"car range above", "car", `{"fuel_type":"electric","electric_range_km":2001}`, []string{"metadata.electric_range_km"}},
-		{"car range zero", "car", `{"electric_range_km":0}`, []string{"metadata.electric_range_km"}},
 		{"camera year below", "camera", `{"release_year":1899}`, []string{"metadata.release_year"}},
 		{"camera megapixels below", "camera", `{"megapixels":0}`, []string{"metadata.megapixels"}},
 		{"camera megapixels above", "camera", `{"megapixels":500.1}`, []string{"metadata.megapixels"}},
 		{"camera megapixels two decimals", "camera", `{"megapixels":24.35}`, []string{"metadata.megapixels"}},
-		{"camera lens mount 51", "camera", `{"lens_mount":"` + strings.Repeat("a", 51) + `"}`, []string{"metadata.lens_mount"}},
-		{"camera weight zero", "camera", `{"weight_g":0}`, []string{"metadata.weight_g"}},
-		{"camera weight above", "camera", `{"weight_g":10001}`, []string{"metadata.weight_g"}},
-		{"several errors in key order", "camera", `{"weight_g":0,"release_year":1800,"megapixels":"x"}`, []string{"metadata.megapixels", "metadata.release_year", "metadata.weight_g"}},
+		{"several errors in key order", "camera", `{"model":"","release_year":1800,"megapixels":"x"}`, []string{"metadata.megapixels", "metadata.model", "metadata.release_year"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -216,7 +196,11 @@ func TestAT05_UnknownKeysAreUnknownFields(t *testing.T) {
 		{"first unknown key alphabetically", "car", `{"b":1,"a":1}`, "metadata.a"},
 		{"streaming unknown key", "movie", `{"streaming":{"country":"IT","region":"EU"}}`, "metadata.streaming.region"},
 		{"tv key of movie", "tv_show", `{"release_year":2000}`, "metadata.release_year"},
-		{"camera key of car", "camera", `{"seats":5}`, "metadata.seats"},
+		{"camera key of car", "camera", `{"fuel_type":"petrol"}`, "metadata.fuel_type"},
+		{"TestF007 dropped movie key", "movie", `{"summary":"x"}`, "metadata.summary"},
+		{"TestF007 dropped motorcycle key", "motorcycle", `{"torque_nm":93}`, "metadata.torque_nm"},
+		{"TestF007 dropped car key", "car", `{"electric_range_km":400}`, "metadata.electric_range_km"},
+		{"TestF007 dropped camera key", "camera", `{"lens_mount":"Sony E"}`, "metadata.lens_mount"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -261,5 +245,26 @@ func TestValidateAcceptsGoIntegers(t *testing.T) {
 	}
 	if got["release_year"] != 1999 || got["runtime_minutes"] != 90 {
 		t.Fatalf("got %#v", got)
+	}
+}
+
+func TestF007_SortKey(t *testing.T) {
+	tests := []struct {
+		kind, key string
+		ok        bool
+	}{
+		{"movie", "release_year", true},
+		{"tv_show", "first_air_year", true},
+		{"motorcycle", "displacement_cc", true},
+		{"car", "power_hp", true},
+		{"camera", "megapixels", true},
+		{"generic", "", false},
+		{"book", "", false},
+	}
+	for _, tt := range tests {
+		key, ok := kinds.SortKey(tt.kind)
+		if key != tt.key || ok != tt.ok {
+			t.Errorf("SortKey(%q) = %q, %v; want %q, %v", tt.kind, key, ok, tt.key, tt.ok)
+		}
 	}
 }

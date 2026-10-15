@@ -14,11 +14,13 @@ This repo is the `backend/` submodule of the parent repo `0xfederama/collections
 
 ## Session rules (summary of AGENT_WORKFLOW)
 
-- **Never push to `main`.** Branch `<feature|fix|hotfix|refactor|test|docs|chore|ci>/<desc>` from `origin/main`, use Conventional Commits, push the branch, and open a PR with `gh pr create`. Don't merge unless the user says so.
+- **Never push to `main`.** Branch `<feature|fix|hotfix|refactor|test|docs|chore|ci>/<desc>` from `origin/main`, use Conventional Commits, push the branch, and open a PR with `gh pr create`. In workflow v2 the repo orchestrator merges its own PRs once the gate is green (D-077): squash merge only (`gh pr merge --squash --delete-branch`), never merge commits; a non-trivial rebase and its merge go to a Sonnet 5.5 subagent.
 - **Workflow v2 (AGENT_WORKFLOW §1b, D-074).** This session is the **repo orchestrator** (Opus 5.5, medium effort): it splits
   the repo's stories from `design-docs/features/F-NNN-*.md` into tasks and dispatches agents from `.claude/agents/`:
-  - `worker` (Sonnet 5.5, medium): implements one task with its tests, runs the gate, commits, and reports **FLAGS**.
-    Review **only flagged items**, and run the gate yourself once before each PR.
+  - `worker` (Sonnet 5.5, medium): implements one task with its tests, runs the tests that matter, commits, and reports
+    **FLAGS**. Review **only flagged items**, and run the full gate yourself once before each PR.
+  - Run tests wisely (§1b "Test runs", D-076): targeted tests while working, the full gate once per PR, slow suites
+    (e2e, smoke, backup round trip) only when the change touches what they cover or before a release.
   - `researcher` (sonnet): versions, library docs, "how does X work here". Must cite sources.
   - `docs-keeper` (haiku): updates `docs/` before every PR.
   - Built-in `Explore` handles broad code search.

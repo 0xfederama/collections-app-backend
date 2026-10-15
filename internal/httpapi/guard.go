@@ -144,7 +144,7 @@ func bodyLimit(opID, mediaType string) int64 {
 	switch {
 	case mediaType == "multipart/form-data":
 		return multipartBodyLimit
-	case opID == "UpdateItemContent":
+	case opID == "UpdateItemContent", opID == "CreateList", opID == "UpdateList":
 		return contentBodyLimit
 	default:
 		return jsonBodyLimit

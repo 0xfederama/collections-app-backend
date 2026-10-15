@@ -25,13 +25,13 @@ import (
 
 // Limits and enums from DATA_MODEL §2 (the same rules are CHECK constraints).
 const (
-	maxNameLen        = 200
-	maxDescriptionLen = 2000
+	maxNameLen          = 200
+	maxDescriptionBytes = 64 << 10 // Markdown, decoded UTF-8 bytes
 )
 
 var (
 	displayModes = map[string]bool{"compact": true, "thumbnail": true, "grid": true}
-	sortModes    = map[string]bool{"manual": true, "title": true, "updated": true}
+	sortModes    = map[string]bool{"manual": true, "title": true, "updated": true, "kind_key": true}
 )
 
 // Defaults for a list created without display_mode / sort_mode.
@@ -72,9 +72,11 @@ type Folder struct {
 // List is a list as the API shows it. FolderID nil means root. Path is filled
 // by GetList only: the ancestor folders, root first.
 type List struct {
-	ID          uuid.UUID
-	FolderID    *uuid.UUID
-	Name        string
+	ID       uuid.UUID
+	FolderID *uuid.UUID
+	Name     string
+	// Kind is the one kind of every item in the list (F-007).
+	Kind        string
 	Description *string
 	DisplayMode string
 	SortMode    string
@@ -182,7 +184,7 @@ func folderFromRow(f sqlc.Folder) Folder {
 
 func listFromRow(l sqlc.GetListRow) List {
 	return List{
-		ID: l.ID, FolderID: ptrUUID(l.FolderID), Name: l.Name, Description: l.Description,
+		ID: l.ID, FolderID: ptrUUID(l.FolderID), Name: l.Name, Kind: l.Kind, Description: l.Description,
 		DisplayMode: l.DisplayMode, SortMode: l.SortMode, SortOrder: int(l.SortOrder), ItemCount: int(l.ItemCount),
 		Version: int(l.Version), CreatedAt: l.CreatedAt, UpdatedAt: l.UpdatedAt,
 	}

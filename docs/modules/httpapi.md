@@ -33,6 +33,7 @@ Serves the HTTP API: the generated strict server mounted on chi, behind request 
 
 - `/healthz` ignores the DB and storage. Use `/readyz`; every `/readyz` call creates and deletes a `.readyz-*` file in DATA_DIR.
 - The guard, not the generated server, enforces: body limits (413), unknown JSON fields (400 `unknown_field`), missing If-Match (428), and query schema ranges (400).
+- List create and update take 2 MiB JSON bodies (64 KiB Markdown `description`); other JSON bodies keep the 64 KiB limit.
 - Move and reorder bodies must carry the nullable parent field (`parent_folder_id` or `folder_id`): absent is 422, null means root.
 - Attachment responses set `Cache-Control: private, max-age=31536000, immutable` and `Content-Disposition: inline`; nosniff and CSP come from middleware.
 - Item `metadata` keys are checked by `items/kinds`, not the guard.

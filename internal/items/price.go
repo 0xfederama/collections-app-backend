@@ -12,9 +12,20 @@ import (
 
 // Price is a price range in one currency. Min and Max are decimal strings with
 // exactly two decimals ("1299.00", D-015); nil means that bound is unset.
+// Amount is request-only (F-007): a single price, stored as Min = Max. Rows read
+// from the database never set it.
 type Price struct {
 	Min, Max *string
+	Amount   *string
 	Currency string
+}
+
+// normalized folds Amount into Min and Max.
+func (p Price) normalized() Price {
+	if p.Amount != nil {
+		p.Min, p.Max, p.Amount = p.Amount, p.Amount, nil
+	}
+	return p
 }
 
 var (
@@ -66,9 +77,20 @@ func priceFromRow(minV, maxV pgtype.Numeric, currency *string) *Price {
 	return p
 }
 
-// validatePrice checks the D-015 rules and returns the price to store.
+// validatePrice checks the D-015 rules plus the F-007 single price (amount).
 func validatePrice(p *Price) []apperr.FieldError {
 	var errs []apperr.FieldError
+	if p.Amount != nil {
+		if p.Min != nil || p.Max != nil {
+			errs = append(errs, apperr.FieldError{Field: "price", Message: "amount cannot be combined with min or max"})
+		} else if !moneyRe.MatchString(*p.Amount) {
+			errs = append(errs, apperr.FieldError{Field: "price.amount", Message: "must be a decimal with 2 decimals like 12.00"})
+		}
+		if !currencyRe.MatchString(p.Currency) {
+			errs = append(errs, apperr.FieldError{Field: "price.currency", Message: "must be a 3-letter uppercase code like EUR"})
+		}
+		return errs
+	}
 	if p.Min == nil && p.Max == nil {
 		errs = append(errs, apperr.FieldError{Field: "price", Message: "needs at least one of min and max"})
 	}
@@ -94,6 +116,8 @@ func priceColumns(p *Price) (minV, maxV pgtype.Numeric, currency *string) {
 	if p == nil {
 		return pgtype.Numeric{}, pgtype.Numeric{}, nil
 	}
+	n := p.normalized()
+	p = &n
 	if p.Min != nil {
 		minV = moneyToNumeric(*p.Min)
 	}

@@ -140,6 +140,9 @@ func conflictProblem(c *apperr.ConflictError) problem {
 	case apperr.CodeDestinationUnavailable:
 		return newProblem(http.StatusConflict, string(c.Code), "Destination unavailable",
 			"The destination does not exist or is in the trash.")
+	case apperr.CodeKindMismatch:
+		return newProblem(http.StatusConflict, string(c.Code), "Kind mismatch",
+			"The destination list has a different kind than the item.")
 	case apperr.CodeOrderStale:
 		return newProblem(http.StatusConflict, string(c.Code), "Order is stale",
 			"The items changed. Reload and try again.")

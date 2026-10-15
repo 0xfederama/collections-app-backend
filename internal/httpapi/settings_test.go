@@ -14,7 +14,6 @@ import (
 type settingsBody struct {
 	WorkspaceName        string `json:"workspace_name"`
 	StreamingCountryCode string `json:"streaming_country_code"`
-	DefaultCurrency      string `json:"default_currency"`
 	MarkdownHistoryLimit int    `json:"markdown_history_limit"`
 	Version              int    `json:"version"`
 }
@@ -60,7 +59,7 @@ func TestAT02_GetSettings(t *testing.T) {
 	if got := rec.Header().Get("ETag"); got != `"s-1"` {
 		t.Errorf("ETag = %q, want \"s-1\"", got)
 	}
-	want := settingsBody{"Our Collection", "IT", "EUR", 20, 1}
+	want := settingsBody{"Our Collection", "IT", 20, 1}
 	if got := decodeSettings(t, rec); got != want {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}
@@ -69,14 +68,14 @@ func TestAT02_GetSettings(t *testing.T) {
 func TestAT02_PatchSettings(t *testing.T) {
 	h := settingsRouter(t)
 
-	rec := patchSettings(t, h, `"s-1"`, `{"workspace_name":" Home ","streaming_country_code":"US","default_currency":"USD","markdown_history_limit":0}`)
+	rec := patchSettings(t, h, `"s-1"`, `{"workspace_name":" Home ","streaming_country_code":"US","markdown_history_limit":0}`)
 	if rec.Code != 200 {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body)
 	}
 	if got := rec.Header().Get("ETag"); got != `"s-2"` {
 		t.Errorf("ETag = %q, want \"s-2\"", got)
 	}
-	want := settingsBody{"Home", "US", "USD", 0, 2}
+	want := settingsBody{"Home", "US", 0, 2}
 	if got := decodeSettings(t, rec); got != want {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}
@@ -94,22 +93,22 @@ func TestAT02_PatchSettings(t *testing.T) {
 	}
 
 	get := do(t, h, req{method: "GET", path: "/api/v1/settings"})
-	if got, want := decodeSettings(t, get), (settingsBody{"Ours", "US", "USD", 0, 3}); got != want {
+	if got, want := decodeSettings(t, get), (settingsBody{"Ours", "US", 0, 3}); got != want {
 		t.Errorf("GET after patches = %+v, want %+v", got, want)
 	}
 }
 
 func TestAT02_PatchSettingsStaleVersion(t *testing.T) {
 	h := settingsRouter(t)
-	if rec := patchSettings(t, h, `"s-1"`, `{"default_currency":"USD"}`); rec.Code != 200 {
+	if rec := patchSettings(t, h, `"s-1"`, `{"streaming_country_code":"US"}`); rec.Code != 200 {
 		t.Fatalf("setup patch: %d %s", rec.Code, rec.Body)
 	}
-	p := wantProblem(t, patchSettings(t, h, `"s-1"`, `{"default_currency":"GBP"}`), 412, "version_conflict")
+	p := wantProblem(t, patchSettings(t, h, `"s-1"`, `{"streaming_country_code":"GB"}`), 412, "version_conflict")
 	if p.CurrentVersion == nil || *p.CurrentVersion != 2 {
 		t.Errorf("current_version = %v, want 2", p.CurrentVersion)
 	}
-	if got := decodeSettings(t, do(t, h, req{method: "GET", path: "/api/v1/settings"})); got.DefaultCurrency != "USD" {
-		t.Errorf("currency = %q, want the stale write ignored", got.DefaultCurrency)
+	if got := decodeSettings(t, do(t, h, req{method: "GET", path: "/api/v1/settings"})); got.StreamingCountryCode != "US" {
+		t.Errorf("country = %q, want the stale write ignored", got.StreamingCountryCode)
 	}
 }
 
@@ -121,10 +120,9 @@ func TestAT02_PatchSettingsValidation(t *testing.T) {
 	}{
 		{"empty name", `{"workspace_name":"  "}`, []string{"workspace_name"}},
 		{"bad country", `{"streaming_country_code":"it"}`, []string{"streaming_country_code"}},
-		{"bad currency", `{"default_currency":"EURO"}`, []string{"default_currency"}},
 		{"limit too high", `{"markdown_history_limit":201}`, []string{"markdown_history_limit"}},
-		{"several", `{"workspace_name":"","default_currency":"x","markdown_history_limit":-1}`,
-			[]string{"workspace_name", "default_currency", "markdown_history_limit"}},
+		{"several", `{"workspace_name":"","streaming_country_code":"x","markdown_history_limit":-1}`,
+			[]string{"workspace_name", "streaming_country_code", "markdown_history_limit"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -142,7 +140,10 @@ func TestAT02_PatchSettingsValidation(t *testing.T) {
 	t.Run("unknown field is a 400, not a silent ignore", func(t *testing.T) {
 		wantProblem(t, patchSettings(t, h, `"s-1"`, `{"version":9}`), 400, "unknown_field")
 	})
+	t.Run("TestF007_default_currency is gone", func(t *testing.T) {
+		wantProblem(t, patchSettings(t, h, `"s-1"`, `{"default_currency":"USD"}`), 400, "unknown_field")
+	})
 	t.Run("missing If-Match", func(t *testing.T) {
-		wantProblem(t, patchSettings(t, h, "", `{"default_currency":"USD"}`), 428, "precondition_required")
+		wantProblem(t, patchSettings(t, h, "", `{"streaming_country_code":"US"}`), 428, "precondition_required")
 	})
 }

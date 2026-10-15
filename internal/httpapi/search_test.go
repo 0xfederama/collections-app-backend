@@ -53,7 +53,7 @@ func TestAT12_SearchSubstringAndPath(t *testing.T) {
 	e := newTreeEnv(t)
 	media := e.folder("Media", nil)
 	movies := e.folder("Movies", media["id"])
-	watchlist := e.list("Watchlist", movies["id"])
+	watchlist := e.listOfKind("Watchlist", movies["id"], "movie")
 	rootList := e.list("Inbox", nil)
 
 	e.newItem(watchlist["id"].(string), matrix)
@@ -85,7 +85,7 @@ func TestAT12_SearchSubstringAndPath(t *testing.T) {
 		t.Fatalf("nested path = %v, want %v", hit.Path, wantPath)
 	}
 	// Summary shape: same fields as a list row, no metadata.
-	for _, k := range []string{"id", "list_id", "title", "kind", "summary", "status", "image", "price", "official_website_url", "content_version", "sort_order", "version", "created_at", "updated_at"} {
+	for _, k := range []string{"id", "list_id", "title", "kind", "image", "price", "website", "content_version", "sort_order", "version", "created_at", "updated_at"} {
 		if _, ok := hit.Item[k]; !ok {
 			t.Errorf("item summary lacks %q", k)
 		}
@@ -93,11 +93,14 @@ func TestAT12_SearchSubstringAndPath(t *testing.T) {
 	if _, ok := hit.Item["metadata"]; ok {
 		t.Error("item summary must not carry metadata")
 	}
-	if hit.Item["kind"] != "movie" || hit.Item["status"] != "Watched" || hit.Item["image"] != nil {
+	if hit.Item["kind"] != "movie" || hit.Item["website"] != "https://www.warnerbros.com/movies/matrix" || hit.Item["image"] != nil {
 		t.Errorf("unexpected summary: %v", hit.Item)
 	}
 
 	rootHit := e.search(q("matte")).Data[0]
+	if rootHit.Item["kind"] != "generic" {
+		t.Errorf("TestF007 kind of an item in a generic list = %v", rootHit.Item["kind"])
+	}
 	if want := []obj{{"type": "list", "id": rootList["id"], "name": "Inbox"}}; !reflect.DeepEqual(rootHit.Path, want) {
 		t.Fatalf("root list path = %v, want %v", rootHit.Path, want)
 	}
@@ -140,7 +143,7 @@ func TestAT12_SearchExcludesTrash(t *testing.T) {
 	trashedFolder := e.trashFolder("GoneFolder", nil)
 	listInFolder := uuid.New()
 	batch := e.trashBatch("list", listInFolder)
-	e.exec(`INSERT INTO lists (id, workspace_id, folder_id, name, sort_order, deleted_at, trash_batch_id) VALUES ($1, $2, $3, 'In gone folder', 0, now(), $4)`,
+	e.exec(`INSERT INTO lists (id, workspace_id, folder_id, name, kind, sort_order, deleted_at, trash_batch_id) VALUES ($1, $2, $3, 'In gone folder', 'generic', 0, now(), $4)`,
 		listInFolder, e.ws, trashedFolder, batch)
 	e.trashedItem(listInFolder.String(), "Needle in trashed folder")
 

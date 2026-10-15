@@ -11,6 +11,7 @@ func (s *Server) CreateList(ctx context.Context, r oapi.CreateListRequestObject)
 	b := r.Body
 	in := tree.CreateListInput{
 		Name:        b.Name,
+		Kind:        string(b.Kind),
 		FolderID:    optionalUUID(b.FolderId),
 		Description: optionalString(b.Description).Value,
 		DisplayMode: derefOr(enumPtr(b.DisplayMode)),
@@ -38,6 +39,7 @@ func (s *Server) UpdateList(ctx context.Context, r oapi.UpdateListRequestObject)
 	b := r.Body
 	l, err := s.deps.Tree.UpdateList(ctx, r.Id, IfMatchVersion(ctx), tree.ListPatch{
 		Name:        b.Name,
+		Kind:        enumPtr(b.Kind),
 		Description: optionalString(b.Description),
 		DisplayMode: enumPtr(b.DisplayMode),
 		SortMode:    enumPtr(b.SortMode),

@@ -28,4 +28,5 @@
 - `If-Match` is `required: false` so a missing header reaches the handler, which returns 428.
 - An unset `nullable.Nullable` in a response marshals as a zero value, not `null`.
 - `nullable: true` must sit on the schema itself, not next to `allOf`.
-- Item metadata is a `oneOf` discriminated by `kind`.
+- Item metadata is a `oneOf` discriminated by `kind`. Items have no `kind` in request bodies; it is the list's kind (F-007, spec 0.3.0).
+- Spec 0.3.0 removed `default_currency`, item `summary`/`status`, and renamed `official_website_url` to `website`.

@@ -32,13 +32,15 @@ func (q *Queries) CountSearchItems(ctx context.Context, arg CountSearchItemsPara
 }
 
 const listRecentItems = `-- name: ListRecentItems :many
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.kind, i.summary, i.status, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.official_website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+       l.kind              AS kind,
        a.width             AS image_width,
        a.height            AS image_height,
        a.original_filename AS image_original_filename,
        COALESCE((SELECT max(v.version) FROM item_content_versions v WHERE v.item_id = i.id), 0)::int AS content_version
 FROM items i
 LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.workspace_id = $1 AND i.deleted_at IS NULL
 ORDER BY i.updated_at DESC, i.id
 LIMIT $2
@@ -54,15 +56,12 @@ type ListRecentItemsRow struct {
 	WorkspaceID           uuid.UUID
 	ListID                uuid.UUID
 	Title                 string
-	Kind                  string
-	Summary               *string
-	Status                *string
 	ImageUrl              *string
 	ImageAttachmentID     uuid.NullUUID
 	PriceMin              pgtype.Numeric
 	PriceMax              pgtype.Numeric
 	Currency              *string
-	OfficialWebsiteUrl    *string
+	WebsiteUrl            *string
 	Metadata              []byte
 	SortOrder             int32
 	Version               int32
@@ -70,6 +69,7 @@ type ListRecentItemsRow struct {
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
 	TrashBatchID          uuid.NullUUID
+	Kind                  string
 	ImageWidth            *int32
 	ImageHeight           *int32
 	ImageOriginalFilename *string
@@ -93,15 +93,12 @@ func (q *Queries) ListRecentItems(ctx context.Context, arg ListRecentItemsParams
 			&i.WorkspaceID,
 			&i.ListID,
 			&i.Title,
-			&i.Kind,
-			&i.Summary,
-			&i.Status,
 			&i.ImageUrl,
 			&i.ImageAttachmentID,
 			&i.PriceMin,
 			&i.PriceMax,
 			&i.Currency,
-			&i.OfficialWebsiteUrl,
+			&i.WebsiteUrl,
 			&i.Metadata,
 			&i.SortOrder,
 			&i.Version,
@@ -109,6 +106,7 @@ func (q *Queries) ListRecentItems(ctx context.Context, arg ListRecentItemsParams
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.TrashBatchID,
+			&i.Kind,
 			&i.ImageWidth,
 			&i.ImageHeight,
 			&i.ImageOriginalFilename,
@@ -190,13 +188,15 @@ func (q *Queries) ListSearchLists(ctx context.Context, workspaceID uuid.UUID) ([
 
 const searchItems = `-- name: SearchItems :many
 
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.kind, i.summary, i.status, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.official_website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+       l.kind              AS kind,
        a.width             AS image_width,
        a.height            AS image_height,
        a.original_filename AS image_original_filename,
        COALESCE((SELECT max(v.version) FROM item_content_versions v WHERE v.item_id = i.id), 0)::int AS content_version
 FROM items i
 LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.workspace_id = $1 AND i.deleted_at IS NULL
   AND lower(i.title) LIKE '%' || lower($2::text) || '%' ESCAPE '\'
 ORDER BY (lower(i.title) = lower($3::text)) DESC, lower(i.title), i.id
@@ -216,15 +216,12 @@ type SearchItemsRow struct {
 	WorkspaceID           uuid.UUID
 	ListID                uuid.UUID
 	Title                 string
-	Kind                  string
-	Summary               *string
-	Status                *string
 	ImageUrl              *string
 	ImageAttachmentID     uuid.NullUUID
 	PriceMin              pgtype.Numeric
 	PriceMax              pgtype.Numeric
 	Currency              *string
-	OfficialWebsiteUrl    *string
+	WebsiteUrl            *string
 	Metadata              []byte
 	SortOrder             int32
 	Version               int32
@@ -232,6 +229,7 @@ type SearchItemsRow struct {
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
 	TrashBatchID          uuid.NullUUID
+	Kind                  string
 	ImageWidth            *int32
 	ImageHeight           *int32
 	ImageOriginalFilename *string
@@ -262,15 +260,12 @@ func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]Sea
 			&i.WorkspaceID,
 			&i.ListID,
 			&i.Title,
-			&i.Kind,
-			&i.Summary,
-			&i.Status,
 			&i.ImageUrl,
 			&i.ImageAttachmentID,
 			&i.PriceMin,
 			&i.PriceMax,
 			&i.Currency,
-			&i.OfficialWebsiteUrl,
+			&i.WebsiteUrl,
 			&i.Metadata,
 			&i.SortOrder,
 			&i.Version,
@@ -278,6 +273,7 @@ func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]Sea
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.TrashBatchID,
+			&i.Kind,
 			&i.ImageWidth,
 			&i.ImageHeight,
 			&i.ImageOriginalFilename,

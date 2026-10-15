@@ -286,7 +286,7 @@ func cleanFilename(in *string) *string {
 }
 
 // cleanURL accepts absolute http and https URLs of at most 2048 characters
-// (the same rule as official_website_url in the items service).
+// (the same rule as website in the items service).
 func cleanURL(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	bad := func(msg string) (string, error) {

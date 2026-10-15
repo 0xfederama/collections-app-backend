@@ -17,6 +17,7 @@ Typed domain errors that services return and that `internal/httpapi` maps to pro
 - `Cycle() error`: 409 `cycle_detected`
 - `ParentInTrash(b BlockingParent) error`: 409 `parent_in_trash` with the blocking ancestor
 - `DestinationUnavailable() error`: 409 `destination_unavailable`
+- `KindMismatch() error`: 409 `kind_mismatch` (item moved to a list of another kind)
 - `OrderStale() error`: 409 `order_stale`
 - `PayloadTooLarge(limit int64) error`: over-limit body or upload
 - `UnsupportedMediaType(detail string) error`: upload not JPEG, PNG or WebP

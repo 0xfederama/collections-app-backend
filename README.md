@@ -11,7 +11,7 @@ There is no CI. Quality gates run locally with `make check` (see below).
 
 ## What exists today
 
-The whole API in `api/openapi.yaml` is implemented (spec `0.2.0`, tag `api-v0.2.0`):
+The whole API in `api/openapi.yaml` is implemented (spec `0.3.0`, tag `api-v0.3.0`):
 
 | Area | State |
 |---|---|

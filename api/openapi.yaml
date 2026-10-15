@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -21,7 +21,7 @@ info:
     **Errors** are RFC 9457 `application/problem+json` with a stable `code` (see the `Problem` schema). A missing **or trashed** resource is
     `404 not_found` on every non-trash endpoint.
 
-    **Limits.** JSON bodies: 64 KiB (2 MiB on the content `PUT`). Multipart image upload: 10 MiB plus 64 KiB overhead. Markdown: 1 MiB UTF-8.
+    **Limits.** JSON bodies: 64 KiB (2 MiB on the content `PUT` and on list create and update, whose `description` can be 64 KiB). Multipart image upload: 10 MiB plus 64 KiB overhead. Markdown: 1 MiB UTF-8.
     Item pages: `limit` 1–200 (default 50), `offset` ≥ 0.
 servers:
   - url: /
@@ -309,7 +309,10 @@ paths:
       tags: [lists]
       operationId: createList
       summary: Create a list
-      description: Appended to the end of its siblings. `folder_id` absent or `null` creates it at the root. A missing or trashed folder returns `409 destination_unavailable`.
+      description: |
+        Appended to the end of its siblings. `folder_id` absent or `null` creates it at the root. A missing or trashed folder returns
+        `409 destination_unavailable`. `kind` is required: every item of the list has that kind. `description` is Markdown (up to 64 KiB).
+        `sort_mode: kind_key` is rejected (`422 validation_failed`) on a `generic` list.
       requestBody:
         required: true
         content:
@@ -319,6 +322,7 @@ paths:
               watchlist:
                 value:
                   name: Watchlist
+                  kind: movie
                   folder_id: 7c1e5a10-0000-4000-8000-000000000001
                   description: Films to watch
                   display_mode: thumbnail
@@ -390,7 +394,13 @@ paths:
       tags: [lists]
       operationId: updateList
       summary: Update a list
-      description: 'Requires `If-Match` (`"l-N"`). Send `description: null` to clear it.'
+      description: |
+        Requires `If-Match` (`"l-N"`). Send `description: null` to clear it. `description` is Markdown (up to 64 KiB) and has no version
+        history: it is edited with the list's `version`. `sort_mode: kind_key` is rejected (`422 validation_failed`) on a `generic` list.
+
+        Changing `kind` on a list that has items **clears the `metadata` of all its items** (trashed ones too; their `version` is bumped),
+        because the kind fields differ per kind. Clients should warn first. If the list is left on `sort_mode: kind_key` and the new
+        kind is `generic`, the request is rejected with `422 validation_failed`.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -400,6 +410,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateListRequest' }
             examples:
               viewMode: { value: { display_mode: grid, sort_mode: title } }
+              changeKind: { value: { kind: car } }
       responses:
         '200':
           description: The updated list
@@ -475,12 +486,15 @@ paths:
       tags: [items]
       operationId: listItems
       summary: List the items of a list
-      description: "Sorted by `sort` (default: the list's `sort_mode`), tie-break `id`. `q` filters by title."
+      description: |
+        Sorted by `sort` (default: the list's `sort_mode`), tie-break `id`. `q` filters by title. `sort=kind_key` sorts by the kind's
+        sort key ascending, empty values last (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
+        car: `power_hp`, camera: `megapixels`); on a `generic` list it returns `400 invalid_parameter`.
       parameters:
         - name: sort
           in: query
           description: Defaults to the list's `sort_mode`.
-          schema: { type: string, enum: [manual, title, updated] }
+          schema: { $ref: '#/components/schemas/SortMode' }
         - name: q
           in: query
           description: Case-insensitive title filter.
@@ -503,8 +517,9 @@ paths:
       operationId: createItem
       summary: Create an item
       description: |
-        Appended to the end of the list. `kind` defaults to `generic`. Image and Markdown content are set through their own endpoints
-        after creation. `metadata` is validated per kind (see the `*Metadata` schemas).
+        Appended to the end of the list. The item's `kind` is the list's kind (read-only, not accepted in the body). Image and Markdown
+        content are set through their own endpoints after creation. `metadata` is validated against the list's kind (see the `*Metadata` schemas).
+        `price` is either `{amount, currency}` (single price) or `{min, max, currency}` (range).
       requestBody:
         required: true
         content:
@@ -514,11 +529,8 @@ paths:
               movie:
                 value:
                   title: The Matrix
-                  kind: movie
-                  summary: A hacker learns the truth about reality.
-                  status: Watched
-                  price: null
-                  official_website_url: https://www.warnerbros.com/movies/matrix
+                  price: { amount: '12.00', currency: EUR }
+                  website: https://www.warnerbros.com/movies/matrix
                   metadata:
                     release_year: 1999
                     runtime_minutes: 136
@@ -593,8 +605,9 @@ paths:
       operationId: updateItem
       summary: Update an item
       description: |
-        Requires `If-Match` (`"i-N"`). Any of `title, kind, summary, status, price, official_website_url, metadata`; send `null` to clear
-        a nullable field. If `kind` changes and `metadata` is absent, metadata resets to `{}`. Image changes go through the image endpoints.
+        Requires `If-Match` (`"i-N"`). Any of `title, price, website, metadata`; send `null` to clear a nullable field. `metadata` is
+        validated against the list's kind and replaces the stored one. The kind cannot be changed here (it belongs to the list).
+        Image changes go through the image endpoints.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -604,7 +617,9 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateItemRequest' }
             examples:
               price:
-                value: { status: Owned, price: { min: '12000.00', max: '13500.00', currency: EUR } }
+                value: { price: { min: '12000.00', max: '13500.00', currency: EUR } }
+              singlePrice:
+                value: { price: { amount: '12500.00', currency: EUR } }
       responses:
         '200':
           description: The updated item
@@ -643,7 +658,9 @@ paths:
       tags: [items]
       operationId: moveItem
       summary: Move an item to another list
-      description: Requires `If-Match` (`"i-N"`). Appended to the end of the destination list. A missing or trashed list returns `409 destination_unavailable`.
+      description: |
+        Requires `If-Match` (`"i-N"`). Appended to the end of the destination list. A missing or trashed list returns
+        `409 destination_unavailable`. A destination list of another kind returns `409 kind_mismatch`.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -665,7 +682,7 @@ paths:
                 motorcycle: { $ref: '#/components/examples/ItemMotorcycle' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/DestinationUnavailable' }
+        '409': { $ref: '#/components/responses/ItemMoveConflict' }
         '412': { $ref: '#/components/responses/VersionConflict' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
@@ -1142,6 +1159,26 @@ components:
                 status: 409
                 detail: The destination folder or list does not exist or is in the trash.
                 code: destination_unavailable
+    ItemMoveConflict:
+      description: The destination list is missing or trashed, or has another kind than the item's list
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            destination_unavailable:
+              value:
+                type: https://collection-app.invalid/problems/destination-unavailable
+                title: Destination unavailable
+                status: 409
+                detail: The destination folder or list does not exist or is in the trash.
+                code: destination_unavailable
+            kind_mismatch:
+              value:
+                type: https://collection-app.invalid/problems/kind-mismatch
+                title: Kind mismatch
+                status: 409
+                detail: The destination list has a different kind than the item.
+                code: kind_mismatch
     OrderStale:
       description: '`ids` is not exactly the current set of active siblings'
       content:
@@ -1273,7 +1310,6 @@ components:
       value:
         workspace_name: Our Collection
         streaming_country_code: IT
-        default_currency: EUR
         markdown_history_limit: 20
         version: 4
     Folder:
@@ -1290,6 +1326,7 @@ components:
         id: 7c1e5a10-0000-4000-8000-000000000011
         folder_id: 7c1e5a10-0000-4000-8000-000000000002
         name: Watchlist
+        kind: movie
         description: Films to watch
         display_mode: thumbnail
         sort_mode: manual
@@ -1303,6 +1340,7 @@ components:
         id: 7c1e5a10-0000-4000-8000-000000000011
         folder_id: 7c1e5a10-0000-4000-8000-000000000002
         name: Watchlist
+        kind: movie
         description: Films to watch
         display_mode: thumbnail
         sort_mode: manual
@@ -1342,6 +1380,7 @@ components:
           - id: 7c1e5a10-0000-4000-8000-000000000011
             folder_id: 7c1e5a10-0000-4000-8000-000000000002
             name: Watchlist
+            kind: movie
             description: Films to watch
             display_mode: thumbnail
             sort_mode: manual
@@ -1353,6 +1392,7 @@ components:
           - id: 7c1e5a10-0000-4000-8000-000000000012
             folder_id: 7c1e5a10-0000-4000-8000-000000000003
             name: Motorbikes
+            kind: motorcycle
             description: null
             display_mode: grid
             sort_mode: title
@@ -1367,8 +1407,6 @@ components:
         list_id: 7c1e5a10-0000-4000-8000-000000000011
         title: The Matrix
         kind: movie
-        summary: A hacker learns the truth about reality.
-        status: Watched
         image:
           source: upload
           attachment_id: 7c1e5a10-0000-4000-8000-000000000201
@@ -1378,7 +1416,7 @@ components:
           height: 1500
           original_filename: matrix.jpg
         price: null
-        official_website_url: https://www.warnerbros.com/movies/matrix
+        website: https://www.warnerbros.com/movies/matrix
         metadata:
           release_year: 1999
           runtime_minutes: 136
@@ -1395,11 +1433,9 @@ components:
         list_id: 7c1e5a10-0000-4000-8000-000000000011
         title: The Matrix
         kind: movie
-        summary: A hacker learns the truth about reality.
-        status: Watched
         image: null
         price: null
-        official_website_url: null
+        website: null
         metadata:
           release_year: 1999
           runtime_minutes: 136
@@ -1420,21 +1456,15 @@ components:
         list_id: 7c1e5a10-0000-4000-8000-000000000012
         title: Ducati Monster
         kind: motorcycle
-        summary: Naked bike with a 937 cc twin.
-        status: Owned
         image: { source: url, url: 'https://example.org/images/monster.jpg' }
         price: { min: '12000.00', max: '13500.00', currency: EUR }
-        official_website_url: https://www.ducati.com/
+        website: https://www.ducati.com/
         metadata:
           make: Ducati
           model: Monster
           model_year: 2024
-          segment: naked
           displacement_cc: 937
           power_hp: 111
-          torque_nm: 93
-          wet_weight_kg: 188
-          seat_height_mm: 820
           license_class: A
         content_version: 0
         sort_order: 0
@@ -1448,13 +1478,11 @@ components:
             list_id: 7c1e5a10-0000-4000-8000-000000000011
             title: The Matrix
             kind: movie
-            summary: A hacker learns the truth about reality.
-            status: Watched
             image:
               url: /api/v1/attachments/7c1e5a10-0000-4000-8000-000000000201/file
               thumbnail_url: /api/v1/attachments/7c1e5a10-0000-4000-8000-000000000201/thumbnail
             price: null
-            official_website_url: null
+            website: null
             content_version: 2
             sort_order: 0
             version: 3
@@ -1464,11 +1492,9 @@ components:
             list_id: 7c1e5a10-0000-4000-8000-000000000011
             title: Blade Runner 2049
             kind: movie
-            summary: null
-            status: To watch
             image: { url: 'https://example.org/images/br2049.jpg' }
             price: null
-            official_website_url: null
+            website: null
             content_version: 0
             sort_order: 1
             version: 1
@@ -1483,11 +1509,9 @@ components:
               list_id: 7c1e5a10-0000-4000-8000-000000000011
               title: The Matrix
               kind: movie
-              summary: A hacker learns the truth about reality.
-              status: Watched
               image: null
               price: null
-              official_website_url: null
+              website: null
               content_version: 2
               sort_order: 0
               version: 3
@@ -1505,11 +1529,9 @@ components:
               list_id: 7c1e5a10-0000-4000-8000-000000000011
               title: The Matrix
               kind: movie
-              summary: A hacker learns the truth about reality.
-              status: Watched
               image: null
               price: null
-              official_website_url: null
+              website: null
               content_version: 2
               sort_order: 0
               version: 3
@@ -1582,6 +1604,7 @@ components:
             - cycle_detected
             - parent_in_trash
             - destination_unavailable
+            - kind_mismatch
             - order_stale
             - version_conflict
             - payload_too_large
@@ -1638,10 +1661,26 @@ components:
     Price:
       type: object
       nullable: true
-      description: At least one of `min` and `max` is set when a price exists. `min` must not exceed `max`.
+      description: |
+        A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
+        (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
       additionalProperties: false
       required: [min, max, currency]
       properties:
+        min: { type: string, nullable: true, pattern: '^\d{1,10}\.\d{2}$', example: '12.00' }
+        max: { type: string, nullable: true, pattern: '^\d{1,10}\.\d{2}$', example: '15.00' }
+        currency: { type: string, pattern: '^[A-Z]{3}$', example: EUR }
+    PriceInput:
+      type: object
+      nullable: true
+      description: |
+        A price in requests, either a single price `{amount, currency}` or a range `{min, max, currency}`. `amount` and `min`/`max`
+        are mutually exclusive (`422 validation_failed` when mixed); `min` must not exceed `max`; a range needs at least one bound.
+        `null` clears the price. Money is a decimal string (D-062).
+      additionalProperties: false
+      required: [currency]
+      properties:
+        amount: { type: string, pattern: '^\d{1,10}\.\d{2}$', example: '12.00', description: Single price. Stored as `min` = `max`. }
         min: { type: string, nullable: true, pattern: '^\d{1,10}\.\d{2}$', example: '12.00' }
         max: { type: string, nullable: true, pattern: '^\d{1,10}\.\d{2}$', example: '15.00' }
         currency: { type: string, pattern: '^[A-Z]{3}$', example: EUR }
@@ -1688,11 +1727,10 @@ components:
     # ---- Settings, tree ----
     Settings:
       type: object
-      required: [workspace_name, streaming_country_code, default_currency, markdown_history_limit, version]
+      required: [workspace_name, streaming_country_code, markdown_history_limit, version]
       properties:
         workspace_name: { type: string, minLength: 1, maxLength: 200 }
         streaming_country_code: { type: string, pattern: '^[A-Z]{2}$' }
-        default_currency: { type: string, pattern: '^[A-Z]{3}$' }
         markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
         version: { type: integer }
     UpdateSettingsRequest:
@@ -1701,7 +1739,6 @@ components:
       properties:
         workspace_name: { type: string, minLength: 1, maxLength: 200 }
         streaming_country_code: { type: string, pattern: '^[A-Z]{2}$' }
-        default_currency: { type: string, pattern: '^[A-Z]{3}$' }
         markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
     Tree:
       type: object
@@ -1759,15 +1796,20 @@ components:
       enum: [compact, thumbnail, grid]
     SortMode:
       type: string
-      enum: [manual, title, updated]
+      enum: [manual, title, updated, kind_key]
+      description: |
+        `kind_key` sorts by the kind's sort key (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
+        car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists. The manual order is kept
+        when the mode changes.
     List:
       type: object
-      required: [id, folder_id, name, description, display_mode, sort_mode, sort_order, item_count, version, created_at, updated_at]
+      required: [id, folder_id, name, kind, description, display_mode, sort_mode, sort_order, item_count, version, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         folder_id: { type: string, format: uuid, nullable: true }
         name: { type: string, minLength: 1, maxLength: 200 }
-        description: { type: string, nullable: true, maxLength: 2000 }
+        kind: { $ref: '#/components/schemas/ItemKind' }
+        description: { type: string, nullable: true, maxLength: 65536, description: 'Markdown, up to 64 KiB (UTF-8 bytes).' }
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
         sort_mode: { $ref: '#/components/schemas/SortMode' }
         sort_order: { type: integer }
@@ -1782,11 +1824,12 @@ components:
     CreateListRequest:
       type: object
       additionalProperties: false
-      required: [name]
+      required: [name, kind]
       properties:
         name: { type: string, minLength: 1, maxLength: 200 }
+        kind: { $ref: '#/components/schemas/ItemKind' }
         folder_id: { type: string, format: uuid, nullable: true }
-        description: { type: string, nullable: true, maxLength: 2000 }
+        description: { type: string, nullable: true, maxLength: 65536, description: 'Markdown, up to 64 KiB (UTF-8 bytes).' }
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
         sort_mode: { $ref: '#/components/schemas/SortMode' }
     UpdateListRequest:
@@ -1794,7 +1837,8 @@ components:
       additionalProperties: false
       properties:
         name: { type: string, minLength: 1, maxLength: 200 }
-        description: { type: string, nullable: true, maxLength: 2000 }
+        kind: { $ref: '#/components/schemas/ItemKind' }
+        description: { type: string, nullable: true, maxLength: 65536, description: 'Markdown, up to 64 KiB (UTF-8 bytes).' }
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
         sort_mode: { $ref: '#/components/schemas/SortMode' }
     MoveListRequest:
@@ -1816,20 +1860,21 @@ components:
     # ---- Items ----
     ItemKind:
       type: string
+      description: |
+        The kind of a list. Items have no kind of their own: theirs is read-only and derived from their list. Changing the kind of a
+        list that has items clears the `metadata` of all its items.
       enum: [generic, movie, tv_show, motorcycle, car, camera]
     ItemBase:
       type: object
-      description: Fields shared by every item kind. `kind` and `metadata` are added by the per-kind schemas.
-      required: [id, list_id, title, summary, status, image, price, official_website_url, content_version, sort_order, version, created_at, updated_at]
+      description: Fields shared by every item kind. `kind` (read-only, derived from the list) and `metadata` are added by the per-kind schemas.
+      required: [id, list_id, title, image, price, website, content_version, sort_order, version, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         list_id: { type: string, format: uuid }
         title: { type: string, minLength: 1, maxLength: 300 }
-        summary: { type: string, nullable: true, maxLength: 1000 }
-        status: { type: string, nullable: true, maxLength: 100 }
         image: { $ref: '#/components/schemas/Image' }
         price: { $ref: '#/components/schemas/Price' }
-        official_website_url: { type: string, nullable: true, maxLength: 2048 }
+        website: { type: string, nullable: true, maxLength: 2048 }
         content_version: { type: integer, description: 'Current Markdown version (0 = empty). For display only; use the content endpoints to edit.' }
         sort_order: { type: integer }
         version: { type: integer }
@@ -1845,7 +1890,7 @@ components:
         - type: object
           required: [kind, metadata]
           properties:
-            kind: { type: string, enum: [generic] }
+            kind: { type: string, enum: [generic], readOnly: true }
             metadata: { $ref: '#/components/schemas/GenericMetadata' }
     MovieItem:
       allOf:
@@ -1853,7 +1898,7 @@ components:
         - type: object
           required: [kind, metadata]
           properties:
-            kind: { type: string, enum: [movie] }
+            kind: { type: string, enum: [movie], readOnly: true }
             metadata: { $ref: '#/components/schemas/MovieMetadata' }
     TvShowItem:
       allOf:
@@ -1861,7 +1906,7 @@ components:
         - type: object
           required: [kind, metadata]
           properties:
-            kind: { type: string, enum: [tv_show] }
+            kind: { type: string, enum: [tv_show], readOnly: true }
             metadata: { $ref: '#/components/schemas/TvShowMetadata' }
     MotorcycleItem:
       allOf:
@@ -1869,7 +1914,7 @@ components:
         - type: object
           required: [kind, metadata]
           properties:
-            kind: { type: string, enum: [motorcycle] }
+            kind: { type: string, enum: [motorcycle], readOnly: true }
             metadata: { $ref: '#/components/schemas/MotorcycleMetadata' }
     CarItem:
       allOf:
@@ -1877,7 +1922,7 @@ components:
         - type: object
           required: [kind, metadata]
           properties:
-            kind: { type: string, enum: [car] }
+            kind: { type: string, enum: [car], readOnly: true }
             metadata: { $ref: '#/components/schemas/CarMetadata' }
     CameraItem:
       allOf:
@@ -1885,10 +1930,10 @@ components:
         - type: object
           required: [kind, metadata]
           properties:
-            kind: { type: string, enum: [camera] }
+            kind: { type: string, enum: [camera], readOnly: true }
             metadata: { $ref: '#/components/schemas/CameraMetadata' }
     Item:
-      description: An item. `metadata` has the shape of its `kind` (discriminated union).
+      description: An item. `kind` is read-only and derived from the item's list; `metadata` has the shape of that kind (discriminated union).
       oneOf:
         - $ref: '#/components/schemas/GenericItem'
         - $ref: '#/components/schemas/MovieItem'
@@ -1908,17 +1953,15 @@ components:
     ItemSummary:
       type: object
       description: "An item row in lists and search: no `metadata`, and the image is reduced."
-      required: [id, list_id, title, kind, summary, status, image, price, official_website_url, content_version, sort_order, version, created_at, updated_at]
+      required: [id, list_id, title, kind, image, price, website, content_version, sort_order, version, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         list_id: { type: string, format: uuid }
         title: { type: string }
         kind: { $ref: '#/components/schemas/ItemKind' }
-        summary: { type: string, nullable: true }
-        status: { type: string, nullable: true }
         image: { $ref: '#/components/schemas/ImageSummary' }
         price: { $ref: '#/components/schemas/Price' }
-        official_website_url: { type: string, nullable: true }
+        website: { type: string, nullable: true }
         content_version: { type: integer }
         sort_order: { type: integer }
         version: { type: integer }
@@ -1961,28 +2004,22 @@ components:
       required: [title]
       properties:
         title: { type: string, minLength: 1, maxLength: 300 }
-        kind: { type: string, pattern: '^[a-z][a-z0-9_]{0,31}$', default: generic, description: 'One of the `ItemKind` values; validated in Go.' }
-        summary: { type: string, nullable: true, maxLength: 1000 }
-        status: { type: string, nullable: true, maxLength: 100 }
-        price: { $ref: '#/components/schemas/Price' }
-        official_website_url: { type: string, nullable: true, maxLength: 2048 }
+        price: { $ref: '#/components/schemas/PriceInput' }
+        website: { type: string, nullable: true, maxLength: 2048 }
         metadata:
           type: object
-          description: 'Free-form here because `kind` may be absent. Validated per kind: see the `*Metadata` schemas.'
+          description: 'Free-form here because its shape depends on the list''s kind. Validated against that kind: see the `*Metadata` schemas.'
           additionalProperties: true
     UpdateItemRequest:
       type: object
       additionalProperties: false
       properties:
         title: { type: string, minLength: 1, maxLength: 300 }
-        kind: { type: string, pattern: '^[a-z][a-z0-9_]{0,31}$' }
-        summary: { type: string, nullable: true, maxLength: 1000 }
-        status: { type: string, nullable: true, maxLength: 100 }
-        price: { $ref: '#/components/schemas/Price' }
-        official_website_url: { type: string, nullable: true, maxLength: 2048 }
+        price: { $ref: '#/components/schemas/PriceInput' }
+        website: { type: string, nullable: true, maxLength: 2048 }
         metadata:
           type: object
-          description: 'Free-form here because `kind` may be absent. Validated per kind: see the `*Metadata` schemas.'
+          description: 'Free-form here because its shape depends on the list''s kind. Validated against that kind: see the `*Metadata` schemas.'
           additionalProperties: true
     MoveItemRequest:
       type: object
@@ -1999,7 +2036,7 @@ components:
           type: array
           maxItems: 10000
           items: { type: string, format: uuid }
-    # ---- Kind metadata (DATA_MODEL §2.1). All keys optional; text is trimmed, max 100 chars unless noted. ----
+    # ---- Kind metadata (F-007: trimmed to the kept fields; sort key marked). All keys optional; text is trimmed, max 100 chars unless noted. ----
     Streaming:
       type: object
       additionalProperties: false
@@ -2040,12 +2077,8 @@ components:
         make: { type: string, maxLength: 100 }
         model: { type: string, maxLength: 100 }
         model_year: { type: integer, minimum: 1885, maximum: 2100 }
-        segment: { type: string, maxLength: 50, description: 'E.g. naked, adventure, sport-touring.' }
         displacement_cc: { type: integer, minimum: 1, maximum: 5000 }
         power_hp: { type: number, minimum: 0, maximum: 1000, description: One decimal. }
-        torque_nm: { type: number, minimum: 0, maximum: 1000, description: One decimal. }
-        wet_weight_kg: { type: integer, minimum: 1, maximum: 1000 }
-        seat_height_mm: { type: integer, minimum: 300, maximum: 1200 }
         license_class: { type: string, enum: [AM, A1, A2, A] }
     CarMetadata:
       type: object
@@ -2053,14 +2086,9 @@ components:
       properties:
         make: { type: string, maxLength: 100 }
         model: { type: string, maxLength: 100 }
-        trim: { type: string, maxLength: 100 }
         model_year: { type: integer, minimum: 1885, maximum: 2100 }
-        body_type: { type: string, maxLength: 50, description: 'E.g. hatchback, SUV, estate.' }
         fuel_type: { type: string, enum: [petrol, diesel, hybrid, plugin_hybrid, electric, lpg, cng, hydrogen, other] }
-        transmission: { type: string, enum: [manual, automatic] }
         power_hp: { type: number, minimum: 0, maximum: 2000, description: One decimal. }
-        seats: { type: integer, minimum: 1, maximum: 9 }
-        electric_range_km: { type: integer, minimum: 1, maximum: 2000, description: Only allowed when `fuel_type` is `electric` or `plugin_hybrid` (or absent). }
     CameraMetadata:
       type: object
       additionalProperties: false
@@ -2068,11 +2096,8 @@ components:
         make: { type: string, maxLength: 100 }
         model: { type: string, maxLength: 100 }
         release_year: { type: integer, minimum: 1900, maximum: 2100 }
-        camera_type: { type: string, enum: [mirrorless, dslr, compact, rangefinder, medium_format, film, action, other] }
         sensor_format: { type: string, enum: [full_frame, aps_c, micro_four_thirds, one_inch, medium_format, film_35mm, other] }
         megapixels: { type: number, minimum: 0.1, maximum: 500, description: One decimal. }
-        lens_mount: { type: string, maxLength: 50, description: 'E.g. Sony E, Fujifilm X.' }
-        weight_g: { type: integer, minimum: 1, maximum: 10000 }
     # ---- Image requests ----
     UploadImageRequest:
       type: object

@@ -2,9 +2,11 @@ package httpapi_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -12,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/clock"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/items"
@@ -93,14 +96,24 @@ func (e *treeEnv) folder(name string, parent any) obj {
 	return f
 }
 
+// list creates a generic list.
 func (e *treeEnv) list(name string, folder any) obj {
 	e.t.Helper()
-	body, _ := json.Marshal(obj{"name": name, "folder_id": folder})
+	return e.listOfKind(name, folder, "generic")
+}
+
+// listOfKind creates a list of the given kind (required since API 0.3.0).
+func (e *treeEnv) listOfKind(name string, folder any, kind string) obj {
+	e.t.Helper()
+	body, _ := json.Marshal(obj{"name": name, "kind": kind, "folder_id": folder})
 	rec := e.call("POST", "/api/v1/lists", string(body), "")
 	wantStatus(e.t, rec, 201)
 	l := decode(e.t, rec)
 	if rec.Header().Get("Location") != "/api/v1/lists/"+l["id"].(string) || rec.Header().Get("ETag") != fmt.Sprintf(`"l-%v"`, l["version"]) {
 		e.t.Fatalf("bad Location/ETag: %v / %v", rec.Header().Get("Location"), rec.Header().Get("ETag"))
+	}
+	if l["kind"] != kind {
+		e.t.Fatalf("kind = %v, want %s", l["kind"], kind)
 	}
 	return l
 }
@@ -157,7 +170,7 @@ func (e *treeEnv) trashList(name string, folder any) string {
 	e.t.Helper()
 	id := uuid.New()
 	batch := e.trashBatch("list", id)
-	e.exec(`INSERT INTO lists (id, workspace_id, folder_id, name, sort_order, deleted_at, trash_batch_id) VALUES ($1, $2, $3, $4, 0, now(), $5)`,
+	e.exec(`INSERT INTO lists (id, workspace_id, folder_id, name, kind, sort_order, deleted_at, trash_batch_id) VALUES ($1, $2, $3, $4, 'generic', 0, now(), $5)`,
 		id, e.ws, folder, name, batch)
 	return id.String()
 }
@@ -425,7 +438,7 @@ func TestTrashedAndMissingAreNotFound(t *testing.T) {
 	l := e.list("L", nil)
 	for _, dest := range []string{tf, missing} {
 		wantProblem(t, e.call("POST", "/api/v1/folders", fmt.Sprintf(`{"name":"n","parent_folder_id":%q}`, dest), ""), 409, "destination_unavailable")
-		wantProblem(t, e.call("POST", "/api/v1/lists", fmt.Sprintf(`{"name":"n","folder_id":%q}`, dest), ""), 409, "destination_unavailable")
+		wantProblem(t, e.call("POST", "/api/v1/lists", fmt.Sprintf(`{"name":"n","kind":"generic","folder_id":%q}`, dest), ""), 409, "destination_unavailable")
 		wantProblem(t, e.call("POST", "/api/v1/folders/"+live["id"].(string)+"/move", fmt.Sprintf(`{"parent_folder_id":%q}`, dest), etagOf("f", live)), 409, "destination_unavailable")
 		wantProblem(t, e.call("POST", "/api/v1/lists/"+l["id"].(string)+"/move", fmt.Sprintf(`{"folder_id":%q}`, dest), etagOf("l", l)), 409, "destination_unavailable")
 	}
@@ -510,7 +523,6 @@ func TestFieldValidation(t *testing.T) {
 	f := e.folder("F", nil)
 	l := e.list("L", nil)
 	long := strings.Repeat("x", 201)
-	longDesc := strings.Repeat("d", 2001)
 
 	cases := []struct {
 		name, method, path, body, ifMatch string
@@ -520,11 +532,15 @@ func TestFieldValidation(t *testing.T) {
 		{"folder blank name", "POST", "/api/v1/folders", `{"name":"   "}`, "", []string{"name"}},
 		{"folder long name", "POST", "/api/v1/folders", `{"name":"` + long + `"}`, "", []string{"name"}},
 		{"folder rename blank", "PATCH", "/api/v1/folders/" + f["id"].(string), `{"name":" "}`, `"f-1"`, []string{"name"}},
-		{"list empty name", "POST", "/api/v1/lists", `{"name":""}`, "", []string{"name"}},
-		{"list bad enums", "POST", "/api/v1/lists", `{"name":"n","display_mode":"huge","sort_mode":"random"}`, "", []string{"display_mode", "sort_mode"}},
-		{"list long description", "POST", "/api/v1/lists", `{"name":"n","description":"` + longDesc + `"}`, "", []string{"description"}},
+		{"list empty name", "POST", "/api/v1/lists", `{"name":"","kind":"generic"}`, "", []string{"name"}},
+		{"list bad enums", "POST", "/api/v1/lists", `{"name":"n","kind":"generic","display_mode":"huge","sort_mode":"random"}`, "", []string{"display_mode", "sort_mode"}},
+		{"TestF007 list NUL in description", "POST", "/api/v1/lists", `{"name":"n","kind":"generic","description":"a\u0000b"}`, "", []string{"description"}},
 		{"list patch name and enum", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"name":"","display_mode":"x"}`, `"l-1"`, []string{"name", "display_mode"}},
-		{"list patch long description", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"description":"` + longDesc + `"}`, `"l-1"`, []string{"description"}},
+		{"TestF007 list patch NUL in description", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"description":"a\u0000b"}`, `"l-1"`, []string{"description"}},
+		{"TestF007 list unknown kind", "POST", "/api/v1/lists", `{"name":"n","kind":"book"}`, "", []string{"kind"}},
+		{"TestF007 list kind_key on generic", "POST", "/api/v1/lists", `{"name":"n","kind":"generic","sort_mode":"kind_key"}`, "", []string{"sort_mode"}},
+		{"TestF007 list patch unknown kind", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"kind":"book"}`, `"l-1"`, []string{"kind"}},
+		{"TestF007 list patch kind_key on generic", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"sort_mode":"kind_key"}`, `"l-1"`, []string{"sort_mode"}},
 		{"folder move without parent_folder_id", "POST", "/api/v1/folders/" + f["id"].(string) + "/move", `{}`, `"f-1"`, []string{"parent_folder_id"}},
 		{"list move without folder_id", "POST", "/api/v1/lists/" + l["id"].(string) + "/move", `{}`, `"l-1"`, []string{"folder_id"}},
 		{"folder reorder without parent", "PUT", "/api/v1/folders/order", `{"ids":[]}`, "", []string{"parent_folder_id"}},
@@ -573,5 +589,259 @@ func TestTreeShape(t *testing.T) {
 	got := e.tree("lists")
 	if len(got) != 3 || got[2]["name"] != "L2" {
 		t.Fatalf("lists = %v", names(got))
+	}
+}
+
+func TestF007_ListKindIsRequiredAndReturned(t *testing.T) {
+	e := newTreeEnv(t)
+	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"n"}`, ""), 422, "validation_failed")
+
+	l := e.listOfKind("Bikes", nil, "motorcycle")
+	if l["kind"] != "motorcycle" || e.fetch("lists", l["id"].(string))["kind"] != "motorcycle" {
+		t.Fatalf("kind not returned: %v", l)
+	}
+	found := false
+	for _, tl := range e.tree("lists") {
+		if tl["id"] == l["id"] {
+			found = tl["kind"] == "motorcycle"
+		}
+	}
+	if !found {
+		t.Error("GET /tree must show the list kind")
+	}
+	// Every known kind can be created; kind_key is only valid when the kind has a sort key.
+	for _, kind := range []string{"generic", "movie", "tv_show", "motorcycle", "car", "camera"} {
+		e.listOfKind("K "+kind, nil, kind)
+	}
+	for _, kind := range []string{"movie", "tv_show", "motorcycle", "car", "camera"} {
+		rec := e.call("POST", "/api/v1/lists", fmt.Sprintf(`{"name":"S %s","kind":%q,"sort_mode":"kind_key"}`, kind, kind), "")
+		wantStatus(t, rec, 201)
+		if decode(t, rec)["sort_mode"] != "kind_key" {
+			t.Errorf("%s: sort_mode not kept", kind)
+		}
+	}
+	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"S","kind":"generic","sort_mode":"kind_key"}`, ""), 422, "validation_failed")
+}
+
+func TestF007_ChangeListKindClearsItemMetadata(t *testing.T) {
+	e := newTreeEnv(t)
+	l := e.listOfKind("Films", nil, "movie")
+	lid := l["id"].(string)
+	it := e.newItem(lid, matrix)
+	other := e.newItem(e.listOfKind("Other films", nil, "movie")["id"].(string), matrix)
+	// A trashed item of the list has its metadata cleared too.
+	trashed := uuid.New()
+	e.exec(`INSERT INTO items (id, workspace_id, list_id, title, metadata, sort_order, deleted_at, trash_batch_id) VALUES ($1, $2, $3, 'gone', '{"release_year":1999}', 5, now(), $4)`,
+		trashed, e.ws, lid, e.trashBatch("item", trashed))
+
+	// The same kind is a no-op: no bump.
+	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"movie"}`, etagOf("l", l))
+	wantStatus(t, rec, 200)
+	if got := decode(t, rec); got["version"] != l["version"] || got["kind"] != "movie" {
+		t.Fatalf("same kind: %v", got)
+	}
+	if e.fetchItem(it["id"])["version"] != float64(1) {
+		t.Fatal("same kind touched the items")
+	}
+
+	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"car"}`, etagOf("l", l))
+	wantStatus(t, rec, 200)
+	changed := decode(t, rec)
+	if changed["kind"] != "car" || changed["version"].(float64) <= l["version"].(float64) || rec.Header().Get("ETag") != etagOf("l", changed) {
+		t.Fatalf("after kind change: %v etag=%s", changed, rec.Header().Get("ETag"))
+	}
+	got := e.fetchItem(it["id"])
+	if got["kind"] != "car" || !reflect.DeepEqual(got["metadata"], map[string]any{}) || got["version"] != float64(2) || got["title"] != "The Matrix" {
+		t.Fatalf("item after kind change: %v", got)
+	}
+	if got["website"] != "https://www.warnerbros.com/movies/matrix" || got["price"] == nil {
+		t.Errorf("only the kind fields are cleared, got %v", got)
+	}
+	var meta string
+	e.queryRow(`SELECT metadata::text FROM items WHERE id = $1`, []any{trashed}, &meta)
+	if meta != "{}" {
+		t.Errorf("trashed item metadata = %s, want {}", meta)
+	}
+	if o := e.fetchItem(other["id"]); o["kind"] != "movie" || o["version"] != float64(1) || len(o["metadata"].(map[string]any)) == 0 {
+		t.Errorf("an item of another list changed: %v", o)
+	}
+
+	// The item is validated against the new kind from now on.
+	wantProblem(t, e.patchItem(got, `{"metadata":{"release_year":1999}}`), 400, "unknown_field")
+	wantStatus(t, e.patchItem(got, `{"metadata":{"make":"VW","fuel_type":"electric"}}`), 200)
+
+	// A stale version still loses.
+	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"camera"}`, etagOf("l", l)), 412, "version_conflict")
+	// An unknown kind is a 422 and changes nothing.
+	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"book"}`, etagOf("l", changed)), 422, "validation_failed")
+	if cur := e.fetch("lists", lid); cur["kind"] != "car" || cur["version"] != changed["version"] {
+		t.Fatalf("rejected patch changed the list: %v", cur)
+	}
+}
+
+func TestF007_ListSortModeKindKeyFollowsTheKind(t *testing.T) {
+	e := newTreeEnv(t)
+	gen := e.list("Plain", nil)
+	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+gen["id"].(string), `{"sort_mode":"kind_key"}`, etagOf("l", gen)), 422, "validation_failed")
+
+	l := e.listOfKind("Bikes", nil, "motorcycle")
+	lid := l["id"].(string)
+	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"kind_key"}`, etagOf("l", l))
+	wantStatus(t, rec, 200)
+	l = decode(t, rec)
+	if l["sort_mode"] != "kind_key" {
+		t.Fatalf("sort_mode = %v", l["sort_mode"])
+	}
+
+	// Switching to another kind with a sort key keeps the mode.
+	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"car"}`, etagOf("l", l))
+	wantStatus(t, rec, 200)
+	l = decode(t, rec)
+	if l["kind"] != "car" || l["sort_mode"] != "kind_key" {
+		t.Fatalf("after car: %v", l)
+	}
+
+	// Switching to generic while sorting by the kind key is rejected, on the kind.
+	p := wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"generic"}`, etagOf("l", l)), 422, "validation_failed")
+	if len(p.Errors) != 1 || p.Errors[0].Field != "kind" {
+		t.Fatalf("errors = %+v, want one on kind", p.Errors)
+	}
+	// ...but not when the same PATCH also leaves kind_key.
+	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"generic","sort_mode":"title"}`, etagOf("l", l))
+	wantStatus(t, rec, 200)
+	if got := decode(t, rec); got["kind"] != "generic" || got["sort_mode"] != "title" {
+		t.Fatalf("got %v", got)
+	}
+	// ...and a kind and kind_key together on a generic list is rejected on the sort mode.
+	cur := e.fetch("lists", lid)
+	p = wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"generic","sort_mode":"kind_key"}`, etagOf("l", cur)), 422, "validation_failed")
+	if len(p.Errors) != 1 || p.Errors[0].Field != "sort_mode" {
+		t.Fatalf("errors = %+v, want one on sort_mode", p.Errors)
+	}
+}
+
+// descEnv returns a tree service on the env's database and a fresh generic list.
+func (e *treeEnv) descEnv() (*tree.Service, tree.List) {
+	e.t.Helper()
+	svc := tree.New(e.pool, clock.System{}, e.ws)
+	l, err := svc.CreateList(e.t.Context(), tree.CreateListInput{Name: "L", Kind: "generic"})
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return svc, l
+}
+
+func TestF007_ListDescriptionLimitIsBytes(t *testing.T) {
+	e := newTreeEnv(t)
+	svc, l := e.descEnv()
+	ctx := t.Context()
+	patch := func(v *string) tree.ListPatch {
+		return tree.ListPatch{Description: tree.Optional[string]{Set: true, Value: v}}
+	}
+	str := func(s string) *string { return &s }
+
+	tests := []struct {
+		name    string
+		desc    string
+		wantErr string // "", "413" or "422"
+	}{
+		{"exactly 65536 bytes", strings.Repeat("x", 65536), ""},
+		{"65537 bytes", strings.Repeat("x", 65537), "413"},
+		{"multi-byte counts bytes, not characters", strings.Repeat("é", 32769), "413"}, // 65538 bytes, 32769 runes
+		{"multi-byte at the limit", strings.Repeat("é", 32768), ""},                    // 65536 bytes
+		{"NUL", "a\x00b", "422"},
+		{"invalid UTF-8", "a\xffb", "422"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cur, err := svc.GetList(ctx, l.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = svc.UpdateList(ctx, l.ID, cur.Version, patch(str(tt.desc)))
+			var tooLarge *apperr.PayloadTooLargeError
+			var invalid *apperr.ValidationError
+			switch tt.wantErr {
+			case "":
+				if err != nil {
+					t.Fatalf("err = %v", err)
+				}
+			case "413":
+				if !errors.As(err, &tooLarge) || tooLarge.Limit != 65536 {
+					t.Fatalf("err = %v, want PayloadTooLarge(65536)", err)
+				}
+			case "422":
+				if !errors.As(err, &invalid) || invalid.Errors[0].Field != "description" {
+					t.Fatalf("err = %v, want validation error on description", err)
+				}
+			}
+		})
+	}
+
+	t.Run("create applies the same limit", func(t *testing.T) {
+		_, err := svc.CreateList(ctx, tree.CreateListInput{Name: "N", Kind: "generic", Description: str(strings.Repeat("x", 65537))})
+		var tooLarge *apperr.PayloadTooLargeError
+		if !errors.As(err, &tooLarge) {
+			t.Fatalf("err = %v, want PayloadTooLarge", err)
+		}
+		if _, err := svc.CreateList(ctx, tree.CreateListInput{Name: "N", Kind: "generic", Description: str(strings.Repeat("x", 65536))}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("over HTTP the stored markdown round-trips and 65537 bytes answer 413", func(t *testing.T) {
+		path := "/api/v1/lists/" + l.ID.String()
+		cur := e.fetch("lists", l.ID.String())
+		rec := e.call("PATCH", path, `{"description":"# Title\n\n- one\n- two"}`, etagOf("l", cur))
+		wantStatus(t, rec, 200)
+		if got := decode(t, rec)["description"]; got != "# Title\n\n- one\n- two" {
+			t.Fatalf("description = %q", got)
+		}
+		// The 64 KiB JSON body limit of the guard applies first, so the 413 is the same either way.
+		cur = e.fetch("lists", l.ID.String())
+		wantProblem(t, e.call("PATCH", path, `{"description":"`+strings.Repeat("x", 65537)+`"}`, etagOf("l", cur)), 413, "payload_too_large")
+	})
+}
+
+func TestF007_ListDescriptionVersioning(t *testing.T) {
+	e := newTreeEnv(t)
+	l := e.list("L", nil)
+	path := "/api/v1/lists/" + l["id"].(string)
+
+	// A change bumps the version.
+	rec := e.call("PATCH", path, `{"description":"hello"}`, `"l-1"`)
+	wantStatus(t, rec, 200)
+	if got := decode(t, rec); got["description"] != "hello" || got["version"].(float64) != 2 {
+		t.Fatalf("edit: %v", got)
+	}
+
+	// The same description again changes nothing: no bump, same ETag.
+	rec = e.call("PATCH", path, `{"description":"hello"}`, `"l-2"`)
+	wantStatus(t, rec, 200)
+	if got := decode(t, rec); got["version"].(float64) != 2 || rec.Header().Get("ETag") != `"l-2"` {
+		t.Fatalf("unchanged description bumped the version: %v / %s", got, rec.Header().Get("ETag"))
+	}
+
+	// A stale version conflicts, whatever the description.
+	p := wantProblem(t, e.call("PATCH", path, `{"description":"other"}`, `"l-1"`), 412, "version_conflict")
+	_ = p
+	if got := e.fetch("lists", l["id"].(string)); got["description"] != "hello" || got["version"].(float64) != 2 {
+		t.Fatalf("stale write changed the list: %v", got)
+	}
+	// A stale version conflicts even when the description is unchanged.
+	wantProblem(t, e.call("PATCH", path, `{"description":"hello"}`, `"l-1"`), 412, "version_conflict")
+
+	// Empty string and null both clear it.
+	for _, body := range []string{`{"description":""}`, `{"description":null}`} {
+		cur := e.fetch("lists", l["id"].(string))
+		if cur["description"] == nil {
+			wantStatus(t, e.call("PATCH", path, `{"description":"again"}`, etagOf("l", cur)), 200)
+			cur = e.fetch("lists", l["id"].(string))
+		}
+		rec = e.call("PATCH", path, body, etagOf("l", cur))
+		wantStatus(t, rec, 200)
+		if got := decode(t, rec); got["description"] != nil || got["version"].(float64) != cur["version"].(float64)+1 {
+			t.Fatalf("%s: %v", body, got)
+		}
 	}
 }

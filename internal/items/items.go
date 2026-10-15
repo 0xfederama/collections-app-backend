@@ -26,6 +26,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/clock"
 	"github.com/0xfederama/collections-app-backend/internal/database"
 	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/items/kinds"
 )
 
 // Page sizes of listItems (API.md §5).
@@ -61,15 +62,14 @@ func New(db DB, clk clock.Clock, workspaceID uuid.UUID) *Service {
 
 // Item is an item as the API shows it. Path is filled by Get only.
 type Item struct {
-	ID                 uuid.UUID
-	ListID             uuid.UUID
-	Title              string
-	Kind               string
-	Summary            *string
-	Status             *string
-	Image              *Image
-	Price              *Price
-	OfficialWebsiteURL *string
+	ID     uuid.UUID
+	ListID uuid.UUID
+	Title  string
+	// Kind is read-only: it is the kind of the item's list (F-007).
+	Kind    string
+	Image   *Image
+	Price   *Price
+	Website *string
 	// Metadata is the stored JSON object, already validated at write time.
 	Metadata       json.RawMessage
 	ContentVersion int
@@ -105,9 +105,13 @@ type PathSegment struct {
 	Name string
 }
 
+// ErrInvalidSort means sort=kind_key on a list whose kind has no sort key
+// (generic): the handler answers 400 invalid_parameter.
+var ErrInvalidSort = errors.New("items: kind_key sort is not available on this list")
+
 // ListParams are the query options of ListItems. Zero values mean the defaults.
 type ListParams struct {
-	Sort   string // manual, title or updated; "" = the list's sort_mode
+	Sort   string // manual, title, updated or kind_key; "" = the list's sort_mode
 	Q      string // case-insensitive title substring; "" = no filter
 	Limit  int
 	Offset int
@@ -180,12 +184,31 @@ func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (Ite
 		p.Offset = 0
 	}
 	like := escapeLike(p.Q)
-	rows, err := q.ListItems(ctx, sqlc.ListItemsParams{
-		ListID: listID, WorkspaceID: s.workspaceID, Q: like, Sort: p.Sort,
-		PageLimit: int32(p.Limit), PageOffset: int32(p.Offset), //nolint:gosec // bounded above
-	})
-	if err != nil {
-		return ItemPage{}, fmt.Errorf("list items: %w", err)
+	var rows []sqlc.ListItemsRow
+	if p.Sort == "kind_key" {
+		key, ok := kinds.SortKey(list.Kind)
+		if !ok {
+			return ItemPage{}, ErrInvalidSort
+		}
+		kr, err := q.ListItemsByKindKey(ctx, sqlc.ListItemsByKindKeyParams{
+			ListID: listID, WorkspaceID: s.workspaceID, Q: like, Key: key,
+			PageLimit: int32(p.Limit), PageOffset: int32(p.Offset), //nolint:gosec // bounded above
+		})
+		if err != nil {
+			return ItemPage{}, fmt.Errorf("list items by kind key: %w", err)
+		}
+		rows = make([]sqlc.ListItemsRow, 0, len(kr))
+		for _, r := range kr {
+			rows = append(rows, sqlc.ListItemsRow(r))
+		}
+	} else {
+		rows, err = q.ListItems(ctx, sqlc.ListItemsParams{
+			ListID: listID, WorkspaceID: s.workspaceID, Q: like, Sort: p.Sort,
+			PageLimit: int32(p.Limit), PageOffset: int32(p.Offset), //nolint:gosec // bounded above
+		})
+		if err != nil {
+			return ItemPage{}, fmt.Errorf("list items: %w", err)
+		}
 	}
 	total, err := q.CountItems(ctx, sqlc.CountItemsParams{ListID: listID, WorkspaceID: s.workspaceID, Q: like})
 	if err != nil {
@@ -227,8 +250,8 @@ func EscapeLike(q string) string { return escapeLike(q) }
 // itemFromRow is the one mapper from the read-model row to an Item.
 func itemFromRow(r sqlc.ListItemsRow) Item {
 	it := Item{
-		ID: r.ID, ListID: r.ListID, Title: r.Title, Kind: r.Kind, Summary: r.Summary, Status: r.Status,
-		Price: priceFromRow(r.PriceMin, r.PriceMax, r.Currency), OfficialWebsiteURL: r.OfficialWebsiteUrl,
+		ID: r.ID, ListID: r.ListID, Title: r.Title, Kind: r.Kind,
+		Price: priceFromRow(r.PriceMin, r.PriceMax, r.Currency), Website: r.WebsiteUrl,
 		Metadata: json.RawMessage(r.Metadata), ContentVersion: int(r.ContentVersion), SortOrder: int(r.SortOrder),
 		Version: int(r.Version), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}

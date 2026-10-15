@@ -19,7 +19,7 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 - `NewService(db *pgxpool.Pool) *Service`
 - `(*Service).Get(ctx, workspaceID) (Settings, error)`: `apperr.NotFound("settings")` if no row
 - `(*Service).Update(ctx, workspaceID, ifMatch int, p SettingsPatch) (Settings, error)`: 422 field errors, then 412 `apperr.VersionConflict` on a stale version
-- `Settings`: workspace name, streaming country, default currency, markdown history limit, version
+- `Settings`: workspace name, streaming country, markdown history limit, version
 - `SettingsPatch`: pointer fields; nil means "leave as is"
 
 ## Gotchas
@@ -31,3 +31,4 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 - A patch that changes nothing returns the current settings with no version bump.
 - A name change updates `workspaces.name` in the same transaction; it bumps `workspaces.version`, but the ETag stream is only `workspace_settings.version` (`"s-N"`).
 - `Update` writes in `database.InTx` and locks the settings row `FOR UPDATE`.
+- `default_currency` was removed in F-007 (migration 000002); the settings body no longer has it.

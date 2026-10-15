@@ -13,6 +13,7 @@ const (
 	CodeParentInTrash          Code = "parent_in_trash"
 	CodeDestinationUnavailable Code = "destination_unavailable"
 	CodeOrderStale             Code = "order_stale"
+	CodeKindMismatch           Code = "kind_mismatch"
 )
 
 // NotFoundError means the resource is missing or trashed.
@@ -85,6 +86,9 @@ func ParentInTrash(b BlockingParent) error {
 
 // DestinationUnavailable reports a move, restore or create target that is missing or trashed.
 func DestinationUnavailable() error { return &ConflictError{Code: CodeDestinationUnavailable} }
+
+// KindMismatch reports an item moved to a list of another kind (F-007).
+func KindMismatch() error { return &ConflictError{Code: CodeKindMismatch} }
 
 // OrderStale reports a reorder whose id set no longer matches the stored one.
 func OrderStale() error { return &ConflictError{Code: CodeOrderStale} }

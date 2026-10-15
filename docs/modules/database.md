@@ -10,6 +10,8 @@ Owns the PostgreSQL layer: the pgx connection pool, the transaction helper, the 
 - `internal/database/intx_test.go`: commit, rollback, panic and `NewPool` tests
 - `db/migrations/000001_init.up.sql`: pg_trgm extension and the 8 tables
 - `db/migrations/000001_init.down.sql`: drops everything (destructive)
+- `db/migrations/000002_restructure.{up,down}.sql`: F-007 data move and lossy restore (see gotchas)
+- `internal/database/migration_f007_test.go`: `TestF007_MigrationRestructure` fixture test for 000002
 - `db/queries/schema.sql`: smoke query, sqlc input
 - `db/queries/workspace.sql`: workspace bootstrap and settings queries (see `workspace` module)
 - `internal/testdb/testdb.go`: test-only shared testcontainers Postgres, `NewMigrated`, `Terminate`
@@ -31,6 +33,7 @@ Owns the PostgreSQL layer: the pgx connection pool, the transaction helper, the 
 - `InTx` re-panics after rolling back. Rollback uses `context.WithoutCancel`, so a cancelled ctx still rolls back. A failed rollback is joined into the returned error.
 - Multi-statement writes must go through `InTx` (ARCHITECTURE §2).
 - The down migration drops all tables and the pg_trgm extension, so it erases all data.
+- Migration 000002 is lossy on down: summary and status come back NULL, split lists stay split, and the default currency returns as EUR. Take a backup first.
 - `make check-generate` fails if regenerated files differ from the committed ones; run `make generate` and commit.
 - sqlc errors on an empty `db/queries` dir, which is why `schema.sql` exists.
 - sqlc fails on a recursive CTE whose outer SELECT filters with a plain `@param`: use `sqlc.arg(x)::uuid` and `UNION ALL` (see `folders.sql`). Put query comments after the `-- name:` line.

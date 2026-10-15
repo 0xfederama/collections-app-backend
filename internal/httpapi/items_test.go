@@ -572,8 +572,8 @@ func TestListItems(t *testing.T) {
 	t.Run("summary rows", func(t *testing.T) {
 		rows, _ := e.page(lid, "?sort=manual")
 		first := rows[0]
-		if _, has := first["metadata"]; has {
-			t.Error("ItemSummary must not carry metadata")
+		if m, ok := first["metadata"].(map[string]any); !ok || len(m) != 0 {
+			t.Errorf("ItemSummary metadata = %v, want {}", first["metadata"])
 		}
 		if first["id"] != banana["id"] || first["version"] != float64(2) || first["website"] != "https://touched.example" || first["kind"] != "generic" || first["image"] != nil || first["price"] != nil {
 			t.Fatalf("row = %v", first)

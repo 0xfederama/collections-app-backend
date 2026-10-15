@@ -4,7 +4,7 @@ MIGRATE_IMAGE := migrate/migrate:v4.20.1
 REDOCLY_VERSION := 2.63.0
 SHELLCHECK_IMAGE := koalaman/shellcheck:v0.11.0
 
-.PHONY: run test lint lint-api fmt fmt-check check check-generate check-compose check-docker lint-scripts test-backup smoke audit migrate migration generate reset-dev
+.PHONY: run test lint lint-api fmt fmt-check check check-generate check-compose check-docker lint-scripts test-backup smoke strip-images audit migrate migration generate reset-dev
 
 run: ## Run the API on the host (needs `docker compose up -d db` + compose.override.yaml, see README)
 	@test -f .env || { echo "missing .env: cp .env.example .env"; exit 1; }
@@ -42,6 +42,9 @@ test-backup: ## AT-17 backup/restore round trip on an isolated compose project (
 
 smoke: ## API smoke test over HTTP (curl, jq) against a running stack; API_URL defaults to http://localhost:8090 (./deploy/test up -d --fresh); not part of check
 	./scripts/smoke.sh
+
+strip-images: ## Remove EXIF/GPS/XMP metadata from already stored images (running compose stack; safe to re-run; not part of check)
+	docker compose exec api /app/api strip-images
 
 check: fmt-check lint lint-api lint-scripts check-generate test check-compose check-docker ## All local gates
 

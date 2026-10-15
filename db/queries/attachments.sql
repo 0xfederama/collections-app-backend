@@ -46,3 +46,16 @@ SELECT thumbnail_storage_key FROM attachments WHERE workspace_id = sqlc.arg(work
 SELECT a.id FROM attachments a
 WHERE a.workspace_id = @workspace_id AND a.created_at < @cutoff
   AND NOT EXISTS (SELECT 1 FROM items i WHERE i.image_attachment_id = a.id);
+
+-- name: ListAttachmentsForStrip :many
+-- Every original with the size and hash recorded for it, for the strip-images backfill.
+SELECT id, storage_key, media_type, size_bytes, sha256
+FROM attachments
+WHERE workspace_id = @workspace_id
+ORDER BY created_at, id;
+
+-- name: UpdateAttachmentFile :execrows
+-- Records the size and hash of an original rewritten without metadata.
+UPDATE attachments
+SET size_bytes = @size_bytes, sha256 = @sha256
+WHERE id = @id AND workspace_id = @workspace_id;

@@ -7,7 +7,7 @@
 - [content](modules/content.md): item Markdown content, versions, restore and retention
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
 - [httpapi](modules/httpapi.md): HTTP router, probes, settings, tree/folder/list/item/content handlers
-- [images](modules/images.md): item image upload/URL/delete, validation, thumbnails, serving, orphan sweeper
+- [images](modules/images.md): item image upload/URL/delete, metadata stripping (`strip-images` backfill), validation, thumbnails, serving, orphan sweeper
 - [items](modules/items.md): items CRUD, move and reorder, per-kind metadata validation (`items/kinds`)
 - [search](modules/search.md): item title search with folder and list paths (`GET /api/v1/search`) and recent items (`GET /api/v1/recent-items`)
 - [smoke](modules/smoke.md): HTTP smoke test over a running stack (`scripts/smoke.sh`, `make smoke`)

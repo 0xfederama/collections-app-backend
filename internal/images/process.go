@@ -26,6 +26,8 @@ const (
 
 // Processed is a validated upload with its thumbnail, ready to be stored.
 type Processed struct {
+	// Original is the upload without embedded metadata (EXIF, GPS, XMP, IPTC,
+	// comments), losslessly: see Strip. SHA256 is computed over these bytes.
 	Original  []byte
 	MediaType string // image/jpeg, image/png or image/webp
 	Ext       string // jpg, png or webp
@@ -47,6 +49,9 @@ type format struct {
 // the leading bytes, never from the filename or a client Content-Type. The
 // dimensions are read (image.DecodeConfig) before the pixels are decoded, so a
 // small file that expands to a huge bitmap is refused without allocating it.
+//
+// The stored original has its metadata removed (Strip), the thumbnail is
+// re-encoded from pixels and has none either.
 //
 // Errors are domain errors: 413 over 10 MiB, 415 for anything but JPEG, PNG
 // and WebP (SVG included), 422 for a corrupt file or one over 40 megapixels.
@@ -90,9 +95,14 @@ func Process(r io.Reader) (*Processed, error) {
 	if orientation >= 5 {
 		w, h = h, w
 	}
+	// The orientation was read from the upload above; Strip keeps it as the only EXIF tag.
+	clean, err := Strip(data, f.mediaType)
+	if err != nil {
+		return nil, invalidFile("is not a valid " + f.decoder + " image")
+	}
 	return &Processed{
-		Original: data, MediaType: f.mediaType, Ext: f.ext, Width: w, Height: h,
-		SHA256: sha256.Sum256(data), Thumbnail: thumb,
+		Original: clean, MediaType: f.mediaType, Ext: f.ext, Width: w, Height: h,
+		SHA256: sha256.Sum256(clean), Thumbnail: thumb,
 	}, nil
 }
 

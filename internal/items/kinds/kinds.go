@@ -1,5 +1,5 @@
 // Package kinds validates and normalizes item metadata per kind (DATA_MODEL
-// §2.1). It is pure Go: no database, no HTTP. Every key is optional, `null`
+// §2.1, trimmed by F-007). It is pure Go: no database, no HTTP. Every key is optional, `null`
 // means "key omitted", text is trimmed, and the enum-like values live here
 // (not in CHECK constraints) so a new value needs no migration.
 package kinds
@@ -84,46 +84,40 @@ var registry = map[string]schema{
 		"make":            text(defaultTextMax),
 		"model":           text(defaultTextMax),
 		"model_year":      intRange(1885, 2100),
-		"segment":         text(50),
 		"displacement_cc": intRange(1, 5000),
 		"power_hp":        decimalRange(0, 1000),
-		"torque_nm":       decimalRange(0, 1000),
-		"wet_weight_kg":   intRange(1, 1000),
-		"seat_height_mm":  intRange(300, 1200),
 		"license_class":   enum("AM", "A1", "A2", "A"),
 	}},
-	Car: {
-		fields: map[string]rule{
-			"make":              text(defaultTextMax),
-			"model":             text(defaultTextMax),
-			"trim":              text(defaultTextMax),
-			"model_year":        intRange(1885, 2100),
-			"body_type":         text(50),
-			"fuel_type":         enum("petrol", "diesel", "hybrid", "plugin_hybrid", "electric", "lpg", "cng", "hydrogen", "other"),
-			"transmission":      enum("manual", "automatic"),
-			"power_hp":          decimalRange(0, 2000),
-			"seats":             intRange(1, 9),
-			"electric_range_km": intRange(1, 2000),
-		},
-		cross: func(out map[string]any) []apperr.FieldError {
-			fuel, hasFuel := out["fuel_type"].(string)
-			_, hasRange := out["electric_range_km"]
-			if hasRange && hasFuel && fuel != "electric" && fuel != "plugin_hybrid" {
-				return []apperr.FieldError{{Field: "metadata.electric_range_km", Message: "is only allowed for electric and plugin_hybrid cars"}}
-			}
-			return nil
-		},
-	},
+	Car: {fields: map[string]rule{
+		"make":       text(defaultTextMax),
+		"model":      text(defaultTextMax),
+		"model_year": intRange(1885, 2100),
+		"fuel_type":  enum("petrol", "diesel", "hybrid", "plugin_hybrid", "electric", "lpg", "cng", "hydrogen", "other"),
+		"power_hp":   decimalRange(0, 2000),
+	}},
 	Camera: {fields: map[string]rule{
 		"make":          text(defaultTextMax),
 		"model":         text(defaultTextMax),
 		"release_year":  intRange(1900, 2100),
-		"camera_type":   enum("mirrorless", "dslr", "compact", "rangefinder", "medium_format", "film", "action", "other"),
 		"sensor_format": enum("full_frame", "aps_c", "micro_four_thirds", "one_inch", "medium_format", "film_35mm", "other"),
 		"megapixels":    decimalRange(0.1, 500),
-		"lens_mount":    text(50),
-		"weight_g":      intRange(1, 10000),
 	}},
+}
+
+// sortKeys is each kind's sort key, the metadata key of the kind_key sort mode (F-007).
+var sortKeys = map[string]string{
+	Movie:      "release_year",
+	TVShow:     "first_air_year",
+	Motorcycle: "displacement_cc",
+	Car:        "power_hp",
+	Camera:     "megapixels",
+}
+
+// SortKey returns the metadata key a list of this kind sorts by in kind_key
+// mode. ok is false for generic (and unknown kinds): they have no sort key.
+func SortKey(kind string) (key string, ok bool) {
+	key, ok = sortKeys[kind]
+	return key, ok
 }
 
 // Known reports whether kind is one of the six MVP kinds.

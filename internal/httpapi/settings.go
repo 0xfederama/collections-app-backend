@@ -24,7 +24,6 @@ func (s *Server) UpdateSettings(ctx context.Context, req oapi.UpdateSettingsRequ
 	updated, err := s.deps.Settings.Update(ctx, s.deps.WorkspaceID, IfMatchVersion(ctx), workspace.SettingsPatch{
 		WorkspaceName:        req.Body.WorkspaceName,
 		StreamingCountryCode: req.Body.StreamingCountryCode,
-		DefaultCurrency:      req.Body.DefaultCurrency,
 		MarkdownHistoryLimit: req.Body.MarkdownHistoryLimit,
 	})
 	if err != nil {
@@ -40,7 +39,6 @@ func settingsBody(s workspace.Settings) oapi.Settings {
 	return oapi.Settings{
 		WorkspaceName:        s.WorkspaceName,
 		StreamingCountryCode: s.StreamingCountryCode,
-		DefaultCurrency:      s.DefaultCurrency,
 		MarkdownHistoryLimit: s.MarkdownHistoryLimit,
 		Version:              s.Version,
 	}

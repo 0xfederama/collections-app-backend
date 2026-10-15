@@ -10,11 +10,13 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/database"
 	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/items/kinds"
 )
 
-// CreateListInput is a new list. Empty DisplayMode / SortMode take the defaults.
+// CreateListInput is a new list. Kind is required. Empty DisplayMode / SortMode take the defaults.
 type CreateListInput struct {
 	Name        string
+	Kind        string
 	FolderID    *uuid.UUID
 	Description *string
 	DisplayMode string
@@ -24,13 +26,14 @@ type CreateListInput struct {
 // ListPatch is a partial list update; absent fields stay as they are.
 type ListPatch struct {
 	Name        *string
+	Kind        *string
 	Description Optional[string]
 	DisplayMode *string
 	SortMode    *string
 }
 
 func (p ListPatch) empty() bool {
-	return p.Name == nil && !p.Description.Set && p.DisplayMode == nil && p.SortMode == nil
+	return p.Name == nil && p.Kind == nil && !p.Description.Set && p.DisplayMode == nil && p.SortMode == nil
 }
 
 // CreateList appends a list after its active siblings. A missing or trashed
@@ -43,6 +46,10 @@ func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, err
 		in.SortMode = DefaultSortMode
 	}
 	name, errs := validateListFields(&in.Name, in.Description, &in.DisplayMode, &in.SortMode)
+	errs = append(errs, kindErrors(&in.Kind)...)
+	if kinds.Known(in.Kind) {
+		errs = append(errs, sortKindErrors(in.Kind, in.SortMode, "sort_mode")...)
+	}
 	if err := validate(errs); err != nil {
 		return List{}, err
 	}
@@ -59,7 +66,7 @@ func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, err
 			return fmt.Errorf("next list sort order: %w", err)
 		}
 		row, err := q.InsertList(ctx, sqlc.InsertListParams{
-			WorkspaceID: s.workspaceID, FolderID: nullUUID(in.FolderID), Name: name, Description: in.Description,
+			WorkspaceID: s.workspaceID, FolderID: nullUUID(in.FolderID), Name: name, Kind: in.Kind, Description: in.Description,
 			DisplayMode: in.DisplayMode, SortMode: in.SortMode, SortOrder: next, Now: s.now(),
 		})
 		if err != nil {
@@ -103,6 +110,13 @@ func (s *Service) getList(ctx context.Context, id uuid.UUID, withPath bool) (Lis
 
 // UpdateList applies a partial update. An empty patch changes nothing and does
 // not bump the version. version is the caller's If-Match version.
+//
+// A kind that differs from the stored one (F-007) takes the tree lock first
+// (same order as every structural write: tree lock, then the row lock), then
+// updates the list and clears the metadata of all its items, trashed ones
+// included, in the same transaction. A kind equal to the stored one is a no-op.
+// kind_key sorting is rejected (422 sort_mode) on a generic list, and a change to
+// generic of a kind_key list is rejected too (422 kind).
 func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p ListPatch) (List, error) {
 	var errs []apperr.FieldError
 	if p.Name != nil {
@@ -116,10 +130,21 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		errs = append(errs, descriptionErrors(*p.Description.Value)...)
 	}
 	errs = append(errs, enumErrors(p.DisplayMode, p.SortMode)...)
+	if p.Kind != nil {
+		errs = append(errs, kindErrors(p.Kind)...)
+		if p.SortMode != nil && kinds.Known(*p.Kind) {
+			errs = append(errs, sortKindErrors(*p.Kind, *p.SortMode, "sort_mode")...)
+		}
+	}
 	if err := validate(errs); err != nil {
 		return List{}, err
 	}
 	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
+		if p.Kind != nil {
+			if err := s.lockTree(ctx, q); err != nil {
+				return err
+			}
+		}
 		cur, err := q.LockList(ctx, sqlc.LockListParams{ID: id, WorkspaceID: s.workspaceID})
 		if err != nil {
 			return notFoundOr(err, "list")
@@ -127,7 +152,36 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		if int(cur.Version) != version {
 			return apperr.VersionConflict(int(cur.Version))
 		}
-		if p.empty() {
+		kindChanged := p.Kind != nil && *p.Kind != cur.Kind
+		fieldsSet := p.Name != nil || p.Description.Set || p.DisplayMode != nil || p.SortMode != nil
+		if !kindChanged && !fieldsSet {
+			return nil
+		}
+		if kindChanged {
+			// The sort mode that applies after the PATCH must still exist for the new kind.
+			sortMode := cur.SortMode
+			if p.SortMode != nil {
+				sortMode = *p.SortMode
+			}
+			field := "kind"
+			if p.SortMode != nil {
+				field = "sort_mode"
+			}
+			if errs := sortKindErrors(*p.Kind, sortMode, field); len(errs) > 0 {
+				return apperr.Validation(errs...)
+			}
+			if _, err := q.UpdateListKind(ctx, sqlc.UpdateListKindParams{Kind: *p.Kind, Now: s.now(), ID: id, WorkspaceID: s.workspaceID}); err != nil {
+				return fmt.Errorf("update list kind: %w", err)
+			}
+			if _, err := q.ClearListItemsMetadata(ctx, sqlc.ClearListItemsMetadataParams{Now: s.now(), ListID: id, WorkspaceID: s.workspaceID}); err != nil {
+				return fmt.Errorf("clear items metadata: %w", err)
+			}
+		} else if p.SortMode != nil {
+			if errs := sortKindErrors(cur.Kind, *p.SortMode, "sort_mode"); len(errs) > 0 {
+				return apperr.Validation(errs...)
+			}
+		}
+		if !fieldsSet {
 			return nil
 		}
 		arg := sqlc.UpdateListParams{
@@ -230,6 +284,25 @@ func validateListFields(name *string, description *string, displayMode, sortMode
 	return clean, errs
 }
 
+// kindErrors checks a supplied kind: it must be one of the known kinds.
+func kindErrors(kind *string) []apperr.FieldError {
+	if kind == nil || !kinds.Known(*kind) {
+		return []apperr.FieldError{{Field: "kind", Message: "must be one of generic, movie, tv_show, motorcycle, car, camera"}}
+	}
+	return nil
+}
+
+// sortKindErrors rejects the kind_key sort mode on a kind without a sort key.
+func sortKindErrors(kind, sortMode, field string) []apperr.FieldError {
+	if sortMode != "kind_key" {
+		return nil
+	}
+	if _, ok := kinds.SortKey(kind); !ok {
+		return []apperr.FieldError{{Field: field, Message: "kind_key is not available on lists of this kind"}}
+	}
+	return nil
+}
+
 func descriptionErrors(d string) []apperr.FieldError {
 	if utf8.RuneCountInString(d) > maxDescriptionLen {
 		return []apperr.FieldError{{Field: "description", Message: fmt.Sprintf("must be at most %d characters", maxDescriptionLen)}}
@@ -243,7 +316,7 @@ func enumErrors(displayMode, sortMode *string) []apperr.FieldError {
 		errs = append(errs, apperr.FieldError{Field: "display_mode", Message: "must be one of compact, thumbnail, grid"})
 	}
 	if sortMode != nil && !sortModes[*sortMode] {
-		errs = append(errs, apperr.FieldError{Field: "sort_mode", Message: "must be one of manual, title, updated"})
+		errs = append(errs, apperr.FieldError{Field: "sort_mode", Message: "must be one of manual, title, updated, kind_key"})
 	}
 	return errs
 }

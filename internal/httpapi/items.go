@@ -40,12 +40,9 @@ func (s *Server) ListItems(ctx context.Context, r oapi.ListItemsRequestObject) (
 func (s *Server) CreateItem(ctx context.Context, r oapi.CreateItemRequestObject) (oapi.CreateItemResponseObject, error) {
 	b := r.Body
 	in := items.CreateInput{
-		Title:              b.Title,
-		Kind:               derefOr(b.Kind),
-		Summary:            optionalString(b.Summary).Value,
-		Status:             optionalString(b.Status).Value,
-		Price:              optionalPrice(b.Price).Value,
-		OfficialWebsiteURL: optionalString(b.OfficialWebsiteUrl).Value,
+		Title:   b.Title,
+		Price:   optionalPrice(b.Price).Value,
+		Website: optionalString(b.Website).Value,
 	}
 	if b.Metadata != nil {
 		in.Metadata = *b.Metadata
@@ -79,12 +76,9 @@ func (s *Server) GetItem(ctx context.Context, r oapi.GetItemRequestObject) (oapi
 func (s *Server) UpdateItem(ctx context.Context, r oapi.UpdateItemRequestObject) (oapi.UpdateItemResponseObject, error) {
 	b := r.Body
 	patch := items.Patch{
-		Title:              b.Title,
-		Kind:               b.Kind,
-		Summary:            optionalString(b.Summary),
-		Status:             optionalString(b.Status),
-		Price:              optionalPrice(b.Price),
-		OfficialWebsiteURL: optionalString(b.OfficialWebsiteUrl),
+		Title:   b.Title,
+		Price:   optionalPrice(b.Price),
+		Website: optionalString(b.Website),
 	}
 	if b.Metadata != nil {
 		patch.Metadata = *b.Metadata
@@ -126,7 +120,7 @@ func itemETag(it items.Item) string { return etag.Format(etag.Item, it.Version) 
 
 // optionalPrice turns the nullable price of a request into an Optional: absent
 // is not Set, `null` is Set with a nil Value (clear the price).
-func optionalPrice(n nullable.Nullable[oapi.Price]) tree.Optional[items.Price] {
+func optionalPrice(n nullable.Nullable[oapi.PriceInput]) tree.Optional[items.Price] {
 	if !n.IsSpecified() {
 		return tree.Optional[items.Price]{}
 	}
@@ -134,7 +128,7 @@ func optionalPrice(n nullable.Nullable[oapi.Price]) tree.Optional[items.Price] {
 	if err != nil {
 		return tree.Optional[items.Price]{Set: true}
 	}
-	out := items.Price{Currency: p.Currency}
+	out := items.Price{Currency: p.Currency, Amount: p.Amount}
 	if v, err := p.Min.Get(); err == nil {
 		out.Min = &v
 	}
@@ -186,8 +180,8 @@ func itemBody(it items.Item) (oapi.Item, error) {
 		return oapi.Item{}, err
 	}
 	base := oapi.ItemBase{
-		Id: it.ID, ListId: it.ListID, Title: it.Title, Summary: nullableString(it.Summary), Status: nullableString(it.Status),
-		Image: image, Price: priceBody(it.Price), OfficialWebsiteUrl: nullableString(it.OfficialWebsiteURL),
+		Id: it.ID, ListId: it.ListID, Title: it.Title,
+		Image: image, Price: priceBody(it.Price), Website: nullableString(it.Website),
 		ContentVersion: it.ContentVersion, SortOrder: it.SortOrder, Version: it.Version,
 		CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt,
 	}
@@ -212,8 +206,7 @@ func itemBody(it items.Item) (oapi.Item, error) {
 func itemSummaryBody(it items.Item) oapi.ItemSummary {
 	out := oapi.ItemSummary{
 		Id: it.ID, ListId: it.ListID, Title: it.Title, Kind: oapi.ItemKind(it.Kind),
-		Summary: nullableString(it.Summary), Status: nullableString(it.Status), Price: priceBody(it.Price),
-		OfficialWebsiteUrl: nullableString(it.OfficialWebsiteURL), ContentVersion: it.ContentVersion,
+		Price: priceBody(it.Price), Website: nullableString(it.Website), ContentVersion: it.ContentVersion,
 		SortOrder: it.SortOrder, Version: it.Version, CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt,
 		Image: nullable.NewNullNullable[oapi.ImageSummary](),
 	}

@@ -61,15 +61,14 @@ func New(db DB, clk clock.Clock, workspaceID uuid.UUID) *Service {
 
 // Item is an item as the API shows it. Path is filled by Get only.
 type Item struct {
-	ID                 uuid.UUID
-	ListID             uuid.UUID
-	Title              string
-	Kind               string
-	Summary            *string
-	Status             *string
-	Image              *Image
-	Price              *Price
-	OfficialWebsiteURL *string
+	ID     uuid.UUID
+	ListID uuid.UUID
+	Title  string
+	// Kind is read-only: it is the kind of the item's list (F-007).
+	Kind    string
+	Image   *Image
+	Price   *Price
+	Website *string
 	// Metadata is the stored JSON object, already validated at write time.
 	Metadata       json.RawMessage
 	ContentVersion int
@@ -227,8 +226,8 @@ func EscapeLike(q string) string { return escapeLike(q) }
 // itemFromRow is the one mapper from the read-model row to an Item.
 func itemFromRow(r sqlc.ListItemsRow) Item {
 	it := Item{
-		ID: r.ID, ListID: r.ListID, Title: r.Title, Kind: r.Kind, Summary: r.Summary, Status: r.Status,
-		Price: priceFromRow(r.PriceMin, r.PriceMax, r.Currency), OfficialWebsiteURL: r.OfficialWebsiteUrl,
+		ID: r.ID, ListID: r.ListID, Title: r.Title, Kind: r.Kind,
+		Price: priceFromRow(r.PriceMin, r.PriceMax, r.Currency), Website: r.WebsiteUrl,
 		Metadata: json.RawMessage(r.Metadata), ContentVersion: int(r.ContentVersion), SortOrder: int(r.SortOrder),
 		Version: int(r.Version), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}

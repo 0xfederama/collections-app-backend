@@ -21,7 +21,6 @@ import (
 type Settings struct {
 	WorkspaceName        string
 	StreamingCountryCode string
-	DefaultCurrency      string
 	MarkdownHistoryLimit int
 	Version              int
 }
@@ -30,7 +29,6 @@ type Settings struct {
 type SettingsPatch struct {
 	WorkspaceName        *string
 	StreamingCountryCode *string
-	DefaultCurrency      *string
 	MarkdownHistoryLimit *int
 }
 
@@ -93,7 +91,6 @@ func (s *Service) Update(ctx context.Context, workspaceID uuid.UUID, ifMatch int
 		err = q.UpdateSettings(ctx, sqlc.UpdateSettingsParams{
 			WorkspaceID:          workspaceID,
 			StreamingCountryCode: next.StreamingCountryCode,
-			DefaultCurrency:      next.DefaultCurrency,
 			MarkdownHistoryLimit: int32(next.MarkdownHistoryLimit),
 		})
 		if err != nil {
@@ -121,9 +118,6 @@ func (p SettingsPatch) validate() (SettingsPatch, error) {
 	}
 	if p.StreamingCountryCode != nil && !isUpperAlpha(*p.StreamingCountryCode, 2) {
 		errs = append(errs, apperr.FieldError{Field: "streaming_country_code", Message: "must be 2 uppercase letters (ISO 3166-1 alpha-2)"})
-	}
-	if p.DefaultCurrency != nil && !isUpperAlpha(*p.DefaultCurrency, 3) {
-		errs = append(errs, apperr.FieldError{Field: "default_currency", Message: "must be 3 uppercase letters (ISO 4217)"})
 	}
 	if p.MarkdownHistoryLimit != nil && (*p.MarkdownHistoryLimit < 0 || *p.MarkdownHistoryLimit > 200) {
 		errs = append(errs, apperr.FieldError{Field: "markdown_history_limit", Message: "must be between 0 and 200"})
@@ -154,9 +148,6 @@ func (p SettingsPatch) applyTo(s Settings) Settings {
 	if p.StreamingCountryCode != nil {
 		s.StreamingCountryCode = *p.StreamingCountryCode
 	}
-	if p.DefaultCurrency != nil {
-		s.DefaultCurrency = *p.DefaultCurrency
-	}
 	if p.MarkdownHistoryLimit != nil {
 		s.MarkdownHistoryLimit = *p.MarkdownHistoryLimit
 	}
@@ -164,9 +155,9 @@ func (p SettingsPatch) applyTo(s Settings) Settings {
 }
 
 func fromGetRow(r sqlc.GetSettingsRow) Settings {
-	return Settings{r.WorkspaceName, r.StreamingCountryCode, r.DefaultCurrency, int(r.MarkdownHistoryLimit), int(r.Version)}
+	return Settings{r.WorkspaceName, r.StreamingCountryCode, int(r.MarkdownHistoryLimit), int(r.Version)}
 }
 
 func fromLockRow(r sqlc.LockSettingsRow) Settings {
-	return Settings{r.WorkspaceName, r.StreamingCountryCode, r.DefaultCurrency, int(r.MarkdownHistoryLimit), int(r.Version)}
+	return Settings{r.WorkspaceName, r.StreamingCountryCode, int(r.MarkdownHistoryLimit), int(r.Version)}
 }

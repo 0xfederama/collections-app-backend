@@ -22,68 +22,60 @@ import (
 
 // Field limits of DATA_MODEL §2 (the same rules are CHECK constraints).
 const (
-	maxTitleLen   = 300
-	maxSummaryLen = 1000
-	maxStatusLen  = 100
-	maxURLLen     = 2048
+	maxTitleLen = 300
+	maxURLLen   = 2048
 )
 
-// CreateInput is a new item. An empty Kind is generic; nil Metadata is {}.
+// CreateInput is a new item. Its kind is the kind of the list; nil Metadata is {}.
 type CreateInput struct {
-	Title              string
-	Kind               string
-	Summary            *string
-	Status             *string
-	Price              *Price
-	OfficialWebsiteURL *string
-	Metadata           map[string]any
+	Title    string
+	Price    *Price
+	Website  *string
+	Metadata map[string]any
 }
 
 // Patch is a partial item update; absent fields stay as they are. A nil
 // Metadata is absent, an empty map replaces the metadata with {}.
 type Patch struct {
-	Title              *string
-	Kind               *string
-	Summary            tree.Optional[string]
-	Status             tree.Optional[string]
-	Price              tree.Optional[Price]
-	OfficialWebsiteURL tree.Optional[string]
-	Metadata           map[string]any
+	Title    *string
+	Price    tree.Optional[Price]
+	Website  tree.Optional[string]
+	Metadata map[string]any
 }
 
 // Create appends an item to an active list (404 otherwise).
 func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) (Item, error) {
-	if in.Kind == "" {
-		in.Kind = kinds.Generic
-	}
 	var errs []apperr.FieldError
 	title, fe := cleanText("title", in.Title, 1, maxTitleLen)
 	errs = appendIf(errs, fe)
-	summary, errs := optionalText(errs, "summary", in.Summary, maxSummaryLen)
-	status, errs := optionalText(errs, "status", in.Status, maxStatusLen)
-	website, errs := optionalWebsite(errs, in.OfficialWebsiteURL)
+	website, errs := optionalWebsite(errs, in.Website)
 	if in.Price != nil {
 		errs = append(errs, validatePrice(in.Price)...)
 	}
-	meta, merrs, err := validateMetadata(in.Kind, in.Metadata)
-	if err != nil {
+	// Field rules first (422), then the list and its kind (404), then the kind's metadata rules.
+	if err := validate(errs); err != nil {
 		return Item{}, err
-	}
-	if err := validate(append(errs, merrs...)); err != nil {
-		return Item{}, err
-	}
-	metaJSON, err := json.Marshal(meta)
-	if err != nil {
-		return Item{}, fmt.Errorf("encode metadata: %w", err)
 	}
 
 	var id uuid.UUID
-	err = database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
+	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
 		if err := s.lockTree(ctx, q); err != nil {
 			return err
 		}
-		if _, err := q.GetActiveListForItems(ctx, sqlc.GetActiveListForItemsParams{ID: listID, WorkspaceID: s.workspaceID}); err != nil {
+		list, err := q.GetActiveListForItems(ctx, sqlc.GetActiveListForItemsParams{ID: listID, WorkspaceID: s.workspaceID})
+		if err != nil {
 			return notFoundOr(err, "list")
+		}
+		meta, merrs, err := validateMetadata(list.Kind, in.Metadata)
+		if err != nil {
+			return err
+		}
+		if err := validate(merrs); err != nil {
+			return err
+		}
+		metaJSON, err := json.Marshal(meta)
+		if err != nil {
+			return fmt.Errorf("encode metadata: %w", err)
 		}
 		next, err := q.NextItemSortOrder(ctx, sqlc.NextItemSortOrderParams{ListID: listID, WorkspaceID: s.workspaceID})
 		if err != nil {
@@ -91,8 +83,8 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 		}
 		priceMin, priceMax, currency := priceColumns(in.Price)
 		id, err = q.InsertItem(ctx, sqlc.InsertItemParams{
-			WorkspaceID: s.workspaceID, ListID: listID, Title: title, Kind: in.Kind, Summary: summary, Status: status,
-			PriceMin: priceMin, PriceMax: priceMax, Currency: currency, OfficialWebsiteUrl: website,
+			WorkspaceID: s.workspaceID, ListID: listID, Title: title,
+			PriceMin: priceMin, PriceMax: priceMax, Currency: currency, WebsiteUrl: website,
 			Metadata: metaJSON, SortOrder: next, Now: s.now(),
 		})
 		if err != nil {
@@ -108,8 +100,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 
 // Update applies a partial update. version is the caller's If-Match version.
 // Errors in order: field rules (422), NotFound, VersionConflict, then the
-// kind-dependent metadata rules. A patch that changes nothing does not bump the version (D-059).
-// Changing kind without metadata resets metadata to {}.
+// metadata rules of the list's kind. A patch that changes nothing does not bump the version (D-059).
 func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch) (Item, error) {
 	var errs []apperr.FieldError
 	if p.Title != nil {
@@ -117,14 +108,9 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 		p.Title = &title
 		errs = appendIf(errs, fe)
 	}
-	if p.Kind != nil && !kinds.Known(*p.Kind) {
-		errs = append(errs, apperr.FieldError{Field: "kind", Message: "is not a known item kind"})
-	}
-	p.Summary, errs = patchText(errs, "summary", p.Summary, maxSummaryLen)
-	p.Status, errs = patchText(errs, "status", p.Status, maxStatusLen)
-	if p.OfficialWebsiteURL.Set && p.OfficialWebsiteURL.Value != nil {
-		site, fe := cleanWebsite(*p.OfficialWebsiteURL.Value)
-		p.OfficialWebsiteURL.Value = &site
+	if p.Website.Set && p.Website.Value != nil {
+		site, fe := cleanWebsite(*p.Website.Value)
+		p.Website.Value = &site
 		errs = appendIf(errs, fe)
 	}
 	if p.Price.Set && p.Price.Value != nil {
@@ -142,7 +128,11 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 		if int(cur.Version) != version {
 			return apperr.VersionConflict(int(cur.Version))
 		}
-		arg, changed, err := mergePatch(cur, p)
+		list, err := q.GetActiveListForItems(ctx, sqlc.GetActiveListForItemsParams{ID: cur.ListID, WorkspaceID: s.workspaceID})
+		if err != nil {
+			return notFoundOr(err, "list")
+		}
+		arg, changed, err := mergePatch(cur, list.Kind, p)
 		if err != nil {
 			return err
 		}
@@ -162,41 +152,26 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 }
 
 // mergePatch applies a validated patch to the locked row. It returns the full
-// replacement values and whether anything differs from the stored row.
-func mergePatch(cur sqlc.Item, p Patch) (sqlc.UpdateItemParams, bool, error) {
+// replacement values and whether anything differs from the stored row. kind is
+// the kind of the item's list, which the metadata is validated against.
+func mergePatch(cur sqlc.Item, kind string, p Patch) (sqlc.UpdateItemParams, bool, error) {
 	arg := sqlc.UpdateItemParams{
-		Title: cur.Title, Kind: cur.Kind, Summary: cur.Summary, Status: cur.Status,
+		Title:    cur.Title,
 		PriceMin: cur.PriceMin, PriceMax: cur.PriceMax, Currency: cur.Currency,
-		OfficialWebsiteUrl: cur.OfficialWebsiteUrl, Metadata: cur.Metadata,
+		WebsiteUrl: cur.WebsiteUrl, Metadata: cur.Metadata,
 	}
 	changed := false
 	if p.Title != nil && *p.Title != cur.Title {
 		arg.Title, changed = *p.Title, true
 	}
-	if p.Summary.Set && !equalPtr(p.Summary.Value, cur.Summary) {
-		arg.Summary, changed = p.Summary.Value, true
-	}
-	if p.Status.Set && !equalPtr(p.Status.Value, cur.Status) {
-		arg.Status, changed = p.Status.Value, true
-	}
-	if p.OfficialWebsiteURL.Set && !equalPtr(p.OfficialWebsiteURL.Value, cur.OfficialWebsiteUrl) {
-		arg.OfficialWebsiteUrl, changed = p.OfficialWebsiteURL.Value, true
+	if p.Website.Set && !equalPtr(p.Website.Value, cur.WebsiteUrl) {
+		arg.WebsiteUrl, changed = p.Website.Value, true
 	}
 	if p.Price.Set && !samePrice(p.Price.Value, priceFromRow(cur.PriceMin, cur.PriceMax, cur.Currency)) {
 		arg.PriceMin, arg.PriceMax, arg.Currency = priceColumns(p.Price.Value)
 		changed = true
 	}
-
-	kind := cur.Kind
-	if p.Kind != nil {
-		kind = *p.Kind
-	}
-	if kind != cur.Kind {
-		arg.Kind, changed = kind, true
-	}
-	var meta []byte
-	switch {
-	case p.Metadata != nil:
+	if p.Metadata != nil {
 		clean, merrs, err := validateMetadata(kind, p.Metadata)
 		if err != nil {
 			return arg, false, err
@@ -204,20 +179,20 @@ func mergePatch(cur sqlc.Item, p Patch) (sqlc.UpdateItemParams, bool, error) {
 		if len(merrs) > 0 {
 			return arg, false, apperr.Validation(merrs...)
 		}
-		if meta, err = json.Marshal(clean); err != nil {
+		meta, err := json.Marshal(clean)
+		if err != nil {
 			return arg, false, fmt.Errorf("encode metadata: %w", err)
 		}
-	case kind != cur.Kind:
-		meta = []byte("{}")
-	}
-	if meta != nil && !sameJSON(meta, cur.Metadata) {
-		arg.Metadata, changed = meta, true
+		if !sameJSON(meta, cur.Metadata) {
+			arg.Metadata, changed = meta, true
+		}
 	}
 	return arg, changed, nil
 }
 
 // Move appends an item to the end of another active list. Errors in order:
-// NotFound, VersionConflict, DestinationUnavailable.
+// NotFound, VersionConflict, DestinationUnavailable, KindMismatch (the
+// destination list has another kind than the item's current list, F-007).
 func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, dest uuid.UUID) (Item, error) {
 	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
 		if err := s.lockTree(ctx, q); err != nil {
@@ -230,11 +205,19 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, dest uuid
 		if int(cur.Version) != version {
 			return apperr.VersionConflict(int(cur.Version))
 		}
-		if _, err := q.GetActiveListForItems(ctx, sqlc.GetActiveListForItemsParams{ID: dest, WorkspaceID: s.workspaceID}); err != nil {
+		destList, err := q.GetActiveListForItems(ctx, sqlc.GetActiveListForItemsParams{ID: dest, WorkspaceID: s.workspaceID})
+		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return apperr.DestinationUnavailable()
 			}
 			return fmt.Errorf("destination list: %w", err)
+		}
+		srcList, err := q.GetActiveListForItems(ctx, sqlc.GetActiveListForItemsParams{ID: cur.ListID, WorkspaceID: s.workspaceID})
+		if err != nil {
+			return notFoundOr(err, "list")
+		}
+		if destList.Kind != srcList.Kind {
+			return apperr.KindMismatch()
 		}
 		next, err := q.NextItemSortOrder(ctx, sqlc.NextItemSortOrderParams{ListID: dest, WorkspaceID: s.workspaceID})
 		if err != nil {
@@ -330,13 +313,6 @@ func optionalText(errs []apperr.FieldError, field string, in *string, maxLen int
 	return &s, appendIf(errs, fe)
 }
 
-func patchText(errs []apperr.FieldError, field string, in tree.Optional[string], maxLen int) (tree.Optional[string], []apperr.FieldError) {
-	if in.Set && in.Value != nil {
-		in.Value, errs = optionalText(errs, field, in.Value, maxLen)
-	}
-	return in, errs
-}
-
 func optionalWebsite(errs []apperr.FieldError, in *string) (*string, []apperr.FieldError) {
 	if in == nil {
 		return nil, errs
@@ -350,7 +326,7 @@ func optionalWebsite(errs []apperr.FieldError, in *string) (*string, []apperr.Fi
 func cleanWebsite(s string) (string, *apperr.FieldError) {
 	s = strings.TrimSpace(s)
 	bad := func(msg string) (string, *apperr.FieldError) {
-		return s, &apperr.FieldError{Field: "official_website_url", Message: msg}
+		return s, &apperr.FieldError{Field: "website", Message: msg}
 	}
 	if utf8.RuneCountInString(s) > maxURLLen {
 		return bad(fmt.Sprintf("must be at most %d characters", maxURLLen))
@@ -373,7 +349,8 @@ func samePrice(a, b *Price) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
-	return equalPtr(a.Min, b.Min) && equalPtr(a.Max, b.Max) && a.Currency == b.Currency
+	na, nb := a.normalized(), b.normalized()
+	return equalPtr(na.Min, nb.Min) && equalPtr(na.Max, nb.Max) && na.Currency == nb.Currency
 }
 
 // sameJSON compares two JSON documents by value (key order, spacing and

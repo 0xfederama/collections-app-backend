@@ -41,6 +41,11 @@ func listBody(l tree.List) oapi.List {
 		DisplayMode: oapi.DisplayMode(l.DisplayMode), SortMode: oapi.SortMode(l.SortMode),
 		SortOrder: l.SortOrder, ItemCount: l.ItemCount, Version: l.Version, CreatedAt: l.CreatedAt, UpdatedAt: l.UpdatedAt,
 	}
+	out.PinnedFields = nullable.NewNullNullable[oapi.PinnedFields]()
+	if l.PinnedFields != nil {
+		under, right := l.PinnedFields.Under, l.PinnedFields.Right
+		out.PinnedFields = nullable.NewNullableWithValue(oapi.PinnedFields{Under: &under, Right: &right})
+	}
 	if l.Path != nil {
 		path := make([]oapi.PathSegment, 0, len(l.Path))
 		for _, p := range l.Path {
@@ -92,6 +97,25 @@ func optionalString(n nullable.Nullable[string]) tree.Optional[string] {
 		return tree.Optional[string]{Set: true, Value: &v}
 	}
 	return tree.Optional[string]{Set: true}
+}
+
+// optionalPinned reads the pinned_fields PATCH field: absent is unset, null is a reset.
+func optionalPinned(n nullable.Nullable[oapi.PinnedFields]) tree.Optional[tree.PinnedFields] {
+	if !n.IsSpecified() {
+		return tree.Optional[tree.PinnedFields]{}
+	}
+	v, err := n.Get()
+	if err != nil {
+		return tree.Optional[tree.PinnedFields]{Set: true}
+	}
+	p := tree.PinnedFields{}
+	if v.Under != nil {
+		p.Under = *v.Under
+	}
+	if v.Right != nil {
+		p.Right = *v.Right
+	}
+	return tree.Optional[tree.PinnedFields]{Set: true, Value: &p}
 }
 
 func enumPtr[T ~string](v *T) *string {

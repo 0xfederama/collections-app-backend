@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -400,7 +400,9 @@ paths:
 
         Changing `kind` on a list that has items **clears the `metadata` of all its items** (trashed ones too; their `version` is bumped),
         because the kind fields differ per kind. Clients should warn first. If the list is left on `sort_mode: kind_key` and the new
-        kind is `generic`, the request is rejected with `422 validation_failed`.
+        kind is `generic`, the request is rejected with `422 validation_failed`. A kind change also resets `pinned_fields` to `null` (unless
+        the same request sets it, which is then validated against the new kind). Send `pinned_fields: null` to reset it to the kind default;
+        absent leaves it unchanged.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -411,6 +413,8 @@ paths:
             examples:
               viewMode: { value: { display_mode: grid, sort_mode: title } }
               changeKind: { value: { kind: car } }
+              pinFields: { value: { pinned_fields: { under: [release_year], right: [price] } } }
+              resetPinnedFields: { value: { pinned_fields: null } }
       responses:
         '200':
           description: The updated list
@@ -490,6 +494,7 @@ paths:
         Sorted by `sort` (default: the list's `sort_mode`), tie-break `id`. `q` filters by title. `sort=kind_key` sorts by the kind's
         sort key ascending, empty values last (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
         car: `power_hp`, camera: `megapixels`); on a `generic` list it returns `400 invalid_parameter`.
+        `sort=price` sorts by `price.min` ascending, items without a price last, ties by title then `id` (no currency conversion).
       parameters:
         - name: sort
           in: query
@@ -535,7 +540,7 @@ paths:
                     release_year: 1999
                     runtime_minutes: 136
                     imdb_url: https://www.imdb.com/title/tt0133093/
-                    streaming: { country: IT, platforms: [Netflix, Prime Video] }
+                    streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
       responses:
         '201':
           description: Created
@@ -1330,6 +1335,7 @@ components:
         description: Films to watch
         display_mode: thumbnail
         sort_mode: manual
+        pinned_fields: { under: [release_year], right: [price] }
         sort_order: 0
         item_count: 2
         version: 1
@@ -1344,6 +1350,7 @@ components:
         description: Films to watch
         display_mode: thumbnail
         sort_mode: manual
+        pinned_fields: { under: [release_year], right: [price] }
         sort_order: 0
         item_count: 2
         version: 1
@@ -1384,6 +1391,7 @@ components:
             description: Films to watch
             display_mode: thumbnail
             sort_mode: manual
+            pinned_fields: { under: [release_year], right: [price] }
             sort_order: 0
             item_count: 2
             version: 1
@@ -1396,6 +1404,7 @@ components:
             description: null
             display_mode: grid
             sort_mode: title
+            pinned_fields: null
             sort_order: 0
             item_count: 1
             version: 2
@@ -1421,7 +1430,7 @@ components:
           release_year: 1999
           runtime_minutes: 136
           imdb_url: https://www.imdb.com/title/tt0133093/
-          streaming: { country: IT, platforms: [Netflix, Prime Video] }
+          streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
         content_version: 2
         sort_order: 0
         version: 3
@@ -1440,7 +1449,7 @@ components:
           release_year: 1999
           runtime_minutes: 136
           imdb_url: https://www.imdb.com/title/tt0133093/
-          streaming: { country: IT, platforms: [Netflix, Prime Video] }
+          streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
         content_version: 2
         sort_order: 0
         version: 3
@@ -1460,8 +1469,6 @@ components:
         price: { min: '12000.00', max: '13500.00', currency: EUR }
         website: https://www.ducati.com/
         metadata:
-          make: Ducati
-          model: Monster
           model_year: 2024
           displacement_cc: 937
           power_hp: 111
@@ -1796,14 +1803,35 @@ components:
       enum: [compact, thumbnail, grid]
     SortMode:
       type: string
-      enum: [manual, title, updated, kind_key]
+      enum: [manual, title, updated, kind_key, price]
       description: |
         `kind_key` sorts by the kind's sort key (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
-        car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists. The manual order is kept
-        when the mode changes.
+        car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists.
+        `price` sorts by the lowest price (`price.min`) ascending, items without a price last, ties by title and then id. Currencies are not
+        converted, so mixed currencies compare by amount only. The manual order is kept when the mode changes.
+    PinnedFields:
+      type: object
+      nullable: true
+      additionalProperties: false
+      description: |
+        The fields a list shows in its rows, by field key: `under` (under the title) and `right` (on the right), in order. `null` means the
+        kind default (the web app owns the defaults). `{}` or two empty slots pin nothing, which is different from `null`. Allowed keys: the
+        keys of the kind's `metadata` fields plus `price` (`streaming` is a movie and tv_show field). Each slot holds at most 6 unique
+        keys and a key is in at most one slot, else `422 validation_failed` on `pinned_fields.under[i]` / `pinned_fields.right[i]`.
+        Responses always carry both slots. Changing the list's `kind` resets it to `null`.
+      properties:
+        under:
+          type: array
+          maxItems: 6
+          items: { type: string, maxLength: 60 }
+        right:
+          type: array
+          maxItems: 6
+          items: { type: string, maxLength: 60 }
+      example: { under: [release_year, runtime_minutes], right: [price] }
     List:
       type: object
-      required: [id, folder_id, name, kind, description, display_mode, sort_mode, sort_order, item_count, version, created_at, updated_at]
+      required: [id, folder_id, name, kind, description, display_mode, sort_mode, pinned_fields, sort_order, item_count, version, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         folder_id: { type: string, format: uuid, nullable: true }
@@ -1812,6 +1840,7 @@ components:
         description: { type: string, nullable: true, maxLength: 65536, description: 'Markdown, up to 64 KiB (UTF-8 bytes).' }
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
         sort_mode: { $ref: '#/components/schemas/SortMode' }
+        pinned_fields: { $ref: '#/components/schemas/PinnedFields' }
         sort_order: { type: integer }
         item_count: { type: integer, description: Number of active items. }
         version: { type: integer }
@@ -1832,6 +1861,7 @@ components:
         description: { type: string, nullable: true, maxLength: 65536, description: 'Markdown, up to 64 KiB (UTF-8 bytes).' }
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
         sort_mode: { $ref: '#/components/schemas/SortMode' }
+        pinned_fields: { $ref: '#/components/schemas/PinnedFields' }
     UpdateListRequest:
       type: object
       additionalProperties: false
@@ -1841,6 +1871,7 @@ components:
         description: { type: string, nullable: true, maxLength: 65536, description: 'Markdown, up to 64 KiB (UTF-8 bytes).' }
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
         sort_mode: { $ref: '#/components/schemas/SortMode' }
+        pinned_fields: { $ref: '#/components/schemas/PinnedFields' }
     MoveListRequest:
       type: object
       additionalProperties: false
@@ -2048,6 +2079,11 @@ components:
           maxItems: 30
           description: Unique case-insensitively.
           items: { type: string, maxLength: 60 }
+        paid_platforms:
+          type: array
+          maxItems: 30
+          description: Platforms offered only for payment. Each entry must match (case-insensitively) an entry of `platforms` and is stored with that entry's casing. Unique case-insensitively. Omitted, null or empty means none paid.
+          items: { type: string, maxLength: 60 }
     GenericMetadata:
       type: object
       description: Must be `{}`.
@@ -2068,14 +2104,14 @@ components:
         first_air_year: { type: integer, minimum: 1920, maximum: 2100 }
         end_year: { type: integer, minimum: 1920, maximum: 2100, description: 'At least `first_air_year`. Absent = ongoing.' }
         seasons: { type: integer, minimum: 1, maximum: 200 }
+        episodes_per_season: { type: integer, minimum: 1, maximum: 500 }
+        episode_minutes: { type: integer, minimum: 1, maximum: 1000, description: Average episode duration in minutes. }
         imdb_url: { type: string, pattern: '^https://(www\.|m\.)?imdb\.com/title/tt\d{7,10}/?$' }
         streaming: { $ref: '#/components/schemas/Streaming' }
     MotorcycleMetadata:
       type: object
       additionalProperties: false
       properties:
-        make: { type: string, maxLength: 100 }
-        model: { type: string, maxLength: 100 }
         model_year: { type: integer, minimum: 1885, maximum: 2100 }
         displacement_cc: { type: integer, minimum: 1, maximum: 5000 }
         power_hp: { type: number, minimum: 0, maximum: 1000, description: One decimal. }
@@ -2093,8 +2129,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        make: { type: string, maxLength: 100 }
-        model: { type: string, maxLength: 100 }
+        camera_type: { type: string, enum: [mirrorless, dslr, film] }
         release_year: { type: integer, minimum: 1900, maximum: 2100 }
         sensor_format: { type: string, enum: [full_frame, aps_c, micro_four_thirds, one_inch, medium_format, film_35mm, other] }
         megapixels: { type: number, minimum: 0.1, maximum: 500, description: One decimal. }

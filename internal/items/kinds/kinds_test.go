@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -54,22 +55,34 @@ func TestAT05_AcceptedMetadata(t *testing.T) {
 		{"imdb m. host and long id, no slash", "movie", `{"imdb_url":"https://m.imdb.com/title/tt0123456789"}`, m{"imdb_url": "https://m.imdb.com/title/tt0123456789"}},
 		{"imdb bare host", "movie", `{"imdb_url":"https://imdb.com/title/tt1234567/"}`, m{"imdb_url": "https://imdb.com/title/tt1234567/"}},
 		{"null keys are omitted", "movie", `{"release_year":null,"streaming":null,"imdb_url":null,"runtime_minutes":90}`, m{"runtime_minutes": 90}},
+		{"F002B1 paid platforms", "movie", `{"streaming":{"country":"IT","platforms":["Netflix","Prime Video"],"paid_platforms":["Prime Video"]}}`,
+			m{"streaming": m{"country": "IT", "platforms": []string{"Netflix", "Prime Video"}, "paid_platforms": []string{"Prime Video"}}}},
+		{"F002B1 paid platforms normalized to platform casing", "movie", `{"streaming":{"country":"IT","platforms":["Netflix","Prime Video"],"paid_platforms":["  prime video "]}}`,
+			m{"streaming": m{"country": "IT", "platforms": []string{"Netflix", "Prime Video"}, "paid_platforms": []string{"Prime Video"}}}},
+		{"F002B1 paid platforms null", "movie", `{"streaming":{"country":"IT","platforms":["Netflix"],"paid_platforms":null}}`,
+			m{"streaming": m{"country": "IT", "platforms": []string{"Netflix"}}}},
+		{"F002B1 paid platforms empty", "movie", `{"streaming":{"country":"IT","platforms":["Netflix"],"paid_platforms":[]}}`,
+			m{"streaming": m{"country": "IT", "platforms": []string{"Netflix"}}}},
+		{"F002B1 paid platforms empty without platforms", "movie", `{"streaming":{"country":"IT","paid_platforms":[]}}`,
+			m{"streaming": m{"country": "IT"}}},
 		{"streaming without platforms", "movie", `{"streaming":{"country":"US"}}`, m{"streaming": m{"country": "US"}}},
 		{"streaming null platforms", "movie", `{"streaming":{"country":"US","platforms":null}}`, m{"streaming": m{"country": "US"}}},
 		{"streaming platforms trimmed", "movie", `{"streaming":{"country":"IT","platforms":["  Netflix  "]}}`, m{"streaming": m{"country": "IT", "platforms": []string{"Netflix"}}}},
 		{"tv_show open end", "tv_show", `{"first_air_year":2008,"seasons":5}`, m{"first_air_year": 2008, "seasons": 5}},
 		{"tv_show end equals first", "tv_show", `{"first_air_year":2008,"end_year":2008}`, m{"first_air_year": 2008, "end_year": 2008}},
 		{"tv_show end without first", "tv_show", `{"end_year":2013}`, m{"end_year": 2013}},
-		{"motorcycle full", "motorcycle", `{"make":" Ducati ","model":"Monster","model_year":2021,"displacement_cc":937,"power_hp":111.0,"license_class":"A2"}`,
-			m{"make": "Ducati", "model": "Monster", "model_year": 2021, "displacement_cc": 937, "power_hp": 111.0, "license_class": "A2"}},
+		{"motorcycle full", "motorcycle", `{"model_year":2021,"displacement_cc":937,"power_hp":111.0,"license_class":"A2"}`,
+			m{"model_year": 2021, "displacement_cc": 937, "power_hp": 111.0, "license_class": "A2"}},
 		{"motorcycle one decimal", "motorcycle", `{"power_hp":95.5}`, m{"power_hp": 95.5}},
 		{"motorcycle bounds", "motorcycle", `{"power_hp":0,"displacement_cc":5000}`, m{"power_hp": 0.0, "displacement_cc": 5000}},
-		{"text at the limit", "motorcycle", `{"make":"` + long + `"}`, m{"make": long}},
+		{"text at the limit", "car", `{"make":"` + long + `"}`, m{"make": long}},
 		{"car electric", "car", `{"fuel_type":"electric","model_year":2023}`, m{"fuel_type": "electric", "model_year": 2023}},
 		{"car petrol", "car", `{"make":"VW","model":"Golf","model_year":2019,"fuel_type":"petrol","power_hp":245.0}`,
 			m{"make": "VW", "model": "Golf", "model_year": 2019, "fuel_type": "petrol", "power_hp": 245.0}},
-		{"camera full", "camera", `{"make":"Sony","model":"A7","release_year":2013,"sensor_format":"full_frame","megapixels":24.3}`,
-			m{"make": "Sony", "model": "A7", "release_year": 2013, "sensor_format": "full_frame", "megapixels": 24.3}},
+		{"camera full", "camera", `{"camera_type":"mirrorless","release_year":2013,"sensor_format":"full_frame","megapixels":24.3}`,
+			m{"camera_type": "mirrorless", "release_year": 2013, "sensor_format": "full_frame", "megapixels": 24.3}},
+		{"F002B2 tv episode fields", "tv_show", `{"episodes_per_season":10,"episode_minutes":45}`, m{"episodes_per_season": 10, "episode_minutes": 45}},
+		{"F002B2 tv episode bounds", "tv_show", `{"episodes_per_season":500,"episode_minutes":1}`, m{"episodes_per_season": 500, "episode_minutes": 1}},
 		{"camera megapixel bounds", "camera", `{"megapixels":0.1}`, m{"megapixels": 0.1}},
 	}
 	for _, tt := range tests {
@@ -92,6 +105,7 @@ func TestAT05_EveryEnumValueIsAccepted(t *testing.T) {
 	}{
 		{"motorcycle", "license_class", []string{"AM", "A1", "A2", "A"}},
 		{"car", "fuel_type", []string{"petrol", "diesel", "hybrid", "plugin_hybrid", "electric", "lpg", "cng", "hydrogen", "other"}},
+		{"camera", "camera_type", []string{"mirrorless", "dslr", "film"}},
 		{"camera", "sensor_format", []string{"full_frame", "aps_c", "micro_four_thirds", "one_inch", "medium_format", "film_35mm", "other"}},
 	}
 	for _, e := range enums {
@@ -135,6 +149,14 @@ func TestAT05_RejectedValues(t *testing.T) {
 		{"streaming country number", "movie", `{"streaming":{"country":1}}`, []string{"metadata.streaming.country"}},
 		{"streaming not an object", "movie", `{"streaming":"Netflix"}`, []string{"metadata.streaming"}},
 		{"streaming platforms not array", "movie", `{"streaming":{"country":"IT","platforms":"Netflix"}}`, []string{"metadata.streaming.platforms"}},
+		{"F002B1 paid platform not in platforms", "movie", `{"streaming":{"country":"IT","platforms":["Netflix"],"paid_platforms":["Hulu"]}}`, []string{"metadata.streaming.paid_platforms[0]"}},
+		{"F002B1 paid platform without platforms", "movie", `{"streaming":{"country":"IT","paid_platforms":["Netflix"]}}`, []string{"metadata.streaming.paid_platforms[0]"}},
+		{"F002B1 paid second entry not in platforms", "movie", `{"streaming":{"country":"IT","platforms":["Netflix"],"paid_platforms":["netflix","Hulu"]}}`, []string{"metadata.streaming.paid_platforms[1]"}},
+		{"F002B1 paid duplicate", "movie", `{"streaming":{"country":"IT","platforms":["Netflix"],"paid_platforms":["Netflix","NETFLIX"]}}`, []string{"metadata.streaming.paid_platforms[1]"}},
+		{"F002B1 paid not array", "movie", `{"streaming":{"country":"IT","platforms":["Netflix"],"paid_platforms":"Netflix"}}`, []string{"metadata.streaming.paid_platforms"}},
+		{"F002B1 paid entry not string", "movie", `{"streaming":{"country":"IT","platforms":["Netflix"],"paid_platforms":[1]}}`, []string{"metadata.streaming.paid_platforms[0]"}},
+		{"F002B1 paid blank entry", "movie", `{"streaming":{"country":"IT","platforms":["Netflix"],"paid_platforms":[" "]}}`, []string{"metadata.streaming.paid_platforms[0]"}},
+		{"F002B1 paid too many", "movie", `{"streaming":{"country":"IT","platforms":[` + platforms(30) + `],"paid_platforms":[` + platforms(31) + `]}}`, []string{"metadata.streaming.paid_platforms"}},
 		{"streaming duplicate platform", "movie", `{"streaming":{"country":"IT","platforms":["Netflix","netflix"]}}`, []string{"metadata.streaming.platforms[1]"}},
 		{"streaming duplicate after trim", "movie", `{"streaming":{"country":"IT","platforms":["Netflix"," NETFLIX "]}}`, []string{"metadata.streaming.platforms[1]"}},
 		{"streaming empty platform", "movie", `{"streaming":{"country":"IT","platforms":["  "]}}`, []string{"metadata.streaming.platforms[0]"}},
@@ -146,9 +168,14 @@ func TestAT05_RejectedValues(t *testing.T) {
 		{"tv end above", "tv_show", `{"end_year":2101}`, []string{"metadata.end_year"}},
 		{"tv seasons zero", "tv_show", `{"seasons":0}`, []string{"metadata.seasons"}},
 		{"tv seasons above", "tv_show", `{"seasons":201}`, []string{"metadata.seasons"}},
-		{"moto make empty", "motorcycle", `{"make":"   "}`, []string{"metadata.make"}},
-		{"moto make too long", "motorcycle", `{"make":"` + strings.Repeat("a", 101) + `"}`, []string{"metadata.make"}},
-		{"moto make number", "motorcycle", `{"make":7}`, []string{"metadata.make"}},
+		{"car make empty", "car", `{"make":"   "}`, []string{"metadata.make"}},
+		{"car make too long", "car", `{"make":"` + strings.Repeat("a", 101) + `"}`, []string{"metadata.make"}},
+		{"car make number", "car", `{"make":7}`, []string{"metadata.make"}},
+		{"F002B2 tv episodes zero", "tv_show", `{"episodes_per_season":0}`, []string{"metadata.episodes_per_season"}},
+		{"F002B2 tv episodes above", "tv_show", `{"episodes_per_season":501}`, []string{"metadata.episodes_per_season"}},
+		{"F002B2 tv episodes fraction", "tv_show", `{"episodes_per_season":1.5}`, []string{"metadata.episodes_per_season"}},
+		{"F002B2 tv minutes zero", "tv_show", `{"episode_minutes":0}`, []string{"metadata.episode_minutes"}},
+		{"F002B2 tv minutes above", "tv_show", `{"episode_minutes":1001}`, []string{"metadata.episode_minutes"}},
 		{"moto year below", "motorcycle", `{"model_year":1884}`, []string{"metadata.model_year"}},
 		{"moto displacement zero", "motorcycle", `{"displacement_cc":0}`, []string{"metadata.displacement_cc"}},
 		{"moto displacement above", "motorcycle", `{"displacement_cc":5001}`, []string{"metadata.displacement_cc"}},
@@ -160,7 +187,7 @@ func TestAT05_RejectedValues(t *testing.T) {
 		{"camera megapixels below", "camera", `{"megapixels":0}`, []string{"metadata.megapixels"}},
 		{"camera megapixels above", "camera", `{"megapixels":500.1}`, []string{"metadata.megapixels"}},
 		{"camera megapixels two decimals", "camera", `{"megapixels":24.35}`, []string{"metadata.megapixels"}},
-		{"several errors in key order", "camera", `{"model":"","release_year":1800,"megapixels":"x"}`, []string{"metadata.megapixels", "metadata.model", "metadata.release_year"}},
+		{"several errors in key order", "camera", `{"camera_type":"","release_year":1800,"megapixels":"x"}`, []string{"metadata.camera_type", "metadata.megapixels", "metadata.release_year"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -189,6 +216,11 @@ func TestAT05_UnknownKeysAreUnknownFields(t *testing.T) {
 		name, kind, in, path string
 	}{
 		{"generic must be empty", "generic", `{"anything":1}`, "metadata.anything"},
+		{"F002B2 motorcycle make dropped", "motorcycle", `{"make":"Ducati"}`, "metadata.make"},
+		{"F002B2 motorcycle model dropped", "motorcycle", `{"model":"Monster"}`, "metadata.model"},
+		{"F002B2 camera make dropped", "camera", `{"make":"Sony"}`, "metadata.make"},
+		{"F002B2 camera model dropped", "camera", `{"model":"A7"}`, "metadata.model"},
+		{"F002B2 camera_type on a motorcycle", "motorcycle", `{"camera_type":"dslr"}`, "metadata.camera_type"},
 		{"movie key of another kind", "movie", `{"make":"Ducati"}`, "metadata.make"},
 		{"movie typo", "movie", `{"runtime":100}`, "metadata.runtime"},
 		{"unknown key wins over bad value", "movie", `{"release_year":1,"zzz":true}`, "metadata.zzz"},
@@ -230,7 +262,7 @@ func TestAT05_UnknownKind(t *testing.T) {
 
 func TestValidateDoesNotMutateInput(t *testing.T) {
 	in := m{"make": "  Ducati  ", "power_hp": nil}
-	if _, err := kinds.Validate("motorcycle", in); err != nil {
+	if _, err := kinds.Validate("car", in); err != nil {
 		t.Fatal(err)
 	}
 	if in["make"] != "  Ducati  " || len(in) != 2 {
@@ -266,5 +298,65 @@ func TestF007_SortKey(t *testing.T) {
 		if key != tt.key || ok != tt.ok {
 			t.Errorf("SortKey(%q) = %q, %v; want %q, %v", tt.kind, key, ok, tt.key, tt.ok)
 		}
+	}
+}
+
+func TestF002B3_PinnableKeysPerKind(t *testing.T) {
+	tests := []struct {
+		kind string
+		want []string
+	}{
+		{"generic", []string{"price"}},
+		{"movie", []string{"imdb_url", "price", "release_year", "runtime_minutes", "streaming"}},
+		{"tv_show", []string{"end_year", "episode_minutes", "episodes_per_season", "first_air_year", "imdb_url", "price", "seasons", "streaming"}},
+		{"motorcycle", []string{"displacement_cc", "license_class", "model_year", "power_hp", "price"}},
+		{"car", []string{"fuel_type", "make", "model", "model_year", "power_hp", "price"}},
+		{"camera", []string{"camera_type", "megapixels", "price", "release_year", "sensor_format"}},
+		{"book", nil},
+	}
+	for _, tt := range tests {
+		if got := kinds.PinnableKeys(tt.kind); !slices.Equal(got, tt.want) {
+			t.Errorf("PinnableKeys(%q) = %v, want %v", tt.kind, got, tt.want)
+		}
+	}
+}
+
+func TestF002B3_ValidatePinned(t *testing.T) {
+	tests := []struct {
+		name         string
+		kind         string
+		under, right []string
+		wantFields   []string
+	}{
+		{"ok", "movie", []string{"release_year", "streaming"}, []string{"price"}, nil},
+		{"nil slots", "movie", nil, nil, nil},
+		{"unknown under", "movie", []string{"release_year", "make"}, nil, []string{"pinned_fields.under[1]"}},
+		{"unknown right", "car", nil, []string{"nope"}, []string{"pinned_fields.right[0]"}},
+		{"both slots", "movie", []string{"price"}, []string{"release_year", "price"}, []string{"pinned_fields.right[1]"}},
+		{"duplicate", "movie", []string{"price", "price"}, nil, []string{"pinned_fields.under[1]"}},
+		{"too many", "tv_show", []string{"end_year", "episode_minutes", "episodes_per_season", "first_air_year", "imdb_url", "price", "seasons"}, nil, []string{"pinned_fields.under"}},
+		{"six is fine", "tv_show", []string{"end_year", "episode_minutes", "episodes_per_season", "first_air_year", "imdb_url", "price"}, nil, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u, r, err := kinds.ValidatePinned(tt.kind, tt.under, tt.right)
+			if tt.wantFields == nil {
+				if err != nil || u == nil || r == nil {
+					t.Fatalf("got %v %v %v", u, r, err)
+				}
+				return
+			}
+			var ve *apperr.ValidationError
+			if !errors.As(err, &ve) {
+				t.Fatalf("err = %v, want validation", err)
+			}
+			var got []string
+			for _, fe := range ve.Errors {
+				got = append(got, fe.Field)
+			}
+			if !slices.Equal(got, tt.wantFields) {
+				t.Errorf("fields = %v, want %v", got, tt.wantFields)
+			}
+		})
 	}
 }

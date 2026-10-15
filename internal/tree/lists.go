@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf8"
@@ -22,6 +23,8 @@ type CreateListInput struct {
 	Description *string
 	DisplayMode string
 	SortMode    string
+	// PinnedFields nil = the kind default.
+	PinnedFields *PinnedFields
 }
 
 // ListPatch is a partial list update; absent fields stay as they are.
@@ -31,6 +34,8 @@ type ListPatch struct {
 	Description Optional[string]
 	DisplayMode *string
 	SortMode    *string
+	// PinnedFields: Set with a nil Value resets to the kind default.
+	PinnedFields Optional[PinnedFields]
 }
 
 // CreateList appends a list after its active siblings. A missing or trashed
@@ -51,11 +56,20 @@ func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, err
 	if kinds.Known(in.Kind) {
 		errs = append(errs, sortKindErrors(in.Kind, in.SortMode, "sort_mode")...)
 	}
+	if in.PinnedFields != nil && kinds.Known(in.Kind) {
+		var perr error
+		in.PinnedFields, perr = validatePinned(in.Kind, in.PinnedFields)
+		errs = appendValidation(errs, perr)
+	}
 	if err := validate(errs); err != nil {
 		return List{}, err
 	}
+	pinnedJSON, err := pinnedToJSON(in.PinnedFields)
+	if err != nil {
+		return List{}, err
+	}
 	var id uuid.UUID
-	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
+	err = database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
 		if err := s.lockTree(ctx, q); err != nil {
 			return err
 		}
@@ -68,7 +82,7 @@ func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, err
 		}
 		row, err := q.InsertList(ctx, sqlc.InsertListParams{
 			WorkspaceID: s.workspaceID, FolderID: nullUUID(in.FolderID), Name: name, Kind: in.Kind, Description: in.Description,
-			DisplayMode: in.DisplayMode, SortMode: in.SortMode, SortOrder: next, Now: s.now(),
+			DisplayMode: in.DisplayMode, SortMode: in.SortMode, PinnedFields: pinnedJSON, SortOrder: next, Now: s.now(),
 		})
 		if err != nil {
 			return fmt.Errorf("insert list: %w", err)
@@ -162,6 +176,29 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 			(p.Description.Set && !equalPtr(p.Description.Value, cur.Description)) ||
 			(p.DisplayMode != nil && *p.DisplayMode != cur.DisplayMode) ||
 			(p.SortMode != nil && *p.SortMode != cur.SortMode)
+		curPinned := pinnedFromJSON(cur.PinnedFields)
+		var newPinned *PinnedFields
+		if p.PinnedFields.Set {
+			// Validated against the kind that applies after this PATCH.
+			kind := cur.Kind
+			if p.Kind != nil {
+				kind = *p.Kind
+			}
+			if p.PinnedFields.Value != nil {
+				var perr error
+				if newPinned, perr = validatePinned(kind, p.PinnedFields.Value); perr != nil {
+					return perr
+				}
+			}
+			// After a kind change the stored value is NULL (UpdateListKind), whatever was there.
+			base := curPinned
+			if kindChanged {
+				base = nil
+			}
+			if !equalPinned(base, newPinned) {
+				fieldsSet = true
+			}
+		}
 		if !kindChanged && !fieldsSet {
 			return nil
 		}
@@ -196,6 +233,16 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 			Name: cur.Name, Description: cur.Description, DisplayMode: cur.DisplayMode, SortMode: cur.SortMode,
 			Now: s.now(), ID: id, WorkspaceID: s.workspaceID,
 		}
+		keep := curPinned
+		if kindChanged {
+			keep = nil // reset by UpdateListKind in this transaction
+		}
+		if p.PinnedFields.Set {
+			keep = newPinned
+		}
+		if arg.PinnedFields, err = pinnedToJSON(keep); err != nil {
+			return err
+		}
 		if p.Name != nil {
 			arg.Name = *p.Name
 		}
@@ -217,6 +264,31 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		return List{}, err
 	}
 	return s.getList(ctx, id, false)
+}
+
+// validatePinned checks the slots against the kind and returns them normalized (never nil).
+func validatePinned(kind string, in *PinnedFields) (*PinnedFields, error) {
+	under, right, err := kinds.ValidatePinned(kind, in.Under, in.Right)
+	if err != nil {
+		return nil, err
+	}
+	return &PinnedFields{Under: under, Right: right}, nil
+}
+
+// appendValidation adds the field errors of a validation error to errs. Any other error is not expected here.
+func appendValidation(errs []apperr.FieldError, err error) []apperr.FieldError {
+	var ve *apperr.ValidationError
+	if errors.As(err, &ve) {
+		return append(errs, ve.Errors...)
+	}
+	return errs
+}
+
+func equalPinned(a, b *PinnedFields) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.equal(*b)
 }
 
 // MoveList moves a list into a folder (nil = root), appended last. Errors in
@@ -341,7 +413,7 @@ func enumErrors(displayMode, sortMode *string) []apperr.FieldError {
 		errs = append(errs, apperr.FieldError{Field: "display_mode", Message: "must be one of compact, thumbnail, grid"})
 	}
 	if sortMode != nil && !sortModes[*sortMode] {
-		errs = append(errs, apperr.FieldError{Field: "sort_mode", Message: "must be one of manual, title, updated, kind_key"})
+		errs = append(errs, apperr.FieldError{Field: "sort_mode", Message: "must be one of manual, title, updated, kind_key, price"})
 	}
 	return errs
 }

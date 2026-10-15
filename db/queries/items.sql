@@ -21,7 +21,7 @@ WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 FOR UPDATE;
 
 -- name: ListItems :many
--- @sort is manual, title or updated (kind_key has its own query, ListItemsByKindKey); @q is an already escaped LIKE fragment ('' = no filter).
+-- @sort is manual, title, updated or price (price: price_min ascending, no price last, then title; currencies are not converted) (kind_key has its own query, ListItemsByKindKey); @q is an already escaped LIKE fragment ('' = no filter).
 SELECT i.*,
        l.kind              AS kind,
        a.width             AS image_width,
@@ -37,6 +37,8 @@ ORDER BY
   CASE WHEN @sort::text = 'manual' THEN i.sort_order END ASC,
   CASE WHEN @sort::text = 'title' THEN lower(i.title) END ASC,
   CASE WHEN @sort::text = 'updated' THEN i.updated_at END DESC,
+  CASE WHEN @sort::text = 'price' THEN i.price_min END ASC NULLS LAST,
+  CASE WHEN @sort::text = 'price' THEN lower(i.title) END ASC,
   i.id
 LIMIT @page_limit OFFSET @page_offset;
 

@@ -10,7 +10,9 @@ package tree
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -31,7 +33,7 @@ const (
 
 var (
 	displayModes = map[string]bool{"compact": true, "thumbnail": true, "grid": true}
-	sortModes    = map[string]bool{"manual": true, "title": true, "updated": true, "kind_key": true}
+	sortModes    = map[string]bool{"manual": true, "title": true, "updated": true, "kind_key": true, "price": true}
 )
 
 // Defaults for a list created without display_mode / sort_mode.
@@ -80,12 +82,54 @@ type List struct {
 	Description *string
 	DisplayMode string
 	SortMode    string
-	SortOrder   int
-	ItemCount   int
-	Version     int
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	Path        []PathFolder
+	// PinnedFields is nil for the kind default (F002-B3).
+	PinnedFields *PinnedFields
+	SortOrder    int
+	ItemCount    int
+	Version      int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	Path         []PathFolder
+}
+
+// PinnedFields are the field keys a list pins in its rows: Under the title, Right of it (F002-B3).
+// Both are non-nil once stored, and may be empty (pin nothing).
+type PinnedFields struct {
+	Under []string `json:"under"`
+	Right []string `json:"right"`
+}
+
+func (p PinnedFields) equal(o PinnedFields) bool {
+	return slices.Equal(p.Under, o.Under) && slices.Equal(p.Right, o.Right)
+}
+
+// pinnedFromJSON reads the stored column. NULL and anything unreadable are nil (the kind default).
+func pinnedFromJSON(b []byte) *PinnedFields {
+	if b == nil {
+		return nil
+	}
+	var p PinnedFields
+	if json.Unmarshal(b, &p) != nil {
+		return nil
+	}
+	if p.Under == nil {
+		p.Under = []string{}
+	}
+	if p.Right == nil {
+		p.Right = []string{}
+	}
+	return &p
+}
+
+func pinnedToJSON(p *PinnedFields) ([]byte, error) {
+	if p == nil {
+		return nil, nil
+	}
+	b, err := json.Marshal(p)
+	if err != nil {
+		return nil, fmt.Errorf("marshal pinned fields: %w", err)
+	}
+	return b, nil
 }
 
 // PathFolder is one ancestor folder of a list.
@@ -185,7 +229,7 @@ func folderFromRow(f sqlc.Folder) Folder {
 func listFromRow(l sqlc.GetListRow) List {
 	return List{
 		ID: l.ID, FolderID: ptrUUID(l.FolderID), Name: l.Name, Kind: l.Kind, Description: l.Description,
-		DisplayMode: l.DisplayMode, SortMode: l.SortMode, SortOrder: int(l.SortOrder), ItemCount: int(l.ItemCount),
+		DisplayMode: l.DisplayMode, SortMode: l.SortMode, PinnedFields: pinnedFromJSON(l.PinnedFields), SortOrder: int(l.SortOrder), ItemCount: int(l.ItemCount),
 		Version: int(l.Version), CreatedAt: l.CreatedAt, UpdatedAt: l.UpdatedAt,
 	}
 }

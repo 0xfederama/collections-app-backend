@@ -1,5 +1,6 @@
 // Package kinds validates and normalizes item metadata per kind (DATA_MODEL
-// §2.1, trimmed by F-007). It is pure Go: no database, no HTTP. Every key is optional, `null`
+// §2.1, trimmed by F-007 and F-002: motorcycle and camera have no make/model, camera has camera_type,
+// tv_show has episodes_per_season and episode_minutes). It is pure Go: no database, no HTTP. Every key is optional, `null`
 // means "key omitted", text is trimmed, and the enum-like values live here
 // (not in CHECK constraints) so a new value needs no migration.
 package kinds
@@ -65,11 +66,13 @@ var registry = map[string]schema{
 	}},
 	TVShow: {
 		fields: map[string]rule{
-			"first_air_year": intRange(1920, 2100),
-			"end_year":       intRange(1920, 2100),
-			"seasons":        intRange(1, 200),
-			"imdb_url":       imdbURL,
-			"streaming":      streaming,
+			"first_air_year":      intRange(1920, 2100),
+			"end_year":            intRange(1920, 2100),
+			"seasons":             intRange(1, 200),
+			"episodes_per_season": intRange(1, 500),
+			"episode_minutes":     intRange(1, 1000),
+			"imdb_url":            imdbURL,
+			"streaming":           streaming,
 		},
 		cross: func(out map[string]any) []apperr.FieldError {
 			first, ok1 := out["first_air_year"].(int)
@@ -81,8 +84,6 @@ var registry = map[string]schema{
 		},
 	},
 	Motorcycle: {fields: map[string]rule{
-		"make":            text(defaultTextMax),
-		"model":           text(defaultTextMax),
 		"model_year":      intRange(1885, 2100),
 		"displacement_cc": intRange(1, 5000),
 		"power_hp":        decimalRange(0, 1000),
@@ -96,8 +97,7 @@ var registry = map[string]schema{
 		"power_hp":   decimalRange(0, 2000),
 	}},
 	Camera: {fields: map[string]rule{
-		"make":          text(defaultTextMax),
-		"model":         text(defaultTextMax),
+		"camera_type":   enum("mirrorless", "dslr", "film"),
 		"release_year":  intRange(1900, 2100),
 		"sensor_format": enum("full_frame", "aps_c", "micro_four_thirds", "one_inch", "medium_format", "film_35mm", "other"),
 		"megapixels":    decimalRange(0.1, 500),
@@ -259,7 +259,7 @@ func imdbURL(path string, v any) outcome {
 	return outcome{val: s}
 }
 
-// streaming checks {country (required), platforms}. Undeclared keys inside it
+// streaming checks {country (required), platforms, paid_platforms}. Undeclared keys inside it
 // are reported as unknown fields too.
 func streaming(path string, v any) outcome {
 	obj, ok := v.(map[string]any)
@@ -267,7 +267,7 @@ func streaming(path string, v any) outcome {
 		return fail(path, "must be an object")
 	}
 	for _, key := range slices.Sorted(maps.Keys(obj)) {
-		if key != "country" && key != "platforms" {
+		if key != "country" && key != "platforms" && key != "paid_platforms" {
 			return outcome{unknown: path + "." + key}
 		}
 	}
@@ -290,6 +290,29 @@ func streaming(path string, v any) outcome {
 		errs = append(errs, perrs...)
 		if len(perrs) == 0 {
 			out["platforms"] = platforms
+		}
+	}
+	if raw, present := obj["paid_platforms"]; present && raw != nil {
+		paid, perrs := platformList(path+".paid_platforms", raw)
+		if len(perrs) == 0 {
+			// Every paid platform must be one of platforms; store the platform's casing.
+			offered, _ := out["platforms"].([]string)
+			byKey := make(map[string]string, len(offered))
+			for _, p := range offered {
+				byKey[strings.ToLower(p)] = p
+			}
+			for i, p := range paid {
+				match, ok := byKey[strings.ToLower(p)]
+				if !ok {
+					perrs = append(perrs, apperr.FieldError{Field: fmt.Sprintf("%s.paid_platforms[%d]", path, i), Message: "must be one of platforms"})
+					continue
+				}
+				paid[i] = match
+			}
+		}
+		errs = append(errs, perrs...)
+		if len(perrs) == 0 && len(paid) > 0 {
+			out["paid_platforms"] = paid
 		}
 	}
 	if len(errs) > 0 {
@@ -326,4 +349,68 @@ func platformList(path string, raw any) ([]string, []apperr.FieldError) {
 		out = append(out, s)
 	}
 	return out, nil
+}
+
+// maxPinnedPerSlot is the most field keys a list can pin in one slot (F-002).
+const maxPinnedPerSlot = 6
+
+// PriceKey is the item column that can be pinned next to a kind's metadata fields.
+const PriceKey = "price"
+
+// PinnableKeys returns the field keys a list of this kind can pin, sorted: the
+// kind's metadata keys plus "price". Keys are looked up through the registry,
+// so a field added to a kind (or, later, a custom field) is pinnable at once.
+// An unknown kind has none.
+func PinnableKeys(kind string) []string {
+	sc, ok := registry[kind]
+	if !ok {
+		return nil
+	}
+	return slices.Sorted(maps.Keys(withPrice(sc.fields)))
+}
+
+func withPrice(fields map[string]rule) map[string]rule {
+	out := make(map[string]rule, len(fields)+1)
+	maps.Copy(out, fields)
+	out[PriceKey] = nil
+	return out
+}
+
+// ValidatePinned checks the two pinned-field slots of a list of this kind: each
+// slot is an ordered list of at most 6 unique pinnable keys, and a key is in at
+// most one slot. Errors are on "pinned_fields.under[i]" / "pinned_fields.right[i]".
+// Nil slots are returned as empty ones.
+func ValidatePinned(kind string, under, right []string) (u, r []string, err error) {
+	if !Known(kind) {
+		return nil, nil, apperr.Validation(apperr.FieldError{Field: "kind", Message: "is not a known item kind"})
+	}
+	allowed := PinnableKeys(kind)
+	var errs []apperr.FieldError
+	check := func(slot string, keys []string, other map[string]bool) map[string]bool {
+		seen := make(map[string]bool, len(keys))
+		base := "pinned_fields." + slot
+		if len(keys) > maxPinnedPerSlot {
+			errs = append(errs, apperr.FieldError{Field: base, Message: fmt.Sprintf("must have at most %d entries", maxPinnedPerSlot)})
+			return seen
+		}
+		for i, k := range keys {
+			field := fmt.Sprintf("%s[%d]", base, i)
+			switch {
+			case !slices.Contains(allowed, k):
+				errs = append(errs, apperr.FieldError{Field: field, Message: "must be one of " + strings.Join(allowed, ", ")})
+			case seen[k]:
+				errs = append(errs, apperr.FieldError{Field: field, Message: "is a duplicate key"})
+			case other[k]:
+				errs = append(errs, apperr.FieldError{Field: field, Message: "is already pinned in the other slot"})
+			}
+			seen[k] = true
+		}
+		return seen
+	}
+	inUnder := check("under", under, nil)
+	check("right", right, inUnder)
+	if len(errs) > 0 {
+		return nil, nil, apperr.Validation(errs...)
+	}
+	return append([]string{}, under...), append([]string{}, right...), nil
 }

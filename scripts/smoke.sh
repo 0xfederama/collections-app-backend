@@ -86,7 +86,7 @@ expect "list kind" motorcycle "$(field .kind)"
 
 step "create item with metadata and a single price"
 json 201 POST "/api/v1/lists/$LIST_ID/items" \
-  -d "{\"title\":\"$RUN big\",\"price\":{\"amount\":\"1299.00\",\"currency\":\"EUR\"},\"metadata\":{\"make\":\"Smoke\",\"model_year\":2020,\"displacement_cc\":900}}"
+  -d "{\"title\":\"$RUN big\",\"price\":{\"amount\":\"1299.00\",\"currency\":\"EUR\"},\"metadata\":{\"model_year\":2020,\"displacement_cc\":900}}"
 ITEM_ID="$(field .id)"
 ITEM_ETAG="$(etag)"
 expect "item kind" motorcycle "$(field .kind)"

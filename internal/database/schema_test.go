@@ -140,6 +140,11 @@ func schemaCases() []schemaCase {
 				`INSERT INTO lists (workspace_id, name, kind, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'kind_key', 0)`},
 		},
 		{
+			name: "F002 list sort_mode price is valid",
+			stmts: []string{sqlWorkspaces,
+				`INSERT INTO lists (workspace_id, name, kind, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'price', 0)`},
+		},
+		{
 			name: "F007 list sort_mode outside the enum",
 			stmts: []string{sqlWorkspaces,
 				`INSERT INTO lists (workspace_id, name, kind, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'random', 0)`},

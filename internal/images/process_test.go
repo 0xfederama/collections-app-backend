@@ -211,8 +211,9 @@ func TestThumbnailAppliesExifOrientationAndStripsMetadata(t *testing.T) {
 			if bytes.Contains(p.Thumbnail, []byte("Exif")) {
 				t.Fatalf("orientation %d: thumbnail still carries EXIF", o)
 			}
-			if !bytes.Contains(p.Original, []byte("Exif")) {
-				t.Fatalf("orientation %d: the original must stay untouched", o)
+			// The stored original keeps only a minimal EXIF with the orientation (F005-B1).
+			if hasExif := bytes.Contains(p.Original, []byte("Exif")); hasExif != (o > 1) {
+				t.Fatalf("orientation %d: original has EXIF = %v, want %v", o, hasExif, o > 1)
 			}
 		}
 	}

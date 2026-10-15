@@ -85,8 +85,11 @@ This starts `db`, runs `migrate` once, then starts `api` on `http://127.0.0.1:80
 | Safe reset (deletes DB + uploads) | `make reset-dev` (asks first, refuses when `APP_ENV=production`) |
 | Backup / restore / verify | `scripts/backup.sh`, `scripts/restore.sh`, `scripts/verify-restore.sh` (see [Backup and restore](#backup-and-restore)) |
 | Backup round-trip test (AT-17) | `make test-backup` (about a minute, not part of `make check`) |
+| API smoke test | `make smoke` (curl + jq against a running stack, `API_URL` defaults to `http://localhost:8090`, not part of `make check`) |
 
 `make check` = gofmt check, golangci-lint (including goimports), the Redocly spec lint, shellcheck on `scripts/` (pinned Docker image), a generated-code drift check, `go test ./...` (testcontainers Postgres), a check that compose publishes ports on `127.0.0.1` only, and a Docker image build.
+
+Run `make smoke` after a deploy, a compose change or a migration change, and before a release. It walks one end-to-end flow over HTTP (folder, list, item, image, sort, search, trash, restore, purge) and removes what it created. Point it at the test stack, never at dev data: `./deploy/test up -d --fresh`, then `make smoke` (or `API_URL=http://host:port make smoke`).
 
 ## Backup and restore
 

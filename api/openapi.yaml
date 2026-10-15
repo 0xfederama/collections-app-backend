@@ -1460,8 +1460,6 @@ components:
         price: { min: '12000.00', max: '13500.00', currency: EUR }
         website: https://www.ducati.com/
         metadata:
-          make: Ducati
-          model: Monster
           model_year: 2024
           displacement_cc: 937
           power_hp: 111
@@ -2073,14 +2071,14 @@ components:
         first_air_year: { type: integer, minimum: 1920, maximum: 2100 }
         end_year: { type: integer, minimum: 1920, maximum: 2100, description: 'At least `first_air_year`. Absent = ongoing.' }
         seasons: { type: integer, minimum: 1, maximum: 200 }
+        episodes_per_season: { type: integer, minimum: 1, maximum: 500 }
+        episode_minutes: { type: integer, minimum: 1, maximum: 1000, description: Average episode duration in minutes. }
         imdb_url: { type: string, pattern: '^https://(www\.|m\.)?imdb\.com/title/tt\d{7,10}/?$' }
         streaming: { $ref: '#/components/schemas/Streaming' }
     MotorcycleMetadata:
       type: object
       additionalProperties: false
       properties:
-        make: { type: string, maxLength: 100 }
-        model: { type: string, maxLength: 100 }
         model_year: { type: integer, minimum: 1885, maximum: 2100 }
         displacement_cc: { type: integer, minimum: 1, maximum: 5000 }
         power_hp: { type: number, minimum: 0, maximum: 1000, description: One decimal. }
@@ -2098,8 +2096,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        make: { type: string, maxLength: 100 }
-        model: { type: string, maxLength: 100 }
+        camera_type: { type: string, enum: [mirrorless, dslr, film] }
         release_year: { type: integer, minimum: 1900, maximum: 2100 }
         sensor_format: { type: string, enum: [full_frame, aps_c, micro_four_thirds, one_inch, medium_format, film_35mm, other] }
         megapixels: { type: number, minimum: 0.1, maximum: 500, description: One decimal. }

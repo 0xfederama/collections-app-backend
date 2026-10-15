@@ -1,5 +1,6 @@
 // Package kinds validates and normalizes item metadata per kind (DATA_MODEL
-// §2.1, trimmed by F-007). It is pure Go: no database, no HTTP. Every key is optional, `null`
+// §2.1, trimmed by F-007 and F-002: motorcycle and camera have no make/model, camera has camera_type,
+// tv_show has episodes_per_season and episode_minutes). It is pure Go: no database, no HTTP. Every key is optional, `null`
 // means "key omitted", text is trimmed, and the enum-like values live here
 // (not in CHECK constraints) so a new value needs no migration.
 package kinds
@@ -65,11 +66,13 @@ var registry = map[string]schema{
 	}},
 	TVShow: {
 		fields: map[string]rule{
-			"first_air_year": intRange(1920, 2100),
-			"end_year":       intRange(1920, 2100),
-			"seasons":        intRange(1, 200),
-			"imdb_url":       imdbURL,
-			"streaming":      streaming,
+			"first_air_year":      intRange(1920, 2100),
+			"end_year":            intRange(1920, 2100),
+			"seasons":             intRange(1, 200),
+			"episodes_per_season": intRange(1, 500),
+			"episode_minutes":     intRange(1, 1000),
+			"imdb_url":            imdbURL,
+			"streaming":           streaming,
 		},
 		cross: func(out map[string]any) []apperr.FieldError {
 			first, ok1 := out["first_air_year"].(int)
@@ -81,8 +84,6 @@ var registry = map[string]schema{
 		},
 	},
 	Motorcycle: {fields: map[string]rule{
-		"make":            text(defaultTextMax),
-		"model":           text(defaultTextMax),
 		"model_year":      intRange(1885, 2100),
 		"displacement_cc": intRange(1, 5000),
 		"power_hp":        decimalRange(0, 1000),
@@ -96,8 +97,7 @@ var registry = map[string]schema{
 		"power_hp":   decimalRange(0, 2000),
 	}},
 	Camera: {fields: map[string]rule{
-		"make":          text(defaultTextMax),
-		"model":         text(defaultTextMax),
+		"camera_type":   enum("mirrorless", "dslr", "film"),
 		"release_year":  intRange(1900, 2100),
 		"sensor_format": enum("full_frame", "aps_c", "micro_four_thirds", "one_inch", "medium_format", "film_35mm", "other"),
 		"megapixels":    decimalRange(0.1, 500),

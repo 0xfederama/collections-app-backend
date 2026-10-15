@@ -70,16 +70,18 @@ func TestAT05_AcceptedMetadata(t *testing.T) {
 		{"tv_show open end", "tv_show", `{"first_air_year":2008,"seasons":5}`, m{"first_air_year": 2008, "seasons": 5}},
 		{"tv_show end equals first", "tv_show", `{"first_air_year":2008,"end_year":2008}`, m{"first_air_year": 2008, "end_year": 2008}},
 		{"tv_show end without first", "tv_show", `{"end_year":2013}`, m{"end_year": 2013}},
-		{"motorcycle full", "motorcycle", `{"make":" Ducati ","model":"Monster","model_year":2021,"displacement_cc":937,"power_hp":111.0,"license_class":"A2"}`,
-			m{"make": "Ducati", "model": "Monster", "model_year": 2021, "displacement_cc": 937, "power_hp": 111.0, "license_class": "A2"}},
+		{"motorcycle full", "motorcycle", `{"model_year":2021,"displacement_cc":937,"power_hp":111.0,"license_class":"A2"}`,
+			m{"model_year": 2021, "displacement_cc": 937, "power_hp": 111.0, "license_class": "A2"}},
 		{"motorcycle one decimal", "motorcycle", `{"power_hp":95.5}`, m{"power_hp": 95.5}},
 		{"motorcycle bounds", "motorcycle", `{"power_hp":0,"displacement_cc":5000}`, m{"power_hp": 0.0, "displacement_cc": 5000}},
-		{"text at the limit", "motorcycle", `{"make":"` + long + `"}`, m{"make": long}},
+		{"text at the limit", "car", `{"make":"` + long + `"}`, m{"make": long}},
 		{"car electric", "car", `{"fuel_type":"electric","model_year":2023}`, m{"fuel_type": "electric", "model_year": 2023}},
 		{"car petrol", "car", `{"make":"VW","model":"Golf","model_year":2019,"fuel_type":"petrol","power_hp":245.0}`,
 			m{"make": "VW", "model": "Golf", "model_year": 2019, "fuel_type": "petrol", "power_hp": 245.0}},
-		{"camera full", "camera", `{"make":"Sony","model":"A7","release_year":2013,"sensor_format":"full_frame","megapixels":24.3}`,
-			m{"make": "Sony", "model": "A7", "release_year": 2013, "sensor_format": "full_frame", "megapixels": 24.3}},
+		{"camera full", "camera", `{"camera_type":"mirrorless","release_year":2013,"sensor_format":"full_frame","megapixels":24.3}`,
+			m{"camera_type": "mirrorless", "release_year": 2013, "sensor_format": "full_frame", "megapixels": 24.3}},
+		{"F002B2 tv episode fields", "tv_show", `{"episodes_per_season":10,"episode_minutes":45}`, m{"episodes_per_season": 10, "episode_minutes": 45}},
+		{"F002B2 tv episode bounds", "tv_show", `{"episodes_per_season":500,"episode_minutes":1}`, m{"episodes_per_season": 500, "episode_minutes": 1}},
 		{"camera megapixel bounds", "camera", `{"megapixels":0.1}`, m{"megapixels": 0.1}},
 	}
 	for _, tt := range tests {
@@ -102,6 +104,7 @@ func TestAT05_EveryEnumValueIsAccepted(t *testing.T) {
 	}{
 		{"motorcycle", "license_class", []string{"AM", "A1", "A2", "A"}},
 		{"car", "fuel_type", []string{"petrol", "diesel", "hybrid", "plugin_hybrid", "electric", "lpg", "cng", "hydrogen", "other"}},
+		{"camera", "camera_type", []string{"mirrorless", "dslr", "film"}},
 		{"camera", "sensor_format", []string{"full_frame", "aps_c", "micro_four_thirds", "one_inch", "medium_format", "film_35mm", "other"}},
 	}
 	for _, e := range enums {
@@ -164,9 +167,14 @@ func TestAT05_RejectedValues(t *testing.T) {
 		{"tv end above", "tv_show", `{"end_year":2101}`, []string{"metadata.end_year"}},
 		{"tv seasons zero", "tv_show", `{"seasons":0}`, []string{"metadata.seasons"}},
 		{"tv seasons above", "tv_show", `{"seasons":201}`, []string{"metadata.seasons"}},
-		{"moto make empty", "motorcycle", `{"make":"   "}`, []string{"metadata.make"}},
-		{"moto make too long", "motorcycle", `{"make":"` + strings.Repeat("a", 101) + `"}`, []string{"metadata.make"}},
-		{"moto make number", "motorcycle", `{"make":7}`, []string{"metadata.make"}},
+		{"car make empty", "car", `{"make":"   "}`, []string{"metadata.make"}},
+		{"car make too long", "car", `{"make":"` + strings.Repeat("a", 101) + `"}`, []string{"metadata.make"}},
+		{"car make number", "car", `{"make":7}`, []string{"metadata.make"}},
+		{"F002B2 tv episodes zero", "tv_show", `{"episodes_per_season":0}`, []string{"metadata.episodes_per_season"}},
+		{"F002B2 tv episodes above", "tv_show", `{"episodes_per_season":501}`, []string{"metadata.episodes_per_season"}},
+		{"F002B2 tv episodes fraction", "tv_show", `{"episodes_per_season":1.5}`, []string{"metadata.episodes_per_season"}},
+		{"F002B2 tv minutes zero", "tv_show", `{"episode_minutes":0}`, []string{"metadata.episode_minutes"}},
+		{"F002B2 tv minutes above", "tv_show", `{"episode_minutes":1001}`, []string{"metadata.episode_minutes"}},
 		{"moto year below", "motorcycle", `{"model_year":1884}`, []string{"metadata.model_year"}},
 		{"moto displacement zero", "motorcycle", `{"displacement_cc":0}`, []string{"metadata.displacement_cc"}},
 		{"moto displacement above", "motorcycle", `{"displacement_cc":5001}`, []string{"metadata.displacement_cc"}},
@@ -178,7 +186,7 @@ func TestAT05_RejectedValues(t *testing.T) {
 		{"camera megapixels below", "camera", `{"megapixels":0}`, []string{"metadata.megapixels"}},
 		{"camera megapixels above", "camera", `{"megapixels":500.1}`, []string{"metadata.megapixels"}},
 		{"camera megapixels two decimals", "camera", `{"megapixels":24.35}`, []string{"metadata.megapixels"}},
-		{"several errors in key order", "camera", `{"model":"","release_year":1800,"megapixels":"x"}`, []string{"metadata.megapixels", "metadata.model", "metadata.release_year"}},
+		{"several errors in key order", "camera", `{"camera_type":"","release_year":1800,"megapixels":"x"}`, []string{"metadata.camera_type", "metadata.megapixels", "metadata.release_year"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -207,6 +215,11 @@ func TestAT05_UnknownKeysAreUnknownFields(t *testing.T) {
 		name, kind, in, path string
 	}{
 		{"generic must be empty", "generic", `{"anything":1}`, "metadata.anything"},
+		{"F002B2 motorcycle make dropped", "motorcycle", `{"make":"Ducati"}`, "metadata.make"},
+		{"F002B2 motorcycle model dropped", "motorcycle", `{"model":"Monster"}`, "metadata.model"},
+		{"F002B2 camera make dropped", "camera", `{"make":"Sony"}`, "metadata.make"},
+		{"F002B2 camera model dropped", "camera", `{"model":"A7"}`, "metadata.model"},
+		{"F002B2 camera_type on a motorcycle", "motorcycle", `{"camera_type":"dslr"}`, "metadata.camera_type"},
 		{"movie key of another kind", "movie", `{"make":"Ducati"}`, "metadata.make"},
 		{"movie typo", "movie", `{"runtime":100}`, "metadata.runtime"},
 		{"unknown key wins over bad value", "movie", `{"release_year":1,"zzz":true}`, "metadata.zzz"},
@@ -248,7 +261,7 @@ func TestAT05_UnknownKind(t *testing.T) {
 
 func TestValidateDoesNotMutateInput(t *testing.T) {
 	in := m{"make": "  Ducati  ", "power_hp": nil}
-	if _, err := kinds.Validate("motorcycle", in); err != nil {
+	if _, err := kinds.Validate("car", in); err != nil {
 		t.Fatal(err)
 	}
 	if in["make"] != "  Ducati  " || len(in) != 2 {

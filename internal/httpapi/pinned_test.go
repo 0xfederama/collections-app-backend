@@ -158,8 +158,8 @@ func TestF002B3_ChangeKindResetsPinnedFields(t *testing.T) {
 
 func TestF002B3_PinnedKeysPerKind(t *testing.T) {
 	e := newTreeEnv(t)
-	// Every key a kind exposes can be pinned on a list of that kind; "price" is common to all.
-	keys := map[string]string{"generic": `["price"]`, "movie": `["release_year","runtime_minutes","imdb_url","streaming","price"]`,
+	// Every key a kind exposes can be pinned on a list of that kind; "price" is common to all but generic.
+	keys := map[string]string{"movie": `["release_year","runtime_minutes","imdb_url","streaming","price"]`,
 		"tv_show": `["first_air_year","seasons","episodes_per_season","episode_minutes","streaming","price"]`}
 	for kind, k := range keys {
 		rec := e.call("POST", "/api/v1/lists", `{"name":"`+kind+`","kind":"`+kind+`","pinned_fields":{"right":`+k+`}}`, "")

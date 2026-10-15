@@ -38,6 +38,6 @@ Owns folders and lists of the single workspace: create, read, rename, move, reor
 - Move checks in order: 404, 412 `version_conflict`, 409 `destination_unavailable`, 409 `cycle_detected` (walks up from the destination).
 - A PATCH with no fields succeeds and does not bump the version. A `kind` equal to the stored one is a no-op.
 - A kind change runs under the tree lock: it updates the list, resets `pinned_fields` to NULL and clears the metadata of its items (trashed ones too, which bumps their versions) in one transaction. A `pinned_fields` sent in the same PATCH is kept.
-- `pinned_fields` is `{under, right}` (migration 000004, a nullable JSONB). Keys are the kind's metadata keys plus `price`, at most 6 per slot, and a key sits in one slot only (422 on `pinned_fields.under[i]`).
-- `kind` is one of the six kinds (422 otherwise). `sort_mode: kind_key` is 422 on a `generic` list, and so is a change to `generic` while the list is on `kind_key`. `sort_mode: price` (migration 000005) is valid for every kind.
+- `pinned_fields` is `{under, right}` (migration 000004, a nullable JSONB). Keys are the kind's metadata keys plus `price` (`generic` pins nothing), at most 6 per slot, and a key sits in one slot only (422 on `pinned_fields.under[i]`).
+- `kind` is one of the six kinds (422 otherwise). `sort_mode: kind_key` is 422 on a `generic` list, and so is a change to `generic` while the list is on `kind_key`. `sort_mode: price` (migration 000005) is valid for every kind but `generic` (422 there; a change to `generic` clears the items' price and turns a `price` sort into `manual`, F008-B1).
 - Description is Markdown, at most 64 KiB (413 over); invalid UTF-8 or NUL is 422. Name is trimmed to 1-200 characters; enum violations are 422.

@@ -41,7 +41,7 @@ Owns items of a list: create, get with path, paged list, partial update, move an
 - Metadata: an undeclared key is `apperr.UnknownField` (400 `unknown_field`, path `metadata.<key>`) and wins over field errors; bad values are 422 on `metadata.<key>`.
 - Motorcycle and camera have no `make`/`model` (migration 000003 moved them into a `## From 1.1` content block); car keeps them. Camera has `camera_type` (mirrorless, dslr, film); tv_show has `episodes_per_season` (1-500) and `episode_minutes` (1-1000).
 - `streaming.paid_platforms` is optional; each entry must match a `platforms` entry (case-insensitive) and is stored in the platform's casing.
-- Price: `amount` (one price, stored as min = max) or min/max, never both; two decimals, no floats; currency is 3 uppercase letters.
+- Price: `amount` (one price, stored as min = max) or min/max, never both; two decimals, no floats; currency is 3 uppercase letters. A price on an item of a `generic` list is 422 on `price` (`null` is fine, F008-B1).
 - `website` (was `official_website_url`) accepts only absolute http and https URLs; `summary` and `status` are gone (F-007, moved to content by 000002).
 - Item summaries (list rows, search results, recent items) carry the item's `metadata` since F002-B5 (spec 0.5.0), so the web can show pinned fields.
 - Image is read-only here (URLs `/api/v1/attachments/{id}/file` and `/thumbnail`).

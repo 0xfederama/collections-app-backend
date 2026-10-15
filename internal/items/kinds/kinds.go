@@ -399,6 +399,8 @@ func ValidatePinned(kind string, under, right []string) (u, r []string, err erro
 		for i, k := range keys {
 			field := fmt.Sprintf("%s[%d]", base, i)
 			switch {
+			case len(allowed) == 0:
+				errs = append(errs, apperr.FieldError{Field: field, Message: "lists of this kind have no pinnable fields"})
 			case !slices.Contains(allowed, k):
 				errs = append(errs, apperr.FieldError{Field: field, Message: "must be one of " + strings.Join(allowed, ", ")})
 			case seen[k]:

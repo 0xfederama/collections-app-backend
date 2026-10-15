@@ -247,7 +247,7 @@ func TestAT05_ItemFieldRules(t *testing.T) {
 
 func TestF007_PriceAmountIsASinglePrice(t *testing.T) {
 	e := newTreeEnv(t)
-	lid := e.list("L", nil)["id"].(string)
+	lid := e.listOfKind("L", nil, "movie")["id"].(string)
 
 	it := e.newItem(lid, `{"title":"single","price":{"amount":"1200.00","currency":"EUR"}}`)
 	p := it["price"].(map[string]any)
@@ -286,7 +286,7 @@ func TestF007_PriceAmountIsASinglePrice(t *testing.T) {
 
 func TestPriceRoundTripIsExact(t *testing.T) {
 	e := newTreeEnv(t)
-	lid := e.list("L", nil)["id"].(string)
+	lid := e.listOfKind("L", nil, "movie")["id"].(string)
 	for _, price := range []string{"1299.00", "0.10", "0.01", "12.30", "9999999999.99", "100.00", "0.00"} {
 		it := e.newItem(lid, fmt.Sprintf(`{"title":"p","price":{"min":%q,"max":%q,"currency":"EUR"}}`, price, price))
 		got := e.fetchItem(it["id"])["price"].(map[string]any)
@@ -982,7 +982,7 @@ func TestF007_ListItemsSortByKindKey(t *testing.T) {
 
 func TestF002B4_ListItemsSortByPrice(t *testing.T) {
 	e := newTreeEnv(t)
-	l := e.list("Wishlist", nil)
+	l := e.listOfKind("Wishlist", nil, "movie")
 	lid := l["id"].(string)
 	mk := func(title string, min, max any) obj {
 		body := obj{"title": title}
@@ -1048,7 +1048,7 @@ func TestF002B4_ListItemsSortByPrice(t *testing.T) {
 		if len(rows) != 1 {
 			t.Fatalf("got %d rows", len(rows))
 		}
-		rec := e.call("POST", "/api/v1/lists", `{"name":"P","kind":"generic","sort_mode":"price"}`, "")
+		rec := e.call("POST", "/api/v1/lists", `{"name":"P","kind":"movie","sort_mode":"price"}`, "")
 		wantStatus(t, rec, 201)
 		if decode(t, rec)["sort_mode"] != "price" {
 			t.Fatalf("created sort_mode: %s", rec.Body)

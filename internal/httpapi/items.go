@@ -219,6 +219,14 @@ func itemSummaryBody(it items.Item) oapi.ItemSummary {
 		SortOrder: it.SortOrder, Version: it.Version, CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt,
 		Image: nullable.NewNullNullable[oapi.ImageSummary](),
 	}
+	// The stored metadata is validated JSON written by this service; anything unreadable degrades to {}.
+	out.Metadata = map[string]any{}
+	if len(it.Metadata) > 0 {
+		var meta map[string]any
+		if err := json.Unmarshal(it.Metadata, &meta); err == nil && meta != nil {
+			out.Metadata = meta
+		}
+	}
 	if img := it.Image; img != nil {
 		sum := oapi.ImageSummary{Url: img.URL}
 		if img.Source == items.ImageSourceUpload {

@@ -84,14 +84,11 @@ func TestAT12_SearchSubstringAndPath(t *testing.T) {
 	if !reflect.DeepEqual(hit.Path, wantPath) {
 		t.Fatalf("nested path = %v, want %v", hit.Path, wantPath)
 	}
-	// Summary shape: same fields as a list row, no metadata.
-	for _, k := range []string{"id", "list_id", "title", "kind", "image", "price", "website", "content_version", "sort_order", "version", "created_at", "updated_at"} {
+	// Summary shape: same fields as a list row, incl. metadata.
+	for _, k := range []string{"id", "list_id", "title", "kind", "image", "price", "website", "metadata", "content_version", "sort_order", "version", "created_at", "updated_at"} {
 		if _, ok := hit.Item[k]; !ok {
 			t.Errorf("item summary lacks %q", k)
 		}
-	}
-	if _, ok := hit.Item["metadata"]; ok {
-		t.Error("item summary must not carry metadata")
 	}
 	if hit.Item["kind"] != "movie" || hit.Item["website"] != "https://www.warnerbros.com/movies/matrix" || hit.Item["image"] != nil {
 		t.Errorf("unexpected summary: %v", hit.Item)

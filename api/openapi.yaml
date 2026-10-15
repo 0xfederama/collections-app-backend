@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -1490,6 +1490,10 @@ components:
               thumbnail_url: /api/v1/attachments/7c1e5a10-0000-4000-8000-000000000201/thumbnail
             price: null
             website: null
+            metadata:
+              release_year: 1999
+              runtime_minutes: 136
+              streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
             content_version: 2
             sort_order: 0
             version: 3
@@ -1502,6 +1506,7 @@ components:
             image: { url: 'https://example.org/images/br2049.jpg' }
             price: null
             website: null
+            metadata: {}
             content_version: 0
             sort_order: 1
             version: 1
@@ -1519,6 +1524,10 @@ components:
               image: null
               price: null
               website: null
+              metadata:
+                release_year: 1999
+                runtime_minutes: 136
+                streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
               content_version: 2
               sort_order: 0
               version: 3
@@ -1539,6 +1548,10 @@ components:
               image: null
               price: null
               website: null
+              metadata:
+                release_year: 1999
+                runtime_minutes: 136
+                streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
               content_version: 2
               sort_order: 0
               version: 3
@@ -1983,8 +1996,8 @@ components:
           camera: '#/components/schemas/CameraItem'
     ItemSummary:
       type: object
-      description: "An item row in lists and search: no `metadata`, and the image is reduced."
-      required: [id, list_id, title, kind, image, price, website, content_version, sort_order, version, created_at, updated_at]
+      description: "An item row in lists, search and recent items: the same `metadata` object as the full item (`{}` when the kind has none), and the image is reduced."
+      required: [id, list_id, title, kind, image, price, website, metadata, content_version, sort_order, version, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         list_id: { type: string, format: uuid }
@@ -1993,6 +2006,10 @@ components:
         image: { $ref: '#/components/schemas/ImageSummary' }
         price: { $ref: '#/components/schemas/Price' }
         website: { type: string, nullable: true }
+        metadata:
+          type: object
+          description: 'Same object as `metadata` on the full item; its shape depends on `kind` (see the `*Metadata` schemas).'
+          additionalProperties: true
         content_version: { type: integer }
         sort_order: { type: integer }
         version: { type: integer }

@@ -21,7 +21,7 @@ info:
     **Errors** are RFC 9457 `application/problem+json` with a stable `code` (see the `Problem` schema). A missing **or trashed** resource is
     `404 not_found` on every non-trash endpoint.
 
-    **Limits.** JSON bodies: 64 KiB (2 MiB on the content `PUT`). Multipart image upload: 10 MiB plus 64 KiB overhead. Markdown: 1 MiB UTF-8.
+    **Limits.** JSON bodies: 64 KiB (2 MiB on the content `PUT` and on list create and update, whose `description` can be 64 KiB). Multipart image upload: 10 MiB plus 64 KiB overhead. Markdown: 1 MiB UTF-8.
     Item pages: `limit` 1–200 (default 50), `offset` ≥ 0.
 servers:
   - url: /

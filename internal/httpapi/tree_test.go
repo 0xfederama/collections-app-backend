@@ -2,6 +2,7 @@ package httpapi_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/clock"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/items"
@@ -521,7 +523,6 @@ func TestFieldValidation(t *testing.T) {
 	f := e.folder("F", nil)
 	l := e.list("L", nil)
 	long := strings.Repeat("x", 201)
-	longDesc := strings.Repeat("d", 2001)
 
 	cases := []struct {
 		name, method, path, body, ifMatch string
@@ -533,9 +534,9 @@ func TestFieldValidation(t *testing.T) {
 		{"folder rename blank", "PATCH", "/api/v1/folders/" + f["id"].(string), `{"name":" "}`, `"f-1"`, []string{"name"}},
 		{"list empty name", "POST", "/api/v1/lists", `{"name":"","kind":"generic"}`, "", []string{"name"}},
 		{"list bad enums", "POST", "/api/v1/lists", `{"name":"n","kind":"generic","display_mode":"huge","sort_mode":"random"}`, "", []string{"display_mode", "sort_mode"}},
-		{"list long description", "POST", "/api/v1/lists", `{"name":"n","kind":"generic","description":"` + longDesc + `"}`, "", []string{"description"}},
+		{"TestF007 list NUL in description", "POST", "/api/v1/lists", `{"name":"n","kind":"generic","description":"a\u0000b"}`, "", []string{"description"}},
 		{"list patch name and enum", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"name":"","display_mode":"x"}`, `"l-1"`, []string{"name", "display_mode"}},
-		{"list patch long description", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"description":"` + longDesc + `"}`, `"l-1"`, []string{"description"}},
+		{"TestF007 list patch NUL in description", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"description":"a\u0000b"}`, `"l-1"`, []string{"description"}},
 		{"TestF007 list unknown kind", "POST", "/api/v1/lists", `{"name":"n","kind":"book"}`, "", []string{"kind"}},
 		{"TestF007 list kind_key on generic", "POST", "/api/v1/lists", `{"name":"n","kind":"generic","sort_mode":"kind_key"}`, "", []string{"sort_mode"}},
 		{"TestF007 list patch unknown kind", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"kind":"book"}`, `"l-1"`, []string{"kind"}},
@@ -716,5 +717,131 @@ func TestF007_ListSortModeKindKeyFollowsTheKind(t *testing.T) {
 	p = wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"generic","sort_mode":"kind_key"}`, etagOf("l", cur)), 422, "validation_failed")
 	if len(p.Errors) != 1 || p.Errors[0].Field != "sort_mode" {
 		t.Fatalf("errors = %+v, want one on sort_mode", p.Errors)
+	}
+}
+
+// descEnv returns a tree service on the env's database and a fresh generic list.
+func (e *treeEnv) descEnv() (*tree.Service, tree.List) {
+	e.t.Helper()
+	svc := tree.New(e.pool, clock.System{}, e.ws)
+	l, err := svc.CreateList(e.t.Context(), tree.CreateListInput{Name: "L", Kind: "generic"})
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return svc, l
+}
+
+func TestF007_ListDescriptionLimitIsBytes(t *testing.T) {
+	e := newTreeEnv(t)
+	svc, l := e.descEnv()
+	ctx := t.Context()
+	patch := func(v *string) tree.ListPatch {
+		return tree.ListPatch{Description: tree.Optional[string]{Set: true, Value: v}}
+	}
+	str := func(s string) *string { return &s }
+
+	tests := []struct {
+		name    string
+		desc    string
+		wantErr string // "", "413" or "422"
+	}{
+		{"exactly 65536 bytes", strings.Repeat("x", 65536), ""},
+		{"65537 bytes", strings.Repeat("x", 65537), "413"},
+		{"multi-byte counts bytes, not characters", strings.Repeat("é", 32769), "413"}, // 65538 bytes, 32769 runes
+		{"multi-byte at the limit", strings.Repeat("é", 32768), ""},                    // 65536 bytes
+		{"NUL", "a\x00b", "422"},
+		{"invalid UTF-8", "a\xffb", "422"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cur, err := svc.GetList(ctx, l.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = svc.UpdateList(ctx, l.ID, cur.Version, patch(str(tt.desc)))
+			var tooLarge *apperr.PayloadTooLargeError
+			var invalid *apperr.ValidationError
+			switch tt.wantErr {
+			case "":
+				if err != nil {
+					t.Fatalf("err = %v", err)
+				}
+			case "413":
+				if !errors.As(err, &tooLarge) || tooLarge.Limit != 65536 {
+					t.Fatalf("err = %v, want PayloadTooLarge(65536)", err)
+				}
+			case "422":
+				if !errors.As(err, &invalid) || invalid.Errors[0].Field != "description" {
+					t.Fatalf("err = %v, want validation error on description", err)
+				}
+			}
+		})
+	}
+
+	t.Run("create applies the same limit", func(t *testing.T) {
+		_, err := svc.CreateList(ctx, tree.CreateListInput{Name: "N", Kind: "generic", Description: str(strings.Repeat("x", 65537))})
+		var tooLarge *apperr.PayloadTooLargeError
+		if !errors.As(err, &tooLarge) {
+			t.Fatalf("err = %v, want PayloadTooLarge", err)
+		}
+		if _, err := svc.CreateList(ctx, tree.CreateListInput{Name: "N", Kind: "generic", Description: str(strings.Repeat("x", 65536))}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("over HTTP the stored markdown round-trips and 65537 bytes answer 413", func(t *testing.T) {
+		path := "/api/v1/lists/" + l.ID.String()
+		cur := e.fetch("lists", l.ID.String())
+		rec := e.call("PATCH", path, `{"description":"# Title\n\n- one\n- two"}`, etagOf("l", cur))
+		wantStatus(t, rec, 200)
+		if got := decode(t, rec)["description"]; got != "# Title\n\n- one\n- two" {
+			t.Fatalf("description = %q", got)
+		}
+		// The 64 KiB JSON body limit of the guard applies first, so the 413 is the same either way.
+		cur = e.fetch("lists", l.ID.String())
+		wantProblem(t, e.call("PATCH", path, `{"description":"`+strings.Repeat("x", 65537)+`"}`, etagOf("l", cur)), 413, "payload_too_large")
+	})
+}
+
+func TestF007_ListDescriptionVersioning(t *testing.T) {
+	e := newTreeEnv(t)
+	l := e.list("L", nil)
+	path := "/api/v1/lists/" + l["id"].(string)
+
+	// A change bumps the version.
+	rec := e.call("PATCH", path, `{"description":"hello"}`, `"l-1"`)
+	wantStatus(t, rec, 200)
+	if got := decode(t, rec); got["description"] != "hello" || got["version"].(float64) != 2 {
+		t.Fatalf("edit: %v", got)
+	}
+
+	// The same description again changes nothing: no bump, same ETag.
+	rec = e.call("PATCH", path, `{"description":"hello"}`, `"l-2"`)
+	wantStatus(t, rec, 200)
+	if got := decode(t, rec); got["version"].(float64) != 2 || rec.Header().Get("ETag") != `"l-2"` {
+		t.Fatalf("unchanged description bumped the version: %v / %s", got, rec.Header().Get("ETag"))
+	}
+
+	// A stale version conflicts, whatever the description.
+	p := wantProblem(t, e.call("PATCH", path, `{"description":"other"}`, `"l-1"`), 412, "version_conflict")
+	_ = p
+	if got := e.fetch("lists", l["id"].(string)); got["description"] != "hello" || got["version"].(float64) != 2 {
+		t.Fatalf("stale write changed the list: %v", got)
+	}
+	// A stale version conflicts even when the description is unchanged.
+	wantProblem(t, e.call("PATCH", path, `{"description":"hello"}`, `"l-1"`), 412, "version_conflict")
+
+	// Empty string and null both clear it.
+	for _, body := range []string{`{"description":""}`, `{"description":null}`} {
+		cur := e.fetch("lists", l["id"].(string))
+		if cur["description"] == nil {
+			wantStatus(t, e.call("PATCH", path, `{"description":"again"}`, etagOf("l", cur)), 200)
+			cur = e.fetch("lists", l["id"].(string))
+		}
+		rec = e.call("PATCH", path, body, etagOf("l", cur))
+		wantStatus(t, rec, 200)
+		if got := decode(t, rec); got["description"] != nil || got["version"].(float64) != cur["version"].(float64)+1 {
+			t.Fatalf("%s: %v", body, got)
+		}
 	}
 }

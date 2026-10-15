@@ -25,8 +25,8 @@ import (
 
 // Limits and enums from DATA_MODEL §2 (the same rules are CHECK constraints).
 const (
-	maxNameLen        = 200
-	maxDescriptionLen = 2000
+	maxNameLen          = 200
+	maxDescriptionBytes = 64 << 10 // Markdown, decoded UTF-8 bytes
 )
 
 var (

@@ -3,6 +3,7 @@ package tree
 import (
 	"context"
 	"fmt"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -41,7 +42,11 @@ func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, err
 	if in.SortMode == "" {
 		in.SortMode = DefaultSortMode
 	}
-	name, errs := validateListFields(&in.Name, in.Description, &in.DisplayMode, &in.SortMode)
+	if err := validateDescription(in.Description); err != nil {
+		return List{}, err
+	}
+	in.Description = nilIfEmpty(in.Description)
+	name, errs := validateListFields(&in.Name, &in.DisplayMode, &in.SortMode)
 	errs = append(errs, kindErrors(&in.Kind)...)
 	if kinds.Known(in.Kind) {
 		errs = append(errs, sortKindErrors(in.Kind, in.SortMode, "sort_mode")...)
@@ -122,8 +127,11 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 			errs = append(errs, *fe)
 		}
 	}
-	if p.Description.Set && p.Description.Value != nil {
-		errs = append(errs, descriptionErrors(*p.Description.Value)...)
+	if p.Description.Set {
+		if err := validateDescription(p.Description.Value); err != nil {
+			return List{}, err
+		}
+		p.Description.Value = nilIfEmpty(p.Description.Value)
 	}
 	errs = append(errs, enumErrors(p.DisplayMode, p.SortMode)...)
 	if p.Kind != nil {
@@ -149,7 +157,11 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 			return apperr.VersionConflict(int(cur.Version))
 		}
 		kindChanged := p.Kind != nil && *p.Kind != cur.Kind
-		fieldsSet := p.Name != nil || p.Description.Set || p.DisplayMode != nil || p.SortMode != nil
+		// A field sent with its stored value changes nothing: no write, no version bump.
+		fieldsSet := (p.Name != nil && *p.Name != cur.Name) ||
+			(p.Description.Set && !equalPtr(p.Description.Value, cur.Description)) ||
+			(p.DisplayMode != nil && *p.DisplayMode != cur.DisplayMode) ||
+			(p.SortMode != nil && *p.SortMode != cur.SortMode)
 		if !kindChanged && !fieldsSet {
 			return nil
 		}
@@ -267,14 +279,11 @@ func (s *Service) ReorderLists(ctx context.Context, folder *uuid.UUID, ids []uui
 }
 
 // validateListFields checks a create request and returns the trimmed name.
-func validateListFields(name *string, description *string, displayMode, sortMode *string) (string, []apperr.FieldError) {
+func validateListFields(name *string, displayMode, sortMode *string) (string, []apperr.FieldError) {
 	var errs []apperr.FieldError
 	clean, fe := cleanName(*name)
 	if fe != nil {
 		errs = append(errs, *fe)
-	}
-	if description != nil {
-		errs = append(errs, descriptionErrors(*description)...)
 	}
 	errs = append(errs, enumErrors(displayMode, sortMode)...)
 	return clean, errs
@@ -299,11 +308,31 @@ func sortKindErrors(kind, sortMode, field string) []apperr.FieldError {
 	return nil
 }
 
-func descriptionErrors(d string) []apperr.FieldError {
-	if utf8.RuneCountInString(d) > maxDescriptionLen {
-		return []apperr.FieldError{{Field: "description", Message: fmt.Sprintf("must be at most %d characters", maxDescriptionLen)}}
+// validateDescription applies the Markdown description rules, like the item
+// content: at most 64 KiB of decoded UTF-8 bytes (413), valid UTF-8 without NUL
+// (422; Postgres text cannot store NUL).
+func validateDescription(d *string) error {
+	if d == nil {
+		return nil
+	}
+	if len(*d) > maxDescriptionBytes {
+		return apperr.PayloadTooLarge(maxDescriptionBytes)
+	}
+	if !utf8.ValidString(*d) {
+		return apperr.Validation(apperr.FieldError{Field: "description", Message: "must be valid UTF-8"})
+	}
+	if strings.ContainsRune(*d, 0) {
+		return apperr.Validation(apperr.FieldError{Field: "description", Message: "must not contain NUL characters"})
 	}
 	return nil
+}
+
+// nilIfEmpty turns the empty description into nil: both clear it.
+func nilIfEmpty(d *string) *string {
+	if d != nil && *d == "" {
+		return nil
+	}
+	return d
 }
 
 func enumErrors(displayMode, sortMode *string) []apperr.FieldError {
@@ -315,4 +344,11 @@ func enumErrors(displayMode, sortMode *string) []apperr.FieldError {
 		errs = append(errs, apperr.FieldError{Field: "sort_mode", Message: "must be one of manual, title, updated, kind_key"})
 	}
 	return errs
+}
+
+func equalPtr(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }

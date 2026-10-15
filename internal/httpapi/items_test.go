@@ -884,3 +884,82 @@ func TestF007_MoveItemAcrossKinds(t *testing.T) {
 	// A destination that is missing is still destination_unavailable, not a kind mismatch.
 	wantProblem(t, move(e.fetchItem(it["id"]), uuid.NewString()), 409, "destination_unavailable")
 }
+
+func TestF007_ListItemsSortByKindKey(t *testing.T) {
+	e := newTreeEnv(t)
+	l := e.listOfKind("Films", nil, "movie")
+	lid := l["id"].(string)
+	mk := func(title string, year any) obj {
+		body := obj{"title": title}
+		if year != nil {
+			body["metadata"] = obj{"release_year": year}
+		}
+		b, _ := json.Marshal(body)
+		return e.newItem(lid, string(b))
+	}
+	late := mk("late", 2005)
+	none := mk("none", nil)
+	early := mk("early", 1990)
+	tie := mk("tie", 1990)
+	mid := mk("mid", 2000)
+
+	// Ascending, empty last, ties by id.
+	first, second := early, tie
+	if second["id"].(string) < first["id"].(string) {
+		first, second = second, first
+	}
+	want := idsOf(first, second, mid, late, none)
+
+	t.Run("explicit sort", func(t *testing.T) {
+		rows, _ := e.page(lid, "?sort=kind_key")
+		if got := idsOf(rows...); !reflect.DeepEqual(got, want) {
+			t.Fatalf("got %v, want %v", titlesOf(rows), want)
+		}
+	})
+
+	t.Run("paging and q keep working", func(t *testing.T) {
+		rows, page := e.page(lid, "?sort=kind_key&limit=2&offset=2")
+		if got := idsOf(rows...); !reflect.DeepEqual(got, want[2:4]) || page["total"].(float64) != 5 {
+			t.Fatalf("page: got %v total %v", titlesOf(rows), page["total"])
+		}
+		rows, page = e.page(lid, "?sort=kind_key&q=LATE")
+		if got := titlesOf(rows); !reflect.DeepEqual(got, []string{"late"}) || page["total"].(float64) != 1 {
+			t.Fatalf("q: got %v total %v", got, page["total"])
+		}
+	})
+
+	t.Run("stored sort_mode kind_key is the default and manual order is untouched", func(t *testing.T) {
+		manual := []string{"late", "none", "early", "tie", "mid"}
+		rows, _ := e.page(lid, "")
+		if got := titlesOf(rows); !reflect.DeepEqual(got, manual) {
+			t.Fatalf("manual: %v", got)
+		}
+		cur := e.fetch("lists", lid)
+		wantStatus(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"kind_key"}`, etagOf("l", cur)), 200)
+		rows, _ = e.page(lid, "")
+		if got := idsOf(rows...); !reflect.DeepEqual(got, want) {
+			t.Fatalf("default kind_key: got %v", titlesOf(rows))
+		}
+		cur = e.fetch("lists", lid)
+		wantStatus(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"manual"}`, etagOf("l", cur)), 200)
+		rows, _ = e.page(lid, "")
+		if got := titlesOf(rows); !reflect.DeepEqual(got, manual) {
+			t.Fatalf("manual after switching back: %v", got)
+		}
+		var orders []int
+		for _, id := range idsOf(late, none, early, tie, mid) {
+			var so int
+			e.queryRow("SELECT sort_order FROM items WHERE id = $1", []any{id}, &so)
+			orders = append(orders, so)
+		}
+		if !reflect.DeepEqual(orders, []int{0, 1, 2, 3, 4}) {
+			t.Fatalf("sort_order changed: %v", orders)
+		}
+	})
+
+	t.Run("generic list answers 400 invalid_parameter", func(t *testing.T) {
+		g := e.list("Plain", nil)
+		e.titled(g["id"].(string), "x")
+		wantProblem(t, e.call("GET", "/api/v1/lists/"+g["id"].(string)+"/items?sort=kind_key", "", ""), 400, "invalid_parameter")
+	})
+}

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -24,6 +25,14 @@ func (s *Server) ListItems(ctx context.Context, r oapi.ListItemsRequestObject) (
 		p.Offset = *r.Params.Offset
 	}
 	page, err := s.deps.Items.List(ctx, r.Id, p)
+	if errors.Is(err, items.ErrInvalidSort) {
+		pr := invalidParameter(`"sort=kind_key" is not available on lists of this kind.`)
+		return oapi.ListItems400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: oapi.BadRequestApplicationProblemPlusJSONResponse{
+				Type: pr.Type, Title: pr.Title, Status: pr.Status, Code: oapi.ProblemCode(pr.Code), Detail: &pr.Detail,
+			},
+		}, nil
+	}
 	if err != nil {
 		return nil, err
 	}

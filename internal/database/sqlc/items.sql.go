@@ -13,6 +13,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearListItemsMetadata = `-- name: ClearListItemsMetadata :execrows
+UPDATE items SET metadata = '{}', version = version + 1, updated_at = $1
+WHERE list_id = $2 AND workspace_id = $3 AND metadata <> '{}'
+`
+
+type ClearListItemsMetadataParams struct {
+	Now         time.Time
+	ListID      uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+// A kind change empties the kind fields of every item of the list (trashed ones too).
+func (q *Queries) ClearListItemsMetadata(ctx context.Context, arg ClearListItemsMetadataParams) (int64, error) {
+	result, err := q.db.Exec(ctx, clearListItemsMetadata, arg.Now, arg.ListID, arg.WorkspaceID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countItems = `-- name: CountItems :one
 SELECT count(*)::int AS total FROM items i
 WHERE i.list_id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
@@ -32,8 +52,26 @@ func (q *Queries) CountItems(ctx context.Context, arg CountItemsParams) (int32, 
 	return total, err
 }
 
+const countListItems = `-- name: CountListItems :one
+SELECT count(*)::int AS total FROM items
+WHERE list_id = $1 AND workspace_id = $2
+`
+
+type CountListItemsParams struct {
+	ListID      uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+// All items of a list, trashed ones included (a kind change clears all of them).
+func (q *Queries) CountListItems(ctx context.Context, arg CountListItemsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countListItems, arg.ListID, arg.WorkspaceID)
+	var total int32
+	err := row.Scan(&total)
+	return total, err
+}
+
 const getActiveListForItems = `-- name: GetActiveListForItems :one
-SELECT id, name, folder_id, sort_mode FROM lists
+SELECT id, name, folder_id, sort_mode, kind FROM lists
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 `
 
@@ -47,6 +85,7 @@ type GetActiveListForItemsRow struct {
 	Name     string
 	FolderID uuid.NullUUID
 	SortMode string
+	Kind     string
 }
 
 func (q *Queries) GetActiveListForItems(ctx context.Context, arg GetActiveListForItemsParams) (GetActiveListForItemsRow, error) {
@@ -57,19 +96,22 @@ func (q *Queries) GetActiveListForItems(ctx context.Context, arg GetActiveListFo
 		&i.Name,
 		&i.FolderID,
 		&i.SortMode,
+		&i.Kind,
 	)
 	return i, err
 }
 
 const getItem = `-- name: GetItem :one
 
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.kind, i.summary, i.status, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.official_website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+       l.kind              AS kind,
        a.width             AS image_width,
        a.height            AS image_height,
        a.original_filename AS image_original_filename,
        COALESCE((SELECT max(v.version) FROM item_content_versions v WHERE v.item_id = i.id), 0)::int AS content_version
 FROM items i
 LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
 `
 
@@ -83,15 +125,12 @@ type GetItemRow struct {
 	WorkspaceID           uuid.UUID
 	ListID                uuid.UUID
 	Title                 string
-	Kind                  string
-	Summary               *string
-	Status                *string
 	ImageUrl              *string
 	ImageAttachmentID     uuid.NullUUID
 	PriceMin              pgtype.Numeric
 	PriceMax              pgtype.Numeric
 	Currency              *string
-	OfficialWebsiteUrl    *string
+	WebsiteUrl            *string
 	Metadata              []byte
 	SortOrder             int32
 	Version               int32
@@ -99,6 +138,7 @@ type GetItemRow struct {
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
 	TrashBatchID          uuid.NullUUID
+	Kind                  string
 	ImageWidth            *int32
 	ImageHeight           *int32
 	ImageOriginalFilename *string
@@ -106,7 +146,7 @@ type GetItemRow struct {
 }
 
 // Item read model: GetItem and ListItems return the same columns, so one mapper
-// (internal/items) serves both. The image columns come from the attachment the
+// (internal/items) serves both. kind is not stored on the item: it comes from its list (F-007). The image columns come from the attachment the
 // item points to (NULL for no image or an external URL). content_version is the
 // highest saved Markdown version, 0 when there is none (D-052).
 func (q *Queries) GetItem(ctx context.Context, arg GetItemParams) (GetItemRow, error) {
@@ -117,15 +157,12 @@ func (q *Queries) GetItem(ctx context.Context, arg GetItemParams) (GetItemRow, e
 		&i.WorkspaceID,
 		&i.ListID,
 		&i.Title,
-		&i.Kind,
-		&i.Summary,
-		&i.Status,
 		&i.ImageUrl,
 		&i.ImageAttachmentID,
 		&i.PriceMin,
 		&i.PriceMax,
 		&i.Currency,
-		&i.OfficialWebsiteUrl,
+		&i.WebsiteUrl,
 		&i.Metadata,
 		&i.SortOrder,
 		&i.Version,
@@ -133,6 +170,7 @@ func (q *Queries) GetItem(ctx context.Context, arg GetItemParams) (GetItemRow, e
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
+		&i.Kind,
 		&i.ImageWidth,
 		&i.ImageHeight,
 		&i.ImageOriginalFilename,
@@ -142,27 +180,24 @@ func (q *Queries) GetItem(ctx context.Context, arg GetItemParams) (GetItemRow, e
 }
 
 const insertItem = `-- name: InsertItem :one
-INSERT INTO items (workspace_id, list_id, title, kind, summary, status, price_min, price_max, currency,
-                   official_website_url, metadata, sort_order, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7,
-        $8, $9, $10, $11, $12, $13, $13)
+INSERT INTO items (workspace_id, list_id, title, price_min, price_max, currency,
+                   website_url, metadata, sort_order, created_at, updated_at)
+VALUES ($1, $2, $3, $4,
+        $5, $6, $7, $8, $9, $10, $10)
 RETURNING id
 `
 
 type InsertItemParams struct {
-	WorkspaceID        uuid.UUID
-	ListID             uuid.UUID
-	Title              string
-	Kind               string
-	Summary            *string
-	Status             *string
-	PriceMin           pgtype.Numeric
-	PriceMax           pgtype.Numeric
-	Currency           *string
-	OfficialWebsiteUrl *string
-	Metadata           []byte
-	SortOrder          int32
-	Now                time.Time
+	WorkspaceID uuid.UUID
+	ListID      uuid.UUID
+	Title       string
+	PriceMin    pgtype.Numeric
+	PriceMax    pgtype.Numeric
+	Currency    *string
+	WebsiteUrl  *string
+	Metadata    []byte
+	SortOrder   int32
+	Now         time.Time
 }
 
 func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) (uuid.UUID, error) {
@@ -170,13 +205,10 @@ func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) (uuid.UU
 		arg.WorkspaceID,
 		arg.ListID,
 		arg.Title,
-		arg.Kind,
-		arg.Summary,
-		arg.Status,
 		arg.PriceMin,
 		arg.PriceMax,
 		arg.Currency,
-		arg.OfficialWebsiteUrl,
+		arg.WebsiteUrl,
 		arg.Metadata,
 		arg.SortOrder,
 		arg.Now,
@@ -217,14 +249,47 @@ func (q *Queries) ListActiveItemIDsByList(ctx context.Context, arg ListActiveIte
 	return items, nil
 }
 
+const listItemIDsOfList = `-- name: ListItemIDsOfList :many
+SELECT id FROM items
+WHERE list_id = $1 AND workspace_id = $2
+ORDER BY sort_order, id
+`
+
+type ListItemIDsOfListParams struct {
+	ListID      uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) ListItemIDsOfList(ctx context.Context, arg ListItemIDsOfListParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listItemIDsOfList, arg.ListID, arg.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listItems = `-- name: ListItems :many
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.kind, i.summary, i.status, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.official_website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+       l.kind              AS kind,
        a.width             AS image_width,
        a.height            AS image_height,
        a.original_filename AS image_original_filename,
        COALESCE((SELECT max(v.version) FROM item_content_versions v WHERE v.item_id = i.id), 0)::int AS content_version
 FROM items i
 LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.list_id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
   AND lower(i.title) LIKE '%' || lower($3::text) || '%' ESCAPE '\'
 ORDER BY
@@ -249,15 +314,12 @@ type ListItemsRow struct {
 	WorkspaceID           uuid.UUID
 	ListID                uuid.UUID
 	Title                 string
-	Kind                  string
-	Summary               *string
-	Status                *string
 	ImageUrl              *string
 	ImageAttachmentID     uuid.NullUUID
 	PriceMin              pgtype.Numeric
 	PriceMax              pgtype.Numeric
 	Currency              *string
-	OfficialWebsiteUrl    *string
+	WebsiteUrl            *string
 	Metadata              []byte
 	SortOrder             int32
 	Version               int32
@@ -265,13 +327,14 @@ type ListItemsRow struct {
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
 	TrashBatchID          uuid.NullUUID
+	Kind                  string
 	ImageWidth            *int32
 	ImageHeight           *int32
 	ImageOriginalFilename *string
 	ContentVersion        int32
 }
 
-// @sort is manual, title or updated; @q is an already escaped LIKE fragment (” = no filter).
+// @sort is manual, title or updated (kind_key has its own query, ListItemsByKindKey); @q is an already escaped LIKE fragment (” = no filter).
 func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListItemsRow, error) {
 	rows, err := q.db.Query(ctx, listItems,
 		arg.ListID,
@@ -293,15 +356,12 @@ func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListIte
 			&i.WorkspaceID,
 			&i.ListID,
 			&i.Title,
-			&i.Kind,
-			&i.Summary,
-			&i.Status,
 			&i.ImageUrl,
 			&i.ImageAttachmentID,
 			&i.PriceMin,
 			&i.PriceMax,
 			&i.Currency,
-			&i.OfficialWebsiteUrl,
+			&i.WebsiteUrl,
 			&i.Metadata,
 			&i.SortOrder,
 			&i.Version,
@@ -309,6 +369,111 @@ func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListIte
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.TrashBatchID,
+			&i.Kind,
+			&i.ImageWidth,
+			&i.ImageHeight,
+			&i.ImageOriginalFilename,
+			&i.ContentVersion,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listItemsByKindKey = `-- name: ListItemsByKindKey :many
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+       l.kind              AS kind,
+       a.width             AS image_width,
+       a.height            AS image_height,
+       a.original_filename AS image_original_filename,
+       COALESCE((SELECT max(v.version) FROM item_content_versions v WHERE v.item_id = i.id), 0)::int AS content_version
+FROM items i
+LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
+WHERE i.list_id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
+  AND lower(i.title) LIKE '%' || lower($3::text) || '%' ESCAPE '\'
+ORDER BY
+  CASE WHEN jsonb_typeof(i.metadata -> $4::text) = 'number'
+       THEN (i.metadata ->> $4::text)::numeric END ASC NULLS LAST,
+  i.id
+LIMIT $6 OFFSET $5
+`
+
+type ListItemsByKindKeyParams struct {
+	ListID      uuid.UUID
+	WorkspaceID uuid.UUID
+	Q           string
+	Key         string
+	PageOffset  int32
+	PageLimit   int32
+}
+
+type ListItemsByKindKeyRow struct {
+	ID                    uuid.UUID
+	WorkspaceID           uuid.UUID
+	ListID                uuid.UUID
+	Title                 string
+	ImageUrl              *string
+	ImageAttachmentID     uuid.NullUUID
+	PriceMin              pgtype.Numeric
+	PriceMax              pgtype.Numeric
+	Currency              *string
+	WebsiteUrl            *string
+	Metadata              []byte
+	SortOrder             int32
+	Version               int32
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	DeletedAt             *time.Time
+	TrashBatchID          uuid.NullUUID
+	Kind                  string
+	ImageWidth            *int32
+	ImageHeight           *int32
+	ImageOriginalFilename *string
+	ContentVersion        int32
+}
+
+// Sort by the kind's sort key, ascending, empty (missing or non-numeric) values last. @key is the metadata key.
+func (q *Queries) ListItemsByKindKey(ctx context.Context, arg ListItemsByKindKeyParams) ([]ListItemsByKindKeyRow, error) {
+	rows, err := q.db.Query(ctx, listItemsByKindKey,
+		arg.ListID,
+		arg.WorkspaceID,
+		arg.Q,
+		arg.Key,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListItemsByKindKeyRow{}
+	for rows.Next() {
+		var i ListItemsByKindKeyRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ListID,
+			&i.Title,
+			&i.ImageUrl,
+			&i.ImageAttachmentID,
+			&i.PriceMin,
+			&i.PriceMax,
+			&i.Currency,
+			&i.WebsiteUrl,
+			&i.Metadata,
+			&i.SortOrder,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.TrashBatchID,
+			&i.Kind,
 			&i.ImageWidth,
 			&i.ImageHeight,
 			&i.ImageOriginalFilename,
@@ -325,7 +490,7 @@ func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListIte
 }
 
 const lockItem = `-- name: LockItem :one
-SELECT id, workspace_id, list_id, title, kind, summary, status, image_url, image_attachment_id, price_min, price_max, currency, official_website_url, metadata, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM items
+SELECT id, workspace_id, list_id, title, image_url, image_attachment_id, price_min, price_max, currency, website_url, metadata, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM items
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 FOR UPDATE
 `
@@ -343,15 +508,12 @@ func (q *Queries) LockItem(ctx context.Context, arg LockItemParams) (Item, error
 		&i.WorkspaceID,
 		&i.ListID,
 		&i.Title,
-		&i.Kind,
-		&i.Summary,
-		&i.Status,
 		&i.ImageUrl,
 		&i.ImageAttachmentID,
 		&i.PriceMin,
 		&i.PriceMax,
 		&i.Currency,
-		&i.OfficialWebsiteUrl,
+		&i.WebsiteUrl,
 		&i.Metadata,
 		&i.SortOrder,
 		&i.Version,
@@ -436,27 +598,24 @@ func (q *Queries) ReorderItems(ctx context.Context, arg ReorderItemsParams) erro
 
 const updateItem = `-- name: UpdateItem :one
 UPDATE items
-SET title = $1, kind = $2, summary = $3, status = $4,
-    price_min = $5, price_max = $6, currency = $7,
-    official_website_url = $8, metadata = $9,
-    version = version + 1, updated_at = $10
-WHERE id = $11 AND workspace_id = $12 AND deleted_at IS NULL
+SET title = $1,
+    price_min = $2, price_max = $3, currency = $4,
+    website_url = $5, metadata = $6,
+    version = version + 1, updated_at = $7
+WHERE id = $8 AND workspace_id = $9 AND deleted_at IS NULL
 RETURNING id
 `
 
 type UpdateItemParams struct {
-	Title              string
-	Kind               string
-	Summary            *string
-	Status             *string
-	PriceMin           pgtype.Numeric
-	PriceMax           pgtype.Numeric
-	Currency           *string
-	OfficialWebsiteUrl *string
-	Metadata           []byte
-	Now                time.Time
-	ID                 uuid.UUID
-	WorkspaceID        uuid.UUID
+	Title       string
+	PriceMin    pgtype.Numeric
+	PriceMax    pgtype.Numeric
+	Currency    *string
+	WebsiteUrl  *string
+	Metadata    []byte
+	Now         time.Time
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
 }
 
 // A full replacement of the editable fields: the service merges the PATCH into the locked row first.
@@ -464,13 +623,10 @@ type UpdateItemParams struct {
 func (q *Queries) UpdateItem(ctx context.Context, arg UpdateItemParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, updateItem,
 		arg.Title,
-		arg.Kind,
-		arg.Summary,
-		arg.Status,
 		arg.PriceMin,
 		arg.PriceMax,
 		arg.Currency,
-		arg.OfficialWebsiteUrl,
+		arg.WebsiteUrl,
 		arg.Metadata,
 		arg.Now,
 		arg.ID,

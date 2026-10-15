@@ -39,26 +39,23 @@ type Folder struct {
 }
 
 type Item struct {
-	ID                 uuid.UUID
-	WorkspaceID        uuid.UUID
-	ListID             uuid.UUID
-	Title              string
-	Kind               string
-	Summary            *string
-	Status             *string
-	ImageUrl           *string
-	ImageAttachmentID  uuid.NullUUID
-	PriceMin           pgtype.Numeric
-	PriceMax           pgtype.Numeric
-	Currency           *string
-	OfficialWebsiteUrl *string
-	Metadata           []byte
-	SortOrder          int32
-	Version            int32
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	DeletedAt          *time.Time
-	TrashBatchID       uuid.NullUUID
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	ListID            uuid.UUID
+	Title             string
+	ImageUrl          *string
+	ImageAttachmentID uuid.NullUUID
+	PriceMin          pgtype.Numeric
+	PriceMax          pgtype.Numeric
+	Currency          *string
+	WebsiteUrl        *string
+	Metadata          []byte
+	SortOrder         int32
+	Version           int32
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	DeletedAt         *time.Time
+	TrashBatchID      uuid.NullUUID
 }
 
 type ItemContentVersion struct {
@@ -84,6 +81,7 @@ type List struct {
 	UpdatedAt    time.Time
 	DeletedAt    *time.Time
 	TrashBatchID uuid.NullUUID
+	Kind         string
 }
 
 type TrashBatch struct {
@@ -107,7 +105,6 @@ type Workspace struct {
 type WorkspaceSetting struct {
 	WorkspaceID          uuid.UUID
 	StreamingCountryCode string
-	DefaultCurrency      string
 	MarkdownHistoryLimit int32
 	Version              int32
 	CreatedAt            time.Time

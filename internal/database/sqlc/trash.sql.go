@@ -192,7 +192,7 @@ func (q *Queries) GetTrashedFolder(ctx context.Context, arg GetTrashedFolderPara
 }
 
 const getTrashedItem = `-- name: GetTrashedItem :one
-SELECT id, workspace_id, list_id, title, kind, summary, status, image_url, image_attachment_id, price_min, price_max, currency, official_website_url, metadata, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM items WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
+SELECT id, workspace_id, list_id, title, image_url, image_attachment_id, price_min, price_max, currency, website_url, metadata, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM items WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
 `
 
 type GetTrashedItemParams struct {
@@ -209,15 +209,12 @@ func (q *Queries) GetTrashedItem(ctx context.Context, arg GetTrashedItemParams) 
 		&i.WorkspaceID,
 		&i.ListID,
 		&i.Title,
-		&i.Kind,
-		&i.Summary,
-		&i.Status,
 		&i.ImageUrl,
 		&i.ImageAttachmentID,
 		&i.PriceMin,
 		&i.PriceMax,
 		&i.Currency,
-		&i.OfficialWebsiteUrl,
+		&i.WebsiteUrl,
 		&i.Metadata,
 		&i.SortOrder,
 		&i.Version,
@@ -230,7 +227,7 @@ func (q *Queries) GetTrashedItem(ctx context.Context, arg GetTrashedItemParams) 
 }
 
 const getTrashedList = `-- name: GetTrashedList :one
-SELECT id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM lists WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
+SELECT id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, kind FROM lists WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
 `
 
 type GetTrashedListParams struct {
@@ -256,6 +253,7 @@ func (q *Queries) GetTrashedList(ctx context.Context, arg GetTrashedListParams) 
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
+		&i.Kind,
 	)
 	return i, err
 }

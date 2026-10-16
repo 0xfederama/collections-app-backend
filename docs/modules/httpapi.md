@@ -26,7 +26,7 @@ Serves the HTTP API: the generated strict server mounted on chi, behind request 
 - `GET /healthz`: 200 `ok`, liveness only; `GET /readyz`: 200 `ready` or 503 (DB ping, DATA_DIR probe)
 - Settings, tree, folder, list, item, content, search and attachment routes: see `api/openapi.yaml`
 - `DELETE /api/v1/folders/{id}`, `DELETE /api/v1/lists/{id}`, `DELETE /api/v1/items/{id}`: 204, If-Match required
-- `GET /api/v1/trash`, `POST /api/v1/trash/{batch_id}/restore`, `DELETE /api/v1/trash/{batch_id}`
+- `GET /api/v1/trash`, `POST /api/v1/trash/{batch_id}/restore`, `DELETE /api/v1/trash/{batch_id}`, `DELETE /api/v1/trash` (empty trash, 204)
 - Unknown route or method: 404 `not_found` / 405 `method_not_allowed` problem
 
 ## Gotchas

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Owns the PostgreSQL layer: the pgx connection pool, the transaction helper, the SQL migrations (000001 creates the schema, 000002 to 000008 evolve it), and sqlc-generated query code. Schema intent lives in `/Users/federico/Developer/collections-app/design-docs/DATA_MODEL.md`.
+Owns the PostgreSQL layer: the pgx connection pool, the transaction helper, the SQL migrations (000001 creates the schema, 000002 to 000010 evolve it), and sqlc-generated query code. Schema intent lives in `/Users/federico/Developer/collections-app/design-docs/DATA_MODEL.md`.
 
 ## Key files
 
@@ -15,6 +15,8 @@ Owns the PostgreSQL layer: the pgx connection pool, the transaction helper, the 
 - `db/migrations/000007_price_kinds.{up,down}.sql`: movie/tv_show (and generic, a no-op by then) prices move to a "From 1.3" content block (F009-B1)
 - `db/migrations/000008_pinned_fields_ordered.{up,down}.sql`: `pinned_fields` becomes an ordered array of at most 2 keys (F009-B2)
 - `internal/database/migration_f007_test.go`, `migration_f002b2_test.go`, `migration_f008b1_test.go`, `migration_f009_test.go`: fixture tests for 000002, 000003, 000006, 000007 and 000008
+- `db/migrations/000009_list_icon.{up,down}.sql`: `lists.icon`, `icon_color` + CHECK (F012-B1); down is lossy
+- `db/migrations/000010_trash_retention.{up,down}.sql`: `workspace_settings.trash_retention_days` 1-365, NULL = off (F012-B3); down is lossy
 - `db/queries/schema.sql`: smoke query, sqlc input
 - `db/queries/workspace.sql`: workspace bootstrap and settings queries (see `workspace` module)
 - `internal/testdb/testdb.go`: test-only shared testcontainers Postgres, `NewMigrated`, `Terminate`
@@ -35,7 +37,7 @@ Owns the PostgreSQL layer: the pgx connection pool, the transaction helper, the 
 - Multi-statement writes must go through `InTx` (ARCHITECTURE §2).
 - The 000001 down drops all tables and the pg_trgm extension, so it erases all data.
 - 000002 down is lossy: summary and status come back NULL, split lists stay split, and the default currency returns as EUR. Take a backup first.
-- 000003 down is a no-op (make and model stay in content). 000004 down drops every `pinned_fields`; 000005 down turns `price` sorts into `manual`; 000006 down is a no-op (moved prices stay in content). 000007 down is a no-op (moved prices stay in content); 000008 down puts every key back in `under` (order kept, `right` empty).
+- 000003 down is a no-op (make and model stay in content). 000004 down drops every `pinned_fields`; 000005 down turns `price` sorts into `manual`; 000006 down is a no-op (moved prices stay in content). 000007 down is a no-op (moved prices stay in content); 000008 down puts every key back in `under` (order kept, `right` empty). 000009 and 000010 downs drop their columns (icons and retention are lost).
 - `make check-generate` fails if regenerated files differ from the committed ones; run `make generate` and commit.
 - sqlc errors on an empty `db/queries` dir (hence `schema.sql`) and on a recursive CTE filtering with a plain `@param` (use `sqlc.arg(x)::uuid`, see `folders.sql`).
 - Constraint names follow `<table>_<cols>_{pkey,key,fkey,check,idx}`; tests assert on them.

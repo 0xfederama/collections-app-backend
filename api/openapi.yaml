@@ -1888,7 +1888,7 @@ components:
     ListIconColor:
       type: string
       nullable: true
-      enum: [red, orange, amber, green, teal, blue, indigo, purple, pink, gray]
+      enum: [red, orange, amber, green, teal, blue, indigo, purple, pink, gray, null]
       example: indigo
       description: |
         The colour of a built-in icon, one of ten palette names (F012-B1). `null` is the normal text colour. Allowed only when `icon`

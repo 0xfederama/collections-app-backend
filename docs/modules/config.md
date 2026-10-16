@@ -12,13 +12,14 @@ Parses and validates the API's environment configuration once at startup. Every 
 ## Interfaces
 
 - `Load(getenv func(string) string) (Config, error)`: pass `os.Getenv` in production
-- `Config`: `AppEnv`, `HTTPAddr`, `DatabaseURL`, `DBMaxConns`, `DataDir`, `WorkspaceName`, `LogLevel`, `LogFormat`
+- `Config`: `AppEnv`, `HTTPAddr`, `DatabaseURL`, `DBMaxConns`, `DataDir`, `WorkspaceName`, optional `TMDBAPIKey`, `LogLevel`, `LogFormat`
 - `APP_ENV`: `development` (default) or `production`, case-sensitive
 - `HTTP_ADDR`: `host:port` listen address, default `:8080`
 - `DATABASE_URL`: required; `postgres://` or `postgresql://` with a host
 - `DB_MAX_CONNS`: integer 1 to 100, default 10
 - `DATA_DIR`: default `/data`; must be an existing, writable directory
 - `WORKSPACE_NAME`: default `Our Collection`
+- `TMDB_API_KEY`: optional server-side TMDB credential; blank disables lookup
 - `LOG_LEVEL`: `debug`, `info` (default), `warn`, `error`
 - `LOG_FORMAT`: `json` (default) or `text`
 
@@ -28,3 +29,4 @@ Parses and validates the API's environment configuration once at startup. Every 
 - Errors are joined under the prefix `invalid configuration:`, and `cmd/api` prints them as `fatal: ...`.
 - Only `DATABASE_URL` is kept out of error text (it carries the password). Other messages echo the raw value, e.g. `LOG_LEVEL` and `DATA_DIR`.
 - `Load` has a side effect: it creates and deletes a `.startup-*` probe file in `DATA_DIR` to test writability.
+- Keep `TMDB_API_KEY` in the server environment (`deploy/server/.env`); never expose it to the browser. Get a key through [TMDB account API settings](https://www.themoviedb.org/settings/api).

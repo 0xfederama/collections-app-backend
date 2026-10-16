@@ -11,7 +11,6 @@ Owns folders and lists of the single workspace: create, read, rename, move, reor
 - `internal/tree/lists.go`: list create, get with path, patch (kind change, icon), move, reorder
 - `internal/tree/icon.go`: icon grammar (one emoji or `i:<name>`), colour palette, `iconErrors`
 - `db/queries/folders.sql`, `lists.sql`, `tree.sql`: sqlc inputs (`LockTree` is in `tree.sql`)
-- `internal/httpapi/tree_test.go`: AT-03, AT-04, AT-21 and 404/409/412/422 cases
 
 ## Interfaces
 
@@ -36,6 +35,6 @@ Owns folders and lists of the single workspace: create, read, rename, move, reor
 - A PATCH with no fields succeeds and does not bump the version. A `kind` equal to the stored one is a no-op.
 - A kind change runs in one transaction under the tree lock: it updates the list, resets `pinned_fields` to NULL and clears its items' metadata (trashed ones too, bumping their versions). A `pinned_fields` sent in the same PATCH is kept.
 - `pinned_fields` is an ordered JSON array of at most 2 unique keys (migration 000008; F009-B2, replacing the `{under, right}` slots of F-002): the first key is the primary field. `null` is the kind default, `[]` pins nothing. Keys are the kind's metadata keys, plus `price` only on the kinds that have one. Invalid keys are 422 on `pinned_fields[i]`, too many on `pinned_fields`.
-- `sort_mode: kind_key` is 422 on `generic`, and so is a change to `generic` while on `kind_key`. `sort_mode: price` is 422 on any list whose kind has no price (generic, movie, tv_show; F009-B1). A change to a kind without a price clears the items' price (trashed too) and turns a stored `price` sort into `manual`.
+- `sort_mode: kind_key` is invalid on `generic`; `price` is invalid on kinds without price. `director` is valid only for movie lists. A kind change without price clears item prices (trashed too) and changes stored `price` sort to `manual`.
 - Description is Markdown, at most 64 KiB (413 over); invalid UTF-8 or NUL is 422. Name is trimmed to 1-200 characters.
 - Icon: one emoji (`icon.go` grammar, max 32 bytes, no grapheme library) or `i:<name>`, else 422 on `icon`. `icon_color` (ten palette names) needs a built-in icon, else 422. An icon change to an emoji or none clears the colour; a colour sent with an emoji is 422.

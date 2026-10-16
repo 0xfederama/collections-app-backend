@@ -58,6 +58,8 @@ func TestToProblem(t *testing.T) {
 		{"payload too large", apperr.PayloadTooLarge(1), 413, "payload_too_large", nil},
 		{"MaxBytesError from the reader", &http.MaxBytesError{Limit: 1}, 413, "payload_too_large", nil},
 		{"unsupported media type", apperr.UnsupportedMediaType("image/svg+xml"), 415, "unsupported_media_type", nil},
+		{"lookup disabled", apperr.LookupDisabled(), 503, "lookup_disabled", nil},
+		{"upstream unavailable", apperr.UpstreamUnavailable(), 503, "upstream_unavailable", nil},
 		{"wrapped domain error", fmt.Errorf("move: %w", apperr.Cycle()), 409, "cycle_detected", nil},
 		{"joined domain error", errors.Join(errors.New("ctx"), apperr.NotFound("list")), 404, "not_found", nil},
 	}

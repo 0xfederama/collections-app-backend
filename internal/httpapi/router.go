@@ -17,6 +17,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/search"
+	"github.com/0xfederama/collections-app-backend/internal/tmdb"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
@@ -39,6 +40,8 @@ type Deps struct {
 	Settings    *workspace.Service
 	// LookupAvailable reports whether the optional server-side TMDB key is configured (F013-B5).
 	LookupAvailable bool
+	// TMDB serves optional movie and TV metadata lookups (F013-B1..B3).
+	TMDB *tmdb.Client
 	// Tree serves folders, lists and the sidebar tree (B-06).
 	Tree *tree.Service
 	// Items serves items (B-07).

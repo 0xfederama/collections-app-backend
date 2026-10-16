@@ -281,11 +281,11 @@ func (c *Client) DownloadPoster(ctx context.Context, posterPath string) ([]byte,
 	if !safePosterPath(posterPath) {
 		return nil, ErrInvalid
 	}
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
 	if err := c.wait(ctx); err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
 	u := *c.imageBase
 	u.Path = path.Join(u.Path, "w500", strings.TrimPrefix(posterPath, "/"))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -315,11 +315,11 @@ func (c *Client) DownloadPoster(ctx context.Context, posterPath string) ([]byte,
 }
 
 func (c *Client) getJSON(ctx context.Context, route string, query url.Values, out any) error {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
 	if err := c.wait(ctx); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
 	u := *c.apiBase
 	u.Path = path.Join(u.Path, route)
 	query.Set("api_key", c.key)

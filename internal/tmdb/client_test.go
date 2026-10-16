@@ -202,3 +202,22 @@ func TestMalformedBaseURLDisablesClient(t *testing.T) {
 		t.Fatal("malformed endpoint left client enabled")
 	}
 }
+
+func TestRequestTimeoutIncludesRateLimitWait(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "3600")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer s.Close()
+	c := NewWithOptions("test-secret", Options{APIBaseURL: s.URL + "/3", ImageBaseURL: s.URL, HTTPClient: s.Client(), Timeout: 20 * time.Millisecond})
+	if _, err := c.Search(context.Background(), "movie", "first", "en-US"); err == nil {
+		t.Fatal("expected rate limit response")
+	}
+	start := time.Now()
+	if _, err := c.Search(context.Background(), "movie", "queued", "en-US"); err == nil {
+		t.Fatal("queued request ignored client timeout")
+	}
+	if time.Since(start) > 250*time.Millisecond {
+		t.Fatalf("queued request took too long: %s", time.Since(start))
+	}
+}

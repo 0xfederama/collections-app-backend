@@ -605,6 +605,84 @@ func (s *Service) PurgeAll(ctx context.Context) (int, error) {
 	return removed, nil
 }
 
+// PurgeExpired is the auto-purge job (F012-B3): it deletes for good every batch
+// trashed more than the workspace's trash_retention_days ago, with the same
+// rules as PurgeAll. A NULL retention (the default, or no settings row) purges
+// nothing and returns 0. It returns the number of batches removed.
+func (s *Service) PurgeExpired(ctx context.Context) (int, error) {
+	days, err := sqlc.New(s.db).GetTrashRetentionDays(ctx, s.workspaceID)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && days == nil) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("read trash retention: %w", err)
+	}
+	cutoff := s.now().Add(-time.Duration(*days) * 24 * time.Hour)
+
+	var (
+		keys    []string
+		removed int
+	)
+	err = database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
+		if err := s.lockTree(ctx, q); err != nil {
+			return err
+		}
+		ids, err := q.ListExpiredTrashBatchIDs(ctx, sqlc.ListExpiredTrashBatchIDsParams{WorkspaceID: s.workspaceID, Cutoff: cutoff})
+		if err != nil {
+			return fmt.Errorf("list expired trash batches: %w", err)
+		}
+		for _, id := range ids {
+			batch, err := q.LockTrashBatch(ctx, sqlc.LockTrashBatchParams{ID: id, WorkspaceID: s.workspaceID})
+			if errors.Is(err, pgx.ErrNoRows) {
+				// Removed with the root of an earlier batch in this loop.
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("lock trash batch: %w", err)
+			}
+			batchKeys, err := s.purgeBatch(ctx, q, batch)
+			if err != nil {
+				return err
+			}
+			keys = append(keys, batchKeys...)
+		}
+		removed = len(ids)
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	s.deleteFiles(ctx, keys)
+	return removed, nil
+}
+
+// RunAutoPurge runs PurgeExpired once at start-up and then every interval until
+// ctx is cancelled, logging the count of each run (the images sweeper's shape).
+// A failed run is logged and retried by the next one.
+func (s *Service) RunAutoPurge(ctx context.Context, interval time.Duration) {
+	run := func() {
+		n, err := s.PurgeExpired(ctx)
+		if err != nil {
+			if ctx.Err() == nil {
+				s.log.WarnContext(ctx, "trash auto-purge failed; will retry", "err", err)
+			}
+			return
+		}
+		s.log.InfoContext(ctx, "trash auto-purge finished", "purged", n)
+	}
+	run()
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			run()
+		}
+	}
+}
+
 // purgeBatch removes one locked batch inside the caller's transaction: the root
 // with its whole subtree (FK cascades), the attachment rows of its items, and the
 // batch rows that lost their root. It returns the storage keys of the removed

@@ -104,6 +104,7 @@ paths:
       summary: Update workspace settings
       description: |
         Requires `If-Match` (`"s-N"`). Lowering `markdown_history_limit` prunes on the next save per item, not immediately.
+        `trash_retention_days` (F012-B3): absent = unchanged, `null` = off, otherwise 1 to 365. Setting it does not purge at once; the daily job does.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -114,6 +115,8 @@ paths:
             examples:
               rename:
                 value: { workspace_name: Our Collection, markdown_history_limit: 30 }
+              trash_retention:
+                value: { trash_retention_days: 30 }
       responses:
         '200':
           description: The updated settings
@@ -1333,6 +1336,7 @@ components:
         workspace_name: Our Collection
         streaming_country_code: IT
         markdown_history_limit: 20
+        trash_retention_days: null
         version: 4
     Folder:
       value:
@@ -1783,11 +1787,12 @@ components:
     # ---- Settings, tree ----
     Settings:
       type: object
-      required: [workspace_name, streaming_country_code, markdown_history_limit, version]
+      required: [workspace_name, streaming_country_code, markdown_history_limit, trash_retention_days, version]
       properties:
         workspace_name: { type: string, minLength: 1, maxLength: 200 }
         streaming_country_code: { type: string, pattern: '^[A-Z]{2}$' }
         markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
+        trash_retention_days: { type: integer, nullable: true, minimum: 1, maximum: 365 }
         version: { type: integer }
     UpdateSettingsRequest:
       type: object
@@ -1796,6 +1801,7 @@ components:
         workspace_name: { type: string, minLength: 1, maxLength: 200 }
         streaming_country_code: { type: string, pattern: '^[A-Z]{2}$' }
         markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
+        trash_retention_days: { type: integer, nullable: true, minimum: 1, maximum: 365 }
     Tree:
       type: object
       required: [folders, lists]

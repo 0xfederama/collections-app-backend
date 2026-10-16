@@ -74,6 +74,8 @@ func run() error {
 	itemSvc := items.New(pool, clock.System{}, workspaceID)
 	imageSvc := images.New(pool, store, clock.System{}, itemSvc, logger, workspaceID)
 	go imageSvc.RunSweeper(ctx, images.SweepInterval) // stops when ctx is cancelled on shutdown
+	trashSvc := trash.New(pool, store, clock.System{}, logger, workspaceID)
+	go trashSvc.RunAutoPurge(ctx, 24*time.Hour) // stops when ctx is cancelled on shutdown
 
 	handler, err := httpapi.NewRouter(httpapi.Deps{
 		DB:          pool,
@@ -87,7 +89,7 @@ func run() error {
 		Content:     content.New(pool, clock.System{}, workspaceID),
 		Search:      search.New(pool, workspaceID),
 		Images:      imageSvc,
-		Trash:       trash.New(pool, store, clock.System{}, logger, workspaceID),
+		Trash:       trashSvc,
 	})
 	if err != nil {
 		return err

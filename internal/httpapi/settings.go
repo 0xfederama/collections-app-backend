@@ -3,6 +3,8 @@ package httpapi
 import (
 	"context"
 
+	"github.com/oapi-codegen/nullable"
+
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/etag"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
@@ -25,6 +27,7 @@ func (s *Server) UpdateSettings(ctx context.Context, req oapi.UpdateSettingsRequ
 		WorkspaceName:        req.Body.WorkspaceName,
 		StreamingCountryCode: req.Body.StreamingCountryCode,
 		MarkdownHistoryLimit: req.Body.MarkdownHistoryLimit,
+		TrashRetentionDays:   optionalRetention(req.Body.TrashRetentionDays),
 	})
 	if err != nil {
 		return nil, err
@@ -35,11 +38,29 @@ func (s *Server) UpdateSettings(ctx context.Context, req oapi.UpdateSettingsRequ
 	}, nil
 }
 
+// optionalRetention turns the nullable PATCH field into a workspace.Optional:
+// absent leaves the setting, null turns it off.
+func optionalRetention(n nullable.Nullable[int]) workspace.Optional[int] {
+	if !n.IsSpecified() {
+		return workspace.Optional[int]{}
+	}
+	if v, err := n.Get(); err == nil {
+		return workspace.Optional[int]{Set: true, Value: &v}
+	}
+	return workspace.Optional[int]{Set: true}
+}
+
 func settingsBody(s workspace.Settings) oapi.Settings {
+	// The retention is always set: an unset Nullable would marshal as 0, not null.
+	retention := nullable.NewNullNullable[int]()
+	if s.TrashRetentionDays != nil {
+		retention = nullable.NewNullableWithValue(*s.TrashRetentionDays)
+	}
 	return oapi.Settings{
 		WorkspaceName:        s.WorkspaceName,
 		StreamingCountryCode: s.StreamingCountryCode,
 		MarkdownHistoryLimit: s.MarkdownHistoryLimit,
+		TrashRetentionDays:   retention,
 		Version:              s.Version,
 	}
 }

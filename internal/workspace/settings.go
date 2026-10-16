@@ -18,18 +18,29 @@ import (
 
 // Settings is the workspace name plus the workspace_settings row. Version is
 // workspace_settings.version, the single ETag stream "s-N" (API.md §3).
+// TrashRetentionDays nil means off: the trash is never purged automatically (F012-B3).
 type Settings struct {
 	WorkspaceName        string
 	StreamingCountryCode string
 	MarkdownHistoryLimit int
+	TrashRetentionDays   *int
 	Version              int
 }
 
 // SettingsPatch holds the fields a PATCH supplied; nil means "leave as is".
+// TrashRetentionDays is an Optional: absent leaves it, an explicit null turns it off.
 type SettingsPatch struct {
 	WorkspaceName        *string
 	StreamingCountryCode *string
 	MarkdownHistoryLimit *int
+	TrashRetentionDays   Optional[int]
+}
+
+// Optional is a PATCH field that can be cleared: Set tells absent from present,
+// and a nil Value means an explicit null.
+type Optional[T any] struct {
+	Set   bool
+	Value *T
 }
 
 // Service reads and updates the settings of the workspace.
@@ -79,7 +90,7 @@ func (s *Service) Update(ctx context.Context, workspaceID uuid.UUID, ifMatch int
 		}
 
 		next := p.applyTo(cur)
-		if next == cur {
+		if next.equal(cur) {
 			out = cur
 			return nil
 		}
@@ -92,6 +103,7 @@ func (s *Service) Update(ctx context.Context, workspaceID uuid.UUID, ifMatch int
 			WorkspaceID:          workspaceID,
 			StreamingCountryCode: next.StreamingCountryCode,
 			MarkdownHistoryLimit: int32(next.MarkdownHistoryLimit),
+			TrashRetentionDays:   retentionToDB(next.TrashRetentionDays),
 		})
 		if err != nil {
 			return fmt.Errorf("update settings: %w", err)
@@ -122,6 +134,9 @@ func (p SettingsPatch) validate() (SettingsPatch, error) {
 	if p.MarkdownHistoryLimit != nil && (*p.MarkdownHistoryLimit < 0 || *p.MarkdownHistoryLimit > 200) {
 		errs = append(errs, apperr.FieldError{Field: "markdown_history_limit", Message: "must be between 0 and 200"})
 	}
+	if p.TrashRetentionDays.Value != nil && (*p.TrashRetentionDays.Value < 1 || *p.TrashRetentionDays.Value > 365) {
+		errs = append(errs, apperr.FieldError{Field: "trash_retention_days", Message: "must be between 1 and 365, or null to turn it off"})
+	}
 	if len(errs) > 0 {
 		return p, apperr.Validation(errs...)
 	}
@@ -151,13 +166,60 @@ func (p SettingsPatch) applyTo(s Settings) Settings {
 	if p.MarkdownHistoryLimit != nil {
 		s.MarkdownHistoryLimit = *p.MarkdownHistoryLimit
 	}
+	if p.TrashRetentionDays.Set {
+		s.TrashRetentionDays = p.TrashRetentionDays.Value
+	}
 	return s
 }
 
+// equal reports whether two settings hold the same values. The retention is a
+// pointer, so it is compared by value: a PATCH that repeats the stored value changes nothing.
+func (s Settings) equal(o Settings) bool {
+	return s.WorkspaceName == o.WorkspaceName && s.StreamingCountryCode == o.StreamingCountryCode &&
+		s.MarkdownHistoryLimit == o.MarkdownHistoryLimit && sameRetention(s.TrashRetentionDays, o.TrashRetentionDays)
+}
+
+func sameRetention(a, b *int) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+// retentionToDB maps the nullable retention to the column (NULL = off).
+func retentionToDB(days *int) *int32 {
+	if days == nil {
+		return nil
+	}
+	v := int32(*days)
+	return &v
+}
+
+// retentionFromDB maps the column back to the nullable retention.
+func retentionFromDB(days *int32) *int {
+	if days == nil {
+		return nil
+	}
+	v := int(*days)
+	return &v
+}
+
 func fromGetRow(r sqlc.GetSettingsRow) Settings {
-	return Settings{r.WorkspaceName, r.StreamingCountryCode, int(r.MarkdownHistoryLimit), int(r.Version)}
+	return Settings{
+		WorkspaceName:        r.WorkspaceName,
+		StreamingCountryCode: r.StreamingCountryCode,
+		MarkdownHistoryLimit: int(r.MarkdownHistoryLimit),
+		TrashRetentionDays:   retentionFromDB(r.TrashRetentionDays),
+		Version:              int(r.Version),
+	}
 }
 
 func fromLockRow(r sqlc.LockSettingsRow) Settings {
-	return Settings{r.WorkspaceName, r.StreamingCountryCode, int(r.MarkdownHistoryLimit), int(r.Version)}
+	return Settings{
+		WorkspaceName:        r.WorkspaceName,
+		StreamingCountryCode: r.StreamingCountryCode,
+		MarkdownHistoryLimit: int(r.MarkdownHistoryLimit),
+		TrashRetentionDays:   retentionFromDB(r.TrashRetentionDays),
+		Version:              int(r.Version),
+	}
 }

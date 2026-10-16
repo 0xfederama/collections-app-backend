@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/0xfederama/collections-app-backend/internal/trash"
 )
 
 // ---- helpers ----
@@ -539,4 +541,55 @@ func TestF012_EmptyTrash(t *testing.T) {
 		fresh := newImageEnv(t)
 		wantStatus(t, fresh.call("DELETE", "/api/v1/trash", "", ""), 204)
 	})
+}
+
+func TestF012_AutoPurge(t *testing.T) {
+	e := newImageEnv(t)
+	e.exec(`INSERT INTO workspace_settings (workspace_id) VALUES ($1)`, e.ws)
+	svc := trash.New(e.pool, e.store, e.clk, quietLogger(), e.ws)
+
+	old := e.upload(e.newItemInNewList("Old"), "old.png", pngFixture(t, 10, 10))
+	e.mustDel("items", "i", old) // trashed 8 days before the run
+	e.clk.Advance(2 * 24 * time.Hour)
+	recent := e.upload(e.newItemInNewList("Recent"), "recent.png", pngFixture(t, 12, 12))
+	e.mustDel("items", "i", recent) // trashed 6 days before the run
+	e.clk.Advance(6 * 24 * time.Hour)
+	if got := len(e.fileKeys()); got != 4 {
+		t.Fatalf("files before = %d, want 4", got)
+	}
+
+	// Off (the default, NULL): nothing is purged however old the batches are.
+	if n, err := svc.PurgeExpired(t.Context()); err != nil || n != 0 {
+		t.Fatalf("off: PurgeExpired = %d, %v; want 0, nil", n, err)
+	}
+	if n := e.count(`SELECT count(*) FROM trash_batches`); n != 2 {
+		t.Fatalf("off: batches = %d, want 2", n)
+	}
+
+	// Retention 7 days: the 8-day-old batch goes with its file, the 6-day-old stays.
+	e.exec(`UPDATE workspace_settings SET trash_retention_days = 7 WHERE workspace_id = $1`, e.ws)
+	n, err := svc.PurgeExpired(t.Context())
+	if err != nil || n != 1 {
+		t.Fatalf("retention 7: PurgeExpired = %d, %v; want 1, nil", n, err)
+	}
+	if n := e.count(`SELECT count(*) FROM trash_batches`); n != 1 {
+		t.Fatalf("batches = %d, want 1 (the 6-day-old one)", n)
+	}
+	if n := e.count(`SELECT count(*) FROM items WHERE id = $1`, old["id"]); n != 0 {
+		t.Fatalf("old item rows = %d, want 0", n)
+	}
+	if n := e.count(`SELECT count(*) FROM items WHERE id = $1`, recent["id"]); n != 1 {
+		t.Fatalf("recent item rows = %d, want 1", n)
+	}
+	if got := len(e.fileKeys()); got != 2 {
+		t.Fatalf("files after = %v, want the recent item's two", e.fileKeys())
+	}
+	wantProblem(t, e.call("GET", "/api/v1/attachments/"+attachmentIDOf(t, old)+"/file", "", ""), 404, "not_found")
+	wantStatus(t, e.call("GET", "/api/v1/attachments/"+attachmentIDOf(t, recent)+"/file", "", ""), 200)
+	e.wantConsistent()
+
+	// A second run finds nothing left to purge.
+	if n, err := svc.PurgeExpired(t.Context()); err != nil || n != 0 {
+		t.Fatalf("second run: PurgeExpired = %d, %v; want 0, nil", n, err)
+	}
 }

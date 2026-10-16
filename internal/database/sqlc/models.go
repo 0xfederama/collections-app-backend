@@ -112,4 +112,5 @@ type WorkspaceSetting struct {
 	Version              int32
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+	TrashRetentionDays   *int32
 }

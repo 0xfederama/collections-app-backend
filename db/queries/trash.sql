@@ -11,6 +11,14 @@ SELECT * FROM trash_batches
 WHERE id = @id AND workspace_id = @workspace_id
 FOR UPDATE;
 
+-- name: GetTrashRetentionDays :one
+-- The auto-purge setting (NULL = off). No row means no settings: the job treats it as off.
+SELECT trash_retention_days FROM workspace_settings WHERE workspace_id = @workspace_id;
+
+-- name: ListExpiredTrashBatchIDs :many
+-- Batches trashed before the cutoff (deleted_at is the trash time). Read under the tree lock.
+SELECT id FROM trash_batches WHERE workspace_id = @workspace_id AND deleted_at < @cutoff;
+
 -- name: ListTrashBatchIDs :many
 -- Every batch of the workspace (the whole trash, not a page). Read under the tree lock.
 SELECT id FROM trash_batches WHERE workspace_id = @workspace_id;

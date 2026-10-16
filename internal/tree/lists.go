@@ -25,6 +25,9 @@ type CreateListInput struct {
 	SortMode    string
 	// PinnedFields nil = the kind default.
 	PinnedFields *PinnedFields
+	// Icon and IconColor nil = the default icon (F012-B1).
+	Icon      *string
+	IconColor *string
 }
 
 // ListPatch is a partial list update; absent fields stay as they are.
@@ -36,6 +39,9 @@ type ListPatch struct {
 	SortMode    *string
 	// PinnedFields: Set with a nil Value resets to the kind default.
 	PinnedFields Optional[PinnedFields]
+	// Icon and IconColor (F012-B1): a nil Value clears them. A changed icon that is not built-in clears the colour.
+	Icon      Optional[string]
+	IconColor Optional[string]
 }
 
 // CreateList appends a list after its active siblings. A missing or trashed
@@ -61,6 +67,7 @@ func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, err
 		in.PinnedFields, perr = validatePinned(in.Kind, in.PinnedFields)
 		errs = appendValidation(errs, perr)
 	}
+	errs = append(errs, iconErrors(in.Icon, in.IconColor)...)
 	if err := validate(errs); err != nil {
 		return List{}, err
 	}
@@ -82,7 +89,7 @@ func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, err
 		}
 		row, err := q.InsertList(ctx, sqlc.InsertListParams{
 			WorkspaceID: s.workspaceID, FolderID: nullUUID(in.FolderID), Name: name, Kind: in.Kind, Description: in.Description,
-			DisplayMode: in.DisplayMode, SortMode: in.SortMode, PinnedFields: pinnedJSON, SortOrder: next, Now: s.now(),
+			DisplayMode: in.DisplayMode, SortMode: in.SortMode, PinnedFields: pinnedJSON, Icon: in.Icon, IconColor: in.IconColor, SortOrder: next, Now: s.now(),
 		})
 		if err != nil {
 			return fmt.Errorf("insert list: %w", err)
@@ -170,6 +177,27 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		if int(cur.Version) != version {
 			return apperr.VersionConflict(int(cur.Version))
 		}
+		// The icon that applies after this PATCH. A colour needs a built-in icon, and the stored colour
+		// goes when the icon becomes an emoji or none (F012-B1).
+		newIcon := cur.Icon
+		if p.Icon.Set {
+			newIcon = p.Icon.Value
+		}
+		newIconColor := cur.IconColor
+		if p.IconColor.Set {
+			newIconColor = p.IconColor.Value
+		}
+		var sentColor *string
+		if p.IconColor.Set {
+			sentColor = p.IconColor.Value
+		}
+		if errs := iconErrors(newIcon, sentColor); len(errs) > 0 {
+			return apperr.Validation(errs...)
+		}
+		if !isBuiltinIcon(newIcon) {
+			newIconColor = nil
+		}
+		iconChanged := !equalPtr(newIcon, cur.Icon) || !equalPtr(newIconColor, cur.IconColor)
 		kindChanged := p.Kind != nil && *p.Kind != cur.Kind
 		// A field sent with its stored value changes nothing: no write, no version bump.
 		fieldsSet := (p.Name != nil && *p.Name != cur.Name) ||
@@ -199,6 +227,7 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 				fieldsSet = true
 			}
 		}
+		fieldsSet = fieldsSet || iconChanged
 		if !kindChanged && !fieldsSet {
 			return nil
 		}
@@ -244,6 +273,7 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		}
 		arg := sqlc.UpdateListParams{
 			Name: cur.Name, Description: cur.Description, DisplayMode: cur.DisplayMode, SortMode: cur.SortMode,
+			Icon: newIcon, IconColor: newIconColor,
 			Now: s.now(), ID: id, WorkspaceID: s.workspaceID,
 		}
 		keep := curPinned

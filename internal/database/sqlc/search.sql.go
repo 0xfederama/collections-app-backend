@@ -155,17 +155,19 @@ func (q *Queries) ListSearchFolders(ctx context.Context, workspaceID uuid.UUID) 
 }
 
 const listSearchLists = `-- name: ListSearchLists :many
-SELECT id, name, folder_id FROM lists
+SELECT id, name, folder_id, icon, icon_color FROM lists
 WHERE workspace_id = $1 AND deleted_at IS NULL
 `
 
 type ListSearchListsRow struct {
-	ID       uuid.UUID
-	Name     string
-	FolderID uuid.NullUUID
+	ID        uuid.UUID
+	Name      string
+	FolderID  uuid.NullUUID
+	Icon      *string
+	IconColor *string
 }
 
-// Active lists, just enough to name the last path segment and find its folder.
+// Active lists, just enough to name the last path segment (with its icon) and find its folder.
 func (q *Queries) ListSearchLists(ctx context.Context, workspaceID uuid.UUID) ([]ListSearchListsRow, error) {
 	rows, err := q.db.Query(ctx, listSearchLists, workspaceID)
 	if err != nil {
@@ -175,7 +177,13 @@ func (q *Queries) ListSearchLists(ctx context.Context, workspaceID uuid.UUID) ([
 	items := []ListSearchListsRow{}
 	for rows.Next() {
 		var i ListSearchListsRow
-		if err := rows.Scan(&i.ID, &i.Name, &i.FolderID); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.FolderID,
+			&i.Icon,
+			&i.IconColor,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

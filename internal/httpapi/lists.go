@@ -16,6 +16,8 @@ func (s *Server) CreateList(ctx context.Context, r oapi.CreateListRequestObject)
 		Description: optionalString(b.Description).Value,
 		DisplayMode: derefOr(enumPtr(b.DisplayMode)),
 		SortMode:    derefOr(enumPtr(b.SortMode)),
+		Icon:        optionalText(b.Icon).Value,
+		IconColor:   optionalText(b.IconColor).Value,
 	}
 	in.PinnedFields = optionalPinned(b.PinnedFields).Value
 	l, err := s.deps.Tree.CreateList(ctx, in)
@@ -45,6 +47,8 @@ func (s *Server) UpdateList(ctx context.Context, r oapi.UpdateListRequestObject)
 		DisplayMode:  enumPtr(b.DisplayMode),
 		SortMode:     enumPtr(b.SortMode),
 		PinnedFields: optionalPinned(b.PinnedFields),
+		Icon:         optionalText(b.Icon),
+		IconColor:    optionalText(b.IconColor),
 	})
 	if err != nil {
 		return nil, err

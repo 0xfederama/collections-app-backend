@@ -39,6 +39,7 @@ func listBody(l tree.List) oapi.List {
 	out := oapi.List{
 		Id: l.ID, FolderId: nullableUUID(l.FolderID), Name: l.Name, Kind: oapi.ItemKind(l.Kind), Description: nullableString(l.Description),
 		DisplayMode: oapi.DisplayMode(l.DisplayMode), SortMode: oapi.SortMode(l.SortMode),
+		Icon: nullableString(l.Icon), IconColor: nullableIconColor(l.IconColor),
 		SortOrder: l.SortOrder, ItemCount: l.ItemCount, Version: l.Version, CreatedAt: l.CreatedAt, UpdatedAt: l.UpdatedAt,
 	}
 	out.PinnedFields = nullable.NewNullNullable[oapi.PinnedFields]()
@@ -74,6 +75,14 @@ func nullableString(s *string) nullable.Nullable[string] {
 	return nullable.NewNullableWithValue(*s)
 }
 
+// nullableIconColor always sets the field (F012-B1), like nullableString.
+func nullableIconColor(s *string) nullable.Nullable[oapi.ListIconColor] {
+	if s == nil {
+		return nullable.NewNullNullable[oapi.ListIconColor]()
+	}
+	return nullable.NewNullableWithValue(oapi.ListIconColor(*s))
+}
+
 // optionalUUID reads an optional nullable UUID field: absent and null both mean "none" (the root).
 func optionalUUID(n nullable.Nullable[uuid.UUID]) *uuid.UUID {
 	if v, err := n.Get(); err == nil {
@@ -98,6 +107,18 @@ func optionalString(n nullable.Nullable[string]) tree.Optional[string] {
 	}
 	if v, err := n.Get(); err == nil {
 		return tree.Optional[string]{Set: true, Value: &v}
+	}
+	return tree.Optional[string]{Set: true}
+}
+
+// optionalText is optionalString for the spec's named string types (the list icon colour is an enum).
+func optionalText[T ~string](n nullable.Nullable[T]) tree.Optional[string] {
+	if !n.IsSpecified() {
+		return tree.Optional[string]{}
+	}
+	if v, err := n.Get(); err == nil {
+		s := string(v)
+		return tree.Optional[string]{Set: true, Value: &s}
 	}
 	return tree.Optional[string]{Set: true}
 }

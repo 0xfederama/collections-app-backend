@@ -163,8 +163,10 @@ type folderNode struct {
 }
 
 type listNode struct {
-	name   string
-	folder uuid.NullUUID
+	name      string
+	folder    uuid.NullUUID
+	icon      *string
+	iconColor *string
 }
 
 func (s *Service) loadPaths(ctx context.Context, db *sqlc.Queries) (tree, error) {
@@ -181,7 +183,7 @@ func (s *Service) loadPaths(ctx context.Context, db *sqlc.Queries) (tree, error)
 		t.folders[f.ID] = folderNode{name: f.Name, parent: f.ParentFolderID}
 	}
 	for _, l := range lists {
-		t.lists[l.ID] = listNode{name: l.Name, folder: l.FolderID}
+		t.lists[l.ID] = listNode{name: l.Name, folder: l.FolderID, icon: l.Icon, iconColor: l.IconColor}
 	}
 	return t, nil
 }
@@ -194,7 +196,7 @@ func (t tree) of(listID uuid.UUID) (path []items.PathSegment, ok bool) {
 		return nil, false
 	}
 	// Collect leaf to root, then reverse.
-	rev := []items.PathSegment{{Type: "list", ID: listID, Name: l.name}}
+	rev := []items.PathSegment{{Type: "list", ID: listID, Name: l.name, Icon: l.icon, IconColor: l.iconColor}}
 	for next, depth := l.folder, 0; next.Valid; depth++ {
 		f, found := t.folders[next.UUID]
 		if !found || depth >= maxPathDepth {

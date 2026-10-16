@@ -83,6 +83,8 @@ type List struct {
 	TrashBatchID uuid.NullUUID
 	Kind         string
 	PinnedFields []byte
+	Icon         *string
+	IconColor    *string
 }
 
 type TrashBatch struct {

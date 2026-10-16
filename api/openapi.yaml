@@ -997,6 +997,16 @@ paths:
                 default: { $ref: '#/components/examples/TrashPage' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [trash]
+      operationId: emptyTrash
+      summary: Empty the trash
+      description: |
+        Permanently deletes every trash batch and their files, the same as purging each batch. No `If-Match`.
+        Idempotent: an empty trash also answers 204.
+      responses:
+        '204': { description: Trash emptied }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/v1/trash/{batch_id}/restore:
     parameters:
       - $ref: '#/components/parameters/BatchId'

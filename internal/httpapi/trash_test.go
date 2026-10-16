@@ -498,3 +498,45 @@ func TestDeleteAndMoveOfTheSameSubtreeAreSerialized(t *testing.T) {
 		}
 	}
 }
+
+// ---- F012-B2: empty trash ----
+
+func TestF012_EmptyTrash(t *testing.T) {
+	e := newImageEnv(t)
+	f := e.folder("F", nil)
+	l := e.list("L", f["id"])
+	a := e.upload(e.titled(l["id"].(string), "A"), "a.png", pngFixture(t, 10, 10))
+	b := e.upload(e.newItemInNewList("B"), "b.jpg", jpegFixture(t, 10, 10))
+	if got := len(e.fileKeys()); got != 4 {
+		t.Fatalf("files before = %d, want 4", got)
+	}
+	e.mustDel("folders", "f", f) // folder, its list and item A
+	e.mustDel("items", "i", b)   // a second batch with its own image
+	if n := e.count(`SELECT count(*) FROM trash_batches`); n != 2 {
+		t.Fatalf("batches = %d, want 2", n)
+	}
+
+	wantStatus(t, e.call("DELETE", "/api/v1/trash", "", ""), 204)
+	entries, page := e.trashPage("")
+	if len(entries) != 0 || page["total"].(float64) != 0 {
+		t.Fatalf("trash after empty = %v / %v", entries, page)
+	}
+	for q, want := range map[string]int{"folders": 0, "lists": 0, "items": 0, "trash_batches": 0, "attachments": 0} {
+		if n := e.count("SELECT count(*) FROM " + q); n != want {
+			t.Fatalf("%s: %d rows, want %d", q, n, want)
+		}
+	}
+	if got := len(e.fileKeys()); got != 0 {
+		t.Fatalf("files after = %v, want none", e.fileKeys())
+	}
+	wantProblem(t, e.call("GET", "/api/v1/attachments/"+attachmentIDOf(t, a)+"/file", "", ""), 404, "not_found")
+	wantProblem(t, e.call("GET", "/api/v1/attachments/"+attachmentIDOf(t, b)+"/file", "", ""), 404, "not_found")
+	e.wantConsistent()
+
+	// Idempotent: a second call on the now empty trash is 204 too.
+	wantStatus(t, e.call("DELETE", "/api/v1/trash", "", ""), 204)
+	t.Run("fresh workspace", func(t *testing.T) {
+		fresh := newImageEnv(t)
+		wantStatus(t, fresh.call("DELETE", "/api/v1/trash", "", ""), 204)
+	})
+}

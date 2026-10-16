@@ -552,49 +552,107 @@ func (s *Service) Purge(ctx context.Context, id uuid.UUID) error {
 		if err != nil {
 			return notFoundOr(err, "trash entry")
 		}
-		atts, err := q.PurgeAttachments(ctx, sqlc.PurgeAttachmentsParams{RootType: batch.RootType, RootID: batch.RootID, WorkspaceID: s.workspaceID})
-		if err != nil {
-			return fmt.Errorf("collect attachments: %w", err)
-		}
-		switch batch.RootType {
-		case TypeFolder:
-			_, err = q.PurgeFolder(ctx, sqlc.PurgeFolderParams{ID: batch.RootID, WorkspaceID: s.workspaceID})
-		case TypeList:
-			_, err = q.PurgeList(ctx, sqlc.PurgeListParams{ID: batch.RootID, WorkspaceID: s.workspaceID})
-		case TypeItem:
-			_, err = q.PurgeItem(ctx, sqlc.PurgeItemParams{ID: batch.RootID, WorkspaceID: s.workspaceID})
-		default:
-			err = fmt.Errorf("unknown trash root type %q", batch.RootType)
-		}
-		if err != nil {
-			return fmt.Errorf("purge root: %w", err)
-		}
-		ids := make([]uuid.UUID, 0, len(atts))
-		keys = keys[:0]
-		for _, a := range atts {
-			ids = append(ids, a.ID)
-			keys = append(keys, a.StorageKey, a.ThumbnailStorageKey)
-		}
-		if err := q.PurgeAttachmentRows(ctx, sqlc.PurgeAttachmentRowsParams{WorkspaceID: s.workspaceID, Ids: ids}); err != nil {
-			return fmt.Errorf("delete attachments: %w", err)
-		}
-		// Batch id first (it may still be the root's own row, already gone),
-		// then batches nested in the subtree whose roots went with it.
-		if err := q.DeleteTrashBatch(ctx, sqlc.DeleteTrashBatchParams{ID: id, WorkspaceID: s.workspaceID}); err != nil {
-			return fmt.Errorf("delete trash batch: %w", err)
-		}
-		if err := q.DeleteOrphanTrashBatches(ctx, s.workspaceID); err != nil {
-			return fmt.Errorf("delete nested trash batches: %w", err)
-		}
-		return nil
+		keys, err = s.purgeBatch(ctx, q, batch)
+		return err
 	})
 	if err != nil {
 		return err
 	}
+	s.deleteFiles(ctx, keys)
+	return nil
+}
+
+// PurgeAll deletes every trash batch of the workspace for good, the same way
+// Purge deletes one, all in one transaction under the tree lock. It returns the
+// number of batches removed (nested batches that went with a purged root
+// count too, as they do in the trash list). Files are deleted after the commit.
+// An empty trash returns 0 and no error.
+func (s *Service) PurgeAll(ctx context.Context) (int, error) {
+	var (
+		keys    []string
+		removed int
+	)
+	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
+		if err := s.lockTree(ctx, q); err != nil {
+			return err
+		}
+		ids, err := q.ListTrashBatchIDs(ctx, s.workspaceID)
+		if err != nil {
+			return fmt.Errorf("list trash batches: %w", err)
+		}
+		for _, id := range ids {
+			batch, err := q.LockTrashBatch(ctx, sqlc.LockTrashBatchParams{ID: id, WorkspaceID: s.workspaceID})
+			if errors.Is(err, pgx.ErrNoRows) {
+				// Removed with the root of an earlier batch in this loop.
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("lock trash batch: %w", err)
+			}
+			batchKeys, err := s.purgeBatch(ctx, q, batch)
+			if err != nil {
+				return err
+			}
+			keys = append(keys, batchKeys...)
+		}
+		removed = len(ids)
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	s.deleteFiles(ctx, keys)
+	return removed, nil
+}
+
+// purgeBatch removes one locked batch inside the caller's transaction: the root
+// with its whole subtree (FK cascades), the attachment rows of its items, and the
+// batch rows that lost their root. It returns the storage keys of the removed
+// attachments; the caller deletes those files after the commit.
+func (s *Service) purgeBatch(ctx context.Context, q *sqlc.Queries, batch sqlc.TrashBatch) ([]string, error) {
+	atts, err := q.PurgeAttachments(ctx, sqlc.PurgeAttachmentsParams{RootType: batch.RootType, RootID: batch.RootID, WorkspaceID: s.workspaceID})
+	if err != nil {
+		return nil, fmt.Errorf("collect attachments: %w", err)
+	}
+	switch batch.RootType {
+	case TypeFolder:
+		_, err = q.PurgeFolder(ctx, sqlc.PurgeFolderParams{ID: batch.RootID, WorkspaceID: s.workspaceID})
+	case TypeList:
+		_, err = q.PurgeList(ctx, sqlc.PurgeListParams{ID: batch.RootID, WorkspaceID: s.workspaceID})
+	case TypeItem:
+		_, err = q.PurgeItem(ctx, sqlc.PurgeItemParams{ID: batch.RootID, WorkspaceID: s.workspaceID})
+	default:
+		err = fmt.Errorf("unknown trash root type %q", batch.RootType)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("purge root: %w", err)
+	}
+	ids := make([]uuid.UUID, 0, len(atts))
+	keys := make([]string, 0, 2*len(atts))
+	for _, a := range atts {
+		ids = append(ids, a.ID)
+		keys = append(keys, a.StorageKey, a.ThumbnailStorageKey)
+	}
+	if err := q.PurgeAttachmentRows(ctx, sqlc.PurgeAttachmentRowsParams{WorkspaceID: s.workspaceID, Ids: ids}); err != nil {
+		return nil, fmt.Errorf("delete attachments: %w", err)
+	}
+	// The batch itself first (its root may already be gone), then batches nested
+	// in the subtree whose roots went with it.
+	if err := q.DeleteTrashBatch(ctx, sqlc.DeleteTrashBatchParams{ID: batch.ID, WorkspaceID: s.workspaceID}); err != nil {
+		return nil, fmt.Errorf("delete trash batch: %w", err)
+	}
+	if err := q.DeleteOrphanTrashBatches(ctx, s.workspaceID); err != nil {
+		return nil, fmt.Errorf("delete nested trash batches: %w", err)
+	}
+	return keys, nil
+}
+
+// deleteFiles removes purged image files after the commit. A failure is logged
+// only: the images sweeper removes the orphan later.
+func (s *Service) deleteFiles(ctx context.Context, keys []string) {
 	for _, k := range keys {
 		if err := s.store.Delete(k); err != nil {
 			s.log.WarnContext(context.WithoutCancel(ctx), "image file cleanup after purge failed; the sweeper will retry", "err", err)
 		}
 	}
-	return nil
 }

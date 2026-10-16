@@ -82,3 +82,10 @@ func (s *Server) PurgeTrashBatch(ctx context.Context, r oapi.PurgeTrashBatchRequ
 	}
 	return oapi.PurgeTrashBatch204Response{}, nil
 }
+
+func (s *Server) EmptyTrash(ctx context.Context, _ oapi.EmptyTrashRequestObject) (oapi.EmptyTrashResponseObject, error) {
+	if _, err := s.deps.Trash.PurgeAll(ctx); err != nil {
+		return nil, err
+	}
+	return oapi.EmptyTrash204Response{}, nil
+}

@@ -293,6 +293,31 @@ func (q *Queries) InsertTrashBatch(ctx context.Context, arg InsertTrashBatchPara
 	return id, err
 }
 
+const listTrashBatchIDs = `-- name: ListTrashBatchIDs :many
+SELECT id FROM trash_batches WHERE workspace_id = $1
+`
+
+// Every batch of the workspace (the whole trash, not a page). Read under the tree lock.
+func (q *Queries) ListTrashBatchIDs(ctx context.Context, workspaceID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listTrashBatchIDs, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTrashBatches = `-- name: ListTrashBatches :many
 SELECT b.id, b.root_type, b.root_id, b.root_name, b.former_path, b.deleted_at,
        (SELECT count(*) FROM folders f WHERE f.trash_batch_id = b.id)::int AS folder_count,

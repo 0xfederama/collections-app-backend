@@ -11,6 +11,10 @@ SELECT * FROM trash_batches
 WHERE id = @id AND workspace_id = @workspace_id
 FOR UPDATE;
 
+-- name: ListTrashBatchIDs :many
+-- Every batch of the workspace (the whole trash, not a page). Read under the tree lock.
+SELECT id FROM trash_batches WHERE workspace_id = @workspace_id;
+
 -- name: DeleteTrashBatch :exec
 DELETE FROM trash_batches WHERE id = @id AND workspace_id = @workspace_id;
 

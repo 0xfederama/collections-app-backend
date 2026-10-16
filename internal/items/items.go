@@ -99,10 +99,13 @@ const (
 )
 
 // PathSegment is one ancestor of an item: its folders root first, then its list.
+// Icon and IconColor are the list's own, set only by the search paths (F012-B1).
 type PathSegment struct {
-	Type string // "folder" or "list"
-	ID   uuid.UUID
-	Name string
+	Type      string // "folder" or "list"
+	ID        uuid.UUID
+	Name      string
+	Icon      *string
+	IconColor *string
 }
 
 // ErrInvalidSort means a sort mode that the list's kind does not support:

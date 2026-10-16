@@ -84,12 +84,15 @@ type List struct {
 	SortMode    string
 	// PinnedFields is nil for the kind default (F009-B2).
 	PinnedFields *PinnedFields
-	SortOrder    int
-	ItemCount    int
-	Version      int
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	Path         []PathFolder
+	// Icon and IconColor are nil for the default icon (F012-B1).
+	Icon      *string
+	IconColor *string
+	SortOrder int
+	ItemCount int
+	Version   int
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Path      []PathFolder
 }
 
 // PinnedFields are the field keys a list pins in its rows, in order: the first is
@@ -227,7 +230,8 @@ func folderFromRow(f sqlc.Folder) Folder {
 func listFromRow(l sqlc.GetListRow) List {
 	return List{
 		ID: l.ID, FolderID: ptrUUID(l.FolderID), Name: l.Name, Kind: l.Kind, Description: l.Description,
-		DisplayMode: l.DisplayMode, SortMode: l.SortMode, PinnedFields: pinnedFromJSON(l.PinnedFields), SortOrder: int(l.SortOrder), ItemCount: int(l.ItemCount),
+		DisplayMode: l.DisplayMode, SortMode: l.SortMode, PinnedFields: pinnedFromJSON(l.PinnedFields), Icon: l.Icon, IconColor: l.IconColor,
+		SortOrder: int(l.SortOrder), ItemCount: int(l.ItemCount),
 		Version: int(l.Version), CreatedAt: l.CreatedAt, UpdatedAt: l.UpdatedAt,
 	}
 }

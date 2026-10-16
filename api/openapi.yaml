@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.7.0
+  version: 0.8.0
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -104,6 +104,7 @@ paths:
       summary: Update workspace settings
       description: |
         Requires `If-Match` (`"s-N"`). Lowering `markdown_history_limit` prunes on the next save per item, not immediately.
+        `trash_retention_days` (F012-B3): absent = unchanged, `null` = off, otherwise 1 to 365. Setting it does not purge at once; the daily job does.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -114,6 +115,8 @@ paths:
             examples:
               rename:
                 value: { workspace_name: Our Collection, markdown_history_limit: 30 }
+              trash_retention:
+                value: { trash_retention_days: 30 }
       responses:
         '200':
           description: The updated settings
@@ -313,7 +316,7 @@ paths:
         Appended to the end of its siblings. `folder_id` absent or `null` creates it at the root. A missing or trashed folder returns
         `409 destination_unavailable`. `kind` is required: every item of the list has that kind. `description` is Markdown (up to 64 KiB).
         `sort_mode: kind_key` and `sort_mode: price` are rejected (`422 validation_failed`) on a `generic` list, and `sort_mode: price`
-        also on `movie` and `tv_show` lists (F009-B1: only the kinds with a price can sort by it).
+        also on `movie` and `tv_show` lists (F009-B1: only the kinds with a price can sort by it). `icon` and `icon_color` are optional (F012-B1).
       requestBody:
         required: true
         content:
@@ -405,6 +408,9 @@ paths:
         kind is `generic`, the request is rejected with `422 validation_failed`. A kind change also resets `pinned_fields` to `null` (unless
         the same request sets it, which is then validated against the new kind). Send `pinned_fields: null` to reset it to the kind default;
         absent leaves it unchanged.
+
+        `icon` and `icon_color` (F012-B1): send `icon: null` to reset the icon to the default. Changing the icon to an emoji or to `null`
+        clears `icon_color`, so a PATCH that sends a colour with an emoji icon is rejected (`422 validation_failed`). A PATCH that changes only `icon_color` on a built-in icon is fine.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -994,6 +1000,16 @@ paths:
                 default: { $ref: '#/components/examples/TrashPage' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [trash]
+      operationId: emptyTrash
+      summary: Empty the trash
+      description: |
+        Permanently deletes every trash batch and their files, the same as purging each batch. No `If-Match`.
+        Idempotent: an empty trash also answers 204.
+      responses:
+        '204': { description: Trash emptied }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/v1/trash/{batch_id}/restore:
     parameters:
       - $ref: '#/components/parameters/BatchId'
@@ -1320,6 +1336,7 @@ components:
         workspace_name: Our Collection
         streaming_country_code: IT
         markdown_history_limit: 20
+        trash_retention_days: null
         version: 4
     Folder:
       value:
@@ -1340,6 +1357,8 @@ components:
         display_mode: thumbnail
         sort_mode: manual
         pinned_fields: [release_year, runtime_minutes]
+        icon: i:film
+        icon_color: indigo
         sort_order: 0
         item_count: 2
         version: 1
@@ -1355,6 +1374,8 @@ components:
         display_mode: thumbnail
         sort_mode: manual
         pinned_fields: [release_year, runtime_minutes]
+        icon: i:film
+        icon_color: indigo
         sort_order: 0
         item_count: 2
         version: 1
@@ -1396,6 +1417,8 @@ components:
             display_mode: thumbnail
             sort_mode: manual
             pinned_fields: [release_year, runtime_minutes]
+            icon: i:film
+            icon_color: indigo
             sort_order: 0
             item_count: 2
             version: 1
@@ -1409,6 +1432,8 @@ components:
             display_mode: grid
             sort_mode: title
             pinned_fields: null
+            icon: null
+            icon_color: null
             sort_order: 0
             item_count: 1
             version: 2
@@ -1538,9 +1563,9 @@ components:
               created_at: '2026-10-14T09:31:00Z'
               updated_at: '2026-10-14T10:00:00Z'
             path:
-              - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000001, name: Media }
-              - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000002, name: Movies }
-              - { type: list, id: 7c1e5a10-0000-4000-8000-000000000011, name: Watchlist }
+              - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000001, name: Media, icon: null, icon_color: null }
+              - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000002, name: Movies, icon: null, icon_color: null }
+              - { type: list, id: 7c1e5a10-0000-4000-8000-000000000011, name: Watchlist, icon: i:film, icon_color: indigo }
     SearchPage:
       value:
         data:
@@ -1562,9 +1587,9 @@ components:
               created_at: '2026-10-14T09:31:00Z'
               updated_at: '2026-10-14T10:00:00Z'
             path:
-              - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000001, name: Media }
-              - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000002, name: Movies }
-              - { type: list, id: 7c1e5a10-0000-4000-8000-000000000011, name: Watchlist }
+              - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000001, name: Media, icon: null, icon_color: null }
+              - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000002, name: Movies, icon: null, icon_color: null }
+              - { type: list, id: 7c1e5a10-0000-4000-8000-000000000011, name: Watchlist, icon: i:film, icon_color: indigo }
         page: { limit: 50, offset: 0, total: 1 }
     Content:
       value:
@@ -1682,6 +1707,17 @@ components:
         type: { type: string, enum: [folder, list] }
         id: { type: string, format: uuid }
         name: { type: string }
+    SearchPathSegment:
+      type: object
+      description: |
+        An ancestor of a search result (F012-B1). `icon` and `icon_color` are the list's own (list segments); both are `null` on folder segments.
+      required: [type, id, name, icon, icon_color]
+      properties:
+        type: { type: string, enum: [folder, list] }
+        id: { type: string, format: uuid }
+        name: { type: string }
+        icon: { $ref: '#/components/schemas/ListIcon' }
+        icon_color: { $ref: '#/components/schemas/ListIconColor' }
     Price:
       type: object
       nullable: true
@@ -1751,11 +1787,12 @@ components:
     # ---- Settings, tree ----
     Settings:
       type: object
-      required: [workspace_name, streaming_country_code, markdown_history_limit, version]
+      required: [workspace_name, streaming_country_code, markdown_history_limit, trash_retention_days, version]
       properties:
         workspace_name: { type: string, minLength: 1, maxLength: 200 }
         streaming_country_code: { type: string, pattern: '^[A-Z]{2}$' }
         markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
+        trash_retention_days: { type: integer, nullable: true, minimum: 1, maximum: 365 }
         version: { type: integer }
     UpdateSettingsRequest:
       type: object
@@ -1764,6 +1801,7 @@ components:
         workspace_name: { type: string, minLength: 1, maxLength: 200 }
         streaming_country_code: { type: string, pattern: '^[A-Z]{2}$' }
         markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
+        trash_retention_days: { type: integer, nullable: true, minimum: 1, maximum: 365 }
     Tree:
       type: object
       required: [folders, lists]
@@ -1839,9 +1877,25 @@ components:
         kinds that have one (motorcycle, car, camera; F009-B1). `generic` has no key at all, and `movie` and `tv_show` have no `price`. At most
         2 unique keys (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `kind` resets it to `null`.
       example: [release_year, runtime_minutes]
+    ListIcon:
+      type: string
+      nullable: true
+      maxLength: 64
+      example: i:film
+      description: |
+        The icon of a list (F012-B1): an emoji (one grapheme) or `i:<name>` for a built-in icon key. `null` is the default icon.
+        Lists only. The service checks the value: `422 validation_failed` on `icon` for anything else.
+    ListIconColor:
+      type: string
+      nullable: true
+      enum: [red, orange, amber, green, teal, blue, indigo, purple, pink, gray, null]
+      example: indigo
+      description: |
+        The colour of a built-in icon, one of ten palette names (F012-B1). `null` is the normal text colour. Allowed only when `icon`
+        is a built-in icon: `422 validation_failed` on `icon_color` otherwise. It is cleared when the icon changes to an emoji or to `null`.
     List:
       type: object
-      required: [id, folder_id, name, kind, description, display_mode, sort_mode, pinned_fields, sort_order, item_count, version, created_at, updated_at]
+      required: [id, folder_id, name, kind, description, display_mode, sort_mode, pinned_fields, icon, icon_color, sort_order, item_count, version, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         folder_id: { type: string, format: uuid, nullable: true }
@@ -1851,6 +1905,8 @@ components:
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
         sort_mode: { $ref: '#/components/schemas/SortMode' }
         pinned_fields: { $ref: '#/components/schemas/PinnedFields' }
+        icon: { $ref: '#/components/schemas/ListIcon' }
+        icon_color: { $ref: '#/components/schemas/ListIconColor' }
         sort_order: { type: integer }
         item_count: { type: integer, description: Number of active items. }
         version: { type: integer }
@@ -1872,6 +1928,8 @@ components:
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
         sort_mode: { $ref: '#/components/schemas/SortMode' }
         pinned_fields: { $ref: '#/components/schemas/PinnedFields' }
+        icon: { $ref: '#/components/schemas/ListIcon' }
+        icon_color: { $ref: '#/components/schemas/ListIconColor' }
     UpdateListRequest:
       type: object
       additionalProperties: false
@@ -1882,6 +1940,8 @@ components:
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
         sort_mode: { $ref: '#/components/schemas/SortMode' }
         pinned_fields: { $ref: '#/components/schemas/PinnedFields' }
+        icon: { $ref: '#/components/schemas/ListIcon' }
+        icon_color: { $ref: '#/components/schemas/ListIconColor' }
     MoveListRequest:
       type: object
       additionalProperties: false
@@ -2027,7 +2087,7 @@ components:
         item: { $ref: '#/components/schemas/ItemSummary' }
         path:
           type: array
-          items: { $ref: '#/components/schemas/PathSegment' }
+          items: { $ref: '#/components/schemas/SearchPathSegment' }
     SearchPage:
       type: object
       required: [data, page]

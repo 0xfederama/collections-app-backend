@@ -162,6 +162,18 @@ func (q *Queries) GetAnyListState(ctx context.Context, arg GetAnyListStateParams
 	return i, err
 }
 
+const getTrashRetentionDays = `-- name: GetTrashRetentionDays :one
+SELECT trash_retention_days FROM workspace_settings WHERE workspace_id = $1
+`
+
+// The auto-purge setting (NULL = off). No row means no settings: the job treats it as off.
+func (q *Queries) GetTrashRetentionDays(ctx context.Context, workspaceID uuid.UUID) (*int32, error) {
+	row := q.db.QueryRow(ctx, getTrashRetentionDays, workspaceID)
+	var trash_retention_days *int32
+	err := row.Scan(&trash_retention_days)
+	return trash_retention_days, err
+}
+
 const getTrashedFolder = `-- name: GetTrashedFolder :one
 SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM folders WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
 `
@@ -227,7 +239,7 @@ func (q *Queries) GetTrashedItem(ctx context.Context, arg GetTrashedItemParams) 
 }
 
 const getTrashedList = `-- name: GetTrashedList :one
-SELECT id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, kind, pinned_fields FROM lists WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
+SELECT id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, kind, pinned_fields, icon, icon_color FROM lists WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
 `
 
 type GetTrashedListParams struct {
@@ -255,6 +267,8 @@ func (q *Queries) GetTrashedList(ctx context.Context, arg GetTrashedListParams) 
 		&i.TrashBatchID,
 		&i.Kind,
 		&i.PinnedFields,
+		&i.Icon,
+		&i.IconColor,
 	)
 	return i, err
 }
@@ -289,6 +303,61 @@ func (q *Queries) InsertTrashBatch(ctx context.Context, arg InsertTrashBatchPara
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const listExpiredTrashBatchIDs = `-- name: ListExpiredTrashBatchIDs :many
+SELECT id FROM trash_batches WHERE workspace_id = $1 AND deleted_at < $2
+`
+
+type ListExpiredTrashBatchIDsParams struct {
+	WorkspaceID uuid.UUID
+	Cutoff      time.Time
+}
+
+// Batches trashed before the cutoff (deleted_at is the trash time). Read under the tree lock.
+func (q *Queries) ListExpiredTrashBatchIDs(ctx context.Context, arg ListExpiredTrashBatchIDsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listExpiredTrashBatchIDs, arg.WorkspaceID, arg.Cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTrashBatchIDs = `-- name: ListTrashBatchIDs :many
+SELECT id FROM trash_batches WHERE workspace_id = $1
+`
+
+// Every batch of the workspace (the whole trash, not a page). Read under the tree lock.
+func (q *Queries) ListTrashBatchIDs(ctx context.Context, workspaceID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listTrashBatchIDs, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listTrashBatches = `-- name: ListTrashBatches :many

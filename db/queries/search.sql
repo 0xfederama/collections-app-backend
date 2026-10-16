@@ -29,8 +29,8 @@ SELECT id, name, parent_folder_id FROM folders
 WHERE workspace_id = @workspace_id AND deleted_at IS NULL;
 
 -- name: ListSearchLists :many
--- Active lists, just enough to name the last path segment and find its folder.
-SELECT id, name, folder_id FROM lists
+-- Active lists, just enough to name the last path segment (with its icon) and find its folder.
+SELECT id, name, folder_id, icon, icon_color FROM lists
 WHERE workspace_id = @workspace_id AND deleted_at IS NULL;
 
 -- name: ListRecentItems :many

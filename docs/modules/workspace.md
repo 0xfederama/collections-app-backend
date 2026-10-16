@@ -19,8 +19,8 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 - `NewService(db *pgxpool.Pool) *Service`
 - `(*Service).Get(ctx, workspaceID) (Settings, error)`: `apperr.NotFound("settings")` if no row
 - `(*Service).Update(ctx, workspaceID, ifMatch int, p SettingsPatch) (Settings, error)`: 422 field errors, then 412 `apperr.VersionConflict` on a stale version
-- `Settings`: workspace name, streaming country, markdown history limit, version
-- `SettingsPatch`: pointer fields; nil means "leave as is"
+- `Settings`: workspace name, streaming country, markdown history limit, `TrashRetentionDays *int` (nil = off), version
+- `SettingsPatch`: pointer fields; nil means "leave as is"; `TrashRetentionDays` is `Optional[int]` (absent vs explicit null)
 
 ## Gotchas
 
@@ -32,3 +32,5 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 - A name change updates `workspaces.name` in the same transaction; it bumps `workspaces.version`, but the ETag stream is only `workspace_settings.version` (`"s-N"`).
 - `Update` writes in `database.InTx` and locks the settings row `FOR UPDATE`.
 - `default_currency` was removed in F-007 (migration 000002); the settings body no longer has it.
+- `trash_retention_days` (1 to 365, or null = off; migration 000010, default NULL) is read by the trash auto-purge (`internal/trash`). Setting it purges nothing at once.
+- Settings equality (`settings.equal`) compares the retention by value, so repeating the stored number changes nothing.

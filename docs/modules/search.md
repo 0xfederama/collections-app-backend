@@ -26,7 +26,7 @@ Finds active items by title (case-insensitive literal substring) across the work
 - Matches titles only. `%`, `_` and `\` are escaped in Go with `items.EscapeLike`.
 - Order: exact title match (case-insensitive) first, then `lower(title)`, then id.
 - Only active items. Batch cascade (D-004) trashes children with their list or folder, so there is no ancestor check and no join with lists.
-- Paths come from all active folders and lists, loaded once per request (no N+1). Root folder first, list last.
+- Paths come from all active folders and lists, loaded once per request (no N+1). Root folder first, list last. The list segment carries its `icon` and `icon_color`; folder segments have both `null`.
 - A row whose list vanished between reads is skipped, so a page can hold fewer rows than `limit`. `Total` still counts it.
 - `Total` comes from a separate count, so it stays right past the last page.
 - The request guard rejects an empty or too long raw `q`; whitespace-only `q` is caught by the service.

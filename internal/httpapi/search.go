@@ -57,9 +57,12 @@ func (s *Server) ListRecentItems(ctx context.Context, r oapi.ListRecentItemsRequ
 
 // searchResultBody maps a service result (item and path) to the shared SearchResult body.
 func searchResultBody(res search.Result) oapi.SearchResult {
-	path := make([]oapi.PathSegment, 0, len(res.Path))
+	path := make([]oapi.SearchPathSegment, 0, len(res.Path))
 	for _, seg := range res.Path {
-		path = append(path, oapi.PathSegment{Type: oapi.PathSegmentType(seg.Type), Id: seg.ID, Name: seg.Name})
+		path = append(path, oapi.SearchPathSegment{
+			Type: oapi.SearchPathSegmentType(seg.Type), Id: seg.ID, Name: seg.Name,
+			Icon: nullableString(seg.Icon), IconColor: nullableIconColor(seg.IconColor),
+		})
 	}
 	return oapi.SearchResult{Item: itemSummaryBody(res.Item), Path: path}
 }

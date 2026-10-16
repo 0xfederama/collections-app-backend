@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
@@ -15,7 +16,9 @@ type settingsBody struct {
 	WorkspaceName        string `json:"workspace_name"`
 	StreamingCountryCode string `json:"streaming_country_code"`
 	MarkdownHistoryLimit int    `json:"markdown_history_limit"`
-	Version              int    `json:"version"`
+	// TrashRetentionDays is nil (JSON null) when off, else the decoded float64.
+	TrashRetentionDays any `json:"trash_retention_days"`
+	Version            int `json:"version"`
 }
 
 // settingsRouter returns a router on a fresh migrated database with the workspace bootstrapped.
@@ -59,7 +62,7 @@ func TestAT02_GetSettings(t *testing.T) {
 	if got := rec.Header().Get("ETag"); got != `"s-1"` {
 		t.Errorf("ETag = %q, want \"s-1\"", got)
 	}
-	want := settingsBody{"Our Collection", "IT", 20, 1}
+	want := settingsBody{"Our Collection", "IT", 20, nil, 1}
 	if got := decodeSettings(t, rec); got != want {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}
@@ -75,7 +78,7 @@ func TestAT02_PatchSettings(t *testing.T) {
 	if got := rec.Header().Get("ETag"); got != `"s-2"` {
 		t.Errorf("ETag = %q, want \"s-2\"", got)
 	}
-	want := settingsBody{"Home", "US", 0, 2}
+	want := settingsBody{"Home", "US", 0, nil, 2}
 	if got := decodeSettings(t, rec); got != want {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}
@@ -93,7 +96,7 @@ func TestAT02_PatchSettings(t *testing.T) {
 	}
 
 	get := do(t, h, req{method: "GET", path: "/api/v1/settings"})
-	if got, want := decodeSettings(t, get), (settingsBody{"Ours", "US", 0, 3}); got != want {
+	if got, want := decodeSettings(t, get), (settingsBody{"Ours", "US", 0, nil, 3}); got != want {
 		t.Errorf("GET after patches = %+v, want %+v", got, want)
 	}
 }
@@ -146,4 +149,56 @@ func TestAT02_PatchSettingsValidation(t *testing.T) {
 	t.Run("missing If-Match", func(t *testing.T) {
 		wantProblem(t, patchSettings(t, h, "", `{"streaming_country_code":"US"}`), 428, "precondition_required")
 	})
+}
+
+func TestF012_TrashRetentionSetting(t *testing.T) {
+	h := settingsRouter(t)
+	if got := decodeSettings(t, do(t, h, req{method: "GET", path: "/api/v1/settings"})); got.TrashRetentionDays != nil {
+		t.Fatalf("default retention = %v, want null (off)", got.TrashRetentionDays)
+	}
+
+	rec := patchSettings(t, h, `"s-1"`, `{"trash_retention_days":7}`)
+	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-2"` {
+		t.Fatalf("set 7: status = %d ETag = %q, body=%s", rec.Code, rec.Header().Get("ETag"), rec.Body)
+	}
+	if got := decodeSettings(t, rec); got.TrashRetentionDays != float64(7) || got.Version != 2 {
+		t.Fatalf("set 7 body = %+v, want retention 7 version 2", got)
+	}
+
+	for _, body := range []string{`{"trash_retention_days":0}`, `{"trash_retention_days":366}`} {
+		p := wantProblem(t, patchSettings(t, h, `"s-2"`, body), 422, "validation_failed")
+		if len(p.Errors) != 1 || p.Errors[0].Field != "trash_retention_days" {
+			t.Errorf("%s: errors = %+v, want field trash_retention_days", body, p.Errors)
+		}
+	}
+
+	// Repeating the stored value changes nothing: no version bump.
+	rec = patchSettings(t, h, `"s-2"`, `{"trash_retention_days":7}`)
+	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-2"` {
+		t.Fatalf("repeat 7: status = %d ETag = %q, want 200 \"s-2\"", rec.Code, rec.Header().Get("ETag"))
+	}
+
+	// An absent field leaves the retention alone.
+	rec = patchSettings(t, h, `"s-2"`, `{"workspace_name":"Ours"}`)
+	if rec.Code != 200 || decodeSettings(t, rec).TrashRetentionDays != float64(7) {
+		t.Fatalf("rename: status = %d body=%s, want retention kept at 7", rec.Code, rec.Body)
+	}
+
+	rec = patchSettings(t, h, `"s-3"`, `{"trash_retention_days":null}`)
+	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-4"` {
+		t.Fatalf("set null: status = %d ETag = %q, body=%s", rec.Code, rec.Header().Get("ETag"), rec.Body)
+	}
+	if got := decodeSettings(t, rec); got.TrashRetentionDays != nil || got.Version != 4 {
+		t.Fatalf("set null body = %+v, want retention null version 4", got)
+	}
+
+	// Null again is a no-op, and the GET shows the null key (not a zero value).
+	rec = patchSettings(t, h, `"s-4"`, `{"trash_retention_days":null}`)
+	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-4"` {
+		t.Fatalf("repeat null: status = %d ETag = %q, want 200 \"s-4\"", rec.Code, rec.Header().Get("ETag"))
+	}
+	get := do(t, h, req{method: "GET", path: "/api/v1/settings"})
+	if !strings.Contains(get.Body.String(), `"trash_retention_days":null`) {
+		t.Errorf("GET body = %s, want trash_retention_days null", get.Body)
+	}
 }

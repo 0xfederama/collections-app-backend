@@ -26,7 +26,7 @@ This repo is the `backend/` submodule of the parent repo `0xfederama/collections
   - Built-in `Explore` handles broad code search.
   - Keep schema, concurrency, trash, storage, and security logic as `[CRUCIAL]` flags you always review.
 - Update **this file** in the same PR when commands, layout, conventions, or gotchas change. Keep it under ~200 lines.
-- MVP scope fence: no auth, TMDB, AI, public-API features, WebSockets, ORM, Redis, or queues (ORCHESTRATOR_BRIEF §2).
+- Scope fence: F-013 explicitly permits server-side TMDB lookup; no auth, AI, public-API features, WebSockets, ORM, Redis, or queues (ORCHESTRATOR_BRIEF §2).
 
 ## Commands
 No CI (D-031, D-032): the gates run locally. Run `make check` before every PR and paste the output in the PR.
@@ -95,6 +95,8 @@ Versions and tool choices: DECISIONS.md "Toolchain versions (R-1)" and D-035–D
 - 2026-10-15: F-002 (spec 0.4.0): `streaming.paid_platforms` is a parallel name list (subset of `platforms`); motorcycle/camera have no make/model (migration 000003 moved them to a "From 1.1" content block); `lists.pinned_fields` is validated by `kinds.ValidatePinned` against `kinds.PinnableKeys` (kind keys + `price`) and reset by the list-kind change; sort mode `price` orders by `price_min` (no currency conversion), no-price last.
 - 2026-10-16: F-009 (spec 0.7.0): `kinds.HasPrice` (motorcycle, car, camera) is the single source of truth for price. F008-B1's "generic" price rule is generalised: a non-null price on a generic/movie/tv_show item is 422 on `price`, `?sort=price` on those lists is 400 `invalid_parameter`, and a list of such a kind cannot pin `price` nor store `sort_mode: price`. Migration 000007 moves their prices to a "From 1.3" content block. `lists.pinned_fields` is now an ordered array of at most 2 keys, the first primary type (migration 000008; no more `{under, right}`, `kinds.ValidatePinned` errors on `pinned_fields[i]` / `pinned_fields`).
 - 2026-10-16: F-012 (spec 0.8.0): `lists.icon` is an emoji (own grammar in `internal/tree/icon.go`, no grapheme library) or `i:<name>` (the server does not know the built-in set); `icon_color` (10 palette names) only with an `i:` icon and is cleared when the icon becomes an emoji/null. `DELETE /trash` = `trash.PurgeAll`. `workspace_settings.trash_retention_days` (null = off): `trash.RunAutoPurge` runs at start-up and daily, tree lock, files deleted after commit. Migrations 000009/000010 downs are lossy.
+
+- 2026-10-17: F-013 (`api-v0.9.0`): `internal/tmdb` owns bounded upstream calls; optional `TMDB_API_KEY` disables lookup when absent. `internal/lookup` atomically records imported values/posters and provenance; D-089 requires refresh before six months and expired-data cleanup preserving edits (including trash and missing-key cases). Tests use fake TMDB servers only. Movie `director` is pinnable/filterable and has a movie-only sort; `metadata_language` defaults to `en-US`.
 
 ## Adding an endpoint (B-05+)
 1. Implement the operation's method in a file of its own (`settings.go`, `folders.go`, `trash.go`, …) on `*Server` (the generated strict interface has no stub left: a missing method is a compile error). Add the service dependency to `Deps`/`Server`.

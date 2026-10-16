@@ -35,7 +35,7 @@ func TestSearchAuthLocalizationRankingAndCache(t *testing.T) {
 		if r.URL.Query().Get("api_key") != "test-secret" {
 			t.Errorf("missing API key query parameter")
 		}
-		_, _ = w.Write([]byte(`{"results":[{"id":1,"title":"2001: Odissea nello spazio","original_title":"2001: A Space Odyssey","release_date":"1968-04-02","overview":"Uno spazio."},{"id":2,"title":"Odissea","original_title":"Odyssey","release_date":"1997-01-01"}]}`))
+		_, _ = w.Write([]byte(`{"results":[{"id":1,"title":"2001: Odissea nello spazio","original_title":"2001: A Space Odyssey","release_date":"1968-04-02","poster_path":"/poster.jpg","overview":"Uno spazio."},{"id":2,"title":"Odissea","original_title":"Odyssey","release_date":"1997-01-01"}]}`))
 	})
 	a, err := c.Search(context.Background(), "movie", "odissea", "it-IT")
 	if err != nil {

@@ -63,6 +63,10 @@ type ApplyParams struct {
 	Fields     map[string]any
 	PosterPath string
 	Poster     *images.Processed
+	// RefreshPoster distinguishes "preserve the current image" from a checked
+	// TMDB response with no poster. In owned mode the latter removes an expired
+	// lookup-owned poster; manual modes still preserve every existing image.
+	RefreshPoster bool
 }
 
 // Store owns the atomic item, attachment and provenance transaction. Apply

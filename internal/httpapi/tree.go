@@ -43,8 +43,11 @@ func listBody(l tree.List) oapi.List {
 	}
 	out.PinnedFields = nullable.NewNullNullable[oapi.PinnedFields]()
 	if l.PinnedFields != nil {
-		under, right := l.PinnedFields.Under, l.PinnedFields.Right
-		out.PinnedFields = nullable.NewNullableWithValue(oapi.PinnedFields{Under: &under, Right: &right})
+		keys := oapi.PinnedFields(*l.PinnedFields)
+		if keys == nil {
+			keys = oapi.PinnedFields{}
+		}
+		out.PinnedFields = nullable.NewNullableWithValue(keys)
 	}
 	if l.Path != nil {
 		path := make([]oapi.PathSegment, 0, len(l.Path))
@@ -108,12 +111,9 @@ func optionalPinned(n nullable.Nullable[oapi.PinnedFields]) tree.Optional[tree.P
 	if err != nil {
 		return tree.Optional[tree.PinnedFields]{Set: true}
 	}
-	p := tree.PinnedFields{}
-	if v.Under != nil {
-		p.Under = *v.Under
-	}
-	if v.Right != nil {
-		p.Right = *v.Right
+	p := tree.PinnedFields(v)
+	if p == nil {
+		p = tree.PinnedFields{}
 	}
 	return tree.Optional[tree.PinnedFields]{Set: true, Value: &p}
 }

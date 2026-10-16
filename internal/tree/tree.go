@@ -82,7 +82,7 @@ type List struct {
 	Description *string
 	DisplayMode string
 	SortMode    string
-	// PinnedFields is nil for the kind default (F002-B3).
+	// PinnedFields is nil for the kind default (F009-B2).
 	PinnedFields *PinnedFields
 	SortOrder    int
 	ItemCount    int
@@ -92,15 +92,13 @@ type List struct {
 	Path         []PathFolder
 }
 
-// PinnedFields are the field keys a list pins in its rows: Under the title, Right of it (F002-B3).
-// Both are non-nil once stored, and may be empty (pin nothing).
-type PinnedFields struct {
-	Under []string `json:"under"`
-	Right []string `json:"right"`
-}
+// PinnedFields are the field keys a list pins in its rows, in order: the first is
+// the primary field, the second the secondary (F009-B2, replaces the under/right
+// slots of F-002). Non-nil once stored, and may be empty (pin nothing).
+type PinnedFields []string
 
 func (p PinnedFields) equal(o PinnedFields) bool {
-	return slices.Equal(p.Under, o.Under) && slices.Equal(p.Right, o.Right)
+	return slices.Equal(p, o)
 }
 
 // pinnedFromJSON reads the stored column. NULL and anything unreadable are nil (the kind default).
@@ -112,11 +110,8 @@ func pinnedFromJSON(b []byte) *PinnedFields {
 	if json.Unmarshal(b, &p) != nil {
 		return nil
 	}
-	if p.Under == nil {
-		p.Under = []string{}
-	}
-	if p.Right == nil {
-		p.Right = []string{}
+	if p == nil {
+		p = PinnedFields{}
 	}
 	return &p
 }
@@ -124,6 +119,9 @@ func pinnedFromJSON(b []byte) *PinnedFields {
 func pinnedToJSON(p *PinnedFields) ([]byte, error) {
 	if p == nil {
 		return nil, nil
+	}
+	if *p == nil {
+		return []byte("[]"), nil
 	}
 	b, err := json.Marshal(p)
 	if err != nil {

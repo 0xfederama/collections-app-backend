@@ -351,23 +351,33 @@ func platformList(path string, raw any) ([]string, []apperr.FieldError) {
 	return out, nil
 }
 
-// maxPinnedPerSlot is the most field keys a list can pin in one slot (F-002).
-const maxPinnedPerSlot = 6
+// maxPinned is the most field keys a list can pin (F009-B2): the first is the
+// primary field, the second the secondary.
+const maxPinned = 2
 
 // PriceKey is the item column that can be pinned next to a kind's metadata fields.
 const PriceKey = "price"
 
+// priceKinds are the kinds whose items can carry a price (F009-B1): price lives
+// only on motorcycle, car and camera items. Generic, movie and tv_show items
+// have none.
+var priceKinds = map[string]bool{Motorcycle: true, Car: true, Camera: true}
+
+// HasPrice reports whether items of this kind can carry a price (F009-B1).
+func HasPrice(kind string) bool { return priceKinds[kind] }
+
 // PinnableKeys returns the field keys a list of this kind can pin, sorted: the
-// kind's metadata keys plus "price" (generic has none). Keys are looked up through the registry,
-// so a field added to a kind (or, later, a custom field) is pinnable at once.
-// An unknown kind has none.
+// kind's metadata keys, plus "price" only on the kinds that have one (generic
+// has no key at all; movie and tv_show have no price, F009-B1). Keys are looked
+// up through the registry, so a field added to a kind (or, later, a custom
+// field) is pinnable at once. An unknown kind has none.
 func PinnableKeys(kind string) []string {
 	sc, ok := registry[kind]
 	if !ok {
 		return nil
 	}
-	if kind == Generic {
-		return nil // generic lists have no fields at all, price included (F008-B1)
+	if !HasPrice(kind) {
+		return slices.Sorted(maps.Keys(sc.fields))
 	}
 	return slices.Sorted(maps.Keys(withPrice(sc.fields)))
 }
@@ -379,43 +389,36 @@ func withPrice(fields map[string]rule) map[string]rule {
 	return out
 }
 
-// ValidatePinned checks the two pinned-field slots of a list of this kind: each
-// slot is an ordered list of at most 6 unique pinnable keys, and a key is in at
-// most one slot. Errors are on "pinned_fields.under[i]" / "pinned_fields.right[i]".
-// Nil slots are returned as empty ones.
-func ValidatePinned(kind string, under, right []string) (u, r []string, err error) {
+// ValidatePinned checks the pinned fields of a list of this kind (F009-B2): an
+// ordered list of at most 2 unique pinnable keys, the first the primary. Errors
+// are on "pinned_fields[i]". The result is never nil for an unknown kind (which
+// errors) but is the empty list for "pins nothing". A key that is not (or no
+// longer) a field of the kind is rejected: a list of a price-less kind cannot
+// pin "price".
+func ValidatePinned(kind string, keys []string) ([]string, error) {
 	if !Known(kind) {
-		return nil, nil, apperr.Validation(apperr.FieldError{Field: "kind", Message: "is not a known item kind"})
+		return nil, apperr.Validation(apperr.FieldError{Field: "kind", Message: "is not a known item kind"})
 	}
 	allowed := PinnableKeys(kind)
 	var errs []apperr.FieldError
-	check := func(slot string, keys []string, other map[string]bool) map[string]bool {
-		seen := make(map[string]bool, len(keys))
-		base := "pinned_fields." + slot
-		if len(keys) > maxPinnedPerSlot {
-			errs = append(errs, apperr.FieldError{Field: base, Message: fmt.Sprintf("must have at most %d entries", maxPinnedPerSlot)})
-			return seen
-		}
-		for i, k := range keys {
-			field := fmt.Sprintf("%s[%d]", base, i)
-			switch {
-			case len(allowed) == 0:
-				errs = append(errs, apperr.FieldError{Field: field, Message: "lists of this kind have no pinnable fields"})
-			case !slices.Contains(allowed, k):
-				errs = append(errs, apperr.FieldError{Field: field, Message: "must be one of " + strings.Join(allowed, ", ")})
-			case seen[k]:
-				errs = append(errs, apperr.FieldError{Field: field, Message: "is a duplicate key"})
-			case other[k]:
-				errs = append(errs, apperr.FieldError{Field: field, Message: "is already pinned in the other slot"})
-			}
-			seen[k] = true
-		}
-		return seen
+	if len(keys) > maxPinned {
+		errs = append(errs, apperr.FieldError{Field: "pinned_fields", Message: fmt.Sprintf("must have at most %d entries", maxPinned)})
 	}
-	inUnder := check("under", under, nil)
-	check("right", right, inUnder)
+	seen := make(map[string]bool, len(keys))
+	for i, k := range keys {
+		field := fmt.Sprintf("pinned_fields[%d]", i)
+		switch {
+		case len(allowed) == 0:
+			errs = append(errs, apperr.FieldError{Field: field, Message: "lists of this kind have no pinnable fields"})
+		case !slices.Contains(allowed, k):
+			errs = append(errs, apperr.FieldError{Field: field, Message: "must be one of " + strings.Join(allowed, ", ")})
+		case seen[k]:
+			errs = append(errs, apperr.FieldError{Field: field, Message: "is a duplicate key"})
+		}
+		seen[k] = true
+	}
 	if len(errs) > 0 {
-		return nil, nil, apperr.Validation(errs...)
+		return nil, apperr.Validation(errs...)
 	}
-	return append([]string{}, under...), append([]string{}, right...), nil
+	return append([]string{}, keys...), nil
 }

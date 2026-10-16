@@ -654,7 +654,7 @@ func TestF007_ChangeListKindClearsItemMetadata(t *testing.T) {
 	if got["kind"] != "car" || !reflect.DeepEqual(got["metadata"], map[string]any{}) || got["version"] != float64(2) || got["title"] != "The Matrix" {
 		t.Fatalf("item after kind change: %v", got)
 	}
-	if got["website"] != "https://www.warnerbros.com/movies/matrix" || got["price"] == nil {
+	if got["website"] != "https://www.warnerbros.com/movies/matrix" || got["price"] != nil {
 		t.Errorf("only the kind fields are cleared, got %v", got)
 	}
 	var meta string

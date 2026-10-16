@@ -213,8 +213,9 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 			if p.SortMode != nil {
 				field = "sort_mode"
 			}
-			// A stored price sort on a list that becomes generic falls back to manual (F008-B1).
-			if p.SortMode == nil && sortMode == "price" && *p.Kind == kinds.Generic {
+			// A stored price sort on a list that becomes one without a price
+			// (generic, movie, tv_show) falls back to manual (F009-B1).
+			if p.SortMode == nil && sortMode == "price" && !kinds.HasPrice(*p.Kind) {
 				sortMode = "manual"
 				resetSort = true
 				fieldsSet = true
@@ -228,7 +229,7 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 			if _, err := q.ClearListItemsMetadata(ctx, sqlc.ClearListItemsMetadataParams{Now: s.now(), ListID: id, WorkspaceID: s.workspaceID}); err != nil {
 				return fmt.Errorf("clear items metadata: %w", err)
 			}
-			if *p.Kind == kinds.Generic {
+			if !kinds.HasPrice(*p.Kind) {
 				if _, err := q.ClearListItemsPrice(ctx, sqlc.ClearListItemsPriceParams{Now: s.now(), ListID: id, WorkspaceID: s.workspaceID}); err != nil {
 					return fmt.Errorf("clear items price: %w", err)
 				}
@@ -280,13 +281,17 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 	return s.getList(ctx, id, false)
 }
 
-// validatePinned checks the slots against the kind and returns them normalized (never nil).
+// validatePinned checks the ordered keys against the kind and returns them normalized (never nil).
 func validatePinned(kind string, in *PinnedFields) (*PinnedFields, error) {
-	under, right, err := kinds.ValidatePinned(kind, in.Under, in.Right)
+	keys, err := kinds.ValidatePinned(kind, *in)
 	if err != nil {
 		return nil, err
 	}
-	return &PinnedFields{Under: under, Right: right}, nil
+	p := PinnedFields(keys)
+	if p == nil {
+		p = PinnedFields{}
+	}
+	return &p, nil
 }
 
 // appendValidation adds the field errors of a validation error to errs. Any other error is not expected here.
@@ -384,10 +389,11 @@ func kindErrors(kind *string) []apperr.FieldError {
 }
 
 // sortKindErrors rejects the kind_key sort mode on a kind without a sort key
-// and the price sort mode on generic (no price, F008-B1).
+// and the price sort mode on a kind without a price (generic, movie and tv_show;
+// F009-B1, which subsumes F008-B1 for generic).
 func sortKindErrors(kind, sortMode, field string) []apperr.FieldError {
-	if sortMode == "price" && kind == kinds.Generic {
-		return []apperr.FieldError{{Field: field, Message: "price is not available on generic lists"}}
+	if sortMode == "price" && !kinds.HasPrice(kind) {
+		return []apperr.FieldError{{Field: field, Message: "price is not available on lists of this kind"}}
 	}
 	if sortMode != "kind_key" {
 		return nil

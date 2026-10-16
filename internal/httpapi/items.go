@@ -78,6 +78,9 @@ func (s *Server) CreateItem(ctx context.Context, r oapi.CreateItemRequestObject)
 }
 
 func (s *Server) LookupItemMetadata(ctx context.Context, r oapi.LookupItemMetadataRequestObject) (oapi.LookupItemMetadataResponseObject, error) {
+	if s.deps.Lookup == nil {
+		return nil, apperr.LookupDisabled()
+	}
 	mode := lookup.ModeFill
 	if r.Body.Mode != nil {
 		mode = lookup.Mode(*r.Body.Mode)

@@ -107,7 +107,8 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 	return s.store.Apply(ctx, ApplyParams{
 		Mode: ModeCreate, ListID: listID, Kind: kind, CreateInput: &in,
 		TMDBID: candidate.details.ID, Title: candidate.details.Title, OriginalTitle: in.Title,
-		Fields: candidate.details.Metadata, PosterPath: candidate.details.PosterPath, Poster: poster, RefreshPoster: true,
+		Fields: candidate.details.Metadata, PosterPath: candidate.details.PosterPath, Poster: poster,
+		RefreshFields: true, RefreshPoster: true,
 	})
 }
 
@@ -164,7 +165,8 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 	return s.store.Apply(ctx, ApplyParams{
 		Mode: mode, ItemID: itemID, ExpectedVersion: expectedVersion, Kind: it.Kind,
 		TMDBID: candidate.details.ID, Title: candidate.details.Title, OriginalTitle: it.Title,
-		Fields: candidate.details.Metadata, PosterPath: candidate.details.PosterPath, Poster: poster, RefreshPoster: refreshPoster,
+		Fields: candidate.details.Metadata, PosterPath: candidate.details.PosterPath, Poster: poster,
+		RefreshFields: true, RefreshPoster: refreshPoster,
 	})
 }
 
@@ -197,8 +199,10 @@ func (s *Service) RefreshOwned(ctx context.Context, itemID uuid.UUID, expectedVe
 		return fmt.Errorf("refresh imported item: TMDB details missing")
 	}
 
+	now := s.clock.Now()
+	refreshFields := !now.Before(record.FetchedAt.AddDate(0, 5, 0))
 	refreshPoster := record.AttachmentID == nil || record.PosterFetchedAt == nil ||
-		!s.clock.Now().Before(record.PosterFetchedAt.AddDate(0, 5, 0))
+		!now.Before(record.PosterFetchedAt.AddDate(0, 5, 0))
 	var poster *images.Processed
 	if refreshPoster && candidate.details.PosterPath != "" {
 		poster, err = s.poster(ctx, candidate.details.PosterPath)
@@ -209,7 +213,8 @@ func (s *Service) RefreshOwned(ctx context.Context, itemID uuid.UUID, expectedVe
 	_, err = s.store.Apply(ctx, ApplyParams{
 		Mode: ModeOwned, ItemID: itemID, ExpectedVersion: expectedVersion, Kind: record.Kind,
 		TMDBID: candidate.details.ID, Title: candidate.details.Title, OriginalTitle: record.OriginalTitle,
-		Fields: candidate.details.Metadata, PosterPath: candidate.details.PosterPath, Poster: poster, RefreshPoster: refreshPoster,
+		Fields: candidate.details.Metadata, PosterPath: candidate.details.PosterPath, Poster: poster,
+		RefreshFields: refreshFields, RefreshPoster: refreshPoster,
 	})
 	return err
 }

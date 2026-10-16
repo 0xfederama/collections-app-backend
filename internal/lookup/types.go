@@ -63,6 +63,10 @@ type ApplyParams struct {
 	Fields     map[string]any
 	PosterPath string
 	Poster     *images.Processed
+	// RefreshFields is relevant to owned maintenance. False means a poster-only
+	// refresh and must leave field snapshots, title provenance and FetchedAt
+	// unchanged.
+	RefreshFields bool
 	// RefreshPoster distinguishes "preserve the current image" from a checked
 	// TMDB response with no poster. In owned mode the latter removes an expired
 	// lookup-owned poster; manual modes still preserve every existing image.

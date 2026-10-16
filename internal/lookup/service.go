@@ -200,9 +200,9 @@ func (s *Service) RefreshOwned(ctx context.Context, itemID uuid.UUID, expectedVe
 	}
 
 	now := s.clock.Now()
-	refreshFields := !now.Before(record.FetchedAt.AddDate(0, 5, 0))
+	refreshFields := !now.Before(addMonthsClamped(record.FetchedAt, 5))
 	refreshPoster := record.AttachmentID == nil || record.PosterFetchedAt == nil ||
-		!now.Before(record.PosterFetchedAt.AddDate(0, 5, 0))
+		!now.Before(addMonthsClamped(*record.PosterFetchedAt, 5))
 	var poster *images.Processed
 	if refreshPoster && candidate.details.PosterPath != "" {
 		poster, err = s.poster(ctx, candidate.details.PosterPath)

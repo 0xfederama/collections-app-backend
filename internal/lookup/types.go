@@ -82,3 +82,11 @@ type Store interface {
 	Read(ctx context.Context, itemID uuid.UUID) (Record, bool, error)
 	Apply(ctx context.Context, p ApplyParams) (items.Item, error)
 }
+
+// addMonthsClamped applies calendar-month retention without rolling a date at
+// the end of a long month into the following month.
+func addMonthsClamped(t time.Time, months int) time.Time {
+	first := time.Date(t.Year(), t.Month(), 1, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location()).AddDate(0, months, 0)
+	lastDay := first.AddDate(0, 1, -1).Day()
+	return time.Date(first.Year(), first.Month(), min(t.Day(), lastDay), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
+}

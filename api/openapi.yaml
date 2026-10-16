@@ -725,6 +725,10 @@ paths:
         The default mode is `fill`. When a search has no result, the operation returns the unchanged item and its current ETag.
         An explicit lookup while the integration is disabled or TMDB cannot be reached returns `503 lookup_disabled` or
         `503 upstream_unavailable` respectively.
+        Imported fields and lookup-owned posters retain server-side provenance. Maintenance refreshes owned values after five calendar months;
+        at six months, a value that still cannot be refreshed is removed only when it still equals its imported snapshot. User edits and
+        user-supplied images are preserved. Poster age is tracked separately from metadata age. An item's `lookup_disabled` flag stops automatic
+        refresh and lets its owned values expire under the same rules.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:

@@ -44,6 +44,7 @@ var ifMatchPrefix = map[string]string{
 	"MoveItem":              etag.Item,
 	"SetItemImage":          etag.Item,
 	"DeleteItemImage":       etag.Item,
+	"LookupItemMetadata":    etag.Item,
 	"UpdateItemContent":     etag.Content,
 	"RestoreContentVersion": etag.Content,
 	"UpdateSettings":        etag.Settings,

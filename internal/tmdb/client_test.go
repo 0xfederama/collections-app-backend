@@ -75,15 +75,44 @@ func TestDetailsMetadataAndProviders(t *testing.T) {
 }
 
 func TestDetailsTVMetadata(t *testing.T) {
-	c, _ := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"id":4,"name":"Series","first_air_date":"2010-01-01","last_air_date":"2018-01-01","number_of_seasons":5,"episode_run_time":[44]}`))
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/3/tv/4" {
+			t.Errorf("TV details path = %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"id":4,"name":"Series","first_air_date":"2010-01-01","last_air_date":"2018-01-01","number_of_seasons":5,"episode_run_time":[44],"status":"Returning Series"}`))
 	})
 	d, err := c.Details(context.Background(), "tv_show", 4, "en-US", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.Metadata["first_air_year"] != 2010 || d.Metadata["end_year"] != 2018 || d.Metadata["seasons"] != 5 || d.Metadata["episode_minutes"] != 44 {
+	if d.ID != 4 || d.Metadata["first_air_year"] != 2010 || d.Metadata["end_year"] != nil || d.Metadata["seasons"] != 5 || d.Metadata["episode_minutes"] != 44 {
 		t.Fatalf("metadata = %#v", d.Metadata)
+	}
+}
+
+func TestTVEndedYearAndDetailsIDValidation(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/3/tv/4" {
+			t.Errorf("TV details path = %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"id":4,"name":"Series","first_air_date":"2010-01-01","last_air_date":"2018-01-01","status":"Ended"}`))
+	})
+	d, err := c.Details(context.Background(), "tv_show", 4, "en-US", "")
+	if err != nil || d.Metadata["end_year"] != 2018 {
+		t.Fatalf("ended details = %+v, %v", d, err)
+	}
+
+	wrongID, _ := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":9,"title":"Wrong result"}`))
+	})
+	if _, err := wrongID.Details(context.Background(), "movie", 4, "en-US", ""); err == nil {
+		t.Fatal("accepted mismatched upstream details ID")
+	}
+	missingID, _ := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"title":"No ID"}`))
+	})
+	if _, err := missingID.Details(context.Background(), "movie", 4, "en-US", ""); err == nil {
+		t.Fatal("accepted missing upstream details ID")
 	}
 }
 
@@ -147,5 +176,29 @@ func TestHTTPTimeout(t *testing.T) {
 	c := NewWithOptions("test-secret", Options{APIBaseURL: s.URL + "/3", ImageBaseURL: s.URL, HTTPClient: s.Client(), Timeout: 15 * time.Millisecond})
 	if _, err := c.Search(context.Background(), "movie", "slow", "en-US"); err == nil || strings.Contains(err.Error(), "test-secret") {
 		t.Fatalf("timeout error = %v", err)
+	}
+}
+
+func TestErrorsHideKeyAndRetryAfterIsBounded(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "9223372036854775807")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte("upstream diagnostic contains test-secret"))
+	})
+	_, err := c.Search(context.Background(), "movie", "x", "en-US")
+	if err == nil || strings.Contains(err.Error(), "test-secret") {
+		t.Fatalf("upstream error = %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Millisecond)
+	defer cancel()
+	if _, err := c.Search(ctx, "movie", "again", "en-US"); err == nil || strings.Contains(err.Error(), "test-secret") {
+		t.Fatalf("Retry-After wait error = %v", err)
+	}
+}
+
+func TestMalformedBaseURLDisablesClient(t *testing.T) {
+	c := NewWithOptions("test-secret", Options{APIBaseURL: "://bad", ImageBaseURL: "https://images.example.test"})
+	if c.Enabled() {
+		t.Fatal("malformed endpoint left client enabled")
 	}
 }

@@ -25,6 +25,7 @@ const (
 	searchTTL        = 5 * time.Minute
 	maxSearchEntries = 128
 	requestInterval  = 250 * time.Millisecond
+	maxRetryAfter    = time.Hour
 )
 
 var (
@@ -92,8 +93,13 @@ func NewWithOptions(apiKey string, opts Options) *Client {
 	if opts.ImageBaseURL == "" {
 		opts.ImageBaseURL = imageOrigin
 	}
-	api, _ := url.Parse(strings.TrimRight(opts.APIBaseURL, "/"))
-	image, _ := url.Parse(strings.TrimRight(opts.ImageBaseURL, "/"))
+	api, apiOK := parseBaseURL(opts.APIBaseURL)
+	image, imageOK := parseBaseURL(opts.ImageBaseURL)
+	if !apiOK || !imageOK {
+		api, _ = url.Parse(apiOrigin)
+		image, _ = url.Parse(imageOrigin)
+		apiKey = ""
+	}
 	hc := opts.HTTPClient
 	if hc == nil {
 		hc = &http.Client{Timeout: opts.Timeout}
@@ -135,7 +141,7 @@ func (c *Client) Search(ctx context.Context, kind, query, language string) ([]Ma
 			Overview      string `json:"overview"`
 		} `json:"results"`
 	}
-	if err := c.getJSON(ctx, endpoint+"/search/"+map[string]string{"movie": "movie", "tv_show": "tv"}[kind], url.Values{"query": {query}, "language": {language}}, &data); err != nil {
+	if err := c.getJSON(ctx, "/search/"+endpoint, url.Values{"query": {query}, "language": {language}}, &data); err != nil {
 		return nil, err
 	}
 	results := make([]Match, 0, len(data.Results))
@@ -172,6 +178,7 @@ func (c *Client) Details(ctx context.Context, kind string, id int, language, cou
 		ReleaseDate    string `json:"release_date"`
 		FirstAirDate   string `json:"first_air_date"`
 		LastAirDate    string `json:"last_air_date"`
+		Status         string `json:"status"`
 		Runtime        *int   `json:"runtime"`
 		EpisodeRunTime []int  `json:"episode_run_time"`
 		Seasons        int    `json:"number_of_seasons"`
@@ -198,8 +205,11 @@ func (c *Client) Details(ctx context.Context, kind string, id int, language, cou
 	if kind == "movie" {
 		appendTo += ",credits"
 	}
-	if err := c.getJSON(ctx, endpoint+"/"+strconv.Itoa(id), url.Values{"language": {language}, "append_to_response": {appendTo}}, &data); err != nil {
+	if err := c.getJSON(ctx, "/"+endpoint+"/"+strconv.Itoa(id), url.Values{"language": {language}, "append_to_response": {appendTo}}, &data); err != nil {
 		return Details{}, err
+	}
+	if data.ID <= 0 || data.ID != id {
+		return Details{}, errors.New("TMDB returned invalid details")
 	}
 	title, date := data.Title, data.ReleaseDate
 	if kind == "tv_show" {
@@ -236,8 +246,10 @@ func (c *Client) Details(ctx context.Context, kind string, id int, language, cou
 		if len(data.EpisodeRunTime) > 0 && data.EpisodeRunTime[0] > 0 {
 			metadata["episode_minutes"] = data.EpisodeRunTime[0]
 		}
-		if y := year(data.LastAirDate); y != 0 {
-			metadata["end_year"] = y
+		if data.Status == "Ended" || data.Status == "Canceled" {
+			if y := year(data.LastAirDate); y != 0 {
+				metadata["end_year"] = y
+			}
 		}
 	}
 	if country != "" {
@@ -370,10 +382,17 @@ func (c *Client) wait(ctx context.Context) error {
 
 func (c *Client) note429(value string) {
 	delay := time.Second
-	if seconds, err := strconv.Atoi(strings.TrimSpace(value)); err == nil && seconds > 0 {
-		delay = time.Duration(seconds) * time.Second
+	if seconds, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64); err == nil && seconds > 0 {
+		if seconds >= int64(maxRetryAfter/time.Second) {
+			delay = maxRetryAfter
+		} else {
+			delay = time.Duration(seconds) * time.Second
+		}
 	} else if when, err := http.ParseTime(value); err == nil && time.Until(when) > delay {
 		delay = time.Until(when)
+	}
+	if delay > maxRetryAfter {
+		delay = maxRetryAfter
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -422,10 +441,22 @@ func (c *Client) posterURL(p string) string {
 	return u.String()
 }
 func kindEndpoint(kind string) (string, error) {
-	if kind != "movie" && kind != "tv_show" {
+	switch kind {
+	case "movie":
+		return "movie", nil
+	case "tv_show":
+		return "tv", nil
+	default:
 		return "", ErrInvalid
 	}
-	return "", nil
+}
+
+func parseBaseURL(raw string) (*url.URL, bool) {
+	u, err := url.Parse(strings.TrimRight(raw, "/"))
+	if err != nil || u == nil || u.Host == "" || u.User != nil || (u.Scheme != "https" && u.Scheme != "http") || u.RawQuery != "" || u.Fragment != "" {
+		return nil, false
+	}
+	return u, true
 }
 func safePosterPath(p string) bool {
 	return strings.HasPrefix(p, "/") && len(p) > 1 && !strings.ContainsAny(p, "\\?#") && !strings.Contains(p, "..") && path.Clean(p) == p

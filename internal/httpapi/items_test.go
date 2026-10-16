@@ -710,6 +710,38 @@ func urlQueryEscape(s string) string {
 	return b.String()
 }
 
+func TestF013B4_ListItemsDirectorSortAndFilter(t *testing.T) {
+	e := newTreeEnv(t)
+	movies := e.listOfKind("Films", nil, "movie")
+	lid := movies["id"].(string)
+	mk := func(title string, director any) obj {
+		body := obj{"title": title, "lookup": false}
+		if director != nil {
+			body["metadata"] = obj{"director": director}
+		}
+		b, _ := json.Marshal(body)
+		return e.newItem(lid, string(b))
+	}
+	mk("Zulu", "Jane Campion")
+	mk("Alpha", "Jane Campion")
+	mk("Middle", "Bong Joon-ho")
+	mk("No director", nil)
+
+	rows, page := e.page(lid, "?sort=director")
+	if got, want := titlesOf(rows), []string{"Middle", "Alpha", "Zulu", "No director"}; !reflect.DeepEqual(got, want) || page["total"] != float64(4) {
+		t.Fatalf("director sort = %v total=%v, want %v total=4", got, page["total"], want)
+	}
+
+	rows, page = e.page(lid, "?sort=director&q=campion")
+	if got, want := titlesOf(rows), []string{"Alpha", "Zulu"}; !reflect.DeepEqual(got, want) || page["total"] != float64(2) {
+		t.Fatalf("director filter = %v total=%v, want %v total=2", got, page["total"], want)
+	}
+
+	tv := e.listOfKind("Shows", nil, "tv_show")
+	e.newItem(tv["id"].(string), `{"title":"Show","lookup":false}`)
+	wantProblem(t, e.call("GET", "/api/v1/lists/"+tv["id"].(string)+"/items?sort=director", "", ""), 400, "invalid_parameter")
+}
+
 func TestMoveItem(t *testing.T) {
 	e := newTreeEnv(t)
 	src := e.list("Src", nil)["id"].(string)

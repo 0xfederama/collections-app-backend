@@ -21,7 +21,7 @@ WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 FOR UPDATE;
 
 -- name: ListItems :many
--- @sort is manual, title, updated or price (price: price_min ascending, no price last, then title; currencies are not converted) (kind_key has its own query, ListItemsByKindKey); @q is an already escaped LIKE fragment ('' = no filter).
+-- @sort is manual, title, updated, price or director (movie only; empty director last) (kind_key has its own query, ListItemsByKindKey); @q matches title and, for movies, director.
 SELECT i.*,
        l.kind              AS kind,
        a.width             AS image_width,
@@ -32,13 +32,16 @@ FROM items i
 LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.list_id = @list_id AND i.workspace_id = @workspace_id AND i.deleted_at IS NULL
-  AND lower(i.title) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'
+  AND (lower(i.title) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'
+       OR (l.kind = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'))
 ORDER BY
   CASE WHEN @sort::text = 'manual' THEN i.sort_order END ASC,
   CASE WHEN @sort::text = 'title' THEN lower(i.title) END ASC,
   CASE WHEN @sort::text = 'updated' THEN i.updated_at END DESC,
   CASE WHEN @sort::text = 'price' THEN i.price_min END ASC NULLS LAST,
   CASE WHEN @sort::text = 'price' THEN lower(i.title) END ASC,
+  CASE WHEN @sort::text = 'director' THEN lower(NULLIF(i.metadata ->> 'director', '')) END ASC NULLS LAST,
+  CASE WHEN @sort::text = 'director' THEN lower(i.title) END ASC,
   i.id
 LIMIT @page_limit OFFSET @page_offset;
 
@@ -54,7 +57,8 @@ FROM items i
 LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.list_id = @list_id AND i.workspace_id = @workspace_id AND i.deleted_at IS NULL
-  AND lower(i.title) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'
+  AND (lower(i.title) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'
+       OR (l.kind = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'))
 ORDER BY
   CASE WHEN jsonb_typeof(i.metadata -> sqlc.arg(key)::text) = 'number'
        THEN (i.metadata ->> sqlc.arg(key)::text)::numeric END ASC NULLS LAST,
@@ -63,8 +67,10 @@ LIMIT @page_limit OFFSET @page_offset;
 
 -- name: CountItems :one
 SELECT count(*)::int AS total FROM items i
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.list_id = @list_id AND i.workspace_id = @workspace_id AND i.deleted_at IS NULL
-  AND lower(i.title) LIKE '%' || lower(@q::text) || '%' ESCAPE '\';
+  AND (lower(i.title) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'
+       OR (l.kind = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'));
 
 -- name: GetActiveListForItems :one
 SELECT id, name, folder_id, sort_mode, kind FROM lists

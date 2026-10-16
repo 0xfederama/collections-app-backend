@@ -22,6 +22,7 @@ import (
 type Settings struct {
 	WorkspaceName        string
 	StreamingCountryCode string
+	MetadataLanguage     string
 	MarkdownHistoryLimit int
 	TrashRetentionDays   *int
 	Version              int
@@ -32,6 +33,7 @@ type Settings struct {
 type SettingsPatch struct {
 	WorkspaceName        *string
 	StreamingCountryCode *string
+	MetadataLanguage     *string
 	MarkdownHistoryLimit *int
 	TrashRetentionDays   Optional[int]
 }
@@ -102,6 +104,7 @@ func (s *Service) Update(ctx context.Context, workspaceID uuid.UUID, ifMatch int
 		err = q.UpdateSettings(ctx, sqlc.UpdateSettingsParams{
 			WorkspaceID:          workspaceID,
 			StreamingCountryCode: next.StreamingCountryCode,
+			MetadataLanguage:     next.MetadataLanguage,
 			MarkdownHistoryLimit: int32(next.MarkdownHistoryLimit),
 			TrashRetentionDays:   retentionToDB(next.TrashRetentionDays),
 		})
@@ -131,6 +134,9 @@ func (p SettingsPatch) validate() (SettingsPatch, error) {
 	if p.StreamingCountryCode != nil && !isUpperAlpha(*p.StreamingCountryCode, 2) {
 		errs = append(errs, apperr.FieldError{Field: "streaming_country_code", Message: "must be 2 uppercase letters (ISO 3166-1 alpha-2)"})
 	}
+	if p.MetadataLanguage != nil && !isMetadataLanguage(*p.MetadataLanguage) {
+		errs = append(errs, apperr.FieldError{Field: "metadata_language", Message: "must be an ISO 639-1 code (xx) optionally followed by an uppercase region (xx-YY)"})
+	}
 	if p.MarkdownHistoryLimit != nil && (*p.MarkdownHistoryLimit < 0 || *p.MarkdownHistoryLimit > 200) {
 		errs = append(errs, apperr.FieldError{Field: "markdown_history_limit", Message: "must be between 0 and 200"})
 	}
@@ -156,12 +162,25 @@ func isUpperAlpha(s string, n int) bool {
 	return true
 }
 
+func isMetadataLanguage(s string) bool {
+	if len(s) != 2 && len(s) != 5 {
+		return false
+	}
+	if s[0] < 'a' || s[0] > 'z' || s[1] < 'a' || s[1] > 'z' {
+		return false
+	}
+	return len(s) == 2 || (s[2] == '-' && isUpperAlpha(s[3:], 2))
+}
+
 func (p SettingsPatch) applyTo(s Settings) Settings {
 	if p.WorkspaceName != nil {
 		s.WorkspaceName = *p.WorkspaceName
 	}
 	if p.StreamingCountryCode != nil {
 		s.StreamingCountryCode = *p.StreamingCountryCode
+	}
+	if p.MetadataLanguage != nil {
+		s.MetadataLanguage = *p.MetadataLanguage
 	}
 	if p.MarkdownHistoryLimit != nil {
 		s.MarkdownHistoryLimit = *p.MarkdownHistoryLimit
@@ -176,7 +195,7 @@ func (p SettingsPatch) applyTo(s Settings) Settings {
 // pointer, so it is compared by value: a PATCH that repeats the stored value changes nothing.
 func (s Settings) equal(o Settings) bool {
 	return s.WorkspaceName == o.WorkspaceName && s.StreamingCountryCode == o.StreamingCountryCode &&
-		s.MarkdownHistoryLimit == o.MarkdownHistoryLimit && sameRetention(s.TrashRetentionDays, o.TrashRetentionDays)
+		s.MetadataLanguage == o.MetadataLanguage && s.MarkdownHistoryLimit == o.MarkdownHistoryLimit && sameRetention(s.TrashRetentionDays, o.TrashRetentionDays)
 }
 
 func sameRetention(a, b *int) bool {
@@ -208,6 +227,7 @@ func fromGetRow(r sqlc.GetSettingsRow) Settings {
 	return Settings{
 		WorkspaceName:        r.WorkspaceName,
 		StreamingCountryCode: r.StreamingCountryCode,
+		MetadataLanguage:     r.MetadataLanguage,
 		MarkdownHistoryLimit: int(r.MarkdownHistoryLimit),
 		TrashRetentionDays:   retentionFromDB(r.TrashRetentionDays),
 		Version:              int(r.Version),
@@ -218,6 +238,7 @@ func fromLockRow(r sqlc.LockSettingsRow) Settings {
 	return Settings{
 		WorkspaceName:        r.WorkspaceName,
 		StreamingCountryCode: r.StreamingCountryCode,
+		MetadataLanguage:     r.MetadataLanguage,
 		MarkdownHistoryLimit: int(r.MarkdownHistoryLimit),
 		TrashRetentionDays:   retentionFromDB(r.TrashRetentionDays),
 		Version:              int(r.Version),

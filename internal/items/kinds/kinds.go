@@ -61,8 +61,11 @@ var registry = map[string]schema{
 	Movie: {fields: map[string]rule{
 		"release_year":    intRange(1870, 2100),
 		"runtime_minutes": intRange(1, 1000),
+		"director":        text(300),
 		"imdb_url":        imdbURL,
 		"streaming":       streaming,
+		"tmdb_id":         positiveInteger,
+		"lookup_disabled": boolean,
 	}},
 	TVShow: {
 		fields: map[string]rule{
@@ -73,6 +76,8 @@ var registry = map[string]schema{
 			"episode_minutes":     intRange(1, 1000),
 			"imdb_url":            imdbURL,
 			"streaming":           streaming,
+			"tmdb_id":             positiveInteger,
+			"lookup_disabled":     boolean,
 		},
 		cross: func(out map[string]any) []apperr.FieldError {
 			first, ok1 := out["first_air_year"].(int)
@@ -197,6 +202,22 @@ func intRange(lo, hi int) rule {
 		}
 		return outcome{val: int(f)}
 	}
+}
+
+func positiveInteger(path string, v any) outcome {
+	f, ok := number(v)
+	if !ok || f != math.Trunc(f) || f < 1 || f > 9007199254740991 {
+		return fail(path, "must be a positive integer")
+	}
+	return outcome{val: int(f)}
+}
+
+func boolean(path string, v any) outcome {
+	b, ok := v.(bool)
+	if !ok {
+		return fail(path, "must be a boolean")
+	}
+	return outcome{val: b}
 }
 
 // decimalRange accepts numbers with at most one decimal place.
@@ -369,17 +390,20 @@ func HasPrice(kind string) bool { return priceKinds[kind] }
 // PinnableKeys returns the field keys a list of this kind can pin, sorted: the
 // kind's metadata keys, plus "price" only on the kinds that have one (generic
 // has no key at all; movie and tv_show have no price, F009-B1). Keys are looked
-// up through the registry, so a field added to a kind (or, later, a custom
-// field) is pinnable at once. An unknown kind has none.
+// up through the registry, except provider bookkeeping fields, which are never
+// displayed as pins. An unknown kind has none.
 func PinnableKeys(kind string) []string {
 	sc, ok := registry[kind]
 	if !ok {
 		return nil
 	}
+	fields := maps.Clone(sc.fields)
+	delete(fields, "tmdb_id")
+	delete(fields, "lookup_disabled")
 	if !HasPrice(kind) {
-		return slices.Sorted(maps.Keys(sc.fields))
+		return slices.Sorted(maps.Keys(fields))
 	}
-	return slices.Sorted(maps.Keys(withPrice(sc.fields)))
+	return slices.Sorted(maps.Keys(withPrice(fields)))
 }
 
 func withPrice(fields map[string]rule) map[string]rule {

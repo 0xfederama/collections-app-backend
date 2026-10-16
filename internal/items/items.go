@@ -109,14 +109,14 @@ type PathSegment struct {
 }
 
 // ErrInvalidSort means a sort mode that the list's kind does not support:
-// kind_key on a kind without a sort key, or price on a kind without a price
-// (generic, movie, tv_show). The handler answers 400 invalid_parameter.
+// kind_key on a kind without a sort key, price on a kind without a price,
+// or director on a non-movie list. The handler answers 400 invalid_parameter.
 var ErrInvalidSort = errors.New("items: sort is not available on this list")
 
 // ListParams are the query options of ListItems. Zero values mean the defaults.
 type ListParams struct {
-	Sort   string // manual, title, updated, price or kind_key; "" = the list's sort_mode
-	Q      string // case-insensitive title substring; "" = no filter
+	Sort   string // manual, title, updated, price, director or kind_key; "" = the list's sort_mode
+	Q      string // case-insensitive title substring, plus director on movie lists; "" = no filter
 	Limit  int
 	Offset int
 }
@@ -189,6 +189,9 @@ func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (Ite
 	}
 	like := escapeLike(p.Q)
 	if p.Sort == "price" && !kinds.HasPrice(list.Kind) {
+		return ItemPage{}, ErrInvalidSort
+	}
+	if p.Sort == "director" && list.Kind != kinds.Movie {
 		return ItemPage{}, ErrInvalidSort
 	}
 	var rows []sqlc.ListItemsRow

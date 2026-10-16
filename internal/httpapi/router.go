@@ -37,6 +37,8 @@ type Deps struct {
 	// WorkspaceID is the single workspace, from workspace.Bootstrap.
 	WorkspaceID uuid.UUID
 	Settings    *workspace.Service
+	// LookupAvailable reports whether the optional server-side TMDB key is configured (F013-B5).
+	LookupAvailable bool
 	// Tree serves folders, lists and the sidebar tree (B-06).
 	Tree *tree.Service
 	// Items serves items (B-07).

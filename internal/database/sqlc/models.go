@@ -113,4 +113,5 @@ type WorkspaceSetting struct {
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 	TrashRetentionDays   *int32
+	MetadataLanguage     string
 }

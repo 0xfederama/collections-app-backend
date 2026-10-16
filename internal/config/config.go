@@ -21,6 +21,7 @@ type Config struct {
 	DBMaxConns    int32
 	DataDir       string
 	WorkspaceName string
+	TMDBAPIKey    string
 	LogLevel      slog.Level
 	LogFormat     string
 }
@@ -42,6 +43,7 @@ func Load(getenv func(string) string) (Config, error) {
 		DatabaseURL:   get("DATABASE_URL", ""),
 		DataDir:       get("DATA_DIR", "/data"),
 		WorkspaceName: get("WORKSPACE_NAME", "Our Collection"),
+		TMDBAPIKey:    strings.TrimSpace(getenv("TMDB_API_KEY")),
 		LogFormat:     get("LOG_FORMAT", "json"),
 	}
 

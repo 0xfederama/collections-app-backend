@@ -77,9 +77,9 @@ func TestAT12_SearchSubstringAndPath(t *testing.T) {
 	}
 	hit := got.Data[0]
 	wantPath := []obj{
-		{"type": "folder", "id": media["id"], "name": "Media"},
-		{"type": "folder", "id": movies["id"], "name": "Movies"},
-		{"type": "list", "id": watchlist["id"], "name": "Watchlist"},
+		{"type": "folder", "id": media["id"], "name": "Media", "icon": nil, "icon_color": nil},
+		{"type": "folder", "id": movies["id"], "name": "Movies", "icon": nil, "icon_color": nil},
+		{"type": "list", "id": watchlist["id"], "name": "Watchlist", "icon": nil, "icon_color": nil},
 	}
 	if !reflect.DeepEqual(hit.Path, wantPath) {
 		t.Fatalf("nested path = %v, want %v", hit.Path, wantPath)
@@ -98,7 +98,7 @@ func TestAT12_SearchSubstringAndPath(t *testing.T) {
 	if rootHit.Item["kind"] != "generic" {
 		t.Errorf("TestF007 kind of an item in a generic list = %v", rootHit.Item["kind"])
 	}
-	if want := []obj{{"type": "list", "id": rootList["id"], "name": "Inbox"}}; !reflect.DeepEqual(rootHit.Path, want) {
+	if want := []obj{{"type": "list", "id": rootList["id"], "name": "Inbox", "icon": nil, "icon_color": nil}}; !reflect.DeepEqual(rootHit.Path, want) {
 		t.Fatalf("root list path = %v, want %v", rootHit.Path, want)
 	}
 

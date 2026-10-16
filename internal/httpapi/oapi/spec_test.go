@@ -46,6 +46,7 @@ var apiRoutes = []struct{ method, path string }{
 	{"GET", "/api/v1/search"},
 	{"GET", "/api/v1/recent-items"},
 	{"GET", "/api/v1/trash"},
+	{"DELETE", "/api/v1/trash"},
 	{"POST", "/api/v1/trash/{batch_id}/restore"},
 	{"DELETE", "/api/v1/trash/{batch_id}"},
 }

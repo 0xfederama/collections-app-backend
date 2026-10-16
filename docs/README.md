@@ -12,8 +12,8 @@
 - [search](modules/search.md): item title search with folder and list paths (`GET /api/v1/search`) and recent items (`GET /api/v1/recent-items`)
 - [smoke](modules/smoke.md): HTTP smoke test over a running stack (`scripts/smoke.sh`, `make smoke`)
 - [storage](modules/storage.md): local file store under DATA_DIR (`os.Root`, generated keys)
-- [trash](modules/trash.md): delete into trash batches, trash list, restore, purge
-- [tree](modules/tree.md): folders and lists CRUD, move with cycle check, reorder, sidebar tree
+- [trash](modules/trash.md): delete into trash batches, trash list, restore, purge, empty trash, retention auto-purge
+- [tree](modules/tree.md): folders and lists CRUD, move with cycle check, reorder, sidebar tree, list icons
 - [workspace](modules/workspace.md): single-workspace bootstrap and settings service
 
 Design docs (canonical): `/Users/federico/Developer/collections-app/design-docs/`

@@ -85,8 +85,8 @@ func TestB12_RecentItemsOrderAndPath(t *testing.T) {
 	}
 
 	wantPath := []obj{
-		{"type": "folder", "id": media["id"], "name": "Media"},
-		{"type": "list", "id": wid, "name": "Watchlist"},
+		{"type": "folder", "id": media["id"], "name": "Media", "icon": nil, "icon_color": nil},
+		{"type": "list", "id": wid, "name": "Watchlist", "icon": nil, "icon_color": nil},
 	}
 	if !reflect.DeepEqual(got.Data[0].Path, wantPath) {
 		t.Fatalf("path = %v, want %v", got.Data[0].Path, wantPath)

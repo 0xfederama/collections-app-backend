@@ -523,7 +523,7 @@ func TestF012_EmptyTrash(t *testing.T) {
 	if len(entries) != 0 || page["total"].(float64) != 0 {
 		t.Fatalf("trash after empty = %v / %v", entries, page)
 	}
-	for q, want := range map[string]int{"folders": 0, "lists": 0, "items": 0, "trash_batches": 0, "attachments": 0} {
+	for q, want := range map[string]int{"folders": 0, "lists": 1 /* B's own list stays */, "items": 0, "trash_batches": 0, "attachments": 0} {
 		if n := e.count("SELECT count(*) FROM " + q); n != want {
 			t.Fatalf("%s: %d rows, want %d", q, n, want)
 		}

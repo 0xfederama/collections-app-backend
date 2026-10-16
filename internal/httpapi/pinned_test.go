@@ -7,7 +7,7 @@ import (
 
 func pinnedOf(o obj) any { return o["pinned_fields"] }
 
-func TestF002B3_PinnedFieldsLifecycle(t *testing.T) {
+func TestF009B2_PinnedFieldsLifecycle(t *testing.T) {
 	e := newTreeEnv(t)
 	l := e.listOfKind("Films", nil, "movie")
 	lid := l["id"].(string)
@@ -15,11 +15,11 @@ func TestF002B3_PinnedFieldsLifecycle(t *testing.T) {
 		t.Fatalf("new list: pinned_fields = %v (present %v), want null", v, ok)
 	}
 
-	// Set: stored, read back, ETag bumps.
-	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":{"under":["release_year","streaming"],"right":["price"]}}`, etagOf("l", l))
+	// Set: an ordered list, stored, read back, ETag bumps.
+	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":["release_year","streaming"]}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
 	set := decode(t, rec)
-	want := map[string]any{"under": []any{"release_year", "streaming"}, "right": []any{"price"}}
+	want := []any{"release_year", "streaming"}
 	if !reflect.DeepEqual(pinnedOf(set), want) || set["version"] != float64(2) || rec.Header().Get("ETag") != `"l-2"` {
 		t.Fatalf("after set: %v etag=%s", set, rec.Header().Get("ETag"))
 	}
@@ -33,7 +33,7 @@ func TestF002B3_PinnedFieldsLifecycle(t *testing.T) {
 	}
 
 	// The same value again, and an absent field, change nothing.
-	wantStatus(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":{"under":["release_year","streaming"],"right":["price"]}}`, `"l-2"`), 200)
+	wantStatus(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":["release_year","streaming"]}`, `"l-2"`), 200)
 	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"name":"Films 2"}`, `"l-2"`)
 	wantStatus(t, rec, 200)
 	if got := decode(t, rec); got["version"] != float64(3) || !reflect.DeepEqual(pinnedOf(got), want) {
@@ -54,11 +54,11 @@ func TestF002B3_PinnedFieldsLifecycle(t *testing.T) {
 		t.Fatalf("move changed pinned fields: %v", got)
 	}
 
-	// Empty slots mean "pin nothing", not NULL; both slots are returned.
-	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":{}}`, `"l-4"`)
+	// An empty list means "pin nothing", not NULL.
+	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":[]}`, `"l-4"`)
 	wantStatus(t, rec, 200)
 	empty := decode(t, rec)
-	if !reflect.DeepEqual(pinnedOf(empty), map[string]any{"under": []any{}, "right": []any{}}) || empty["version"] != float64(5) {
+	if !reflect.DeepEqual(pinnedOf(empty), []any{}) || empty["version"] != float64(5) {
 		t.Fatalf("empty: %v", empty)
 	}
 
@@ -76,11 +76,11 @@ func TestF002B3_PinnedFieldsLifecycle(t *testing.T) {
 	}
 }
 
-func TestF002B3_PinnedFieldsOnCreate(t *testing.T) {
+func TestF009B2_PinnedFieldsOnCreate(t *testing.T) {
 	e := newTreeEnv(t)
-	rec := e.call("POST", "/api/v1/lists", `{"name":"Bikes","kind":"motorcycle","pinned_fields":{"under":["model_year"],"right":["price","power_hp"]}}`, "")
+	rec := e.call("POST", "/api/v1/lists", `{"name":"Bikes","kind":"motorcycle","pinned_fields":["model_year","price"]}`, "")
 	wantStatus(t, rec, 201)
-	if got := decode(t, rec); !reflect.DeepEqual(pinnedOf(got), map[string]any{"under": []any{"model_year"}, "right": []any{"price", "power_hp"}}) {
+	if got := decode(t, rec); !reflect.DeepEqual(pinnedOf(got), []any{"model_year", "price"}) {
 		t.Fatalf("created: %v", got)
 	}
 	rec = e.call("POST", "/api/v1/lists", `{"name":"Null","kind":"movie","pinned_fields":null}`, "")
@@ -89,21 +89,20 @@ func TestF002B3_PinnedFieldsOnCreate(t *testing.T) {
 		t.Fatalf("null on create: %v", v)
 	}
 	// Invalid on create changes nothing.
-	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"X","kind":"generic","pinned_fields":{"under":["release_year"]}}`, ""), 422, "validation_failed")
+	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"X","kind":"generic","pinned_fields":["release_year"]}`, ""), 422, "validation_failed")
 }
 
-func TestF002B3_PinnedFieldsValidation(t *testing.T) {
+func TestF009B2_PinnedFieldsValidation(t *testing.T) {
 	e := newTreeEnv(t)
 	l := e.listOfKind("Films", nil, "movie")
 	lid := l["id"].(string)
 	tests := []struct {
 		name, body, field string
 	}{
-		{"unknown key", `{"pinned_fields":{"under":["make"]}}`, "pinned_fields.under[0]"},
-		{"unknown key right", `{"pinned_fields":{"under":["price"],"right":["release_year","bogus"]}}`, "pinned_fields.right[1]"},
-		{"in both slots", `{"pinned_fields":{"under":["price"],"right":["price"]}}`, "pinned_fields.right[0]"},
-		{"duplicate", `{"pinned_fields":{"under":["price","price"]}}`, "pinned_fields.under[1]"},
-		{"seven keys", `{"pinned_fields":{"under":["a","b","c","d","e","f","g"]}}`, "pinned_fields.under"},
+		{"unknown key", `{"pinned_fields":["make"]}`, "pinned_fields[0]"},
+		{"TestF009B1 price on a movie", `{"pinned_fields":["release_year","price"]}`, "pinned_fields[1]"},
+		{"duplicate", `{"pinned_fields":["release_year","release_year"]}`, "pinned_fields[1]"},
+		{"three keys", `{"pinned_fields":["release_year","runtime_minutes","imdb_url"]}`, "pinned_fields"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -113,19 +112,18 @@ func TestF002B3_PinnedFieldsValidation(t *testing.T) {
 			}
 		})
 	}
-	// Unknown object keys are an unknown-field 400.
-	p := wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":{"above":["price"]}}`, etagOf("l", l)), 400, "unknown_field")
-	_ = p
+	// The old object shape is no longer a valid pinned_fields (now an array).
+	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":{"under":["release_year"]}}`, etagOf("l", l)), 400, "malformed_request")
 	if got := e.fetch("lists", lid); got["version"] != l["version"] || got["pinned_fields"] != nil {
 		t.Fatalf("rejected patches changed the list: %v", got)
 	}
 }
 
-func TestF002B3_ChangeKindResetsPinnedFields(t *testing.T) {
+func TestF009B2_ChangeKindResetsPinnedFields(t *testing.T) {
 	e := newTreeEnv(t)
 	l := e.listOfKind("Films", nil, "movie")
 	lid := l["id"].(string)
-	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":{"under":["release_year"],"right":["price"]}}`, etagOf("l", l))
+	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":["release_year","streaming"]}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
 	l = decode(t, rec)
 
@@ -148,21 +146,22 @@ func TestF002B3_ChangeKindResetsPinnedFields(t *testing.T) {
 	}
 
 	// A kind change that also sets pinned fields validates them against the new kind.
-	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"camera","pinned_fields":{"under":["make"]}}`, etagOf("l", got)), 422, "validation_failed")
-	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"camera","pinned_fields":{"under":["megapixels"]}}`, etagOf("l", got))
+	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"camera","pinned_fields":["make"]}`, etagOf("l", got)), 422, "validation_failed")
+	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"camera","pinned_fields":["megapixels"]}`, etagOf("l", got))
 	wantStatus(t, rec, 200)
-	if g := decode(t, rec); !reflect.DeepEqual(pinnedOf(g), map[string]any{"under": []any{"megapixels"}, "right": []any{}}) {
+	if g := decode(t, rec); !reflect.DeepEqual(pinnedOf(g), []any{"megapixels"}) {
 		t.Fatalf("kind change plus pinned: %v", g)
 	}
 }
 
-func TestF002B3_PinnedKeysPerKind(t *testing.T) {
+func TestF009B2_PinnedKeysPerKind(t *testing.T) {
 	e := newTreeEnv(t)
-	// Every key a kind exposes can be pinned on a list of that kind; "price" is common to all but generic.
-	keys := map[string]string{"movie": `["release_year","runtime_minutes","imdb_url","streaming","price"]`,
-		"tv_show": `["first_air_year","seasons","episodes_per_season","episode_minutes","streaming","price"]`}
+	// Every key a kind exposes can be pinned on a list of that kind; movie and tv_show have no "price" (F009B1).
+	keys := map[string]string{"movie": `["release_year","streaming"]`,
+		"tv_show":    `["first_air_year","seasons"]`,
+		"motorcycle": `["price","power_hp"]`}
 	for kind, k := range keys {
-		rec := e.call("POST", "/api/v1/lists", `{"name":"`+kind+`","kind":"`+kind+`","pinned_fields":{"right":`+k+`}}`, "")
+		rec := e.call("POST", "/api/v1/lists", `{"name":"`+kind+`","kind":"`+kind+`","pinned_fields":`+k+`}`, "")
 		wantStatus(t, rec, 201)
 	}
 }

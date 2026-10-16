@@ -75,9 +75,9 @@ func idsJSON(ids ...string) string {
 	return string(b)
 }
 
-// matrix is the body of a movie item: create it in a list of kind movie.
+// matrix is the body of a movie item: create it in a list of kind movie. Movie
+// items have no price (F009-B1); price behavior is tested on a motorcycle/car/camera list.
 const matrix = `{"title":"The Matrix","website":"https://www.warnerbros.com/movies/matrix",
-	"price":{"min":"1299.00","max":null,"currency":"EUR"},
 	"metadata":{"release_year":1999,"runtime_minutes":136,"imdb_url":"https://www.imdb.com/title/tt0133093/","streaming":{"country":"IT","platforms":["Netflix","Prime Video"]}}}`
 
 func TestAT05_CreateItem(t *testing.T) {
@@ -109,9 +109,8 @@ func TestAT05_CreateItem(t *testing.T) {
 		if it["kind"] != "movie" || it["sort_order"] != float64(1) {
 			t.Fatalf("created: %v", it)
 		}
-		price := it["price"].(map[string]any)
-		if price["min"] != "1299.00" || price["max"] != nil || price["currency"] != "EUR" {
-			t.Fatalf("price = %v", price)
+		if it["price"] != nil {
+			t.Fatalf("a movie item must have no price: %v", it["price"])
 		}
 		got := e.fetchItem(it["id"])
 		meta := got["metadata"].(map[string]any)
@@ -162,6 +161,7 @@ func TestAT05_ItemFieldRules(t *testing.T) {
 	lid := e.listOfKind("L", nil, "movie")["id"].(string)
 	tv := e.listOfKind("TV", nil, "tv_show")["id"].(string)
 	car := e.listOfKind("Cars", nil, "car")["id"].(string)
+	bike := e.listOfKind("Bikes", nil, "motorcycle")["id"].(string)
 	gen := e.list("Generic", nil)["id"].(string)
 	long := func(n int) string { return strings.Repeat("a", n) }
 	tests := []struct {
@@ -180,20 +180,22 @@ func TestAT05_ItemFieldRules(t *testing.T) {
 		{"url no host", lid, `{"title":"t","website":"https://"}`, 422, "validation_failed", "website"},
 		{"url empty", lid, `{"title":"t","website":""}`, 422, "validation_failed", "website"},
 		{"url too long", lid, `{"title":"t","website":"https://example.com/` + long(2040) + `"}`, 422, "validation_failed", "website"},
-		{"price min format", lid, `{"title":"t","price":{"min":"12.5","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
-		{"price comma", lid, `{"title":"t","price":{"min":"12,50","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
-		{"price negative", lid, `{"title":"t","price":{"min":"-1.00","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
-		{"price 11 digits", lid, `{"title":"t","price":{"min":"12345678901.00","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
-		{"price max format", lid, `{"title":"t","price":{"min":null,"max":"abc","currency":"EUR"}}`, 422, "validation_failed", "price.max"},
-		{"price min above max", lid, `{"title":"t","price":{"min":"20.00","max":"10.00","currency":"EUR"}}`, 422, "validation_failed", "price.max"},
-		{"price both null", lid, `{"title":"t","price":{"min":null,"max":null,"currency":"EUR"}}`, 422, "validation_failed", "price"},
-		{"currency missing", lid, `{"title":"t","price":{"min":"1.00","max":null}}`, 422, "validation_failed", "price.currency"},
-		{"currency lowercase", lid, `{"title":"t","price":{"min":"1.00","max":null,"currency":"eur"}}`, 422, "validation_failed", "price.currency"},
-		{"currency 2 letters", lid, `{"title":"t","price":{"min":"1.00","max":null,"currency":"EU"}}`, 422, "validation_failed", "price.currency"},
-		{"TestF007 amount format", lid, `{"title":"t","price":{"amount":"12.5","currency":"EUR"}}`, 422, "validation_failed", "price.amount"},
-		{"TestF007 amount without currency", lid, `{"title":"t","price":{"amount":"12.50"}}`, 422, "validation_failed", "price.currency"},
-		{"TestF007 amount with min", lid, `{"title":"t","price":{"amount":"12.50","min":"10.00","currency":"EUR"}}`, 422, "validation_failed", "price"},
-		{"TestF007 amount with max", lid, `{"title":"t","price":{"amount":"12.50","max":"15.00","currency":"EUR"}}`, 422, "validation_failed", "price"},
+		{"price min format", bike, `{"title":"t","price":{"min":"12.5","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
+		{"price comma", bike, `{"title":"t","price":{"min":"12,50","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
+		{"price negative", bike, `{"title":"t","price":{"min":"-1.00","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
+		{"price 11 digits", bike, `{"title":"t","price":{"min":"12345678901.00","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price.min"},
+		{"price max format", bike, `{"title":"t","price":{"min":null,"max":"abc","currency":"EUR"}}`, 422, "validation_failed", "price.max"},
+		{"price min above max", bike, `{"title":"t","price":{"min":"20.00","max":"10.00","currency":"EUR"}}`, 422, "validation_failed", "price.max"},
+		{"price both null", bike, `{"title":"t","price":{"min":null,"max":null,"currency":"EUR"}}`, 422, "validation_failed", "price"},
+		{"currency missing", bike, `{"title":"t","price":{"min":"1.00","max":null}}`, 422, "validation_failed", "price.currency"},
+		{"currency lowercase", bike, `{"title":"t","price":{"min":"1.00","max":null,"currency":"eur"}}`, 422, "validation_failed", "price.currency"},
+		{"currency 2 letters", bike, `{"title":"t","price":{"min":"1.00","max":null,"currency":"EU"}}`, 422, "validation_failed", "price.currency"},
+		{"TestF007 amount format", bike, `{"title":"t","price":{"amount":"12.5","currency":"EUR"}}`, 422, "validation_failed", "price.amount"},
+		{"TestF007 amount without currency", bike, `{"title":"t","price":{"amount":"12.50"}}`, 422, "validation_failed", "price.currency"},
+		{"TestF007 amount with min", bike, `{"title":"t","price":{"amount":"12.50","min":"10.00","currency":"EUR"}}`, 422, "validation_failed", "price"},
+		{"TestF007 amount with max", bike, `{"title":"t","price":{"amount":"12.50","max":"15.00","currency":"EUR"}}`, 422, "validation_failed", "price"},
+		{"TestF009B1 price on a movie", lid, `{"title":"t","price":{"min":"1.00","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price"},
+		{"TestF009B1 price on a tv_show", tv, `{"title":"t","price":{"min":"1.00","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price"},
 		{"metadata wrong value", lid, `{"title":"t","metadata":{"release_year":1700}}`, 422, "validation_failed", "metadata.release_year"},
 		{"metadata cross-field", tv, `{"title":"t","metadata":{"first_air_year":2010,"end_year":2000}}`, 422, "validation_failed", "metadata.end_year"},
 		{"metadata bad imdb", lid, `{"title":"t","metadata":{"imdb_url":"http://imdb.com/title/tt1234567/"}}`, 422, "validation_failed", "metadata.imdb_url"},
@@ -234,20 +236,24 @@ func TestAT05_ItemFieldRules(t *testing.T) {
 		for _, body := range []string{
 			`{"title":"` + long(300) + `"}`,
 			`{"title":"t","website":"HTTP://Example.com/a?b=c#d"}`,
+		} {
+			wantStatus(t, e.call("POST", "/api/v1/lists/"+lid+"/items", body, ""), 201)
+		}
+		for _, body := range []string{
 			`{"title":"t","price":{"min":"0.00","max":"9999999999.99","currency":"JPY"}}`,
 			`{"title":"t","price":{"min":"5.00","max":"5.00","currency":"EUR"}}`,
 			`{"title":"t","price":{"min":null,"max":"5.00","currency":"EUR"}}`,
 			`{"title":"t","price":{"amount":"5.00","currency":"EUR"}}`,
 			`{"title":"t","price":null,"website":null}`,
 		} {
-			wantStatus(t, e.call("POST", "/api/v1/lists/"+lid+"/items", body, ""), 201)
+			wantStatus(t, e.call("POST", "/api/v1/lists/"+bike+"/items", body, ""), 201)
 		}
 	})
 }
 
 func TestF007_PriceAmountIsASinglePrice(t *testing.T) {
 	e := newTreeEnv(t)
-	lid := e.listOfKind("L", nil, "movie")["id"].(string)
+	lid := e.listOfKind("L", nil, "motorcycle")["id"].(string)
 
 	it := e.newItem(lid, `{"title":"single","price":{"amount":"1200.00","currency":"EUR"}}`)
 	p := it["price"].(map[string]any)
@@ -286,7 +292,7 @@ func TestF007_PriceAmountIsASinglePrice(t *testing.T) {
 
 func TestPriceRoundTripIsExact(t *testing.T) {
 	e := newTreeEnv(t)
-	lid := e.listOfKind("L", nil, "movie")["id"].(string)
+	lid := e.listOfKind("L", nil, "motorcycle")["id"].(string)
 	for _, price := range []string{"1299.00", "0.10", "0.01", "12.30", "9999999999.99", "100.00", "0.00"} {
 		it := e.newItem(lid, fmt.Sprintf(`{"title":"p","price":{"min":%q,"max":%q,"currency":"EUR"}}`, price, price))
 		got := e.fetchItem(it["id"])["price"].(map[string]any)
@@ -311,6 +317,7 @@ func (e *treeEnv) queryRow(sql string, args []any, dest ...any) {
 func TestAT05_UpdateItem(t *testing.T) {
 	e := newTreeEnv(t)
 	lid := e.listOfKind("L", nil, "movie")["id"].(string)
+	bike := e.listOfKind("Bikes", nil, "motorcycle")["id"].(string)
 
 	t.Run("only supplied fields change and the version bumps", func(t *testing.T) {
 		it := e.newItem(lid, matrix)
@@ -320,7 +327,7 @@ func TestAT05_UpdateItem(t *testing.T) {
 		if got["title"] != "The Matrix Reloaded" || got["version"] != float64(2) || rec.Header().Get("ETag") != `"i-2"` {
 			t.Fatalf("patched: %v etag=%s", got, rec.Header().Get("ETag"))
 		}
-		if got["website"] != "https://www.warnerbros.com/movies/matrix" || got["price"] == nil || got["metadata"].(map[string]any)["release_year"] != float64(1999) {
+		if got["website"] != "https://www.warnerbros.com/movies/matrix" || got["price"] != nil || got["metadata"].(map[string]any)["release_year"] != float64(1999) {
 			t.Fatalf("untouched fields changed: %v", got)
 		}
 		if got["updated_at"] == it["updated_at"] {
@@ -329,7 +336,7 @@ func TestAT05_UpdateItem(t *testing.T) {
 	})
 
 	t.Run("null clears, absent keeps", func(t *testing.T) {
-		it := e.newItem(lid, matrix)
+		it := e.newItem(bike, `{"title":"The Matrix","website":"https://www.warnerbros.com/movies/matrix","price":{"min":"1299.00","max":null,"currency":"EUR"}}`)
 		rec := e.patchItem(it, `{"price":null,"website":null}`)
 		wantStatus(t, rec, 200)
 		got := decode(t, rec)
@@ -344,7 +351,7 @@ func TestAT05_UpdateItem(t *testing.T) {
 	})
 
 	t.Run("price set and replaced as a whole", func(t *testing.T) {
-		it := e.titled(lid, "priced")
+		it := e.titled(bike, "priced")
 		it = decode(t, e.patchItem(it, `{"price":{"min":"3.00","max":"4.50","currency":"USD"}}`))
 		it = decode(t, e.patchItem(it, `{"price":{"min":null,"max":"9.00","currency":"EUR"}}`))
 		if p := it["price"].(map[string]any); p["min"] != nil || p["max"] != "9.00" || p["currency"] != "EUR" {
@@ -391,11 +398,14 @@ func TestAT05_UpdateItem(t *testing.T) {
 
 	t.Run("field rules apply to patches", func(t *testing.T) {
 		it := e.titled(lid, "rules")
+		for _, body := range []string{`{"title":""}`, `{"website":"javascript:alert(1)"}`} {
+			wantProblem(t, e.patchItem(it, body), 422, "validation_failed")
+		}
+		priced := e.titled(bike, "priced rules")
 		for _, body := range []string{
-			`{"title":""}`, `{"website":"javascript:alert(1)"}`,
 			`{"price":{"min":"2.00","max":"1.00","currency":"EUR"}}`, `{"price":{"min":"1.00","max":null}}`,
 		} {
-			wantProblem(t, e.patchItem(it, body), 422, "validation_failed")
+			wantProblem(t, e.patchItem(priced, body), 422, "validation_failed")
 		}
 		wantProblem(t, e.patchItem(it, `{"nope":1}`), 400, "unknown_field")
 		if after := e.fetchItem(it["id"]); after["version"] != float64(1) {
@@ -406,7 +416,7 @@ func TestAT05_UpdateItem(t *testing.T) {
 	t.Run("a patch that changes nothing does not bump", func(t *testing.T) {
 		it := e.newItem(lid, matrix)
 		for _, body := range []string{
-			`{}`, `{"title":"The Matrix"}`, `{"price":{"min":"1299.00","max":null,"currency":"EUR"}}`,
+			`{}`, `{"title":"The Matrix"}`,
 			`{"metadata":{"release_year":1999,"runtime_minutes":136,"imdb_url":"https://www.imdb.com/title/tt0133093/","streaming":{"platforms":["Netflix","Prime Video"],"country":"IT"}}}`,
 			`{"website":"https://www.warnerbros.com/movies/matrix"}`,
 		} {
@@ -982,7 +992,7 @@ func TestF007_ListItemsSortByKindKey(t *testing.T) {
 
 func TestF002B4_ListItemsSortByPrice(t *testing.T) {
 	e := newTreeEnv(t)
-	l := e.listOfKind("Wishlist", nil, "movie")
+	l := e.listOfKind("Wishlist", nil, "motorcycle")
 	lid := l["id"].(string)
 	mk := func(title string, min, max any) obj {
 		body := obj{"title": title}
@@ -1041,14 +1051,14 @@ func TestF002B4_ListItemsSortByPrice(t *testing.T) {
 	})
 
 	t.Run("?sort=price works on a list stored as manual, and create accepts it", func(t *testing.T) {
-		other := e.list("Other", nil)
+		other := e.listOfKind("Other", nil, "motorcycle")
 		oid := other["id"].(string)
 		e.titled(oid, "x")
 		rows, _ := e.page(oid, "?sort=price")
 		if len(rows) != 1 {
 			t.Fatalf("got %d rows", len(rows))
 		}
-		rec := e.call("POST", "/api/v1/lists", `{"name":"P","kind":"movie","sort_mode":"price"}`, "")
+		rec := e.call("POST", "/api/v1/lists", `{"name":"P","kind":"motorcycle","sort_mode":"price"}`, "")
 		wantStatus(t, rec, 201)
 		if decode(t, rec)["sort_mode"] != "price" {
 			t.Fatalf("created sort_mode: %s", rec.Body)

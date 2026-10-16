@@ -67,7 +67,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 			return notFoundOr(err, "list")
 		}
 		if in.Price != nil {
-			if err := genericPriceError(list.Kind); err != nil {
+			if err := priceKindError(list.Kind); err != nil {
 				return err
 			}
 		}
@@ -138,7 +138,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 			return notFoundOr(err, "list")
 		}
 		if p.Price.Set && p.Price.Value != nil {
-			if err := genericPriceError(list.Kind); err != nil {
+			if err := priceKindError(list.Kind); err != nil {
 				return err
 			}
 		}
@@ -161,13 +161,14 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 	return s.get(ctx, id, false)
 }
 
-// genericPriceError rejects a price on an item of a generic list (F008-B1, 422).
-// Clearing a price (null) never gets here.
-func genericPriceError(kind string) error {
-	if kind != kinds.Generic {
+// priceKindError rejects a price on an item of a kind that has none: generic,
+// movie and tv_show (F009-B1, subsuming F008-B1; 422). Clearing a price (null)
+// never gets here.
+func priceKindError(kind string) error {
+	if kinds.HasPrice(kind) {
 		return nil
 	}
-	return apperr.Validation(apperr.FieldError{Field: "price", Message: "generic items have no price"})
+	return apperr.Validation(apperr.FieldError{Field: "price", Message: "items of this kind have no price"})
 }
 
 // mergePatch applies a validated patch to the locked row. It returns the full

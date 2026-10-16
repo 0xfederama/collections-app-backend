@@ -301,14 +301,14 @@ func TestF007_SortKey(t *testing.T) {
 	}
 }
 
-func TestF002B3_PinnableKeysPerKind(t *testing.T) {
+func TestF009B1_PinnableKeysPerKind(t *testing.T) {
 	tests := []struct {
 		kind string
 		want []string
 	}{
 		{"generic", nil},
-		{"movie", []string{"imdb_url", "price", "release_year", "runtime_minutes", "streaming"}},
-		{"tv_show", []string{"end_year", "episode_minutes", "episodes_per_season", "first_air_year", "imdb_url", "price", "seasons", "streaming"}},
+		{"movie", []string{"imdb_url", "release_year", "runtime_minutes", "streaming"}},
+		{"tv_show", []string{"end_year", "episode_minutes", "episodes_per_season", "first_air_year", "imdb_url", "seasons", "streaming"}},
 		{"motorcycle", []string{"displacement_cc", "license_class", "model_year", "power_hp", "price"}},
 		{"car", []string{"fuel_type", "make", "model", "model_year", "power_hp", "price"}},
 		{"camera", []string{"camera_type", "megapixels", "price", "release_year", "sensor_format"}},
@@ -321,30 +321,46 @@ func TestF002B3_PinnableKeysPerKind(t *testing.T) {
 	}
 }
 
-func TestF002B3_ValidatePinned(t *testing.T) {
+func TestF009B1_HasPrice(t *testing.T) {
+	tests := map[string]bool{
+		"generic": false, "movie": false, "tv_show": false,
+		"motorcycle": true, "car": true, "camera": true, "book": false,
+	}
+	for kind, want := range tests {
+		if got := kinds.HasPrice(kind); got != want {
+			t.Errorf("HasPrice(%q) = %v, want %v", kind, got, want)
+		}
+	}
+}
+
+func TestF009B2_ValidatePinned(t *testing.T) {
 	tests := []struct {
-		name         string
-		kind         string
-		under, right []string
-		wantFields   []string
+		name       string
+		kind       string
+		keys       []string
+		wantFields []string
 	}{
-		{"ok", "movie", []string{"release_year", "streaming"}, []string{"price"}, nil},
-		{"nil slots", "movie", nil, nil, nil},
-		{"TestF008B1 generic has no pinnable price", "generic", nil, []string{"price"}, []string{"pinned_fields.right[0]"}},
-		{"TestF008B1 generic empty slots", "generic", nil, nil, nil},
-		{"unknown under", "movie", []string{"release_year", "make"}, nil, []string{"pinned_fields.under[1]"}},
-		{"unknown right", "car", nil, []string{"nope"}, []string{"pinned_fields.right[0]"}},
-		{"both slots", "movie", []string{"price"}, []string{"release_year", "price"}, []string{"pinned_fields.right[1]"}},
-		{"duplicate", "movie", []string{"price", "price"}, nil, []string{"pinned_fields.under[1]"}},
-		{"too many", "tv_show", []string{"end_year", "episode_minutes", "episodes_per_season", "first_air_year", "imdb_url", "price", "seasons"}, nil, []string{"pinned_fields.under"}},
-		{"six is fine", "tv_show", []string{"end_year", "episode_minutes", "episodes_per_season", "first_air_year", "imdb_url", "price"}, nil, nil},
+		{"ok", "movie", []string{"release_year", "streaming"}, nil},
+		{"empty pins nothing", "movie", nil, nil},
+		{"one is fine", "movie", []string{"release_year"}, nil},
+		{"TestF009B1 price on movie", "movie", []string{"price"}, []string{"pinned_fields[0]"}},
+		{"TestF009B1 price on tv_show", "tv_show", []string{"price"}, []string{"pinned_fields[0]"}},
+		{"TestF009B1 generic has no pinnable key", "generic", []string{"price"}, []string{"pinned_fields[0]"}},
+		{"TestF009B1 generic empty is fine", "generic", nil, nil},
+		{"unknown key", "movie", []string{"release_year", "make"}, []string{"pinned_fields[1]"}},
+		{"duplicate", "movie", []string{"release_year", "release_year"}, []string{"pinned_fields[1]"}},
+		{"three keys", "movie", []string{"release_year", "runtime_minutes", "imdb_url"}, []string{"pinned_fields"}},
+		{"price is fine on motorcycle", "motorcycle", []string{"price", "power_hp"}, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u, r, err := kinds.ValidatePinned(tt.kind, tt.under, tt.right)
+			got, err := kinds.ValidatePinned(tt.kind, tt.keys)
 			if tt.wantFields == nil {
-				if err != nil || u == nil || r == nil {
-					t.Fatalf("got %v %v %v", u, r, err)
+				if err != nil {
+					t.Fatalf("got %v", err)
+				}
+				if got == nil {
+					t.Fatal("want a non-nil empty slice")
 				}
 				return
 			}
@@ -352,12 +368,12 @@ func TestF002B3_ValidatePinned(t *testing.T) {
 			if !errors.As(err, &ve) {
 				t.Fatalf("err = %v, want validation", err)
 			}
-			var got []string
+			var fields []string
 			for _, fe := range ve.Errors {
-				got = append(got, fe.Field)
+				fields = append(fields, fe.Field)
 			}
-			if !slices.Equal(got, tt.wantFields) {
-				t.Errorf("fields = %v, want %v", got, tt.wantFields)
+			if !slices.Equal(fields, tt.wantFields) {
+				t.Errorf("fields = %v, want %v", fields, tt.wantFields)
 			}
 		})
 	}

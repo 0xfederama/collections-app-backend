@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -312,7 +312,8 @@ paths:
       description: |
         Appended to the end of its siblings. `folder_id` absent or `null` creates it at the root. A missing or trashed folder returns
         `409 destination_unavailable`. `kind` is required: every item of the list has that kind. `description` is Markdown (up to 64 KiB).
-        `sort_mode: kind_key` is rejected (`422 validation_failed`) on a `generic` list.
+        `sort_mode: kind_key` and `sort_mode: price` are rejected (`422 validation_failed`) on a `generic` list, and `sort_mode: price`
+        also on `movie` and `tv_show` lists (F009-B1: only the kinds with a price can sort by it).
       requestBody:
         required: true
         content:
@@ -396,10 +397,10 @@ paths:
       summary: Update a list
       description: |
         Requires `If-Match` (`"l-N"`). Send `description: null` to clear it. `description` is Markdown (up to 64 KiB) and has no version
-        history: it is edited with the list's `version`. `sort_mode: kind_key` and `sort_mode: price` are rejected (`422 validation_failed`) on a `generic` list.
+        history: it is edited with the list's `version`. `sort_mode: kind_key` and `sort_mode: price` are rejected (`422 validation_failed`) on a `generic` list, and `sort_mode: price` also on `movie` and `tv_show` lists (F009-B1).
 
         Changing `kind` on a list that has items **clears the `metadata` of all its items** (trashed ones too; their `version` is bumped),
-        because the kind fields differ per kind. A change **to `generic`** also clears the `price` of all its items (trashed ones too) and
+        because the kind fields differ per kind. A change **to a kind without a price** (`generic`, `movie`, `tv_show`) also clears the `price` of all its items (trashed ones too) and
         turns a stored `sort_mode: price` into `manual`. Clients should warn first. If the list is left on `sort_mode: kind_key` and the new
         kind is `generic`, the request is rejected with `422 validation_failed`. A kind change also resets `pinned_fields` to `null` (unless
         the same request sets it, which is then validated against the new kind). Send `pinned_fields: null` to reset it to the kind default;
@@ -414,7 +415,7 @@ paths:
             examples:
               viewMode: { value: { display_mode: grid, sort_mode: title } }
               changeKind: { value: { kind: car } }
-              pinFields: { value: { pinned_fields: { under: [release_year], right: [price] } } }
+              pinFields: { value: { pinned_fields: [release_year, runtime_minutes] } }
               resetPinnedFields: { value: { pinned_fields: null } }
       responses:
         '200':
@@ -495,7 +496,8 @@ paths:
         Sorted by `sort` (default: the list's `sort_mode`), tie-break `id`. `q` filters by title. `sort=kind_key` sorts by the kind's
         sort key ascending, empty values last (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
         car: `power_hp`, camera: `megapixels`); on a `generic` list it returns `400 invalid_parameter`.
-        `sort=price` sorts by `price.min` ascending, items without a price last, ties by title then `id` (no currency conversion).
+        `sort=price` sorts by `price.min` ascending, items without a price last, ties by title then `id` (no currency conversion); on a list
+        whose kind has no price (generic, movie, tv_show) it returns `400 invalid_parameter` (F009-B1).
       parameters:
         - name: sort
           in: query
@@ -525,7 +527,8 @@ paths:
       description: |
         Appended to the end of the list. The item's `kind` is the list's kind (read-only, not accepted in the body). Image and Markdown
         content are set through their own endpoints after creation. `metadata` is validated against the list's kind (see the `*Metadata` schemas).
-        `price` is either `{amount, currency}` (single price) or `{min, max, currency}` (range). A `price` on an item of a `generic` list is rejected with `422 validation_failed` on `price` (`null` is fine).
+        `price` is either `{amount, currency}` (single price) or `{min, max, currency}` (range). A `price` on an item of a kind without a price
+        (`generic`, `movie` or `tv_show`; F009-B1) is rejected with `422 validation_failed` on `price` (`null` is fine).
       requestBody:
         required: true
         content:
@@ -611,7 +614,7 @@ paths:
       operationId: updateItem
       summary: Update an item
       description: |
-        Requires `If-Match` (`"i-N"`). Any of `title, price, website, metadata`; send `null` to clear a nullable field. A non-null `price` on an item of a `generic` list is rejected with `422 validation_failed`. `metadata` is
+        Requires `If-Match` (`"i-N"`). Any of `title, price, website, metadata`; send `null` to clear a nullable field. A non-null `price` on an item of a kind without a price (`generic`, `movie`, `tv_show`; F009-B1) is rejected with `422 validation_failed`. `metadata` is
         validated against the list's kind and replaces the stored one. The kind cannot be changed here (it belongs to the list).
         Image changes go through the image endpoints.
       parameters:
@@ -1336,7 +1339,7 @@ components:
         description: Films to watch
         display_mode: thumbnail
         sort_mode: manual
-        pinned_fields: { under: [release_year], right: [price] }
+        pinned_fields: [release_year, runtime_minutes]
         sort_order: 0
         item_count: 2
         version: 1
@@ -1351,7 +1354,7 @@ components:
         description: Films to watch
         display_mode: thumbnail
         sort_mode: manual
-        pinned_fields: { under: [release_year], right: [price] }
+        pinned_fields: [release_year, runtime_minutes]
         sort_order: 0
         item_count: 2
         version: 1
@@ -1392,7 +1395,7 @@ components:
             description: Films to watch
             display_mode: thumbnail
             sort_mode: manual
-            pinned_fields: { under: [release_year], right: [price] }
+            pinned_fields: [release_year, runtime_minutes]
             sort_order: 0
             item_count: 2
             version: 1
@@ -1821,28 +1824,21 @@ components:
       description: |
         `kind_key` sorts by the kind's sort key (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
         car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists.
-        `price` is not valid on `generic` lists either (they have no price). `price` sorts by the lowest price (`price.min`) ascending, items without a price last, ties by title and then id. Currencies are not
+        `price` is valid only on the kinds that have a price (motorcycle, car, camera; F009-B1), not on `generic`, `movie` or `tv_show`.
+        It sorts by the lowest price (`price.min`) ascending, items without a price last, ties by title and then id. Currencies are not
         converted, so mixed currencies compare by amount only. The manual order is kept when the mode changes.
     PinnedFields:
-      type: object
+      type: array
       nullable: true
-      additionalProperties: false
+      maxItems: 2
+      items: { type: string, maxLength: 60 }
       description: |
-        The fields a list shows in its rows, by field key: `under` (under the title) and `right` (on the right), in order. `null` means the
-        kind default (the web app owns the defaults). `{}` or two empty slots pin nothing, which is different from `null`. Allowed keys: the
-        keys of the kind's `metadata` fields plus `price` (`generic` has no pinnable key at all; `streaming` is a movie and tv_show field). Each slot holds at most 6 unique
-        keys and a key is in at most one slot, else `422 validation_failed` on `pinned_fields.under[i]` / `pinned_fields.right[i]`.
-        Responses always carry both slots. Changing the list's `kind` resets it to `null`.
-      properties:
-        under:
-          type: array
-          maxItems: 6
-          items: { type: string, maxLength: 60 }
-        right:
-          type: array
-          maxItems: 6
-          items: { type: string, maxLength: 60 }
-      example: { under: [release_year, runtime_minutes], right: [price] }
+        The fields a list shows in its rows, in order: the first is the primary field, the second the secondary (F009-B2; replaces the
+        `{under, right}` slots of F-002). `null` means the kind default (the web app owns the defaults). `[]` pins nothing, which is different
+        from `null`, and a single-element list is valid. Allowed keys: the keys of the kind's `metadata` fields, plus `price` **only** on the
+        kinds that have one (motorcycle, car, camera; F009-B1). `generic` has no key at all, and `movie` and `tv_show` have no `price`. At most
+        2 unique keys (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `kind` resets it to `null`.
+      example: [release_year, runtime_minutes]
     List:
       type: object
       required: [id, folder_id, name, kind, description, display_mode, sort_mode, pinned_fields, sort_order, item_count, version, created_at, updated_at]

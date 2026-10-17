@@ -2,7 +2,7 @@
 name: worker
 description: Implements one well-scoped task from the repo orchestrator (a slice of a feature user story) with its tests, runs the repo gate, commits on the given branch, and reports back with FLAGS for anything the orchestrator must review. Use for all implementation work.
 tools: Read, Grep, Glob, Edit, Write, Bash
-model: sonnet
+model: haiku
 effort: medium
 ---
 

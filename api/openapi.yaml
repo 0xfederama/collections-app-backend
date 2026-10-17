@@ -1447,7 +1447,7 @@ components:
       value:
         workspace_name: Our Collection
         streaming_country_code: IT
-        metadata_language: en-US
+        metadata_language: it-IT
         lookup_available: true
         markdown_history_limit: 20
         trash_retention_days: null
@@ -1924,7 +1924,7 @@ components:
     MetadataLanguage:
       type: string
       pattern: '^[a-z]{2}(-[A-Z]{2})?$'
-      example: en-US
+      example: it-IT
       description: ISO 639-1 language (`xx`), optionally with an uppercase region (`xx-YY`), passed to TMDB.
     Tree:
       type: object
@@ -2323,7 +2323,7 @@ components:
         paid_platforms:
           type: array
           maxItems: 30
-          description: Platforms offered only for payment. Each entry must match (case-insensitively) an entry of `platforms` and is stored with that entry's casing. Unique case-insensitively. Omitted, null or empty means none paid.
+          description: Platforms available only through per-title rental or purchase, not subscription, free, or ad-supported offers. Each entry must match (case-insensitively) an entry of `platforms` and is stored with that entry's casing. Unique case-insensitively. Omitted, null or empty means none paid.
           items: { type: string, maxLength: 60 }
     GenericMetadata:
       type: object

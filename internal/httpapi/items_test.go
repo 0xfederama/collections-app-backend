@@ -78,7 +78,7 @@ func idsJSON(ids ...string) string {
 // matrix is the body of a movie item: create it in a list of kind movie. Movie
 // items have no price (F009-B1); price behavior is tested on a motorcycle/car/camera list.
 const matrix = `{"title":"The Matrix","website":"https://www.warnerbros.com/movies/matrix",
-	"metadata":{"release_year":1999,"runtime_minutes":136,"imdb_url":"https://www.imdb.com/title/tt0133093/","streaming":{"country":"IT","platforms":["Netflix","Prime Video"]}}}`
+	"metadata":{"release_year":1999,"runtime_minutes":136,"imdb_url":"https://www.imdb.com/title/tt0133093/","director":"Lana Wachowski, Lilly Wachowski","streaming":{"country":"IT","platforms":["Netflix","Prime Video"]}}}`
 
 func TestAT05_CreateItem(t *testing.T) {
 	e := newTreeEnv(t)
@@ -115,7 +115,7 @@ func TestAT05_CreateItem(t *testing.T) {
 		got := e.fetchItem(it["id"])
 		meta := got["metadata"].(map[string]any)
 		stream := meta["streaming"].(map[string]any)
-		if meta["release_year"] != float64(1999) || stream["country"] != "IT" || !reflect.DeepEqual(stream["platforms"], []any{"Netflix", "Prime Video"}) {
+		if meta["release_year"] != float64(1999) || meta["director"] != "Lana Wachowski, Lilly Wachowski" || stream["country"] != "IT" || !reflect.DeepEqual(stream["platforms"], []any{"Netflix", "Prime Video"}) {
 			t.Fatalf("metadata = %v", meta)
 		}
 	})
@@ -200,7 +200,7 @@ func TestAT05_ItemFieldRules(t *testing.T) {
 		{"metadata cross-field", tv, `{"title":"t","metadata":{"first_air_year":2010,"end_year":2000}}`, 422, "validation_failed", "metadata.end_year"},
 		{"metadata bad imdb", lid, `{"title":"t","metadata":{"imdb_url":"http://imdb.com/title/tt1234567/"}}`, 422, "validation_failed", "metadata.imdb_url"},
 		{"generic with a key", gen, `{"title":"t","metadata":{"release_year":1999}}`, 400, "unknown_field", "metadata.release_year"},
-		{"unknown metadata key", lid, `{"title":"t","metadata":{"director":"x"}}`, 400, "unknown_field", "metadata.director"},
+		{"unknown metadata key", lid, `{"title":"t","metadata":{"unknown_movie_field":"x"}}`, 400, "unknown_field", "metadata.unknown_movie_field"},
 		{"unknown nested streaming key", lid, `{"title":"t","metadata":{"streaming":{"country":"IT","x":1}}}`, 400, "unknown_field", "metadata.streaming.x"},
 		{"unknown top-level key", lid, `{"title":"t","colour":"red"}`, 400, "unknown_field", "colour"},
 		{"TestF007 kind is no longer sent", lid, `{"title":"t","kind":"movie"}`, 400, "unknown_field", "kind"},

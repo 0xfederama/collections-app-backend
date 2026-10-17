@@ -15,15 +15,16 @@ import (
 
 // Config holds every runtime setting of the API process.
 type Config struct {
-	AppEnv        string
-	HTTPAddr      string
-	DatabaseURL   string
-	DBMaxConns    int32
-	DataDir       string
-	WorkspaceName string
-	TMDBAPIKey    string
-	LogLevel      slog.Level
-	LogFormat     string
+	AppEnv          string
+	HTTPAddr        string
+	DatabaseURL     string
+	DBMaxConns      int32
+	DataDir         string
+	WorkspaceName   string
+	TMDBAPIKey      string
+	TMDBMockFixture bool
+	LogLevel        slog.Level
+	LogFormat       string
 }
 
 // Load reads configuration through getenv (os.Getenv in production) and returns
@@ -38,17 +39,29 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	c := Config{
-		AppEnv:        get("APP_ENV", "development"),
-		HTTPAddr:      get("HTTP_ADDR", ":8080"),
-		DatabaseURL:   get("DATABASE_URL", ""),
-		DataDir:       get("DATA_DIR", "/data"),
-		WorkspaceName: get("WORKSPACE_NAME", "Our Collection"),
-		TMDBAPIKey:    strings.TrimSpace(getenv("TMDB_API_KEY")),
-		LogFormat:     get("LOG_FORMAT", "json"),
+		AppEnv:          get("APP_ENV", "development"),
+		HTTPAddr:        get("HTTP_ADDR", ":8080"),
+		DatabaseURL:     get("DATABASE_URL", ""),
+		DataDir:         get("DATA_DIR", "/data"),
+		WorkspaceName:   get("WORKSPACE_NAME", "Our Collection"),
+		TMDBAPIKey:      strings.TrimSpace(getenv("TMDB_API_KEY")),
+		TMDBMockFixture: false,
+		LogFormat:       get("LOG_FORMAT", "json"),
+	}
+	if raw := strings.TrimSpace(getenv("TMDB_MOCK_FIXTURE")); raw != "" {
+		fixture, err := strconv.ParseBool(raw)
+		if err != nil {
+			errs = append(errs, errors.New("TMDB_MOCK_FIXTURE must be true or false"))
+		} else {
+			c.TMDBMockFixture = fixture
+		}
 	}
 
 	if c.AppEnv != "development" && c.AppEnv != "production" {
 		errs = append(errs, fmt.Errorf("APP_ENV must be development or production, got %q", c.AppEnv))
+	}
+	if c.AppEnv == "production" && c.TMDBMockFixture {
+		errs = append(errs, errors.New("TMDB_MOCK_FIXTURE cannot be enabled when APP_ENV=production"))
 	}
 
 	if _, _, err := net.SplitHostPort(c.HTTPAddr); err != nil {

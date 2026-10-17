@@ -42,6 +42,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if c.TMDBAPIKey != "" {
 		t.Errorf("TMDBAPIKey = %q, want empty", c.TMDBAPIKey)
 	}
+	if c.TMDBMockFixture {
+		t.Error("TMDBMockFixture = true, want false by default")
+	}
 	if c.LogLevel != slog.LevelInfo {
 		t.Errorf("LogLevel = %v", c.LogLevel)
 	}
@@ -72,6 +75,20 @@ func TestLoad_Overrides(t *testing.T) {
 	}
 }
 
+func TestLoad_TMDBMockFixture(t *testing.T) {
+	c, err := config.Load(env(map[string]string{
+		"DATABASE_URL":      validDB,
+		"DATA_DIR":          t.TempDir(),
+		"TMDB_MOCK_FIXTURE": "true",
+	}))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !c.TMDBMockFixture {
+		t.Fatal("TMDBMockFixture = false, want true")
+	}
+}
+
 func TestLoad_Validation(t *testing.T) {
 	dir := t.TempDir()
 	tests := []struct {
@@ -98,6 +115,8 @@ func TestLoad_Validation(t *testing.T) {
 
 		{"bad app env", map[string]string{"APP_ENV": "staging"}, "APP_ENV"},
 		{"app env wrong case", map[string]string{"APP_ENV": "Production"}, "APP_ENV"},
+		{"invalid TMDB fixture flag", map[string]string{"TMDB_MOCK_FIXTURE": "sometimes"}, "TMDB_MOCK_FIXTURE"},
+		{"TMDB fixture forbidden in production", map[string]string{"APP_ENV": "production", "TMDB_MOCK_FIXTURE": "true"}, "TMDB_MOCK_FIXTURE cannot be enabled"},
 		{"bad log level", map[string]string{"LOG_LEVEL": "verbose"}, "LOG_LEVEL"},
 		{"bad log format", map[string]string{"LOG_FORMAT": "xml"}, "LOG_FORMAT"},
 		{"http addr no port", map[string]string{"HTTP_ADDR": "localhost"}, "HTTP_ADDR"},

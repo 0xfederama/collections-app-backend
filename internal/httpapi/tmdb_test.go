@@ -39,6 +39,26 @@ func TestF013B2_SuggestionsDisabledWithoutKey(t *testing.T) {
 	}
 }
 
+func TestF013B2_MockFixtureIsAvailableWithoutKeyOnlyForExactQuery(t *testing.T) {
+	client := tmdb.NewWithOptions("", tmdb.Options{MockFixture: true})
+	h := tmdbRouter(t, client)
+
+	fixture := do(t, h, req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?kind=movie&q=" + url.QueryEscape("[mock] movie name")})
+	wantStatus(t, fixture, http.StatusOK)
+	got := decode(t, fixture)
+	results, ok := got["results"].([]any)
+	if got["available"] != true || !ok || len(results) != 1 || results[0].(map[string]any)["title"] != "[mock] movie name" {
+		t.Fatalf("fixture suggestions = %v", got)
+	}
+
+	other := do(t, h, req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?kind=movie&q=Alien"})
+	wantStatus(t, other, http.StatusOK)
+	got = decode(t, other)
+	if got["available"] != false || len(got["results"].([]any)) != 0 {
+		t.Fatalf("nonfixture suggestions without key = %v", got)
+	}
+}
+
 func TestF013B2_SuggestionsUseLanguageAndPreserveRanking(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/3/search/movie" || r.URL.Query().Get("query") != "odissea" || r.URL.Query().Get("language") != "en-US" {

@@ -44,6 +44,8 @@ services:
       DATABASE_URL: postgres://db:5432/collection?user=collection&password=${POSTGRES_PASSWORD}&sslmode=disable
       DATA_DIR: /data
       WORKSPACE_NAME: ${WORKSPACE_NAME:-Our Collection}
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      TMDB_MOCK_FIXTURE: ${TMDB_MOCK_FIXTURE:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-json}
     volumes:

@@ -200,7 +200,7 @@ func TestAT05_ItemFieldRules(t *testing.T) {
 		{"metadata cross-field", tv, `{"title":"t","metadata":{"first_air_year":2010,"end_year":2000}}`, 422, "validation_failed", "metadata.end_year"},
 		{"metadata bad imdb", lid, `{"title":"t","metadata":{"imdb_url":"http://imdb.com/title/tt1234567/"}}`, 422, "validation_failed", "metadata.imdb_url"},
 		{"generic with a key", gen, `{"title":"t","metadata":{"release_year":1999}}`, 400, "unknown_field", "metadata.release_year"},
-		{"unknown metadata key", lid, `{"title":"t","metadata":{"director":"x"}}`, 400, "unknown_field", "metadata.director"},
+		{"unknown metadata key", lid, `{"title":"t","metadata":{"unknown_movie_field":"x"}}`, 400, "unknown_field", "metadata.unknown_movie_field"},
 		{"unknown nested streaming key", lid, `{"title":"t","metadata":{"streaming":{"country":"IT","x":1}}}`, 400, "unknown_field", "metadata.streaming.x"},
 		{"unknown top-level key", lid, `{"title":"t","colour":"red"}`, 400, "unknown_field", "colour"},
 		{"TestF007 kind is no longer sent", lid, `{"title":"t","kind":"movie"}`, 400, "unknown_field", "kind"},

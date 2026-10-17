@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`api/openapi.yaml` is the canonical OpenAPI 3.0.3 contract for the HTTP API. Go models and server stubs are generated from it into `internal/httpapi/oapi`. F013 adds movie/TV TMDB suggestions and item lookup operations; their handlers are being integrated. Design context lives in `/Users/federico/Developer/collections-app/design-docs/`.
+`api/openapi.yaml` is the canonical OpenAPI 3.0.3 contract for the HTTP API. Go models and server stubs are generated from it into `internal/httpapi/oapi`. F013 adds movie/TV TMDB suggestions and item lookup operations. Design context lives in `/Users/federico/Developer/collections-app/design-docs/`.
 
 ## Key files
 

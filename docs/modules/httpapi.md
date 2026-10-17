@@ -27,7 +27,7 @@ Serves the HTTP API: the generated strict server mounted on chi, behind request 
 - Settings, tree, folder, list, item, content, search, attachment and trash routes: see `api/openapi.yaml`
 - Delete folder/list/item: 204 with If-Match; trash supports list, restore, single purge and empty
 - `GET /api/v1/tmdb/suggestions?kind=movie|tv_show&q=...`: ranked suggestions; unavailable integration returns an empty disabled result
-- `POST /api/v1/items/{id}/lookup`: explicit metadata lookup with item If-Match (handler integration in progress)
+- `POST /api/v1/items/{id}/lookup`: explicit metadata lookup with item If-Match
 
 ## Gotchas
 

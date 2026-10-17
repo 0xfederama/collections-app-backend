@@ -2,15 +2,15 @@
 
 ## Purpose
 
-Defines the merge and provenance boundary for importing TMDB values into movie and TV items. Current integration work records imported snapshots and expiry in PostgreSQL; design context lives in `/Users/federico/Developer/collections-app/design-docs/`.
+Defines the merge and provenance boundary for importing TMDB values into movie and TV items. It records imported snapshots and expiry in PostgreSQL; design context lives in `/Users/federico/Developer/collections-app/design-docs/`.
 
 ## Key files
 
 - `internal/lookup/types.go`: lookup modes, provenance `Record`, `ApplyParams`, and `Store` contract
 - `db/queries/tmdb_imports.sql`: workspace-scoped locking, provenance, due and expiry queries
 - `db/migrations/000012_tmdb_imports.up.sql`: imported field and poster provenance table
-- `internal/httpapi/items.go`: item create and lookup handler integration (in progress)
-- `cmd/api/main.go`: lookup service and maintenance wiring (in progress)
+- `internal/httpapi/items.go`: item create and lookup handler integration
+- `cmd/api/main.go`: lookup service and maintenance wiring
 
 ## Interfaces
 
@@ -26,4 +26,3 @@ Defines the merge and provenance boundary for importing TMDB values into movie a
 - User edits survive refresh and expiry, including on trashed items. If an unchanged imported title expires, restore the original typed title.
 - Poster expiry is tracked independently from metadata refresh; manual lookup modes preserve the existing image.
 - Backups containing TMDB data must be retired within six months under [TMDB API terms](https://www.themoviedb.org/api-terms-of-use).
-- The HTTP handler, store implementation, and scheduled maintenance are still integrating; verify these interfaces against the final F013 branch before PR.

@@ -33,11 +33,15 @@ func TestMockFixtureIsExactAndNeverReplacesManualTMDBQueries(t *testing.T) {
 	var queries []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		if r.URL.Path != "/3/search/movie" {
+		switch r.URL.Path {
+		case "/3/search/movie":
+			queries = append(queries, r.URL.Query().Get("query"))
+			_, _ = w.Write([]byte(`{"results":[{"id":7,"title":"Manual result"}]}`))
+		case "/3/movie/7":
+			_, _ = w.Write([]byte(`{"id":7,"title":"Manual detail","release_date":"2001-01-01"}`))
+		default:
 			t.Errorf("unexpected real-client request = %s?%s", r.URL.Path, r.URL.RawQuery)
 		}
-		queries = append(queries, r.URL.Query().Get("query"))
-		_, _ = w.Write([]byte(`{"results":[{"id":7,"title":"Manual result"}]}`))
 	}))
 	defer server.Close()
 	c := NewWithOptions("", Options{
@@ -60,6 +64,9 @@ func TestMockFixtureIsExactAndNeverReplacesManualTMDBQueries(t *testing.T) {
 	if _, err := c.Search(context.Background(), "movie", "manual experiment", "en-US"); !errors.Is(err, ErrDisabled) {
 		t.Fatalf("manual query without key error = %v, want ErrDisabled", err)
 	}
+	if _, err := c.Details(context.Background(), "movie", mockMovieID+1, "en-US", "US"); !errors.Is(err, ErrDisabled) {
+		t.Fatalf("nonfixture details without key error = %v, want ErrDisabled", err)
+	}
 	manualClient := NewWithOptions("test-secret", Options{
 		APIBaseURL: server.URL + "/3", ImageBaseURL: server.URL,
 		HTTPClient: server.Client(), MockFixture: true,
@@ -68,7 +75,10 @@ func TestMockFixtureIsExactAndNeverReplacesManualTMDBQueries(t *testing.T) {
 	if err != nil || len(manual) != 1 || manual[0].ID != 7 || calls != 1 {
 		t.Fatalf("manual results = %+v, calls = %d, error = %v", manual, calls, err)
 	}
-	if _, err := manualClient.Search(context.Background(), "movie", " [mock] movie name", "en-US"); err != nil || calls != 2 || queries[1] != "[mock] movie name" {
+	if _, err := manualClient.Details(context.Background(), "movie", 7, "en-US", "US"); err != nil || calls != 2 {
+		t.Fatalf("manual details calls = %d, error = %v", calls, err)
+	}
+	if _, err := manualClient.Search(context.Background(), "movie", " [mock] movie name", "en-US"); err != nil || calls != 3 || queries[1] != "[mock] movie name" {
 		t.Fatalf("non-exact query should use normal client: calls=%d error=%v", calls, err)
 	}
 }

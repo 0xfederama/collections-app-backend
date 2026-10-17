@@ -115,7 +115,8 @@ func NewWithOptions(apiKey string, opts Options) *Client {
 	return &Client{key: strings.TrimSpace(apiKey), http: hc, apiBase: api, imageBase: image, timeout: opts.Timeout, mockFixture: opts.MockFixture, cache: make(map[string]cacheEntry)}
 }
 
-// Enabled reports whether a server-side TMDB credential is configured.
+// Enabled reports whether TMDB-backed suggestions are available. The explicit
+// test fixture keeps the suggestions endpoint available without a credential.
 func (c *Client) Enabled() bool { return c != nil && (c.key != "" || c.mockFixture) }
 
 // Search returns TMDB results in upstream ranking order, localized by language.
@@ -127,7 +128,7 @@ func (c *Client) Search(ctx context.Context, kind, query, language string) ([]Ma
 	if c != nil && c.mockFixture && kind == "movie" && query == mockMovieQuery {
 		return []Match{{ID: mockMovieID, Title: mockMovieQuery, OriginalTitle: mockMovieQuery, Year: 2001, Overview: "Deterministic TMDB fixture for frontend end-to-end tests."}}, nil
 	}
-	if !c.Enabled() {
+	if c == nil || c.key == "" {
 		return nil, ErrDisabled
 	}
 	query = strings.TrimSpace(query)
@@ -182,7 +183,7 @@ func (c *Client) Details(ctx context.Context, kind string, id int, language, cou
 			},
 		}, nil
 	}
-	if !c.Enabled() {
+	if c == nil || c.key == "" {
 		return Details{}, ErrDisabled
 	}
 	endpoint, err := kindEndpoint(kind)
@@ -293,7 +294,7 @@ type provider struct {
 
 // DownloadPoster downloads a TMDB poster path from the configured image origin.
 func (c *Client) DownloadPoster(ctx context.Context, posterPath string) ([]byte, error) {
-	if !c.Enabled() {
+	if c == nil || c.key == "" {
 		return nil, ErrDisabled
 	}
 	if !safePosterPath(posterPath) {

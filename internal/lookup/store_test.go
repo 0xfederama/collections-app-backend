@@ -206,6 +206,7 @@ func TestF013B3_OwnedRefreshPreservesUserEditedLeaf(t *testing.T) {
 		Mode: ModeOwned, ItemID: it.ID, ExpectedVersion: it.Version, Kind: "movie", TMDBID: 603,
 		Title: "The Matrix", OriginalTitle: "Matrix",
 		Fields: map[string]any{"release_year": 2000, "runtime_minutes": 137, "director": "The Wachowskis"},
+		RefreshFields: true,
 	})
 	if err != nil {
 		t.Fatal(err)

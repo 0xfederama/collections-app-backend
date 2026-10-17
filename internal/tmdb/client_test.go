@@ -2,6 +2,7 @@ package tmdb
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,7 +23,7 @@ func TestDisabledClient(t *testing.T) {
 	if c.Enabled() {
 		t.Fatal("empty key enabled client")
 	}
-	if _, err := c.Search(context.Background(), "movie", "Alien", "en-US"); err != ErrDisabled {
+	if _, err := c.Search(context.Background(), "movie", "Alien", "en-US"); !errors.Is(err, ErrDisabled) {
 		t.Fatalf("Search error = %v", err)
 	}
 }

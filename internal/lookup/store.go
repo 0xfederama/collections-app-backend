@@ -297,7 +297,7 @@ func (s *DBStore) applyExisting(ctx context.Context, q *sqlc.Queries, p ApplyPar
 			attachmentID = uuid.NullUUID{}
 			posterFetchedAt, posterPath = nil, ""
 		}
-	} else if !cur.ImageAttachmentID.Valid && cur.ImageUrl == nil && poster != nil && !(p.Mode == ModeOwned && old.AttachmentID != nil) {
+	} else if !cur.ImageAttachmentID.Valid && cur.ImageUrl == nil && poster != nil && (p.Mode != ModeOwned || old.AttachmentID == nil) {
 		if err := s.insertAttachment(ctx, q, poster); err != nil {
 			return false, nil, err
 		}

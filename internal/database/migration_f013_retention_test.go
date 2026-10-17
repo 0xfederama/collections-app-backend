@@ -21,13 +21,18 @@ func TestF013B3_MigrationTMDBImports(t *testing.T) {
 	}
 	t.Cleanup(pool.Close)
 	workspaceID, listID, itemID, invalidItemID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
-	if _, err := pool.Exec(ctx, `
-		INSERT INTO workspaces (id, name) VALUES ($1, 'W');
-		INSERT INTO lists (id, workspace_id, name, kind, sort_order) VALUES ($2, $1, 'Movies', 'movie', 0);
-		INSERT INTO items (id, workspace_id, list_id, title, sort_order) VALUES ($3, $1, $2, 'Matrix', 0);
-		INSERT INTO items (id, workspace_id, list_id, title, sort_order) VALUES ($4, $1, $2, 'Invalid', 1)`,
-		workspaceID, listID, itemID, invalidItemID); err != nil {
-		t.Fatal(err)
+	for _, seed := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO workspaces (id, name) VALUES ($1, 'W')`, []any{workspaceID}},
+		{`INSERT INTO lists (id, workspace_id, name, kind, sort_order) VALUES ($1, $2, 'Movies', 'movie', 0)`, []any{listID, workspaceID}},
+		{`INSERT INTO items (id, workspace_id, list_id, title, sort_order) VALUES ($1, $2, $3, 'Matrix', 0)`, []any{itemID, workspaceID, listID}},
+		{`INSERT INTO items (id, workspace_id, list_id, title, sort_order) VALUES ($1, $2, $3, 'Invalid', 1)`, []any{invalidItemID, workspaceID, listID}},
+	} {
+		if _, err := pool.Exec(ctx, seed.query, seed.args...); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := m.Steps(1); err != nil {
 		t.Fatalf("migrate up 000012: %v", err)

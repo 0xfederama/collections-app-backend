@@ -296,7 +296,7 @@ func (c *Client) DownloadPoster(ctx context.Context, posterPath string) ([]byte,
 	if err != nil {
 		return nil, safeNetworkError(ctx, err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusTooManyRequests {
 		c.note429(response.Header.Get("Retry-After"))
 		return nil, errors.New("TMDB rate limit exceeded")
@@ -333,7 +333,7 @@ func (c *Client) getJSON(ctx context.Context, route string, query url.Values, ou
 	if err != nil {
 		return safeNetworkError(ctx, err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusTooManyRequests {
 		c.note429(response.Header.Get("Retry-After"))
 		return errors.New("TMDB rate limit exceeded")

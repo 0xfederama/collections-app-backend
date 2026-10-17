@@ -64,7 +64,7 @@ func TestAT02_GetSettings(t *testing.T) {
 	if got := rec.Header().Get("ETag"); got != `"s-1"` {
 		t.Errorf("ETag = %q, want \"s-1\"", got)
 	}
-	want := settingsBody{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "en-US", LookupAvailable: true, MarkdownHistoryLimit: 20, Version: 1}
+	want := settingsBody{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 20, Version: 1}
 	if got := decodeSettings(t, rec); got != want {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}

@@ -12,7 +12,7 @@ import (
 func ptr[T any](v T) *T { return &v }
 
 func TestService_Update(t *testing.T) {
-	base := workspace.Settings{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "en-US", MarkdownHistoryLimit: 20, Version: 1}
+	base := workspace.Settings{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, Version: 1}
 	tests := []struct {
 		name  string
 		patch workspace.SettingsPatch
@@ -20,13 +20,13 @@ func TestService_Update(t *testing.T) {
 	}{
 		{"name is trimmed", workspace.SettingsPatch{WorkspaceName: ptr("  Home  ")}, with(base, func(s *workspace.Settings) { s.WorkspaceName = "Home"; s.Version = 2 })},
 		{"country", workspace.SettingsPatch{StreamingCountryCode: ptr("US")}, with(base, func(s *workspace.Settings) { s.StreamingCountryCode = "US"; s.Version = 2 })},
-		{"metadata language", workspace.SettingsPatch{MetadataLanguage: ptr("it-IT")}, with(base, func(s *workspace.Settings) { s.MetadataLanguage = "it-IT"; s.Version = 2 })},
+		{"metadata language", workspace.SettingsPatch{MetadataLanguage: ptr("en-US")}, with(base, func(s *workspace.Settings) { s.MetadataLanguage = "en-US"; s.Version = 2 })},
 		{"limit zero", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(0)}, with(base, func(s *workspace.Settings) { s.MarkdownHistoryLimit = 0; s.Version = 2 })},
 		{"limit max", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(200)}, with(base, func(s *workspace.Settings) { s.MarkdownHistoryLimit = 200; s.Version = 2 })},
 		{"all fields bump once", workspace.SettingsPatch{WorkspaceName: ptr("X"), StreamingCountryCode: ptr("DE"), MarkdownHistoryLimit: ptr(5)},
-			workspace.Settings{WorkspaceName: "X", StreamingCountryCode: "DE", MetadataLanguage: "en-US", MarkdownHistoryLimit: 5, Version: 2}},
+			workspace.Settings{WorkspaceName: "X", StreamingCountryCode: "DE", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 5, Version: 2}},
 		{"empty patch is a no-op", workspace.SettingsPatch{}, base},
-		{"same values are a no-op", workspace.SettingsPatch{WorkspaceName: ptr(" Our Collection "), StreamingCountryCode: ptr("IT"), MetadataLanguage: ptr("en-US")}, base},
+		{"same values are a no-op", workspace.SettingsPatch{WorkspaceName: ptr(" Our Collection "), StreamingCountryCode: ptr("IT"), MetadataLanguage: ptr("it-IT")}, base},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

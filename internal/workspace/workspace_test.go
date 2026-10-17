@@ -130,7 +130,7 @@ func TestBootstrap_DefaultsAndInvalidName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := workspace.Settings{WorkspaceName: "Ours", StreamingCountryCode: "IT", MetadataLanguage: "en-US", MarkdownHistoryLimit: 20, Version: 1}
+	want := workspace.Settings{WorkspaceName: "Ours", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, Version: 1}
 	if got != want {
 		t.Errorf("settings = %+v, want %+v", got, want)
 	}

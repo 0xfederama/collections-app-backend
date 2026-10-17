@@ -215,6 +215,8 @@ func (c *Client) Details(ctx context.Context, kind string, id int, language, cou
 			Results map[string]struct {
 				Link     string     `json:"link"`
 				Flatrate []provider `json:"flatrate"`
+				Rent     []provider `json:"rent"`
+				Buy      []provider `json:"buy"`
 				Free     []provider `json:"free"`
 				Ads      []provider `json:"ads"`
 			} `json:"results"`
@@ -273,7 +275,7 @@ func (c *Client) Details(ctx context.Context, kind string, id int, language, cou
 	}
 	if country != "" {
 		providers := data.Providers.Results[strings.ToUpper(country)]
-		platforms, paid := providerNames(providers.Flatrate, providers.Free, providers.Ads)
+		platforms, paid := providerNames(providers.Flatrate, providers.Rent, providers.Buy, providers.Free, providers.Ads)
 		streaming := map[string]any{"country": strings.ToUpper(country)}
 		if len(platforms) > 0 {
 			streaming["platforms"] = platforms
@@ -495,11 +497,25 @@ func contains(items []string, item string) bool {
 	}
 	return false
 }
-func providerNames(groups ...[]provider) ([]string, []string) {
+
+// providerNames maps TMDB watch-provider availability into the UI's platform
+// lists. A subscription, free, or ad-supported offer wins over rent/buy: a
+// platform is paid only when its availability is per-title payment only.
+func providerNames(flatrate, rent, buy, free, ads []provider) ([]string, []string) {
 	all, paid := make([]string, 0), make([]string, 0)
 	seen := map[string]bool{}
 	paidSeen := map[string]bool{}
-	for i, group := range groups {
+	nonPaid := map[string]bool{}
+	for _, group := range [][]provider{flatrate, free, ads} {
+		for _, p := range group {
+			k := strings.ToLower(strings.TrimSpace(p.Name))
+			if k == "" {
+				continue
+			}
+			nonPaid[k] = true
+		}
+	}
+	for _, group := range [][]provider{flatrate, rent, buy, free, ads} {
 		for _, p := range group {
 			k := strings.ToLower(strings.TrimSpace(p.Name))
 			if k == "" {
@@ -509,7 +525,15 @@ func providerNames(groups ...[]provider) ([]string, []string) {
 				seen[k] = true
 				all = append(all, p.Name)
 			}
-			if i == 0 && !paidSeen[k] {
+		}
+	}
+	for _, group := range [][]provider{rent, buy} {
+		for _, p := range group {
+			k := strings.ToLower(strings.TrimSpace(p.Name))
+			if k == "" || nonPaid[k] || paidSeen[k] {
+				continue
+			}
+			if !paidSeen[k] {
 				paidSeen[k] = true
 				paid = append(paid, p.Name)
 			}

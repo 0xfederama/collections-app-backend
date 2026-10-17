@@ -61,7 +61,7 @@ func TestF013B2_MockFixtureIsAvailableWithoutKeyOnlyForExactQuery(t *testing.T) 
 
 func TestF013B2_SuggestionsUseLanguageAndPreserveRanking(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/3/search/movie" || r.URL.Query().Get("query") != "odissea" || r.URL.Query().Get("language") != "en-US" {
+		if r.URL.Path != "/3/search/movie" || r.URL.Query().Get("query") != "odissea" || r.URL.Query().Get("language") != "it-IT" {
 			t.Errorf("upstream request = %s?%s", r.URL.Path, r.URL.RawQuery)
 		}
 		if r.URL.Query().Get("api_key") != "test-key" {

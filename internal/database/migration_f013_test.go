@@ -77,3 +77,66 @@ func TestF013B4B5_MigrationDirectorAndMetadataLanguage(t *testing.T) {
 		t.Errorf("re-up metadata_language = %q, want en-US", language)
 	}
 }
+
+func TestMetadataLanguageItalianDefaultMigration(t *testing.T) {
+	ctx := t.Context()
+	dsn := newDatabase(t)
+	m := newMigrate(t, dsn)
+	if err := m.Migrate(12); err != nil {
+		t.Fatalf("migrate to 12: %v", err)
+	}
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+
+	const existingWorkspaceID = "00000000-0000-0000-0000-000000000513"
+	if _, err := pool.Exec(ctx, `INSERT INTO workspaces (id, name) VALUES ($1, 'Existing')`, existingWorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO workspace_settings (workspace_id) VALUES ($1)`, existingWorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Steps(1); err != nil {
+		t.Fatalf("migrate up 000013: %v", err)
+	}
+	var language string
+	if err := pool.QueryRow(ctx, `SELECT metadata_language FROM workspace_settings WHERE workspace_id = $1`, existingWorkspaceID).Scan(&language); err != nil {
+		t.Fatal(err)
+	}
+	if language != "en-US" {
+		t.Errorf("existing workspace metadata_language = %q, want en-US", language)
+	}
+
+	const newWorkspaceID = "00000000-0000-0000-0000-000000000514"
+	if _, err := pool.Exec(ctx, `INSERT INTO workspaces (id, name) VALUES ($1, 'New')`, newWorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO workspace_settings (workspace_id) VALUES ($1)`, newWorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT metadata_language FROM workspace_settings WHERE workspace_id = $1`, newWorkspaceID).Scan(&language); err != nil {
+		t.Fatal(err)
+	}
+	if language != "it-IT" {
+		t.Errorf("new workspace metadata_language = %q, want it-IT", language)
+	}
+
+	if err := m.Steps(-1); err != nil {
+		t.Fatalf("migrate down 000013: %v", err)
+	}
+	const revertedWorkspaceID = "00000000-0000-0000-0000-000000000515"
+	if _, err := pool.Exec(ctx, `INSERT INTO workspaces (id, name) VALUES ($1, 'Reverted')`, revertedWorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO workspace_settings (workspace_id) VALUES ($1)`, revertedWorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT metadata_language FROM workspace_settings WHERE workspace_id = $1`, revertedWorkspaceID).Scan(&language); err != nil {
+		t.Fatal(err)
+	}
+	if language != "en-US" {
+		t.Errorf("reverted default metadata_language = %q, want en-US", language)
+	}
+}

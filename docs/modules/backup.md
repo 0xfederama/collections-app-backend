@@ -34,3 +34,4 @@ Backs up Postgres and the uploaded images (`appdata` volume) together as one che
 - Restored files are chowned to 65532 (the api's nonroot user).
 - `POSTGRES_PASSWORD`, `API_PORT`, `COMPOSE_PROJECT_NAME` come from the environment, else `.env`.
 - Checksums detect corruption, not a forged archive: restore only backups you made. Backups are unencrypted; `backups/` is gitignored.
+- Backups contain imported TMDB data. Retire each backup within six months under [TMDB API terms](https://www.themoviedb.org/api-terms-of-use); production backup retention is configured separately.

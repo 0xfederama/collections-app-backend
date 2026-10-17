@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.8.0
+  version: 0.9.0
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -38,6 +38,8 @@ tags:
     description: Lists, their moves and ordering.
   - name: items
     description: Items and their metadata.
+  - name: tmdb
+    description: Optional movie and TV metadata lookup through the server-side TMDB integration.
   - name: image
     description: Item images (upload or URL) and attachment files.
   - name: content
@@ -105,6 +107,7 @@ paths:
       description: |
         Requires `If-Match` (`"s-N"`). Lowering `markdown_history_limit` prunes on the next save per item, not immediately.
         `trash_retention_days` (F012-B3): absent = unchanged, `null` = off, otherwise 1 to 365. Setting it does not purge at once; the daily job does.
+        `metadata_language` controls the locale used for TMDB suggestions and imported metadata.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -132,6 +135,40 @@ paths:
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/tmdb/suggestions:
+    get:
+      tags: [tmdb]
+      operationId: listTmdbSuggestions
+      summary: Suggest movie or TV matches
+      description: |
+        Searches TMDB using the workspace's `metadata_language`. When the server has no TMDB key, returns
+        `{ "available": false, "results": [] }`; this endpoint does not fail merely because lookup is disabled.
+        Results retain TMDB's ranking. The returned poster URL is for suggestion display only and is not an item image.
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/TmdbKind' }
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 300 }
+      responses:
+        '200':
+          description: Ranked suggestions, or an unavailable result when no key is configured
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TmdbSuggestions' }
+              examples:
+                matches:
+                  value:
+                    available: true
+                    results:
+                      - { tmdb_id: 603, title: The Matrix, original_title: The Matrix, year: 1999, poster_url: 'https://image.tmdb.org/t/p/w342/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg', overview: A computer hacker learns the truth. }
+                disabled: { value: { available: false, results: [] } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '503': { $ref: '#/components/responses/LookupUnavailable' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/v1/tree:
     get:
@@ -499,11 +536,13 @@ paths:
       operationId: listItems
       summary: List the items of a list
       description: |
-        Sorted by `sort` (default: the list's `sort_mode`), tie-break `id`. `q` filters by title. `sort=kind_key` sorts by the kind's
+        Sorted by `sort` (default: the list's `sort_mode`), tie-break `id`. `q` filters by title and, on movie lists, director. `sort=kind_key` sorts by the kind's
         sort key ascending, empty values last (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
         car: `power_hp`, camera: `megapixels`); on a `generic` list it returns `400 invalid_parameter`.
         `sort=price` sorts by `price.min` ascending, items without a price last, ties by title then `id` (no currency conversion); on a list
         whose kind has no price (generic, movie, tv_show) it returns `400 invalid_parameter` (F009-B1).
+        `sort=director` is available only on movie lists, sorts case-insensitively with empty directors last, and returns
+        `400 invalid_parameter` on every other kind.
       parameters:
         - name: sort
           in: query
@@ -511,7 +550,7 @@ paths:
           schema: { $ref: '#/components/schemas/SortMode' }
         - name: q
           in: query
-          description: Case-insensitive title filter.
+          description: Case-insensitive title filter; on movie lists it also matches `metadata.director`.
           schema: { type: string, minLength: 1, maxLength: 200 }
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
@@ -535,6 +574,10 @@ paths:
         content are set through their own endpoints after creation. `metadata` is validated against the list's kind (see the `*Metadata` schemas).
         `price` is either `{amount, currency}` (single price) or `{min, max, currency}` (range). A `price` on an item of a kind without a price
         (`generic`, `movie` or `tv_show`; F009-B1) is rejected with `422 validation_failed` on `price` (`null` is fine).
+        For movie and TV lists, `lookup` defaults to `true`: the server searches by title and applies the first result. Send `tmdb_id` to
+        select a known suggestion. Send `lookup: false` to create the item exactly as supplied. Lookup fields are ignored on other kinds.
+        If automatic lookup finds no match, the item is still created unchanged. If lookup was explicitly requested but unavailable, the
+        request returns `503 lookup_disabled` or `503 upstream_unavailable` and no item is created.
       requestBody:
         required: true
         content:
@@ -566,6 +609,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
+        '503': { $ref: '#/components/responses/LookupUnavailable' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/v1/lists/{id}/items/order:
     parameters:
@@ -665,6 +709,54 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '412': { $ref: '#/components/responses/VersionConflict' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/items/{id}/lookup:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [tmdb]
+      operationId: lookupItemMetadata
+      summary: Fill or replace an item's TMDB metadata
+      description: |
+        Requires `If-Match` (`"i-N"`) and is available only for movie and TV items. `fill` preserves every non-empty user value and
+        fills empty fields; `rematch` searches from the current title unless `tmdb_id` selects a suggestion, then replaces the title and
+        all fields fetched from TMDB; `refresh` uses the stored `metadata.tmdb_id` unless `tmdb_id` is supplied and likewise replaces fetched
+        fields. All modes preserve an existing item image. A poster is stored through the normal image pipeline only when the item has no image.
+        The default mode is `fill`. When a search has no result, the operation returns the unchanged item and its current ETag.
+        An explicit lookup while the integration is disabled or TMDB cannot be reached returns `503 lookup_disabled` or
+        `503 upstream_unavailable` respectively.
+        Imported fields and lookup-owned posters retain server-side provenance. Maintenance refreshes owned values after five calendar months;
+        at six months, a value that still cannot be refreshed is removed only when it still equals its imported snapshot. User edits and
+        user-supplied images are preserved. Poster age is tracked separately from metadata age. An item's `lookup_disabled` flag stops automatic
+        refresh and lets its owned values expire under the same rules.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LookupItemRequest' }
+            examples:
+              fill: { value: { mode: fill } }
+              chosenMatch: { value: { mode: rematch, tmdb_id: 603 } }
+              refresh: { value: { mode: refresh } }
+      responses:
+        '200':
+          description: The updated item, or the unchanged item when no result matched
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Item' }
+              examples:
+                movie: { $ref: '#/components/examples/ItemMovie' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/VersionConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '503': { $ref: '#/components/responses/LookupUnavailable' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/v1/items/{id}/move:
     parameters:
@@ -1303,6 +1395,26 @@ components:
                 code: validation_failed
                 errors:
                   - { field: price.max, message: must be greater than or equal to price.min }
+    LookupUnavailable:
+      description: An explicit TMDB lookup cannot run because lookup is disabled or the upstream service is unavailable
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            lookup_disabled:
+              value:
+                type: https://collection-app.invalid/problems/lookup-disabled
+                title: Lookup disabled
+                status: 503
+                detail: TMDB lookup is not configured on this server.
+                code: lookup_disabled
+            upstream_unavailable:
+              value:
+                type: https://collection-app.invalid/problems/upstream-unavailable
+                title: Lookup unavailable
+                status: 503
+                detail: TMDB is temporarily unavailable. Try again later.
+                code: upstream_unavailable
     PreconditionRequired:
       description: '`If-Match` is missing (or `*`)'
       content:
@@ -1335,6 +1447,8 @@ components:
       value:
         workspace_name: Our Collection
         streaming_country_code: IT
+        metadata_language: en-US
+        lookup_available: true
         markdown_history_limit: 20
         trash_retention_days: null
         version: 4
@@ -1659,6 +1773,8 @@ components:
             - payload_too_large
             - unsupported_media_type
             - validation_failed
+            - lookup_disabled
+            - upstream_unavailable
             - precondition_required
             - internal
         request_id: { type: string, description: Only on `internal` problems. Matches the `X-Request-Id` header. }
@@ -1787,10 +1903,12 @@ components:
     # ---- Settings, tree ----
     Settings:
       type: object
-      required: [workspace_name, streaming_country_code, markdown_history_limit, trash_retention_days, version]
+      required: [workspace_name, streaming_country_code, metadata_language, lookup_available, markdown_history_limit, trash_retention_days, version]
       properties:
         workspace_name: { type: string, minLength: 1, maxLength: 200 }
         streaming_country_code: { type: string, pattern: '^[A-Z]{2}$' }
+        metadata_language: { $ref: '#/components/schemas/MetadataLanguage' }
+        lookup_available: { type: boolean, readOnly: true, description: Whether this server has TMDB lookup configured. }
         markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
         trash_retention_days: { type: integer, nullable: true, minimum: 1, maximum: 365 }
         version: { type: integer }
@@ -1800,8 +1918,14 @@ components:
       properties:
         workspace_name: { type: string, minLength: 1, maxLength: 200 }
         streaming_country_code: { type: string, pattern: '^[A-Z]{2}$' }
+        metadata_language: { $ref: '#/components/schemas/MetadataLanguage' }
         markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
         trash_retention_days: { type: integer, nullable: true, minimum: 1, maximum: 365 }
+    MetadataLanguage:
+      type: string
+      pattern: '^[a-z]{2}(-[A-Z]{2})?$'
+      example: en-US
+      description: ISO 639-1 language (`xx`), optionally with an uppercase region (`xx-YY`), passed to TMDB.
     Tree:
       type: object
       required: [folders, lists]
@@ -1858,13 +1982,14 @@ components:
       enum: [compact, thumbnail, grid]
     SortMode:
       type: string
-      enum: [manual, title, updated, kind_key, price]
+      enum: [manual, title, updated, kind_key, price, director]
       description: |
         `kind_key` sorts by the kind's sort key (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
         car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists.
         `price` is valid only on the kinds that have a price (motorcycle, car, camera; F009-B1), not on `generic`, `movie` or `tv_show`.
         It sorts by the lowest price (`price.min`) ascending, items without a price last, ties by title and then id. Currencies are not
         converted, so mixed currencies compare by amount only. The manual order is kept when the mode changes.
+        `director` is valid only on movie lists. It sorts the director text case-insensitively, empty values last, then title and id.
     PinnedFields:
       type: array
       nullable: true
@@ -1875,7 +2000,8 @@ components:
         `{under, right}` slots of F-002). `null` means the kind default (the web app owns the defaults). `[]` pins nothing, which is different
         from `null`, and a single-element list is valid. Allowed keys: the keys of the kind's `metadata` fields, plus `price` **only** on the
         kinds that have one (motorcycle, car, camera; F009-B1). `generic` has no key at all, and `movie` and `tv_show` have no `price`. At most
-        2 unique keys (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `kind` resets it to `null`.
+        2 unique keys (`422 validation_failed` on `pinned_fields[i]`), else `422`. Provider bookkeeping fields (`tmdb_id`,
+        `lookup_disabled`) are never pinnable. Changing the list's `kind` resets it to `null`.
       example: [release_year, runtime_minutes]
     ListIcon:
       type: string
@@ -2109,6 +2235,14 @@ components:
       required: [title]
       properties:
         title: { type: string, minLength: 1, maxLength: 300 }
+        lookup:
+          type: boolean
+          default: true
+          description: For movie and TV lists, run TMDB lookup during creation. Ignored on other kinds.
+        tmdb_id:
+          type: integer
+          minimum: 1
+          description: Optional selected TMDB suggestion. Used only when lookup runs on a movie or TV item.
         price: { $ref: '#/components/schemas/PriceInput' }
         website: { type: string, nullable: true, maxLength: 2048 }
         metadata:
@@ -2141,6 +2275,39 @@ components:
           type: array
           maxItems: 10000
           items: { type: string, format: uuid }
+    LookupItemRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        mode:
+          type: string
+          enum: [fill, rematch, refresh]
+          default: fill
+        tmdb_id:
+          type: integer
+          minimum: 1
+          description: Selects a known TMDB match. Without it, fill/rematch searches by title and refresh uses stored metadata.tmdb_id.
+    TmdbKind:
+      type: string
+      enum: [movie, tv_show]
+    TmdbSuggestion:
+      type: object
+      required: [tmdb_id, title, original_title, year, poster_url, overview]
+      properties:
+        tmdb_id: { type: integer, minimum: 1 }
+        title: { type: string }
+        original_title: { type: string }
+        year: { type: integer, nullable: true }
+        poster_url: { type: string, format: uri, nullable: true }
+        overview: { type: string }
+    TmdbSuggestions:
+      type: object
+      required: [available, results]
+      properties:
+        available: { type: boolean }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/TmdbSuggestion' }
     # ---- Kind metadata (F-007: trimmed to the kept fields; sort key marked). All keys optional; text is trimmed, max 100 chars unless noted. ----
     Streaming:
       type: object
@@ -2169,8 +2336,11 @@ components:
       properties:
         release_year: { type: integer, minimum: 1870, maximum: 2100 }
         runtime_minutes: { type: integer, minimum: 1, maximum: 1000 }
+        director: { type: string, minLength: 1, maxLength: 300, description: Movie directors joined with a comma when TMDB returns several. }
         imdb_url: { type: string, pattern: '^https://(www\.|m\.)?imdb\.com/title/tt\d{7,10}/?$' }
         streaming: { $ref: '#/components/schemas/Streaming' }
+        tmdb_id: { type: integer, minimum: 1, description: Stored provider identity used by refresh. }
+        lookup_disabled: { type: boolean, description: Per-item opt-out from automatic TMDB lookup. }
     TvShowMetadata:
       type: object
       additionalProperties: false
@@ -2182,6 +2352,8 @@ components:
         episode_minutes: { type: integer, minimum: 1, maximum: 1000, description: Average episode duration in minutes. }
         imdb_url: { type: string, pattern: '^https://(www\.|m\.)?imdb\.com/title/tt\d{7,10}/?$' }
         streaming: { $ref: '#/components/schemas/Streaming' }
+        tmdb_id: { type: integer, minimum: 1, description: Stored provider identity used by refresh. }
+        lookup_disabled: { type: boolean, description: Per-item opt-out from automatic TMDB lookup. }
     MotorcycleMetadata:
       type: object
       additionalProperties: false

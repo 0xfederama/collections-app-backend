@@ -15,6 +15,8 @@ import (
 type settingsBody struct {
 	WorkspaceName        string `json:"workspace_name"`
 	StreamingCountryCode string `json:"streaming_country_code"`
+	MetadataLanguage     string `json:"metadata_language"`
+	LookupAvailable      bool   `json:"lookup_available"`
 	MarkdownHistoryLimit int    `json:"markdown_history_limit"`
 	// TrashRetentionDays is nil (JSON null) when off, else the decoded float64.
 	TrashRetentionDays any `json:"trash_retention_days"`
@@ -31,7 +33,7 @@ func settingsRouter(t *testing.T) http.Handler {
 	}
 	return newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(),
-		WorkspaceID: id, Settings: workspace.NewService(pool),
+		WorkspaceID: id, Settings: workspace.NewService(pool), LookupAvailable: true,
 	})
 }
 
@@ -62,7 +64,7 @@ func TestAT02_GetSettings(t *testing.T) {
 	if got := rec.Header().Get("ETag"); got != `"s-1"` {
 		t.Errorf("ETag = %q, want \"s-1\"", got)
 	}
-	want := settingsBody{"Our Collection", "IT", 20, nil, 1}
+	want := settingsBody{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "en-US", LookupAvailable: true, MarkdownHistoryLimit: 20, Version: 1}
 	if got := decodeSettings(t, rec); got != want {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}
@@ -71,14 +73,14 @@ func TestAT02_GetSettings(t *testing.T) {
 func TestAT02_PatchSettings(t *testing.T) {
 	h := settingsRouter(t)
 
-	rec := patchSettings(t, h, `"s-1"`, `{"workspace_name":" Home ","streaming_country_code":"US","markdown_history_limit":0}`)
+	rec := patchSettings(t, h, `"s-1"`, `{"workspace_name":" Home ","streaming_country_code":"US","metadata_language":"it-IT","markdown_history_limit":0}`)
 	if rec.Code != 200 {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body)
 	}
 	if got := rec.Header().Get("ETag"); got != `"s-2"` {
 		t.Errorf("ETag = %q, want \"s-2\"", got)
 	}
-	want := settingsBody{"Home", "US", 0, nil, 2}
+	want := settingsBody{WorkspaceName: "Home", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, Version: 2}
 	if got := decodeSettings(t, rec); got != want {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}
@@ -96,7 +98,7 @@ func TestAT02_PatchSettings(t *testing.T) {
 	}
 
 	get := do(t, h, req{method: "GET", path: "/api/v1/settings"})
-	if got, want := decodeSettings(t, get), (settingsBody{"Ours", "US", 0, nil, 3}); got != want {
+	if got, want := decodeSettings(t, get), (settingsBody{WorkspaceName: "Ours", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, Version: 3}); got != want {
 		t.Errorf("GET after patches = %+v, want %+v", got, want)
 	}
 }
@@ -123,6 +125,7 @@ func TestAT02_PatchSettingsValidation(t *testing.T) {
 	}{
 		{"empty name", `{"workspace_name":"  "}`, []string{"workspace_name"}},
 		{"bad country", `{"streaming_country_code":"it"}`, []string{"streaming_country_code"}},
+		{"bad metadata language", `{"metadata_language":"IT-it"}`, []string{"metadata_language"}},
 		{"limit too high", `{"markdown_history_limit":201}`, []string{"markdown_history_limit"}},
 		{"several", `{"workspace_name":"","streaming_country_code":"x","markdown_history_limit":-1}`,
 			[]string{"workspace_name", "streaming_country_code", "markdown_history_limit"}},
@@ -149,6 +152,21 @@ func TestAT02_PatchSettingsValidation(t *testing.T) {
 	t.Run("missing If-Match", func(t *testing.T) {
 		wantProblem(t, patchSettings(t, h, "", `{"streaming_country_code":"US"}`), 428, "precondition_required")
 	})
+}
+
+func TestF013B5_MetadataLanguageAndLookupAvailability(t *testing.T) {
+	h := settingsRouter(t)
+	rec := patchSettings(t, h, `"s-1"`, `{"metadata_language":"fr"}`)
+	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-2"` {
+		t.Fatalf("patch: status=%d ETag=%q body=%s", rec.Code, rec.Header().Get("ETag"), rec.Body)
+	}
+	if got := decodeSettings(t, rec); got.MetadataLanguage != "fr" || !got.LookupAvailable || got.Version != 2 {
+		t.Fatalf("body = %+v, want fr, available, version 2", got)
+	}
+	rec = patchSettings(t, h, `"s-2"`, `{"metadata_language":"fr"}`)
+	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-2"` {
+		t.Fatalf("no-op: status=%d ETag=%q body=%s", rec.Code, rec.Header().Get("ETag"), rec.Body)
+	}
 }
 
 func TestF012_TrashRetentionSetting(t *testing.T) {

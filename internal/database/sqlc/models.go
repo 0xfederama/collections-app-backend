@@ -87,6 +87,24 @@ type List struct {
 	IconColor    *string
 }
 
+type TmdbImport struct {
+	WorkspaceID        uuid.UUID
+	ItemID             uuid.UUID
+	TmdbID             int32
+	Kind               string
+	ImportedFields     []byte
+	ImportedTitle      *string
+	OriginalTitle      string
+	AttachmentID       uuid.NullUUID
+	PosterPath         *string
+	PosterFetchedAt    *time.Time
+	PosterRefreshAfter *time.Time
+	PosterExpiresAt    *time.Time
+	FetchedAt          time.Time
+	RefreshAfter       time.Time
+	ExpiresAt          time.Time
+}
+
 type TrashBatch struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
@@ -113,4 +131,5 @@ type WorkspaceSetting struct {
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 	TrashRetentionDays   *int32
+	MetadataLanguage     string
 }

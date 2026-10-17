@@ -33,7 +33,7 @@ const (
 
 var (
 	displayModes = map[string]bool{"compact": true, "thumbnail": true, "grid": true}
-	sortModes    = map[string]bool{"manual": true, "title": true, "updated": true, "kind_key": true, "price": true}
+	sortModes    = map[string]bool{"manual": true, "title": true, "updated": true, "kind_key": true, "price": true, "director": true}
 )
 
 // Defaults for a list created without display_mode / sort_mode.

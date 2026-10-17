@@ -249,6 +249,11 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 				resetSort = true
 				fieldsSet = true
 			}
+			if p.SortMode == nil && sortMode == "director" && *p.Kind != kinds.Movie {
+				sortMode = "manual"
+				resetSort = true
+				fieldsSet = true
+			}
 			if errs := sortKindErrors(*p.Kind, sortMode, field); len(errs) > 0 {
 				return apperr.Validation(errs...)
 			}
@@ -422,6 +427,9 @@ func kindErrors(kind *string) []apperr.FieldError {
 // and the price sort mode on a kind without a price (generic, movie and tv_show;
 // F009-B1, which subsumes F008-B1 for generic).
 func sortKindErrors(kind, sortMode, field string) []apperr.FieldError {
+	if sortMode == "director" && kind != kinds.Movie {
+		return []apperr.FieldError{{Field: field, Message: "director is available only on movie lists"}}
+	}
 	if sortMode == "price" && !kinds.HasPrice(kind) {
 		return []apperr.FieldError{{Field: field, Message: "price is not available on lists of this kind"}}
 	}
@@ -467,7 +475,7 @@ func enumErrors(displayMode, sortMode *string) []apperr.FieldError {
 		errs = append(errs, apperr.FieldError{Field: "display_mode", Message: "must be one of compact, thumbnail, grid"})
 	}
 	if sortMode != nil && !sortModes[*sortMode] {
-		errs = append(errs, apperr.FieldError{Field: "sort_mode", Message: "must be one of manual, title, updated, kind_key, price"})
+		errs = append(errs, apperr.FieldError{Field: "sort_mode", Message: "must be one of manual, title, updated, kind_key, price, director"})
 	}
 	return errs
 }

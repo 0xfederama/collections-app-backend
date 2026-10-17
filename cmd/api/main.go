@@ -20,8 +20,10 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/lookup"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
+	"github.com/0xfederama/collections-app-backend/internal/tmdb"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
@@ -76,20 +78,31 @@ func run() error {
 	go imageSvc.RunSweeper(ctx, images.SweepInterval) // stops when ctx is cancelled on shutdown
 	trashSvc := trash.New(pool, store, clock.System{}, logger, workspaceID)
 	go trashSvc.RunAutoPurge(ctx, 24*time.Hour) // stops when ctx is cancelled on shutdown
+	tmdbClient := tmdb.New(cfg.TMDBAPIKey)
+	settingsSvc := workspace.NewService(pool)
+	lookupStore := lookup.NewStore(pool, store, clock.System{}, itemSvc, logger, workspaceID)
+	lookupSvc := lookup.New(tmdbClient, lookupStore, itemSvc, settingsSvc, clock.System{}, workspaceID)
+	if _, err := lookupStore.Maintain(ctx, lookupSvc.RefreshOwned); err != nil {
+		logger.Warn("TMDB retention maintenance failed at startup", "err", err)
+	}
+	go lookupStore.Run(ctx, 24*time.Hour, lookupSvc.RefreshOwned) // stops when ctx is cancelled on shutdown
 
 	handler, err := httpapi.NewRouter(httpapi.Deps{
-		DB:          pool,
-		DataDir:     cfg.DataDir,
-		Logger:      logger,
-		Clock:       clock.System{},
-		WorkspaceID: workspaceID,
-		Settings:    workspace.NewService(pool),
-		Tree:        tree.New(pool, clock.System{}, workspaceID),
-		Items:       itemSvc,
-		Content:     content.New(pool, clock.System{}, workspaceID),
-		Search:      search.New(pool, workspaceID),
-		Images:      imageSvc,
-		Trash:       trashSvc,
+		DB:              pool,
+		DataDir:         cfg.DataDir,
+		Logger:          logger,
+		Clock:           clock.System{},
+		WorkspaceID:     workspaceID,
+		Settings:        settingsSvc,
+		TMDB:            tmdbClient,
+		Lookup:          lookupSvc,
+		LookupAvailable: tmdbClient.Enabled(),
+		Tree:            tree.New(pool, clock.System{}, workspaceID),
+		Items:           itemSvc,
+		Content:         content.New(pool, clock.System{}, workspaceID),
+		Search:          search.New(pool, workspaceID),
+		Images:          imageSvc,
+		Trash:           trashSvc,
 	})
 	if err != nil {
 		return err

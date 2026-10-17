@@ -16,7 +16,7 @@ func (s *Server) GetSettings(ctx context.Context, _ oapi.GetSettingsRequestObjec
 		return nil, err
 	}
 	return oapi.GetSettings200JSONResponse{
-		Body:    settingsBody(cur),
+		Body:    settingsBody(cur, s.deps.LookupAvailable),
 		Headers: oapi.GetSettings200ResponseHeaders{ETag: etag.Format(etag.Settings, cur.Version)},
 	}, nil
 }
@@ -26,6 +26,7 @@ func (s *Server) UpdateSettings(ctx context.Context, req oapi.UpdateSettingsRequ
 	updated, err := s.deps.Settings.Update(ctx, s.deps.WorkspaceID, IfMatchVersion(ctx), workspace.SettingsPatch{
 		WorkspaceName:        req.Body.WorkspaceName,
 		StreamingCountryCode: req.Body.StreamingCountryCode,
+		MetadataLanguage:     req.Body.MetadataLanguage,
 		MarkdownHistoryLimit: req.Body.MarkdownHistoryLimit,
 		TrashRetentionDays:   optionalRetention(req.Body.TrashRetentionDays),
 	})
@@ -33,7 +34,7 @@ func (s *Server) UpdateSettings(ctx context.Context, req oapi.UpdateSettingsRequ
 		return nil, err
 	}
 	return oapi.UpdateSettings200JSONResponse{
-		Body:    settingsBody(updated),
+		Body:    settingsBody(updated, s.deps.LookupAvailable),
 		Headers: oapi.UpdateSettings200ResponseHeaders{ETag: etag.Format(etag.Settings, updated.Version)},
 	}, nil
 }
@@ -50,7 +51,7 @@ func optionalRetention(n nullable.Nullable[int]) workspace.Optional[int] {
 	return workspace.Optional[int]{Set: true}
 }
 
-func settingsBody(s workspace.Settings) oapi.Settings {
+func settingsBody(s workspace.Settings, lookupAvailable bool) oapi.Settings {
 	// The retention is always set: an unset Nullable would marshal as 0, not null.
 	retention := nullable.NewNullNullable[int]()
 	if s.TrashRetentionDays != nil {
@@ -59,6 +60,8 @@ func settingsBody(s workspace.Settings) oapi.Settings {
 	return oapi.Settings{
 		WorkspaceName:        s.WorkspaceName,
 		StreamingCountryCode: s.StreamingCountryCode,
+		MetadataLanguage:     s.MetadataLanguage,
+		LookupAvailable:      &lookupAvailable,
 		MarkdownHistoryLimit: s.MarkdownHistoryLimit,
 		TrashRetentionDays:   retention,
 		Version:              s.Version,

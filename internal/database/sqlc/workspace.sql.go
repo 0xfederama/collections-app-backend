@@ -12,7 +12,7 @@ import (
 )
 
 const getSettings = `-- name: GetSettings :one
-SELECT w.name AS workspace_name, s.streaming_country_code, s.markdown_history_limit, s.trash_retention_days, s.version
+SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.version
 FROM workspace_settings s
 JOIN workspaces w ON w.id = s.workspace_id
 WHERE s.workspace_id = $1
@@ -21,6 +21,7 @@ WHERE s.workspace_id = $1
 type GetSettingsRow struct {
 	WorkspaceName        string
 	StreamingCountryCode string
+	MetadataLanguage     string
 	MarkdownHistoryLimit int32
 	TrashRetentionDays   *int32
 	Version              int32
@@ -32,6 +33,7 @@ func (q *Queries) GetSettings(ctx context.Context, workspaceID uuid.UUID) (GetSe
 	err := row.Scan(
 		&i.WorkspaceName,
 		&i.StreamingCountryCode,
+		&i.MetadataLanguage,
 		&i.MarkdownHistoryLimit,
 		&i.TrashRetentionDays,
 		&i.Version,
@@ -85,7 +87,7 @@ func (q *Queries) ListWorkspaceIDs(ctx context.Context) ([]uuid.UUID, error) {
 }
 
 const lockSettings = `-- name: LockSettings :one
-SELECT w.name AS workspace_name, s.streaming_country_code, s.markdown_history_limit, s.trash_retention_days, s.version
+SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.version
 FROM workspace_settings s
 JOIN workspaces w ON w.id = s.workspace_id
 WHERE s.workspace_id = $1
@@ -95,6 +97,7 @@ FOR UPDATE OF s
 type LockSettingsRow struct {
 	WorkspaceName        string
 	StreamingCountryCode string
+	MetadataLanguage     string
 	MarkdownHistoryLimit int32
 	TrashRetentionDays   *int32
 	Version              int32
@@ -107,6 +110,7 @@ func (q *Queries) LockSettings(ctx context.Context, workspaceID uuid.UUID) (Lock
 	err := row.Scan(
 		&i.WorkspaceName,
 		&i.StreamingCountryCode,
+		&i.MetadataLanguage,
 		&i.MarkdownHistoryLimit,
 		&i.TrashRetentionDays,
 		&i.Version,
@@ -128,8 +132,9 @@ func (q *Queries) LockWorkspaceBootstrap(ctx context.Context, lockKey int64) err
 const updateSettings = `-- name: UpdateSettings :exec
 UPDATE workspace_settings
 SET streaming_country_code = $2,
-    markdown_history_limit = $3,
-    trash_retention_days   = $4,
+    metadata_language      = $3,
+    markdown_history_limit = $4,
+    trash_retention_days   = $5,
     version                = version + 1,
     updated_at             = now()
 WHERE workspace_id = $1
@@ -138,6 +143,7 @@ WHERE workspace_id = $1
 type UpdateSettingsParams struct {
 	WorkspaceID          uuid.UUID
 	StreamingCountryCode string
+	MetadataLanguage     string
 	MarkdownHistoryLimit int32
 	TrashRetentionDays   *int32
 }
@@ -146,6 +152,7 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 	_, err := q.db.Exec(ctx, updateSettings,
 		arg.WorkspaceID,
 		arg.StreamingCountryCode,
+		arg.MetadataLanguage,
 		arg.MarkdownHistoryLimit,
 		arg.TrashRetentionDays,
 	)

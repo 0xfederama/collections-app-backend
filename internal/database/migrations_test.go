@@ -30,7 +30,7 @@ const (
 // schemaTables are the tables created by 000001 (DATA_MODEL §2), in FK order.
 var schemaTables = []string{
 	"workspaces", "workspace_settings", "trash_batches", "folders", "lists",
-	"attachments", "items", "item_content_versions",
+	"attachments", "items", "item_content_versions", "tmdb_imports",
 }
 
 var (
@@ -212,6 +212,10 @@ func seedAllTables(ctx context.Context, tx pgx.Tx) error {
 		           '00000000-0000-0000-0000-000000000003', 'I', '00000000-0000-0000-0000-000000000004', 0)`,
 		`INSERT INTO item_content_versions (item_id, version, body, size_bytes, sha256)
 		   VALUES ('00000000-0000-0000-0000-000000000005', 1, 'hi', 2, '\x00')`,
+		`INSERT INTO tmdb_imports (workspace_id, item_id, tmdb_id, kind, imported_fields, original_title,
+		                           fetched_at, refresh_after, expires_at)
+		   VALUES ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000005', 603,
+		           'movie', '{"release_year":1999}', 'I', now(), now() + interval '5 months', now() + interval '6 months')`,
 		`INSERT INTO trash_batches (id, workspace_id, root_type, root_id, root_name, former_path)
 		   VALUES ('00000000-0000-0000-0000-000000000006', '00000000-0000-0000-0000-000000000001',
 		           'list', '00000000-0000-0000-0000-000000000007', 'Trashed', '[]')`,

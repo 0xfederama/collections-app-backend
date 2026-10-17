@@ -12,7 +12,7 @@ import (
 func ptr[T any](v T) *T { return &v }
 
 func TestService_Update(t *testing.T) {
-	base := workspace.Settings{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MarkdownHistoryLimit: 20, Version: 1}
+	base := workspace.Settings{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "en-US", MarkdownHistoryLimit: 20, Version: 1}
 	tests := []struct {
 		name  string
 		patch workspace.SettingsPatch
@@ -20,12 +20,13 @@ func TestService_Update(t *testing.T) {
 	}{
 		{"name is trimmed", workspace.SettingsPatch{WorkspaceName: ptr("  Home  ")}, with(base, func(s *workspace.Settings) { s.WorkspaceName = "Home"; s.Version = 2 })},
 		{"country", workspace.SettingsPatch{StreamingCountryCode: ptr("US")}, with(base, func(s *workspace.Settings) { s.StreamingCountryCode = "US"; s.Version = 2 })},
+		{"metadata language", workspace.SettingsPatch{MetadataLanguage: ptr("it-IT")}, with(base, func(s *workspace.Settings) { s.MetadataLanguage = "it-IT"; s.Version = 2 })},
 		{"limit zero", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(0)}, with(base, func(s *workspace.Settings) { s.MarkdownHistoryLimit = 0; s.Version = 2 })},
 		{"limit max", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(200)}, with(base, func(s *workspace.Settings) { s.MarkdownHistoryLimit = 200; s.Version = 2 })},
 		{"all fields bump once", workspace.SettingsPatch{WorkspaceName: ptr("X"), StreamingCountryCode: ptr("DE"), MarkdownHistoryLimit: ptr(5)},
-			workspace.Settings{WorkspaceName: "X", StreamingCountryCode: "DE", MarkdownHistoryLimit: 5, Version: 2}},
+			workspace.Settings{WorkspaceName: "X", StreamingCountryCode: "DE", MetadataLanguage: "en-US", MarkdownHistoryLimit: 5, Version: 2}},
 		{"empty patch is a no-op", workspace.SettingsPatch{}, base},
-		{"same values are a no-op", workspace.SettingsPatch{WorkspaceName: ptr(" Our Collection "), StreamingCountryCode: ptr("IT")}, base},
+		{"same values are a no-op", workspace.SettingsPatch{WorkspaceName: ptr(" Our Collection "), StreamingCountryCode: ptr("IT"), MetadataLanguage: ptr("en-US")}, base},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -76,10 +77,13 @@ func TestService_Update_Validation(t *testing.T) {
 		{"name too long", workspace.SettingsPatch{WorkspaceName: ptr(string(long))}, []string{"workspace_name"}},
 		{"country lowercase", workspace.SettingsPatch{StreamingCountryCode: ptr("it")}, []string{"streaming_country_code"}},
 		{"country three letters", workspace.SettingsPatch{StreamingCountryCode: ptr("ITA")}, []string{"streaming_country_code"}},
+		{"language uppercase", workspace.SettingsPatch{MetadataLanguage: ptr("EN")}, []string{"metadata_language"}},
+		{"language lowercase region", workspace.SettingsPatch{MetadataLanguage: ptr("it-it")}, []string{"metadata_language"}},
+		{"language malformed", workspace.SettingsPatch{MetadataLanguage: ptr("eng")}, []string{"metadata_language"}},
 		{"limit negative", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(-1)}, []string{"markdown_history_limit"}},
 		{"limit too high", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(201)}, []string{"markdown_history_limit"}},
-		{"every field reported", workspace.SettingsPatch{WorkspaceName: ptr(""), StreamingCountryCode: ptr("x"), MarkdownHistoryLimit: ptr(999)},
-			[]string{"workspace_name", "streaming_country_code", "markdown_history_limit"}},
+		{"every field reported", workspace.SettingsPatch{WorkspaceName: ptr(""), StreamingCountryCode: ptr("x"), MetadataLanguage: ptr("EN_us"), MarkdownHistoryLimit: ptr(999)},
+			[]string{"workspace_name", "streaming_country_code", "metadata_language", "markdown_history_limit"}},
 	}
 	pool := newPool(t)
 	id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")

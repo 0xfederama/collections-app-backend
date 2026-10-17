@@ -92,6 +92,8 @@ func toProblem(err error, requestID string) (p problem, unexpected bool) {
 		conflict   *apperr.ConflictError
 		tooLarge   *apperr.PayloadTooLargeError
 		badMedia   *apperr.UnsupportedMediaTypeError
+		lookupOff  *apperr.LookupDisabledError
+		upstream   *apperr.UpstreamUnavailableError
 		bodyTooBig *http.MaxBytesError
 	)
 	switch {
@@ -118,6 +120,12 @@ func toProblem(err error, requestID string) (p problem, unexpected bool) {
 	case errors.As(err, &badMedia):
 		return newProblem(http.StatusUnsupportedMediaType, "unsupported_media_type", "Unsupported media type",
 			"Only JPEG, PNG and WebP images are accepted."), false
+	case errors.As(err, &lookupOff):
+		return newProblem(http.StatusServiceUnavailable, "lookup_disabled", "Lookup disabled",
+			"TMDB lookup is not configured on this server."), false
+	case errors.As(err, &upstream):
+		return newProblem(http.StatusServiceUnavailable, "upstream_unavailable", "Lookup unavailable",
+			"TMDB is temporarily unavailable. Try again later."), false
 	default:
 		p = newProblem(http.StatusInternalServerError, "internal", "Internal error", "Something went wrong.")
 		p.RequestID = requestID

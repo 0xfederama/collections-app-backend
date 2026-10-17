@@ -13,6 +13,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/etag"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/lookup"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
 
@@ -56,7 +57,13 @@ func (s *Server) CreateItem(ctx context.Context, r oapi.CreateItemRequestObject)
 	if b.Metadata != nil {
 		in.Metadata = *b.Metadata
 	}
-	it, err := s.deps.Items.Create(ctx, r.Id, in)
+	var it items.Item
+	var err error
+	if s.deps.Lookup != nil {
+		it, err = s.deps.Lookup.Create(ctx, r.Id, in, lookup.CreateOptions{Lookup: b.Lookup, TMDBID: b.TmdbId})
+	} else {
+		it, err = s.deps.Items.Create(ctx, r.Id, in)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -67,6 +74,27 @@ func (s *Server) CreateItem(ctx context.Context, r oapi.CreateItemRequestObject)
 	return oapi.CreateItem201JSONResponse{
 		Body:    body,
 		Headers: oapi.CreateItem201ResponseHeaders{ETag: itemETag(it), Location: "/api/v1/items/" + it.ID.String()},
+	}, nil
+}
+
+func (s *Server) LookupItemMetadata(ctx context.Context, r oapi.LookupItemMetadataRequestObject) (oapi.LookupItemMetadataResponseObject, error) {
+	if s.deps.Lookup == nil {
+		return nil, apperr.LookupDisabled()
+	}
+	mode := lookup.ModeFill
+	if r.Body.Mode != nil {
+		mode = lookup.Mode(*r.Body.Mode)
+	}
+	it, err := s.deps.Lookup.Apply(ctx, r.Id, IfMatchVersion(ctx), mode, r.Body.TmdbId)
+	if err != nil {
+		return nil, err
+	}
+	body, err := itemBody(it)
+	if err != nil {
+		return nil, err
+	}
+	return oapi.LookupItemMetadata200JSONResponse{
+		Body: body, Headers: oapi.LookupItemMetadata200ResponseHeaders{ETag: itemETag(it)},
 	}, nil
 }
 

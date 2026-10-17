@@ -78,7 +78,7 @@ func run() error {
 	go imageSvc.RunSweeper(ctx, images.SweepInterval) // stops when ctx is cancelled on shutdown
 	trashSvc := trash.New(pool, store, clock.System{}, logger, workspaceID)
 	go trashSvc.RunAutoPurge(ctx, 24*time.Hour) // stops when ctx is cancelled on shutdown
-	tmdbClient := tmdb.New(cfg.TMDBAPIKey)
+	tmdbClient := tmdb.NewWithOptions(cfg.TMDBAPIKey, tmdb.Options{MockFixture: cfg.TMDBMockFixture})
 	settingsSvc := workspace.NewService(pool)
 	lookupStore := lookup.NewStore(pool, store, clock.System{}, itemSvc, logger, workspaceID)
 	lookupSvc := lookup.New(tmdbClient, lookupStore, itemSvc, settingsSvc, clock.System{}, workspaceID)

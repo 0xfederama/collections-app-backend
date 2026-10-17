@@ -26,6 +26,8 @@ const (
 	maxSearchEntries = 128
 	requestInterval  = 250 * time.Millisecond
 	maxRetryAfter    = time.Hour
+	mockMovieQuery   = "[mock] movie name"
+	mockMovieID      = 900001
 )
 
 var (
@@ -39,6 +41,7 @@ type Options struct {
 	APIBaseURL   string
 	ImageBaseURL string
 	Timeout      time.Duration
+	MockFixture  bool
 }
 
 // Match is one upstream-ranked search result.
@@ -72,6 +75,7 @@ type Client struct {
 	apiBase      *url.URL
 	imageBase    *url.URL
 	timeout      time.Duration
+	mockFixture  bool
 	mu           sync.Mutex
 	nextRequest  time.Time
 	blockedUntil time.Time
@@ -108,20 +112,23 @@ func NewWithOptions(apiKey string, opts Options) *Client {
 		hc = &copy
 	}
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Client{key: strings.TrimSpace(apiKey), http: hc, apiBase: api, imageBase: image, timeout: opts.Timeout, cache: make(map[string]cacheEntry)}
+	return &Client{key: strings.TrimSpace(apiKey), http: hc, apiBase: api, imageBase: image, timeout: opts.Timeout, mockFixture: opts.MockFixture, cache: make(map[string]cacheEntry)}
 }
 
 // Enabled reports whether a server-side TMDB credential is configured.
-func (c *Client) Enabled() bool { return c != nil && c.key != "" }
+func (c *Client) Enabled() bool { return c != nil && (c.key != "" || c.mockFixture) }
 
 // Search returns TMDB results in upstream ranking order, localized by language.
 func (c *Client) Search(ctx context.Context, kind, query, language string) ([]Match, error) {
-	if !c.Enabled() {
-		return nil, ErrDisabled
-	}
 	endpoint, err := kindEndpoint(kind)
 	if err != nil || strings.TrimSpace(query) == "" {
 		return nil, ErrInvalid
+	}
+	if c != nil && c.mockFixture && kind == "movie" && query == mockMovieQuery {
+		return []Match{{ID: mockMovieID, Title: mockMovieQuery, OriginalTitle: mockMovieQuery, Year: 2001, Overview: "Deterministic TMDB fixture for frontend end-to-end tests."}}, nil
+	}
+	if !c.Enabled() {
+		return nil, ErrDisabled
 	}
 	query = strings.TrimSpace(query)
 	key := strings.Join([]string{kind, strings.ToLower(query), language}, "\x00")
@@ -164,6 +171,17 @@ func (c *Client) Search(ctx context.Context, kind, query, language string) ([]Ma
 
 // Details fetches localized metadata, credits, IMDb id and regional providers.
 func (c *Client) Details(ctx context.Context, kind string, id int, language, country string) (Details, error) {
+	if c != nil && c.mockFixture && kind == "movie" && id == mockMovieID {
+		return Details{
+			ID:    mockMovieID,
+			Title: mockMovieQuery,
+			Metadata: map[string]any{
+				"release_year":    2001,
+				"runtime_minutes": 101,
+				"director":        "Mock Director",
+			},
+		}, nil
+	}
 	if !c.Enabled() {
 		return Details{}, ErrDisabled
 	}

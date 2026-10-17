@@ -106,6 +106,9 @@ thrown="$ITEM_ID"
 new_item "$old_list" "Inside a trashed list"
 inside="$ITEM_ID"
 
+call 200 GET /api/v1/settings
+json 200 PATCH /api/v1/settings -H "If-Match: $(etag)" -d '{"metadata_language":"it-IT"}'
+
 set_image "$matrix" "$T/red.png" image/png
 set_image "$runner" "$T/green.jpg" image/jpeg
 set_image "$keyboard" "$T/blue.png" image/png
@@ -122,10 +125,23 @@ save_content "$thrown" "Content of a trashed item."
 trash items "$thrown"
 trash lists "$old_list"
 
+# A provider-free provenance fixture exercises migration-backed lookup data.
+docker compose exec -T db psql -U collection -d collection -q -v ON_ERROR_STOP=1 -c \
+  "UPDATE items SET metadata = metadata || '{\"tmdb_id\":603}'::jsonb WHERE id = '$matrix';
+   INSERT INTO tmdb_imports (workspace_id, item_id, tmdb_id, kind, imported_fields, imported_title, original_title,
+                             fetched_at, refresh_after, expires_at)
+   SELECT workspace_id, id, 603, 'movie', '{\"tmdb_id\":603,\"release_year\":1999}', title, 'The Matrix',
+          now(), now() + interval '5 months', now() + interval '6 months'
+   FROM items WHERE id = '$matrix';"
+
 step "snapshot of the API before the backup"
 snapshot() {
   call 200 GET /api/v1/tree && jq -S . "$T/body" >"$1.tree"
   call 200 GET /api/v1/trash && jq -S . "$T/body" >"$1.trash"
+  call 200 GET /api/v1/settings && jq -S . "$T/body" >"$1.settings"
+  docker compose exec -T db psql -U collection -d collection -At -F '|' -c \
+    "SELECT item_id, tmdb_id, kind, imported_fields::text, imported_title, original_title,
+            fetched_at, refresh_after, expires_at FROM tmdb_imports ORDER BY item_id" >"$1.tmdb"
   : >"$1.files"
   for id in $(docker compose exec -T db psql -U collection -d collection -At -c 'SELECT id FROM attachments ORDER BY id'); do
     for kind in file thumbnail; do
@@ -165,7 +181,7 @@ scripts/verify-restore.sh "$backup" || fail "verify-restore failed right after a
 
 step "the restored app answers like the original"
 snapshot "$T/after"
-for part in tree trash files content; do
+for part in tree trash settings tmdb files content; do
   diff -u "$T/before.$part" "$T/after.$part" >/dev/null || fail "$part differs after the restore: $(diff "$T/before.$part" "$T/after.$part" | head -5)"
 done
 

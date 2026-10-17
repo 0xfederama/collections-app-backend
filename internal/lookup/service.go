@@ -71,12 +71,19 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 		return s.items.Create(ctx, listID, in)
 	}
 	if opts.Lookup != nil && !*opts.Lookup {
-		in.Metadata = cloneMap(in.Metadata)
+		in.Metadata = cloneInputMap(in.Metadata)
 		in.Metadata["lookup_disabled"] = true
 		return s.items.Create(ctx, listID, in)
 	}
 
 	explicit := (opts.Lookup != nil && *opts.Lookup) || opts.TMDBID != nil
+	if disabled, _ := in.Metadata["lookup_disabled"].(bool); disabled && !explicit {
+		return s.items.Create(ctx, listID, in)
+	}
+	if explicit {
+		in.Metadata = cloneInputMap(in.Metadata)
+		delete(in.Metadata, "lookup_disabled")
+	}
 	if s.client == nil || !s.client.Enabled() {
 		if explicit {
 			return items.Item{}, apperr.LookupDisabled()
@@ -95,6 +102,9 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 		return s.items.Create(ctx, listID, in)
 	}
 	if candidate == nil {
+		if opts.TMDBID != nil {
+			return items.Item{}, apperr.UpstreamUnavailable()
+		}
 		return s.items.Create(ctx, listID, in)
 	}
 	poster, err := s.poster(ctx, candidate.details.PosterPath)
@@ -115,6 +125,9 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 // Apply enriches an existing movie or TV item. Network work happens against an
 // initial snapshot; Store rechecks ExpectedVersion under lock before writing.
 func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion int, mode Mode, selectedID *int) (items.Item, error) {
+	if mode != ModeFill && mode != ModeRematch && mode != ModeRefresh {
+		return items.Item{}, apperr.Validation(apperr.FieldError{Field: "mode", Message: "must be fill, rematch, or refresh"})
+	}
 	if s.client == nil || !s.client.Enabled() {
 		return items.Item{}, apperr.LookupDisabled()
 	}
@@ -150,6 +163,9 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 		return items.Item{}, err
 	}
 	if candidate == nil {
+		if selectedID != nil {
+			return items.Item{}, apperr.UpstreamUnavailable()
+		}
 		// Recheck the ETag even though no fields matched and no write is needed.
 		return s.items.Update(ctx, itemID, expectedVersion, items.Patch{})
 	}
@@ -234,10 +250,19 @@ func (s *Service) resolve(ctx context.Context, kind, title string, selectedID *i
 			return nil, nil
 		}
 		id = matches[0].ID
+		if id <= 0 {
+			return nil, apperr.UpstreamUnavailable()
+		}
+	}
+	if id <= 0 {
+		return nil, apperr.Validation(apperr.FieldError{Field: "tmdb_id", Message: "must be greater than zero"})
 	}
 	details, err := s.client.Details(ctx, kind, id, settings.MetadataLanguage, settings.StreamingCountryCode)
 	if err != nil {
 		return nil, providerError(err)
+	}
+	if details.ID != id || details.ID <= 0 {
+		return nil, apperr.UpstreamUnavailable()
 	}
 	return &candidate{details: details}, nil
 }
@@ -276,7 +301,7 @@ func metadataTMDBID(raw json.RawMessage) int {
 	return int(v)
 }
 
-func cloneMap(in map[string]any) map[string]any {
+func cloneInputMap(in map[string]any) map[string]any {
 	out := make(map[string]any, len(in)+1)
 	for k, v := range in {
 		out[k] = v

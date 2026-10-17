@@ -137,6 +137,29 @@ func TestCreateOptOutStoresLookupDisabled(t *testing.T) {
 	}
 }
 
+func TestCreateMetadataOptOutSuppressesDefaultLookup(t *testing.T) {
+	store := &fakeStore{kind: "movie"}
+	itemSvc := &fakeItems{}
+	client := &fakeClient{enabled: true, matches: []tmdb.Match{{ID: 7}}}
+	_, err := newService(client, store, itemSvc).Create(t.Context(), uuid.New(), items.CreateInput{
+		Title: "Movie", Metadata: map[string]any{"lookup_disabled": true},
+	}, CreateOptions{})
+	if err != nil || itemSvc.created == nil || client.searchQuery != "" || store.applied != nil {
+		t.Fatalf("err=%v created=%v search=%q applied=%v", err, itemSvc.created, client.searchQuery, store.applied)
+	}
+}
+
+func TestCreateSelectedIDWithoutDetailsReturnsUpstreamUnavailable(t *testing.T) {
+	itemSvc := &fakeItems{}
+	client := &fakeClient{enabled: true}
+	selectedID := 7
+	_, err := newService(client, &fakeStore{kind: "movie"}, itemSvc).Create(t.Context(), uuid.New(), items.CreateInput{Title: "Movie"}, CreateOptions{TMDBID: &selectedID})
+	var unavailable *apperr.UpstreamUnavailableError
+	if !errors.As(err, &unavailable) || itemSvc.created != nil {
+		t.Fatalf("err=%v created=%v", err, itemSvc.created)
+	}
+}
+
 func TestCreateUsesFirstLocalizedMatchAndAtomicApply(t *testing.T) {
 	client := &fakeClient{enabled: true, matches: []tmdb.Match{{ID: 7}}, details: tmdb.Details{
 		ID: 7, Title: "Titolo locale", Metadata: map[string]any{"release_year": 1999},
@@ -164,6 +187,15 @@ func TestApplyNoMatchRechecksVersion(t *testing.T) {
 	got, err := newService(&fakeClient{enabled: true}, store, itemSvc).Apply(t.Context(), id, 4, ModeFill, nil)
 	if err != nil || got.Version != 4 || itemSvc.updateCalls != 1 || store.applied != nil {
 		t.Fatalf("got=%+v err=%v updates=%d applied=%v", got, err, itemSvc.updateCalls, store.applied)
+	}
+}
+
+func TestApplyRejectsUnsupportedModeBeforeLookup(t *testing.T) {
+	client := &fakeClient{enabled: true}
+	_, err := newService(client, &fakeStore{}, &fakeItems{}).Apply(t.Context(), uuid.New(), 1, ModeCreate, nil)
+	var validation *apperr.ValidationError
+	if !errors.As(err, &validation) || client.searchQuery != "" {
+		t.Fatalf("err=%v search=%q", err, client.searchQuery)
 	}
 }
 

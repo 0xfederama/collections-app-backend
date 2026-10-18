@@ -74,7 +74,8 @@ func TestF014B2_ValidateDefinitionFieldErrors(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := kinds.Validate(fields, tt.in)
-			if err == nil || !strings.Contains(err.Error(), tt.path) {
+			var validation *apperr.ValidationError
+			if !errors.As(err, &validation) || len(validation.Errors) != 1 || validation.Errors[0].Field != tt.path {
 				t.Fatalf("Validate() error = %v, want %s", err, tt.path)
 			}
 		})

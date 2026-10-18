@@ -13,6 +13,8 @@ const (
 	Item     = "i"
 	Content  = "c"
 	Settings = "s"
+	Kind     = "k"
+	Field    = "kf"
 )
 
 // Format returns the quoted ETag value, e.g. Format(Item, 7) == `"i-7"`.

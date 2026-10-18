@@ -7,9 +7,38 @@ package sqlc
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const deleteKindDefinition = `-- name: DeleteKindDefinition :exec
+DELETE FROM kind_definitions WHERE id = $1 AND workspace_id = $2
+`
+
+type DeleteKindDefinitionParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) DeleteKindDefinition(ctx context.Context, arg DeleteKindDefinitionParams) error {
+	_, err := q.db.Exec(ctx, deleteKindDefinition, arg.ID, arg.WorkspaceID)
+	return err
+}
+
+const deleteKindField = `-- name: DeleteKindField :exec
+DELETE FROM kind_fields WHERE id = $1 AND workspace_id = $2
+`
+
+type DeleteKindFieldParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) DeleteKindField(ctx context.Context, arg DeleteKindFieldParams) error {
+	_, err := q.db.Exec(ctx, deleteKindField, arg.ID, arg.WorkspaceID)
+	return err
+}
 
 const getKindDefinitionByKey = `-- name: GetKindDefinitionByKey :one
 SELECT id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at FROM kind_definitions
@@ -69,6 +98,128 @@ func (q *Queries) GetKindFieldByKey(ctx context.Context, arg GetKindFieldByKeyPa
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const insertKindDefinition = `-- name: InsertKindDefinition :one
+INSERT INTO kind_definitions (workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at
+`
+
+type InsertKindDefinitionParams struct {
+	WorkspaceID         uuid.UUID
+	Key                 string
+	Name                string
+	DefaultIcon         *string
+	AllowsPrice         bool
+	DefaultSortField    *string
+	DefaultPinnedFields []byte
+	Now                 time.Time
+}
+
+func (q *Queries) InsertKindDefinition(ctx context.Context, arg InsertKindDefinitionParams) (KindDefinition, error) {
+	row := q.db.QueryRow(ctx, insertKindDefinition,
+		arg.WorkspaceID,
+		arg.Key,
+		arg.Name,
+		arg.DefaultIcon,
+		arg.AllowsPrice,
+		arg.DefaultSortField,
+		arg.DefaultPinnedFields,
+		arg.Now,
+	)
+	var i KindDefinition
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Key,
+		&i.Name,
+		&i.DefaultIcon,
+		&i.AllowsPrice,
+		&i.DefaultSortField,
+		&i.DefaultPinnedFields,
+		&i.IsLocked,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const insertKindField = `-- name: InsertKindField :one
+INSERT INTO kind_fields (workspace_id, kind_id, key, label, field_type, position, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, workspace_id, kind_id, key, label, field_type, position, is_locked, version, created_at, updated_at
+`
+
+type InsertKindFieldParams struct {
+	WorkspaceID uuid.UUID
+	KindID      uuid.UUID
+	Key         string
+	Label       string
+	FieldType   string
+	Position    int32
+	Now         time.Time
+}
+
+func (q *Queries) InsertKindField(ctx context.Context, arg InsertKindFieldParams) (KindField, error) {
+	row := q.db.QueryRow(ctx, insertKindField,
+		arg.WorkspaceID,
+		arg.KindID,
+		arg.Key,
+		arg.Label,
+		arg.FieldType,
+		arg.Position,
+		arg.Now,
+	)
+	var i KindField
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.KindID,
+		&i.Key,
+		&i.Label,
+		&i.FieldType,
+		&i.Position,
+		&i.IsLocked,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listActiveListsByKind = `-- name: ListActiveListsByKind :many
+SELECT id, name FROM lists WHERE workspace_id = $1 AND kind = $2 AND deleted_at IS NULL ORDER BY name, id
+`
+
+type ListActiveListsByKindParams struct {
+	WorkspaceID uuid.UUID
+	Kind        string
+}
+
+type ListActiveListsByKindRow struct {
+	ID   uuid.UUID
+	Name string
+}
+
+func (q *Queries) ListActiveListsByKind(ctx context.Context, arg ListActiveListsByKindParams) ([]ListActiveListsByKindRow, error) {
+	rows, err := q.db.Query(ctx, listActiveListsByKind, arg.WorkspaceID, arg.Kind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveListsByKindRow{}
+	for rows.Next() {
+		var i ListActiveListsByKindRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listKindDefinitions = `-- name: ListKindDefinitions :many
@@ -215,6 +366,45 @@ func (q *Queries) LockKindField(ctx context.Context, arg LockKindFieldParams) (K
 	return i, err
 }
 
+const nextKindFieldPosition = `-- name: NextKindFieldPosition :one
+SELECT COALESCE(MAX(position) + 1, 0)::int FROM kind_fields WHERE workspace_id = $1 AND kind_id = $2
+`
+
+type NextKindFieldPositionParams struct {
+	WorkspaceID uuid.UUID
+	KindID      uuid.UUID
+}
+
+func (q *Queries) NextKindFieldPosition(ctx context.Context, arg NextKindFieldPositionParams) (int32, error) {
+	row := q.db.QueryRow(ctx, nextKindFieldPosition, arg.WorkspaceID, arg.KindID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const reorderKindFields = `-- name: ReorderKindFields :exec
+UPDATE kind_fields f SET position = (o.ord - 1)::int, updated_at = $1
+FROM unnest($4::text[]) WITH ORDINALITY AS o(key, ord)
+WHERE f.workspace_id = $2 AND f.kind_id = $3 AND f.key = o.key
+`
+
+type ReorderKindFieldsParams struct {
+	Now         time.Time
+	WorkspaceID uuid.UUID
+	KindID      uuid.UUID
+	Keys        []string
+}
+
+func (q *Queries) ReorderKindFields(ctx context.Context, arg ReorderKindFieldsParams) error {
+	_, err := q.db.Exec(ctx, reorderKindFields,
+		arg.Now,
+		arg.WorkspaceID,
+		arg.KindID,
+		arg.Keys,
+	)
+	return err
+}
+
 const seedBuiltinKindDefinitions = `-- name: SeedBuiltinKindDefinitions :exec
 
 SELECT seed_builtin_kind_definitions($1)
@@ -225,4 +415,100 @@ SELECT seed_builtin_kind_definitions($1)
 func (q *Queries) SeedBuiltinKindDefinitions(ctx context.Context, workspaceID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, seedBuiltinKindDefinitions, workspaceID)
 	return err
+}
+
+const stripKindFieldValues = `-- name: StripKindFieldValues :exec
+UPDATE items i SET metadata = i.metadata - $1::text, version = version + 1, updated_at = $2
+FROM lists l WHERE l.id = i.list_id AND l.workspace_id = i.workspace_id
+  AND i.workspace_id = $3 AND l.kind = $4 AND i.metadata ? $1::text
+`
+
+type StripKindFieldValuesParams struct {
+	Key         string
+	Now         time.Time
+	WorkspaceID uuid.UUID
+	Kind        string
+}
+
+func (q *Queries) StripKindFieldValues(ctx context.Context, arg StripKindFieldValuesParams) error {
+	_, err := q.db.Exec(ctx, stripKindFieldValues,
+		arg.Key,
+		arg.Now,
+		arg.WorkspaceID,
+		arg.Kind,
+	)
+	return err
+}
+
+const updateKindDefinitionName = `-- name: UpdateKindDefinitionName :one
+UPDATE kind_definitions SET name = $1, version = version + 1, updated_at = $2
+WHERE id = $3 AND workspace_id = $4 RETURNING id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at
+`
+
+type UpdateKindDefinitionNameParams struct {
+	Name        string
+	Now         time.Time
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) UpdateKindDefinitionName(ctx context.Context, arg UpdateKindDefinitionNameParams) (KindDefinition, error) {
+	row := q.db.QueryRow(ctx, updateKindDefinitionName,
+		arg.Name,
+		arg.Now,
+		arg.ID,
+		arg.WorkspaceID,
+	)
+	var i KindDefinition
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Key,
+		&i.Name,
+		&i.DefaultIcon,
+		&i.AllowsPrice,
+		&i.DefaultSortField,
+		&i.DefaultPinnedFields,
+		&i.IsLocked,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateKindFieldLabel = `-- name: UpdateKindFieldLabel :one
+UPDATE kind_fields SET label = $1, version = version + 1, updated_at = $2
+WHERE id = $3 AND workspace_id = $4 RETURNING id, workspace_id, kind_id, key, label, field_type, position, is_locked, version, created_at, updated_at
+`
+
+type UpdateKindFieldLabelParams struct {
+	Label       string
+	Now         time.Time
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) UpdateKindFieldLabel(ctx context.Context, arg UpdateKindFieldLabelParams) (KindField, error) {
+	row := q.db.QueryRow(ctx, updateKindFieldLabel,
+		arg.Label,
+		arg.Now,
+		arg.ID,
+		arg.WorkspaceID,
+	)
+	var i KindField
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.KindID,
+		&i.Key,
+		&i.Label,
+		&i.FieldType,
+		&i.Position,
+		&i.IsLocked,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

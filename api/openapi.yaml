@@ -1768,6 +1768,7 @@ components:
               version: 3
               created_at: '2026-10-14T09:31:00Z'
               updated_at: '2026-10-14T10:00:00Z'
+            kind_name: Movie
             path:
               - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000001, name: Media, icon: null, icon_color: null }
               - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000002, name: Movies, icon: null, icon_color: null }
@@ -1792,6 +1793,7 @@ components:
               version: 3
               created_at: '2026-10-14T09:31:00Z'
               updated_at: '2026-10-14T10:00:00Z'
+            kind_name: Movie
             path:
               - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000001, name: Media, icon: null, icon_color: null }
               - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000002, name: Movies, icon: null, icon_color: null }
@@ -2234,7 +2236,6 @@ components:
       description: |
         The kind of a list. Items have no kind of their own: theirs is read-only and derived from their list. Changing the kind of a
         list that has items clears the `metadata` of all its items.
-      enum: [generic, movie, tv_show, motorcycle, car, camera]
     ItemBase:
       type: object
       description: Fields shared by every item kind. `kind` (read-only, derived from the list) and `metadata` are added by the per-kind schemas.
@@ -2304,23 +2305,16 @@ components:
             kind: { type: string, enum: [camera], readOnly: true }
             metadata: { $ref: '#/components/schemas/CameraMetadata' }
     Item:
-      description: An item. `kind` is read-only and derived from the item's list; `metadata` has the shape of that kind (discriminated union).
-      oneOf:
-        - $ref: '#/components/schemas/GenericItem'
-        - $ref: '#/components/schemas/MovieItem'
-        - $ref: '#/components/schemas/TvShowItem'
-        - $ref: '#/components/schemas/MotorcycleItem'
-        - $ref: '#/components/schemas/CarItem'
-        - $ref: '#/components/schemas/CameraItem'
-      discriminator:
-        propertyName: kind
-        mapping:
-          generic: '#/components/schemas/GenericItem'
-          movie: '#/components/schemas/MovieItem'
-          tv_show: '#/components/schemas/TvShowItem'
-          motorcycle: '#/components/schemas/MotorcycleItem'
-          car: '#/components/schemas/CarItem'
-          camera: '#/components/schemas/CameraItem'
+      description: An item. `kind` is read-only and derived from the item's list; `metadata` is validated against that workspace kind's field definitions.
+      allOf:
+        - $ref: '#/components/schemas/ItemBase'
+        - type: object
+          required: [kind, metadata]
+          properties:
+            kind: { type: string, readOnly: true }
+            metadata:
+              type: object
+              additionalProperties: true
     ItemSummary:
       type: object
       description: "An item row in lists, search and recent items: the same `metadata` object as the full item (`{}` when the kind has none), and the image is reduced."
@@ -2352,9 +2346,10 @@ components:
         page: { $ref: '#/components/schemas/Page' }
     SearchResult:
       type: object
-      required: [item, path]
+      required: [item, path, kind_name]
       properties:
         item: { $ref: '#/components/schemas/ItemSummary' }
+        kind_name: { type: string, description: The display name from this workspace's kind definition. }
         path:
           type: array
           items: { $ref: '#/components/schemas/SearchPathSegment' }

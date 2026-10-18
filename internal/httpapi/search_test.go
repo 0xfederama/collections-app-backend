@@ -14,10 +14,40 @@ import (
 // searchRows is one page of GET /search.
 type searchRows struct {
 	Data []struct {
-		Item obj   `json:"item"`
-		Path []obj `json:"path"`
+		Item     obj    `json:"item"`
+		KindName string `json:"kind_name"`
+		Path     []obj  `json:"path"`
 	}
 	Page obj
+}
+
+func TestF014B5_CustomKindListsAndSearchNames(t *testing.T) {
+	e := newTreeEnv(t)
+	created := e.call("POST", "/api/v1/kinds", `{"name":"Board game"}`, "")
+	wantStatus(t, created, 201)
+	kind := decode(t, created)
+	key := kind["key"].(string)
+	list := e.call("POST", "/api/v1/lists", fmt.Sprintf(`{"name":"Shelf","kind":%q}`, key), "")
+	wantStatus(t, list, 201)
+	lid := decode(t, list)["id"].(string)
+	e.newItem(lid, `{"title":"Catan"}`)
+
+	got := e.search(q("catan"))
+	if len(got.Data) != 1 || got.Data[0].Item["kind"] != key || got.Data[0].KindName != "Board game" {
+		t.Fatalf("custom-kind search result = %+v", got.Data)
+	}
+	if definition := e.kind(key); definition["name"] != "Board game" {
+		t.Fatalf("custom kind missing from definitions picker data: %v", definition)
+	}
+	recent := e.call("GET", "/api/v1/recent-items", "", "")
+	wantStatus(t, recent, 200)
+	var recentResults searchRows
+	if err := json.Unmarshal(recent.Body.Bytes(), &recentResults); err != nil {
+		t.Fatal(err)
+	}
+	if len(recentResults.Data) != 1 || recentResults.Data[0].KindName != "Board game" {
+		t.Fatalf("custom-kind recent result = %+v", recentResults.Data)
+	}
 }
 
 func (e *treeEnv) search(query string) searchRows {
@@ -90,7 +120,7 @@ func TestAT12_SearchSubstringAndPath(t *testing.T) {
 			t.Errorf("item summary lacks %q", k)
 		}
 	}
-	if hit.Item["kind"] != "movie" || hit.Item["website"] != "https://www.warnerbros.com/movies/matrix" || hit.Item["image"] != nil {
+	if hit.Item["kind"] != "movie" || got.Data[0].KindName != "Movie" || hit.Item["website"] != "https://www.warnerbros.com/movies/matrix" || hit.Item["image"] != nil {
 		t.Errorf("unexpected summary: %v", hit.Item)
 	}
 

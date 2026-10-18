@@ -214,22 +214,23 @@ func imageBody(img *items.Image) (nullable.Nullable[oapi.Image], error) {
 	return nullable.NewNullableWithValue(out), nil
 }
 
-// itemWire is ItemBase plus the two fields the per-kind schemas add. Encoding
-// it and loading the bytes into the Item union avoids a switch over the six
-// kinds, and keeps the stored metadata exactly as validated.
-type itemWire struct {
-	oapi.ItemBase
-	Kind     string          `json:"kind"`
-	Metadata json.RawMessage `json:"metadata"`
-}
-
 func itemBody(it items.Item) (oapi.Item, error) {
 	image, err := imageBody(it.Image)
 	if err != nil {
 		return oapi.Item{}, err
 	}
-	base := oapi.ItemBase{
-		Id: it.ID, ListId: it.ListID, Title: it.Title,
+	var metadata map[string]interface{}
+	if len(it.Metadata) > 0 {
+		if err := json.Unmarshal(it.Metadata, &metadata); err != nil {
+			return oapi.Item{}, fmt.Errorf("decode item metadata: %w", err)
+		}
+	}
+	if metadata == nil {
+		metadata = map[string]interface{}{}
+	}
+	kind := it.Kind
+	out := oapi.Item{
+		Id: it.ID, ListId: it.ListID, Title: it.Title, Kind: &kind, Metadata: metadata,
 		Image: image, Price: priceBody(it.Price), Website: nullableString(it.Website),
 		ContentVersion: it.ContentVersion, SortOrder: it.SortOrder, Version: it.Version,
 		CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt,
@@ -239,15 +240,7 @@ func itemBody(it items.Item) (oapi.Item, error) {
 		for _, p := range it.Path {
 			path = append(path, oapi.PathSegment{Type: oapi.PathSegmentType(p.Type), Id: p.ID, Name: p.Name})
 		}
-		base.Path = &path
-	}
-	raw, err := json.Marshal(itemWire{ItemBase: base, Kind: it.Kind, Metadata: it.Metadata})
-	if err != nil {
-		return oapi.Item{}, fmt.Errorf("encode item: %w", err)
-	}
-	var out oapi.Item
-	if err := out.UnmarshalJSON(raw); err != nil {
-		return oapi.Item{}, fmt.Errorf("load item: %w", err)
+		out.Path = &path
 	}
 	return out, nil
 }

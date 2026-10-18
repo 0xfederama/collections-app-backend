@@ -30,8 +30,10 @@ WHERE workspace_id = @workspace_id AND deleted_at IS NULL;
 
 -- name: ListSearchLists :many
 -- Active lists, just enough to name the last path segment (with its icon) and find its folder.
-SELECT id, name, folder_id, icon, icon_color FROM lists
-WHERE workspace_id = @workspace_id AND deleted_at IS NULL;
+SELECT l.id, l.name, l.folder_id, l.icon, l.icon_color, kd.name AS kind_name
+FROM lists l
+JOIN kind_definitions kd ON kd.workspace_id = l.workspace_id AND kd.key = l.kind
+WHERE l.workspace_id = @workspace_id AND l.deleted_at IS NULL;
 
 -- name: ListRecentItems :many
 -- Recently updated active items (Home, B-12). The columns match ListItems, like SearchItems. No ancestor

@@ -12,7 +12,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/database"
 	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
-	"github.com/0xfederama/collections-app-backend/internal/items/kinds"
 )
 
 // CreateListInput is a new list. Kind is required. Empty DisplayMode / SortMode take the defaults.
@@ -67,7 +66,7 @@ func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, err
 		}
 		def, fields, err := s.kindFields(ctx, q, in.Kind)
 		if err != nil {
-			return apperr.NotFound("kind")
+			return unknownListKind()
 		}
 		if in.SortMode == "" {
 			in.SortMode = DefaultSortMode
@@ -187,7 +186,7 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		}
 		def, fields, err := s.kindFields(ctx, q, newKind)
 		if err != nil {
-			return apperr.NotFound("kind")
+			return unknownListKind()
 		}
 		newSort := cur.SortMode
 		if p.SortMode != nil {
@@ -451,12 +450,17 @@ func validateListFields(name *string, displayMode, sortMode *string) (string, []
 	return clean, errs
 }
 
-// kindErrors checks a supplied kind: it must be one of the known kinds.
+// kindErrors checks that the kind key is present; existence is checked against
+// this workspace's definitions inside the write transaction.
 func kindErrors(kind *string) []apperr.FieldError {
-	if kind == nil || !kinds.Known(*kind) {
-		return []apperr.FieldError{{Field: "kind", Message: "must be one of generic, movie, tv_show, motorcycle, car, camera"}}
+	if kind == nil || strings.TrimSpace(*kind) == "" {
+		return []apperr.FieldError{{Field: "kind", Message: "is required"}}
 	}
 	return nil
+}
+
+func unknownListKind() error {
+	return apperr.Validation(apperr.FieldError{Field: "kind", Message: "must name a kind defined in this workspace"})
 }
 
 // validateDescription applies the Markdown description rules, like the item

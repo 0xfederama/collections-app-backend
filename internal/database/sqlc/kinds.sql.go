@@ -547,7 +547,7 @@ func (q *Queries) SeedBuiltinKindDefinitions(ctx context.Context, workspaceID uu
 }
 
 const stripKindFieldValues = `-- name: StripKindFieldValues :exec
-UPDATE items i SET metadata = i.metadata - $1::text, version = version + 1, updated_at = $2
+UPDATE items i SET metadata = i.metadata - $1::text, version = i.version + 1, updated_at = $2
 FROM lists l WHERE l.id = i.list_id AND l.workspace_id = i.workspace_id
   AND i.workspace_id = $3 AND l.kind = $4 AND i.metadata ? $1::text
 `

@@ -85,7 +85,7 @@ FROM unnest(@keys::text[]) WITH ORDINALITY AS o(key, ord)
 WHERE f.workspace_id = @workspace_id AND f.kind_id = @kind_id AND f.key = o.key;
 
 -- name: StripKindFieldValues :exec
-UPDATE items i SET metadata = i.metadata - @key::text, version = version + 1, updated_at = @now
+UPDATE items i SET metadata = i.metadata - @key::text, version = i.version + 1, updated_at = @now
 FROM lists l WHERE l.id = i.list_id AND l.workspace_id = i.workspace_id
   AND i.workspace_id = @workspace_id AND l.kind = @kind AND i.metadata ? @key::text;
 

@@ -746,13 +746,13 @@ func TestF013B4_ListItemsDirectorSortAndFilter(t *testing.T) {
 	if len(got) != 4 || got[0] != "Middle" || got[3] != "No director" || page["total"] != float64(4) {
 		t.Fatalf("director sort = %v total=%v, want Bong Joon-ho first and missing directors last", got, page["total"])
 	}
-	if middle := got[1:3]; !((middle[0] == "Alpha" && middle[1] == "Zulu") || (middle[0] == "Zulu" && middle[1] == "Alpha")) {
+	if middle := got[1:3]; (middle[0] != "Alpha" || middle[1] != "Zulu") && (middle[0] != "Zulu" || middle[1] != "Alpha") {
 		t.Fatalf("director sort ties = %v, want Alpha and Zulu", middle)
 	}
 
 	rows, page = e.page(lid, "?sort=director&q=campion")
 	got = titlesOf(rows)
-	if len(got) != 2 || !((got[0] == "Alpha" && got[1] == "Zulu") || (got[0] == "Zulu" && got[1] == "Alpha")) || page["total"] != float64(2) {
+	if len(got) != 2 || ((got[0] != "Alpha" || got[1] != "Zulu") && (got[0] != "Zulu" || got[1] != "Alpha")) || page["total"] != float64(2) {
 		t.Fatalf("director filter = %v total=%v, want Alpha and Zulu total=2", got, page["total"])
 	}
 

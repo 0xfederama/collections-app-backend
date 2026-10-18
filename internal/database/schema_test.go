@@ -135,9 +135,9 @@ func schemaCases() []schemaCase {
 			wantCode: "23502", wantConstr: "",
 		},
 		{
-			name: "F007 list sort_mode kind_key is valid",
+			name: "F014-B4 list sort_mode field key is valid",
 			stmts: []string{sqlWorkspaces,
-				`INSERT INTO lists (workspace_id, name, kind, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'kind_key', 0)`},
+				`INSERT INTO lists (workspace_id, name, kind, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'release_year', 0)`},
 		},
 		{
 			name: "F002 list sort_mode price is valid",

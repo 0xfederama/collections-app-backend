@@ -50,34 +50,42 @@ func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, err
 	if in.DisplayMode == "" {
 		in.DisplayMode = DefaultDisplayMode
 	}
-	if in.SortMode == "" {
-		in.SortMode = DefaultSortMode
-	}
 	if err := validateDescription(in.Description); err != nil {
 		return List{}, err
 	}
 	in.Description = nilIfEmpty(in.Description)
 	name, errs := validateListFields(&in.Name, &in.DisplayMode, &in.SortMode)
 	errs = append(errs, kindErrors(&in.Kind)...)
-	if kinds.Known(in.Kind) {
-		errs = append(errs, sortKindErrors(in.Kind, in.SortMode, "sort_mode")...)
-	}
-	if in.PinnedFields != nil && kinds.Known(in.Kind) {
-		var perr error
-		in.PinnedFields, perr = validatePinned(in.Kind, in.PinnedFields)
-		errs = appendValidation(errs, perr)
-	}
 	errs = append(errs, iconErrors(in.Icon, in.IconColor)...)
 	if err := validate(errs); err != nil {
 		return List{}, err
 	}
-	pinnedJSON, err := pinnedToJSON(in.PinnedFields)
-	if err != nil {
-		return List{}, err
-	}
 	var id uuid.UUID
-	err = database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
+	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
 		if err := s.lockTree(ctx, q); err != nil {
+			return err
+		}
+		def, fields, err := s.kindFields(ctx, q, in.Kind)
+		if err != nil {
+			return apperr.NotFound("kind")
+		}
+		if in.SortMode == "" {
+			in.SortMode = DefaultSortMode
+			if def.DefaultSortField != nil {
+				in.SortMode = *def.DefaultSortField
+			}
+		}
+		if err := validateDefinitionSort(in.Kind, in.SortMode, def.AllowsPrice, fields, "sort_mode"); err != nil {
+			return err
+		}
+		if in.PinnedFields != nil {
+			in.PinnedFields, err = validateDefinitionPins(def.AllowsPrice, fields, in.PinnedFields)
+			if err != nil {
+				return err
+			}
+		}
+		pinnedJSON, err := pinnedToJSON(in.PinnedFields)
+		if err != nil {
 			return err
 		}
 		if err := s.requireActiveFolder(ctx, q, in.FolderID); err != nil {
@@ -137,8 +145,7 @@ func (s *Service) getList(ctx context.Context, id uuid.UUID, withPath bool) (Lis
 // (same order as every structural write: tree lock, then the row lock), then
 // updates the list and clears the metadata of all its items, trashed ones
 // included, in the same transaction. A kind equal to the stored one is a no-op.
-// kind_key sorting is rejected (422 sort_mode) on a generic list, and a change to
-// generic of a kind_key list is rejected too (422 kind).
+// the resulting sort and pins are validated against that kind's field definitions.
 func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p ListPatch) (List, error) {
 	var errs []apperr.FieldError
 	if p.Name != nil {
@@ -157,9 +164,6 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 	errs = append(errs, enumErrors(p.DisplayMode, p.SortMode)...)
 	if p.Kind != nil {
 		errs = append(errs, kindErrors(p.Kind)...)
-		if p.SortMode != nil && kinds.Known(*p.Kind) {
-			errs = append(errs, sortKindErrors(*p.Kind, *p.SortMode, "sort_mode")...)
-		}
 	}
 	if err := validate(errs); err != nil {
 		return List{}, err
@@ -176,6 +180,27 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		}
 		if int(cur.Version) != version {
 			return apperr.VersionConflict(int(cur.Version))
+		}
+		newKind := cur.Kind
+		if p.Kind != nil {
+			newKind = *p.Kind
+		}
+		def, fields, err := s.kindFields(ctx, q, newKind)
+		if err != nil {
+			return apperr.NotFound("kind")
+		}
+		newSort := cur.SortMode
+		if p.SortMode != nil {
+			newSort = *p.SortMode
+		} else if p.Kind != nil && newKind != cur.Kind && def.DefaultSortField != nil {
+			newSort = *def.DefaultSortField
+		}
+		if err := validateDefinitionSort(newKind, newSort, def.AllowsPrice, fields, "sort_mode"); err != nil {
+			if p.Kind != nil && newKind != cur.Kind && p.SortMode == nil {
+				newSort = DefaultSortMode
+			} else {
+				return err
+			}
 		}
 		// The icon that applies after this PATCH. A colour needs a built-in icon, and the stored colour
 		// goes when the icon becomes an emoji or none (F012-B1).
@@ -207,14 +232,10 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		curPinned := pinnedFromJSON(cur.PinnedFields)
 		var newPinned *PinnedFields
 		if p.PinnedFields.Set {
-			// Validated against the kind that applies after this PATCH.
-			kind := cur.Kind
-			if p.Kind != nil {
-				kind = *p.Kind
-			}
 			if p.PinnedFields.Value != nil {
 				var perr error
-				if newPinned, perr = validatePinned(kind, p.PinnedFields.Value); perr != nil {
+				newPinned, perr = validateDefinitionPins(def.AllowsPrice, fields, p.PinnedFields.Value)
+				if perr != nil {
 					return perr
 				}
 			}
@@ -233,29 +254,9 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		}
 		resetSort := false
 		if kindChanged {
-			// The sort mode that applies after the PATCH must still exist for the new kind.
-			sortMode := cur.SortMode
-			if p.SortMode != nil {
-				sortMode = *p.SortMode
-			}
-			field := "kind"
-			if p.SortMode != nil {
-				field = "sort_mode"
-			}
-			// A stored price sort on a list that becomes one without a price
-			// (generic, movie, tv_show) falls back to manual (F009-B1).
-			if p.SortMode == nil && sortMode == "price" && !kinds.HasPrice(*p.Kind) {
-				sortMode = "manual"
+			if p.SortMode == nil && cur.SortMode != newSort {
 				resetSort = true
 				fieldsSet = true
-			}
-			if p.SortMode == nil && sortMode == "director" && *p.Kind != kinds.Movie {
-				sortMode = "manual"
-				resetSort = true
-				fieldsSet = true
-			}
-			if errs := sortKindErrors(*p.Kind, sortMode, field); len(errs) > 0 {
-				return apperr.Validation(errs...)
 			}
 			if _, err := q.UpdateListKind(ctx, sqlc.UpdateListKindParams{Kind: *p.Kind, Now: s.now(), ID: id, WorkspaceID: s.workspaceID}); err != nil {
 				return fmt.Errorf("update list kind: %w", err)
@@ -263,14 +264,15 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 			if _, err := q.ClearListItemsMetadata(ctx, sqlc.ClearListItemsMetadataParams{Now: s.now(), ListID: id, WorkspaceID: s.workspaceID}); err != nil {
 				return fmt.Errorf("clear items metadata: %w", err)
 			}
-			if !kinds.HasPrice(*p.Kind) {
+			if !def.AllowsPrice {
 				if _, err := q.ClearListItemsPrice(ctx, sqlc.ClearListItemsPriceParams{Now: s.now(), ListID: id, WorkspaceID: s.workspaceID}); err != nil {
 					return fmt.Errorf("clear items price: %w", err)
 				}
 			}
-		} else if p.SortMode != nil {
-			if errs := sortKindErrors(cur.Kind, *p.SortMode, "sort_mode"); len(errs) > 0 {
-				return apperr.Validation(errs...)
+		}
+		if p.SortMode != nil {
+			if err := validateDefinitionSort(newKind, *p.SortMode, def.AllowsPrice, fields, "sort_mode"); err != nil {
+				return err
 			}
 		}
 		if !fieldsSet {
@@ -303,7 +305,7 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		if p.SortMode != nil {
 			arg.SortMode = *p.SortMode
 		} else if resetSort {
-			arg.SortMode = "manual"
+			arg.SortMode = newSort
 		}
 		if _, err := q.UpdateList(ctx, arg); err != nil {
 			return fmt.Errorf("update list: %w", err)
@@ -317,12 +319,46 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 }
 
 // validatePinned checks the ordered keys against the kind and returns them normalized (never nil).
-func validatePinned(kind string, in *PinnedFields) (*PinnedFields, error) {
-	keys, err := kinds.ValidatePinned(kind, *in)
+func (s *Service) kindFields(ctx context.Context, q *sqlc.Queries, kind string) (sqlc.KindDefinition, []sqlc.KindField, error) {
+	def, err := q.GetKindDefinitionByKey(ctx, sqlc.GetKindDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: kind})
 	if err != nil {
-		return nil, err
+		return sqlc.KindDefinition{}, nil, err
 	}
-	p := PinnedFields(keys)
+	fields, err := q.ListKindFields(ctx, sqlc.ListKindFieldsParams{WorkspaceID: s.workspaceID, KindID: def.ID})
+	return def, fields, err
+}
+
+func validateDefinitionSort(kind, sortMode string, allowsPrice bool, fields []sqlc.KindField, field string) error {
+	if sortMode == "manual" || sortMode == "title" || sortMode == "updated" || (sortMode == "price" && allowsPrice) {
+		return nil
+	}
+	for _, f := range fields {
+		if f.Key == sortMode && sortMode != "manual" && sortMode != "title" && sortMode != "updated" && sortMode != "price" {
+			return nil
+		}
+	}
+	return apperr.Validation(apperr.FieldError{Field: field, Message: fmt.Sprintf("must be a built-in sort mode or a field of kind %s", kind)})
+}
+
+func validateDefinitionPins(allowsPrice bool, fields []sqlc.KindField, in *PinnedFields) (*PinnedFields, error) {
+	if len(*in) > 2 {
+		return nil, apperr.Validation(apperr.FieldError{Field: "pinned_fields", Message: "must have at most 2 entries"})
+	}
+	seen := make(map[string]bool, len(*in))
+	for i, key := range *in {
+		valid := key == "price" && allowsPrice
+		for _, f := range fields {
+			valid = valid || f.Key == key
+		}
+		if !valid {
+			return nil, apperr.Validation(apperr.FieldError{Field: fmt.Sprintf("pinned_fields[%d]", i), Message: "must name a field of this kind"})
+		}
+		if seen[key] {
+			return nil, apperr.Validation(apperr.FieldError{Field: fmt.Sprintf("pinned_fields[%d]", i), Message: "must be unique"})
+		}
+		seen[key] = true
+	}
+	p := PinnedFields(*in)
 	if p == nil {
 		p = PinnedFields{}
 	}
@@ -423,25 +459,6 @@ func kindErrors(kind *string) []apperr.FieldError {
 	return nil
 }
 
-// sortKindErrors rejects the kind_key sort mode on a kind without a sort key
-// and the price sort mode on a kind without a price (generic, movie and tv_show;
-// F009-B1, which subsumes F008-B1 for generic).
-func sortKindErrors(kind, sortMode, field string) []apperr.FieldError {
-	if sortMode == "director" && kind != kinds.Movie {
-		return []apperr.FieldError{{Field: field, Message: "director is available only on movie lists"}}
-	}
-	if sortMode == "price" && !kinds.HasPrice(kind) {
-		return []apperr.FieldError{{Field: field, Message: "price is not available on lists of this kind"}}
-	}
-	if sortMode != "kind_key" {
-		return nil
-	}
-	if _, ok := kinds.SortKey(kind); !ok {
-		return []apperr.FieldError{{Field: field, Message: "kind_key is not available on lists of this kind"}}
-	}
-	return nil
-}
-
 // validateDescription applies the Markdown description rules, like the item
 // content: at most 64 KiB of decoded UTF-8 bytes (413), valid UTF-8 without NUL
 // (422; Postgres text cannot store NUL).
@@ -473,9 +490,6 @@ func enumErrors(displayMode, sortMode *string) []apperr.FieldError {
 	var errs []apperr.FieldError
 	if displayMode != nil && !displayModes[*displayMode] {
 		errs = append(errs, apperr.FieldError{Field: "display_mode", Message: "must be one of compact, thumbnail, grid"})
-	}
-	if sortMode != nil && !sortModes[*sortMode] {
-		errs = append(errs, apperr.FieldError{Field: "sort_mode", Message: "must be one of manual, title, updated, kind_key, price, director"})
 	}
 	return errs
 }

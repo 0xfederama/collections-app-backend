@@ -59,22 +59,6 @@ type Field struct {
 	Special bool // locked built-in field with an established wire shape
 }
 
-// sortKeys is each kind's sort key, the metadata key of the kind_key sort mode (F-007).
-var sortKeys = map[string]string{
-	Movie:      "release_year",
-	TVShow:     "first_air_year",
-	Motorcycle: "displacement_cc",
-	Car:        "power_hp",
-	Camera:     "megapixels",
-}
-
-// SortKey returns the metadata key a list of this kind sorts by in kind_key
-// mode. ok is false for generic (and unknown kinds): they have no sort key.
-func SortKey(kind string) (key string, ok bool) {
-	key, ok = sortKeys[kind]
-	return key, ok
-}
-
 // Known reports whether kind is one of the six built-in kinds. Definition
 // backed callers must not use it to decide whether a workspace kind exists.
 func Known(kind string) bool {

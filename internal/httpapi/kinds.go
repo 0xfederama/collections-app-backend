@@ -5,6 +5,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/etag"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
+	"github.com/oapi-codegen/nullable"
 )
 
 func kindBody(k definitions.Kind) oapi.KindDefinition {
@@ -12,7 +13,18 @@ func kindBody(k definitions.Kind) oapi.KindDefinition {
 	for i, f := range k.Fields {
 		fs[i] = oapi.KindField{Key: f.Key, Label: f.Label, Type: oapi.KindFieldType(f.Type), Position: f.Position, IsLocked: f.Locked, Version: f.Version}
 	}
-	return oapi.KindDefinition{Key: k.Key, Name: k.Name, AllowsPrice: k.AllowsPrice, IsLocked: k.Locked, Version: k.Version, Fields: fs}
+	out := oapi.KindDefinition{Key: k.Key, Name: k.Name, AllowsPrice: k.AllowsPrice, IsLocked: k.Locked, Version: k.Version, Fields: fs}
+	if k.DefaultSortField == nil {
+		out.DefaultSortField = nullable.NewNullNullable[string]()
+	} else {
+		out.DefaultSortField = nullable.NewNullableWithValue(*k.DefaultSortField)
+	}
+	if k.DefaultPinnedFields == nil {
+		out.DefaultPinnedFields = nullable.NewNullNullable[[]string]()
+	} else {
+		out.DefaultPinnedFields = nullable.NewNullableWithValue(*k.DefaultPinnedFields)
+	}
+	return out
 }
 func (s *Server) ListKinds(ctx context.Context, _ oapi.ListKindsRequestObject) (oapi.ListKindsResponseObject, error) {
 	ks, e := s.deps.Definitions.List(ctx)
@@ -26,7 +38,18 @@ func (s *Server) ListKinds(ctx context.Context, _ oapi.ListKindsRequestObject) (
 	return out, nil
 }
 func (s *Server) CreateKind(ctx context.Context, r oapi.CreateKindRequestObject) (oapi.CreateKindResponseObject, error) {
-	k, e := s.deps.Definitions.Create(ctx, definitions.CreateKind{Name: r.Body.Name, AllowsPrice: r.Body.AllowsPrice != nil && *r.Body.AllowsPrice})
+	var defaultSort *string
+	if value, err := r.Body.DefaultSortField.Get(); err == nil {
+		defaultSort = &value
+	}
+	var defaultPins *[]string
+	if value, err := r.Body.DefaultPinnedFields.Get(); err == nil {
+		defaultPins = &value
+	}
+	k, e := s.deps.Definitions.Create(ctx, definitions.CreateKind{
+		Name: r.Body.Name, AllowsPrice: r.Body.AllowsPrice != nil && *r.Body.AllowsPrice,
+		DefaultSortField: defaultSort, DefaultPinnedFields: defaultPins,
+	})
 	if e != nil {
 		return nil, e
 	}

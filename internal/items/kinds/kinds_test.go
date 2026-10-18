@@ -12,21 +12,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/items/kinds"
 )
 
-func TestF007_SortKey(t *testing.T) {
-	for _, tt := range []struct {
-		kind, key string
-		ok        bool
-	}{
-		{"movie", "release_year", true}, {"tv_show", "first_air_year", true}, {"motorcycle", "displacement_cc", true},
-		{"car", "power_hp", true}, {"camera", "megapixels", true}, {"generic", "", false}, {"book", "", false},
-	} {
-		key, ok := kinds.SortKey(tt.kind)
-		if key != tt.key || ok != tt.ok {
-			t.Errorf("SortKey(%q) = %q, %v; want %q, %v", tt.kind, key, ok, tt.key, tt.ok)
-		}
-	}
-}
-
 func TestF009B2_ValidatePinned(t *testing.T) {
 	for _, tt := range []struct {
 		kind string

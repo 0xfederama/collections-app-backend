@@ -957,7 +957,7 @@ func TestF007_MoveItemAcrossKinds(t *testing.T) {
 	wantProblem(t, move(e.fetchItem(it["id"]), uuid.NewString()), 409, "destination_unavailable")
 }
 
-func TestF007_ListItemsSortByKindKey(t *testing.T) {
+func TestF014B4_ListItemsSortsByDefinitionAndFilters(t *testing.T) {
 	e := newTreeEnv(t)
 	l := e.listOfKind("Films", nil, "movie")
 	lid := l["id"].(string)
@@ -983,37 +983,37 @@ func TestF007_ListItemsSortByKindKey(t *testing.T) {
 	want := idsOf(first, second, mid, late, none)
 
 	t.Run("explicit sort", func(t *testing.T) {
-		rows, _ := e.page(lid, "?sort=kind_key")
+		rows, _ := e.page(lid, "?sort=release_year")
 		if got := idsOf(rows...); !reflect.DeepEqual(got, want) {
 			t.Fatalf("got %v, want %v", titlesOf(rows), want)
 		}
 	})
 
 	t.Run("paging and q keep working", func(t *testing.T) {
-		rows, page := e.page(lid, "?sort=kind_key&limit=2&offset=2")
+		rows, page := e.page(lid, "?sort=release_year&limit=2&offset=2")
 		if got := idsOf(rows...); !reflect.DeepEqual(got, want[2:4]) || page["total"].(float64) != 5 {
 			t.Fatalf("page: got %v total %v", titlesOf(rows), page["total"])
 		}
-		rows, page = e.page(lid, "?sort=kind_key&q=LATE")
+		rows, page = e.page(lid, "?sort=release_year&q=LATE")
 		if got := titlesOf(rows); !reflect.DeepEqual(got, []string{"late"}) || page["total"].(float64) != 1 {
 			t.Fatalf("q: got %v total %v", got, page["total"])
 		}
 	})
 
-	t.Run("stored sort_mode kind_key is the default and manual order is untouched", func(t *testing.T) {
+	t.Run("definition default and manual override preserve item order", func(t *testing.T) {
 		manual := []string{"late", "none", "early", "tie", "mid"}
 		rows, _ := e.page(lid, "")
-		if got := titlesOf(rows); !reflect.DeepEqual(got, manual) {
-			t.Fatalf("manual: %v", got)
+		if got := idsOf(rows...); !reflect.DeepEqual(got, want) {
+			t.Fatalf("default field sort: got %v", titlesOf(rows))
 		}
 		cur := e.fetch("lists", lid)
-		wantStatus(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"kind_key"}`, etagOf("l", cur)), 200)
+		wantStatus(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"manual"}`, etagOf("l", cur)), 200)
 		rows, _ = e.page(lid, "")
-		if got := idsOf(rows...); !reflect.DeepEqual(got, want) {
-			t.Fatalf("default kind_key: got %v", titlesOf(rows))
+		if got := titlesOf(rows); !reflect.DeepEqual(got, manual) {
+			t.Fatalf("manual: got %v", got)
 		}
 		cur = e.fetch("lists", lid)
-		wantStatus(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"manual"}`, etagOf("l", cur)), 200)
+		wantStatus(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"release_year"}`, etagOf("l", cur)), 200)
 		rows, _ = e.page(lid, "")
 		if got := titlesOf(rows); !reflect.DeepEqual(got, manual) {
 			t.Fatalf("manual after switching back: %v", got)
@@ -1034,6 +1034,40 @@ func TestF007_ListItemsSortByKindKey(t *testing.T) {
 		e.titled(g["id"].(string), "x")
 		wantProblem(t, e.call("GET", "/api/v1/lists/"+g["id"].(string)+"/items?sort=kind_key", "", ""), 400, "invalid_parameter")
 	})
+}
+
+func TestF014B4_CustomFieldSortAndCombinedFilter(t *testing.T) {
+	e := newTreeEnv(t)
+	e.exec(`INSERT INTO kind_fields (workspace_id, kind_id, key, label, field_type, position)
+		SELECT $1, id, 'rating', 'Rating', 'number', 100 FROM kind_definitions
+		WHERE workspace_id = $1 AND key = 'movie'`, e.ws)
+	l := e.listOfKind("Ratings", nil, "movie")
+	lid := l["id"].(string)
+	cur := e.fetch("lists", lid)
+	gotList := decode(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":["rating"]}`, etagOf("l", cur)))
+	if !reflect.DeepEqual(gotList["pinned_fields"], []any{"rating"}) {
+		t.Fatalf("custom field pin = %v", gotList["pinned_fields"])
+	}
+	for _, body := range []string{
+		`{"title":"Match ten","metadata":{"rating":10}}`,
+		`{"title":"Match two","metadata":{"rating":2}}`,
+		`{"title":"Match five","metadata":{"rating":5}}`,
+		`{"title":"Match missing"}`,
+	} {
+		e.newItem(lid, body)
+	}
+	rows, _ := e.page(lid, "?sort=rating")
+	if got := strings.Join(titlesOf(rows), ","); got != "Match two,Match five,Match ten,Match missing" {
+		t.Fatalf("numeric sort = %s", got)
+	}
+	rows, page := e.page(lid, "?sort=rating&q=match&filter_field=rating&filter_min=4&filter_max=10")
+	if got := strings.Join(titlesOf(rows), ","); got != "Match five,Match ten" || page["total"] != float64(2) {
+		t.Fatalf("combined title and field filter = %s, page %v", got, page)
+	}
+	bad := wantProblem(t, e.call("GET", "/api/v1/lists/"+lid+"/items?filter_field=rating&filter_min=10&filter_max=2", "", ""), 400, "invalid_parameter")
+	if bad.Status != 400 {
+		t.Fatalf("invalid range = %+v", bad)
+	}
 }
 
 func TestF002B4_ListItemsSortByPrice(t *testing.T) {

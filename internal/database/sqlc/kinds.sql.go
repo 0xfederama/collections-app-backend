@@ -511,6 +511,29 @@ func (q *Queries) ResetListKindFieldPins(ctx context.Context, arg ResetListKindF
 	return err
 }
 
+const resetListKindFieldSort = `-- name: ResetListKindFieldSort :exec
+UPDATE lists
+SET sort_mode = 'manual', version = version + 1, updated_at = $1
+WHERE workspace_id = $2 AND kind = $3 AND sort_mode = $4
+`
+
+type ResetListKindFieldSortParams struct {
+	Now         time.Time
+	WorkspaceID uuid.UUID
+	Kind        string
+	Key         string
+}
+
+func (q *Queries) ResetListKindFieldSort(ctx context.Context, arg ResetListKindFieldSortParams) error {
+	_, err := q.db.Exec(ctx, resetListKindFieldSort,
+		arg.Now,
+		arg.WorkspaceID,
+		arg.Kind,
+		arg.Key,
+	)
+	return err
+}
+
 const seedBuiltinKindDefinitions = `-- name: SeedBuiltinKindDefinitions :exec
 
 SELECT seed_builtin_kind_definitions($1)

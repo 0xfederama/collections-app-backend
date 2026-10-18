@@ -18,7 +18,11 @@ import (
 )
 
 func (s *Server) ListItems(ctx context.Context, r oapi.ListItemsRequestObject) (oapi.ListItemsResponseObject, error) {
-	p := items.ListParams{Sort: derefOr(enumPtr(r.Params.Sort)), Q: derefOr(r.Params.Q)}
+	p := items.ListParams{
+		Sort: derefOr(r.Params.Sort), Q: derefOr(r.Params.Q),
+		FilterField: derefOr(r.Params.FilterField), FilterValue: derefOr(r.Params.FilterValue),
+		FilterMin: derefOr(r.Params.FilterMin), FilterMax: derefOr(r.Params.FilterMax),
+	}
 	if r.Params.Limit != nil {
 		p.Limit = *r.Params.Limit
 	}
@@ -27,7 +31,15 @@ func (s *Server) ListItems(ctx context.Context, r oapi.ListItemsRequestObject) (
 	}
 	page, err := s.deps.Items.List(ctx, r.Id, p)
 	if errors.Is(err, items.ErrInvalidSort) {
-		pr := invalidParameter(`"sort=kind_key" is not available on lists of this kind.`)
+		pr := invalidParameter("sort must be manual, title, updated, price (when allowed), or a field key of this list's kind.")
+		return oapi.ListItems400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: oapi.BadRequestApplicationProblemPlusJSONResponse{
+				Type: pr.Type, Title: pr.Title, Status: pr.Status, Code: oapi.ProblemCode(pr.Code), Detail: &pr.Detail,
+			},
+		}, nil
+	}
+	if errors.Is(err, items.ErrInvalidFilter) {
+		pr := invalidParameter("field filter parameters must match a sortable field's type.")
 		return oapi.ListItems400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: oapi.BadRequestApplicationProblemPlusJSONResponse{
 				Type: pr.Type, Title: pr.Title, Status: pr.Status, Code: oapi.ProblemCode(pr.Code), Detail: &pr.Detail,

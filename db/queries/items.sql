@@ -21,7 +21,7 @@ WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 FOR UPDATE;
 
 -- name: ListItems :many
--- @sort is manual, title, updated, price or director (movie only; empty director last) (kind_key has its own query, ListItemsByKindKey); @q matches title and, for movies, director.
+-- @sort is manual, title, updated, price or a metadata field key. Field sorting is driven by its definition type.
 SELECT i.*,
        l.kind              AS kind,
        a.width             AS image_width,
@@ -34,34 +34,27 @@ JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.list_id = @list_id AND i.workspace_id = @workspace_id AND i.deleted_at IS NULL
   AND (lower(i.title) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'
        OR (l.kind = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'))
+  AND (@filter_key::text = '' OR CASE @filter_type::text
+       WHEN 'text' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
+       WHEN 'link' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
+       WHEN 'number' THEN (NOT @filter_min_set::boolean OR (i.metadata ->> @filter_key::text)::numeric >= NULLIF(@filter_min::text, '')::numeric)
+                        AND (NOT @filter_max_set::boolean OR (i.metadata ->> @filter_key::text)::numeric <= NULLIF(@filter_max::text, '')::numeric)
+       WHEN 'date' THEN (NOT @filter_min_set::boolean OR i.metadata ->> @filter_key::text >= @filter_min::text)
+                      AND (NOT @filter_max_set::boolean OR i.metadata ->> @filter_key::text <= @filter_max::text)
+       WHEN 'boolean' THEN i.metadata -> @filter_key::text = @filter_value::jsonb
+       WHEN 'streaming' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
+       ELSE false END)
 ORDER BY
   CASE WHEN @sort::text = 'manual' THEN i.sort_order END ASC,
   CASE WHEN @sort::text = 'title' THEN lower(i.title) END ASC,
   CASE WHEN @sort::text = 'updated' THEN i.updated_at END DESC,
   CASE WHEN @sort::text = 'price' THEN i.price_min END ASC NULLS LAST,
   CASE WHEN @sort::text = 'price' THEN lower(i.title) END ASC,
-  CASE WHEN @sort::text = 'director' THEN lower(NULLIF(i.metadata ->> 'director', '')) END ASC NULLS LAST,
-  CASE WHEN @sort::text = 'director' THEN lower(i.title) END ASC,
-  i.id
-LIMIT @page_limit OFFSET @page_offset;
-
--- name: ListItemsByKindKey :many
--- Sort by the kind's sort key, ascending, empty (missing or non-numeric) values last. @key is the metadata key.
-SELECT i.*,
-       l.kind              AS kind,
-       a.width             AS image_width,
-       a.height            AS image_height,
-       a.original_filename AS image_original_filename,
-       COALESCE((SELECT max(v.version) FROM item_content_versions v WHERE v.item_id = i.id), 0)::int AS content_version
-FROM items i
-LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
-JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-WHERE i.list_id = @list_id AND i.workspace_id = @workspace_id AND i.deleted_at IS NULL
-  AND (lower(i.title) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'
-       OR (l.kind = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'))
-ORDER BY
-  CASE WHEN jsonb_typeof(i.metadata -> sqlc.arg(key)::text) = 'number'
-       THEN (i.metadata ->> sqlc.arg(key)::text)::numeric END ASC NULLS LAST,
+  CASE WHEN @sort_type::text = 'number' THEN (i.metadata ->> @sort_key::text)::numeric END ASC NULLS LAST,
+  CASE WHEN @sort_type::text = 'date' THEN i.metadata ->> @sort_key::text END ASC NULLS LAST,
+  CASE WHEN @sort_type::text IN ('text', 'link') THEN lower(NULLIF(i.metadata ->> @sort_key::text, '')) END ASC NULLS LAST,
+  CASE WHEN @sort_type::text = 'streaming' THEN lower(i.metadata ->> @sort_key::text) END ASC NULLS LAST,
+  CASE WHEN @sort_type::text = 'boolean' THEN (i.metadata ->> @sort_key::text)::boolean END ASC NULLS LAST,
   i.id
 LIMIT @page_limit OFFSET @page_offset;
 
@@ -70,7 +63,17 @@ SELECT count(*)::int AS total FROM items i
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.list_id = @list_id AND i.workspace_id = @workspace_id AND i.deleted_at IS NULL
   AND (lower(i.title) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'
-       OR (l.kind = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'));
+       OR (l.kind = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'))
+  AND (@filter_key::text = '' OR CASE @filter_type::text
+       WHEN 'text' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
+       WHEN 'link' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
+       WHEN 'number' THEN (NOT @filter_min_set::boolean OR (i.metadata ->> @filter_key::text)::numeric >= NULLIF(@filter_min::text, '')::numeric)
+                        AND (NOT @filter_max_set::boolean OR (i.metadata ->> @filter_key::text)::numeric <= NULLIF(@filter_max::text, '')::numeric)
+       WHEN 'date' THEN (NOT @filter_min_set::boolean OR i.metadata ->> @filter_key::text >= @filter_min::text)
+                      AND (NOT @filter_max_set::boolean OR i.metadata ->> @filter_key::text <= @filter_max::text)
+       WHEN 'boolean' THEN i.metadata -> @filter_key::text = @filter_value::jsonb
+       WHEN 'streaming' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
+       ELSE false END);
 
 -- name: GetActiveListForItems :one
 SELECT id, name, folder_id, sort_mode, kind FROM lists

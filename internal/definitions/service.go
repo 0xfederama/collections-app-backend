@@ -3,6 +3,7 @@ package definitions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -36,11 +37,15 @@ type Kind struct {
 	Key, Name           string
 	AllowsPrice, Locked bool
 	Version             int
+	DefaultSortField    *string
+	DefaultPinnedFields *[]string
 	Fields              []Field
 }
 type CreateKind struct {
-	Name        string
-	AllowsPrice bool
+	Name                string
+	AllowsPrice         bool
+	DefaultSortField    *string
+	DefaultPinnedFields *[]string
 }
 type CreateField struct{ Label, Type string }
 
@@ -72,16 +77,49 @@ func (s *Service) Create(ctx context.Context, in CreateKind) (Kind, error) {
 		return Kind{}, apperr.Validation(apperr.FieldError{Field: "name", Message: "is required"})
 	}
 	key := keyFor(name)
+	if in.DefaultSortField != nil && (!validFieldKey(*in.DefaultSortField) || (*in.DefaultSortField == "price" && !in.AllowsPrice)) {
+		return Kind{}, apperr.Validation(apperr.FieldError{Field: "default_sort_field", Message: "must be a field key"})
+	}
+	var pinnedJSON []byte
+	if in.DefaultPinnedFields != nil {
+		if len(*in.DefaultPinnedFields) > 2 {
+			return Kind{}, apperr.Validation(apperr.FieldError{Field: "default_pinned_fields", Message: "must have at most 2 entries"})
+		}
+		seen := map[string]bool{}
+		for i, pin := range *in.DefaultPinnedFields {
+			if (!validFieldKey(pin) || (pin == "price" && !in.AllowsPrice)) || seen[pin] {
+				return Kind{}, apperr.Validation(apperr.FieldError{Field: fmt.Sprintf("default_pinned_fields[%d]", i), Message: "must be a unique field key"})
+			}
+			seen[pin] = true
+		}
+		var err error
+		pinnedJSON, err = json.Marshal(*in.DefaultPinnedFields)
+		if err != nil {
+			return Kind{}, fmt.Errorf("marshal default pinned fields: %w", err)
+		}
+	}
 	var row sqlc.KindDefinition
 	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
 		var err error
-		row, err = q.InsertKindDefinition(ctx, sqlc.InsertKindDefinitionParams{WorkspaceID: s.workspaceID, Key: key, Name: name, AllowsPrice: in.AllowsPrice, Now: time.Now().UTC()})
+		row, err = q.InsertKindDefinition(ctx, sqlc.InsertKindDefinitionParams{WorkspaceID: s.workspaceID, Key: key, Name: name, AllowsPrice: in.AllowsPrice, DefaultSortField: in.DefaultSortField, DefaultPinnedFields: pinnedJSON, Now: time.Now().UTC()})
 		return err
 	})
 	if err != nil {
 		return Kind{}, err
 	}
 	return kindRow(row), nil
+}
+
+func validFieldKey(key string) bool {
+	if len(key) == 0 || len(key) > 32 || key[0] < 'a' || key[0] > 'z' {
+		return false
+	}
+	for _, r := range key[1:] {
+		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_') {
+			return false
+		}
+	}
+	return true
 }
 func (s *Service) Rename(ctx context.Context, key string, v int, name string) (Kind, error) {
 	var out sqlc.KindDefinition
@@ -297,6 +335,9 @@ func (s *Service) DeleteField(ctx context.Context, kindKey, fieldKey string, v i
 		if e = q.ResetListKindFieldPins(ctx, sqlc.ResetListKindFieldPinsParams{WorkspaceID: s.workspaceID, Kind: kind.Key, Key: field.Key, Now: now}); e != nil {
 			return e
 		}
+		if e = q.ResetListKindFieldSort(ctx, sqlc.ResetListKindFieldSortParams{WorkspaceID: s.workspaceID, Kind: kind.Key, Key: field.Key, Now: now}); e != nil {
+			return e
+		}
 		if e = q.StripKindFieldValues(ctx, sqlc.StripKindFieldValuesParams{WorkspaceID: s.workspaceID, Kind: kind.Key, Key: field.Key, Now: now}); e != nil {
 			return e
 		}
@@ -369,7 +410,14 @@ func sameStringSet(a, b []string) bool {
 	return len(seen) == 0
 }
 func kindRow(r sqlc.KindDefinition) Kind {
-	return Kind{Key: r.Key, Name: r.Name, AllowsPrice: r.AllowsPrice, Locked: r.IsLocked, Version: int(r.Version)}
+	k := Kind{Key: r.Key, Name: r.Name, AllowsPrice: r.AllowsPrice, Locked: r.IsLocked, Version: int(r.Version), DefaultSortField: r.DefaultSortField}
+	if len(r.DefaultPinnedFields) > 0 && string(r.DefaultPinnedFields) != "null" {
+		var pins []string
+		if json.Unmarshal(r.DefaultPinnedFields, &pins) == nil {
+			k.DefaultPinnedFields = &pins
+		}
+	}
+	return k
 }
 func fieldRow(r sqlc.KindField) Field {
 	return Field{Key: r.Key, Label: r.Label, Type: r.FieldType, Position: int(r.Position), Locked: r.IsLocked, Version: int(r.Version)}

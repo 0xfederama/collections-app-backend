@@ -155,3 +155,49 @@ func TestF014B1_MigrationSeedsBuiltInDefinitions(t *testing.T) {
 		t.Errorf("items after migration = %d, want %d", count, len(wantKinds))
 	}
 }
+
+func TestF014B4_MigrationReplacesKindKeyWithDefaultField(t *testing.T) {
+	ctx := t.Context()
+	dsn := newDatabase(t)
+	m := newMigrate(t, dsn)
+	if err := m.Migrate(14); err != nil {
+		t.Fatalf("migrate to 14: %v", err)
+	}
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	const workspaceID = "00000000-0000-0000-0000-000000001420"
+	const listID = "00000000-0000-0000-0000-000000001421"
+	if _, err := pool.Exec(ctx, `INSERT INTO workspaces (id, name) VALUES ($1, 'Sort migration')`, workspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `SELECT seed_builtin_kind_definitions($1)`, workspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO lists (id, workspace_id, name, kind, sort_mode, sort_order)
+VALUES ($1, $2, 'Films', 'movie', 'kind_key', 0)`, listID, workspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Steps(1); err != nil {
+		t.Fatalf("migrate up 000015: %v", err)
+	}
+	var sortMode string
+	var version int
+	if err := pool.QueryRow(ctx, `SELECT sort_mode, version FROM lists WHERE id = $1`, listID).Scan(&sortMode, &version); err != nil {
+		t.Fatal(err)
+	}
+	if sortMode != "release_year" || version != 2 {
+		t.Fatalf("after up: sort_mode=%q version=%d", sortMode, version)
+	}
+	if err := m.Steps(-1); err != nil {
+		t.Fatalf("migrate down 000015: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT sort_mode, version FROM lists WHERE id = $1`, listID).Scan(&sortMode, &version); err != nil {
+		t.Fatal(err)
+	}
+	if sortMode != "kind_key" || version != 3 {
+		t.Fatalf("after down: sort_mode=%q version=%d", sortMode, version)
+	}
+}

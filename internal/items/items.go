@@ -16,6 +16,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,7 +29,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/clock"
 	"github.com/0xfederama/collections-app-backend/internal/database"
 	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
-	"github.com/0xfederama/collections-app-backend/internal/items/kinds"
 )
 
 // Page sizes of listItems (API.md §5).
@@ -108,17 +110,20 @@ type PathSegment struct {
 	IconColor *string
 }
 
-// ErrInvalidSort means a sort mode that the list's kind does not support:
-// kind_key on a kind without a sort key, price on a kind without a price,
-// or director on a non-movie list. The handler answers 400 invalid_parameter.
+// ErrInvalidSort means a sort mode is neither a built-in mode nor a defined field of the list kind.
 var ErrInvalidSort = errors.New("items: sort is not available on this list")
+var ErrInvalidFilter = errors.New("items: field filter is not valid for this list")
 
 // ListParams are the query options of ListItems. Zero values mean the defaults.
 type ListParams struct {
-	Sort   string // manual, title, updated, price, director or kind_key; "" = the list's sort_mode
-	Q      string // case-insensitive title substring, plus director on movie lists; "" = no filter
-	Limit  int
-	Offset int
+	Sort        string // manual, title, updated, price or a field key; "" = the list's sort_mode
+	Q           string // case-insensitive title substring, plus director on movie lists
+	FilterField string
+	FilterValue string
+	FilterMin   string
+	FilterMax   string
+	Limit       int
+	Offset      int
 }
 
 // ItemPage is one page of items and the total number of matches.
@@ -188,39 +193,59 @@ func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (Ite
 		p.Offset = 0
 	}
 	like := escapeLike(p.Q)
-	if p.Sort == "price" && !kinds.HasPrice(list.Kind) {
+	sortKey, sortType := "", ""
+	kindDefinition, err := q.GetKindDefinitionByKey(ctx, sqlc.GetKindDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: list.Kind})
+	if err != nil {
+		return ItemPage{}, fmt.Errorf("load list kind definition: %w", err)
+	}
+	if p.Sort == "price" && !kindDefinition.AllowsPrice {
 		return ItemPage{}, ErrInvalidSort
 	}
-	if p.Sort == "director" && list.Kind != kinds.Movie {
-		return ItemPage{}, ErrInvalidSort
-	}
-	var rows []sqlc.ListItemsRow
-	if p.Sort == "kind_key" {
-		key, ok := kinds.SortKey(list.Kind)
-		if !ok {
+	if p.Sort != "manual" && p.Sort != "title" && p.Sort != "updated" && p.Sort != "price" {
+		sortType, err = s.fieldType(ctx, q, list.Kind, p.Sort)
+		if errors.Is(err, ErrInvalidSort) {
 			return ItemPage{}, ErrInvalidSort
 		}
-		kr, err := q.ListItemsByKindKey(ctx, sqlc.ListItemsByKindKeyParams{
-			ListID: listID, WorkspaceID: s.workspaceID, Q: like, Key: key,
-			PageLimit: int32(p.Limit), PageOffset: int32(p.Offset), //nolint:gosec // bounded above
-		})
 		if err != nil {
-			return ItemPage{}, fmt.Errorf("list items by kind key: %w", err)
+			return ItemPage{}, fmt.Errorf("load sort field definition: %w", err)
 		}
-		rows = make([]sqlc.ListItemsRow, 0, len(kr))
-		for _, r := range kr {
-			rows = append(rows, sqlc.ListItemsRow(r))
-		}
-	} else {
-		rows, err = q.ListItems(ctx, sqlc.ListItemsParams{
-			ListID: listID, WorkspaceID: s.workspaceID, Q: like, Sort: p.Sort,
-			PageLimit: int32(p.Limit), PageOffset: int32(p.Offset), //nolint:gosec // bounded above
-		})
-		if err != nil {
-			return ItemPage{}, fmt.Errorf("list items: %w", err)
-		}
+		sortKey = p.Sort
 	}
-	total, err := q.CountItems(ctx, sqlc.CountItemsParams{ListID: listID, WorkspaceID: s.workspaceID, Q: like})
+	filterType := ""
+	if p.FilterField != "" {
+		filterType, err = s.fieldType(ctx, q, list.Kind, p.FilterField)
+		if errors.Is(err, ErrInvalidSort) {
+			return ItemPage{}, ErrInvalidFilter
+		}
+		if err != nil {
+			return ItemPage{}, fmt.Errorf("load filter field definition: %w", err)
+		}
+		if !validFilter(filterType, p.FilterValue, p.FilterMin, p.FilterMax) {
+			return ItemPage{}, ErrInvalidFilter
+		}
+	} else if p.FilterValue != "" || p.FilterMin != "" || p.FilterMax != "" {
+		return ItemPage{}, ErrInvalidFilter
+	}
+	filterValue := p.FilterValue
+	if filterType == "text" || filterType == "link" || filterType == "streaming" {
+		filterValue = escapeLike(filterValue)
+	}
+	filter := sqlc.ListItemsParams{
+		ListID: listID, WorkspaceID: s.workspaceID, Q: like, Sort: p.Sort,
+		SortKey: sortKey, SortType: sortType, FilterKey: p.FilterField, FilterType: filterType,
+		FilterValue: filterValue, FilterMinSet: p.FilterMin != "", FilterMin: p.FilterMin,
+		FilterMaxSet: p.FilterMax != "", FilterMax: p.FilterMax,
+		PageLimit: int32(p.Limit), PageOffset: int32(p.Offset), //nolint:gosec // bounded above
+	}
+	rows, err := q.ListItems(ctx, filter)
+	if err != nil {
+		return ItemPage{}, fmt.Errorf("list items: %w", err)
+	}
+	total, err := q.CountItems(ctx, sqlc.CountItemsParams{
+		ListID: listID, WorkspaceID: s.workspaceID, Q: like, FilterKey: p.FilterField, FilterType: filterType,
+		FilterValue: filterValue, FilterMinSet: p.FilterMin != "", FilterMin: p.FilterMin,
+		FilterMaxSet: p.FilterMax != "", FilterMax: p.FilterMax,
+	})
 	if err != nil {
 		return ItemPage{}, fmt.Errorf("count items: %w", err)
 	}
@@ -229,6 +254,69 @@ func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (Ite
 		page.Items = append(page.Items, itemFromRow(r))
 	}
 	return page, nil
+}
+
+func (s *Service) fieldType(ctx context.Context, q *sqlc.Queries, kind, key string) (string, error) {
+	if key == "" || key == "manual" || key == "title" || key == "updated" || key == "price" {
+		return "", ErrInvalidSort
+	}
+	def, err := q.GetKindDefinitionByKey(ctx, sqlc.GetKindDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: kind})
+	if err != nil {
+		return "", err
+	}
+	fields, err := q.ListKindFields(ctx, sqlc.ListKindFieldsParams{WorkspaceID: s.workspaceID, KindID: def.ID})
+	if err != nil {
+		return "", err
+	}
+	for _, f := range fields {
+		if f.Key == key {
+			return f.FieldType, nil
+		}
+	}
+	return "", ErrInvalidSort
+}
+
+func validFilter(fieldType, value, min, max string) bool {
+	switch fieldType {
+	case "text", "link", "streaming":
+		return value != "" && min == "" && max == ""
+	case "boolean":
+		return (value == "true" || value == "false") && min == "" && max == ""
+	case "number":
+		return value == "" && (min != "" || max != "") && validNumber(min) && validNumber(max) && validNumberRange(min, max)
+	case "date":
+		return value == "" && (min != "" || max != "") && validDate(min) && validDate(max) && (min == "" || max == "" || min <= max)
+	default:
+		return false
+	}
+}
+
+func validNumberRange(min, max string) bool {
+	if min == "" || max == "" {
+		return true
+	}
+	lo, ok := new(big.Rat).SetString(min)
+	if !ok {
+		return false
+	}
+	hi, ok := new(big.Rat).SetString(max)
+	return ok && lo.Cmp(hi) <= 0
+}
+
+func validNumber(raw string) bool {
+	if raw == "" {
+		return true
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	return err == nil && !math.IsNaN(v) && !math.IsInf(v, 0)
+}
+
+func validDate(raw string) bool {
+	if raw == "" {
+		return true
+	}
+	_, err := time.Parse("2006-01-02", raw)
+	return err == nil
 }
 
 // escapeLike makes q literal inside a LIKE pattern that uses `\` as escape.

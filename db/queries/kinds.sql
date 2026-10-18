@@ -110,6 +110,11 @@ UPDATE lists
 SET pinned_fields = NULL, version = version + 1, updated_at = @now
 WHERE workspace_id = @workspace_id AND kind = @kind AND pinned_fields ? @key::text;
 
+-- name: ResetListKindFieldSort :exec
+UPDATE lists
+SET sort_mode = 'manual', version = version + 1, updated_at = @now
+WHERE workspace_id = @workspace_id AND kind = @kind AND sort_mode = @key;
+
 -- name: TouchKindDefinition :exec
 UPDATE kind_definitions SET version = version + 1, updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id;

@@ -59,16 +59,44 @@ JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.list_id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
   AND (lower(i.title) LIKE '%' || lower($3::text) || '%' ESCAPE '\'
        OR (l.kind = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower($3::text) || '%' ESCAPE '\'))
+  AND ($4::text = '' OR CASE $5::text
+       WHEN 'text' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
+       WHEN 'link' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
+       WHEN 'number' THEN (NOT $7::boolean OR (i.metadata ->> $4::text)::numeric >= NULLIF($8::text, '')::numeric)
+                        AND (NOT $9::boolean OR (i.metadata ->> $4::text)::numeric <= NULLIF($10::text, '')::numeric)
+       WHEN 'date' THEN (NOT $7::boolean OR i.metadata ->> $4::text >= $8::text)
+                      AND (NOT $9::boolean OR i.metadata ->> $4::text <= $10::text)
+       WHEN 'boolean' THEN i.metadata -> $4::text = $6::jsonb
+       WHEN 'streaming' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
+       ELSE false END)
 `
 
 type CountItemsParams struct {
-	ListID      uuid.UUID
-	WorkspaceID uuid.UUID
-	Q           string
+	ListID       uuid.UUID
+	WorkspaceID  uuid.UUID
+	Q            string
+	FilterKey    string
+	FilterType   string
+	FilterValue  string
+	FilterMinSet bool
+	FilterMin    string
+	FilterMaxSet bool
+	FilterMax    string
 }
 
 func (q *Queries) CountItems(ctx context.Context, arg CountItemsParams) (int32, error) {
-	row := q.db.QueryRow(ctx, countItems, arg.ListID, arg.WorkspaceID, arg.Q)
+	row := q.db.QueryRow(ctx, countItems,
+		arg.ListID,
+		arg.WorkspaceID,
+		arg.Q,
+		arg.FilterKey,
+		arg.FilterType,
+		arg.FilterValue,
+		arg.FilterMinSet,
+		arg.FilterMin,
+		arg.FilterMaxSet,
+		arg.FilterMax,
+	)
 	var total int32
 	err := row.Scan(&total)
 	return total, err
@@ -315,25 +343,47 @@ JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.list_id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
   AND (lower(i.title) LIKE '%' || lower($3::text) || '%' ESCAPE '\'
        OR (l.kind = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower($3::text) || '%' ESCAPE '\'))
+  AND ($4::text = '' OR CASE $5::text
+       WHEN 'text' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
+       WHEN 'link' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
+       WHEN 'number' THEN (NOT $7::boolean OR (i.metadata ->> $4::text)::numeric >= NULLIF($8::text, '')::numeric)
+                        AND (NOT $9::boolean OR (i.metadata ->> $4::text)::numeric <= NULLIF($10::text, '')::numeric)
+       WHEN 'date' THEN (NOT $7::boolean OR i.metadata ->> $4::text >= $8::text)
+                      AND (NOT $9::boolean OR i.metadata ->> $4::text <= $10::text)
+       WHEN 'boolean' THEN i.metadata -> $4::text = $6::jsonb
+       WHEN 'streaming' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
+       ELSE false END)
 ORDER BY
-  CASE WHEN $4::text = 'manual' THEN i.sort_order END ASC,
-  CASE WHEN $4::text = 'title' THEN lower(i.title) END ASC,
-  CASE WHEN $4::text = 'updated' THEN i.updated_at END DESC,
-  CASE WHEN $4::text = 'price' THEN i.price_min END ASC NULLS LAST,
-  CASE WHEN $4::text = 'price' THEN lower(i.title) END ASC,
-  CASE WHEN $4::text = 'director' THEN lower(NULLIF(i.metadata ->> 'director', '')) END ASC NULLS LAST,
-  CASE WHEN $4::text = 'director' THEN lower(i.title) END ASC,
+  CASE WHEN $11::text = 'manual' THEN i.sort_order END ASC,
+  CASE WHEN $11::text = 'title' THEN lower(i.title) END ASC,
+  CASE WHEN $11::text = 'updated' THEN i.updated_at END DESC,
+  CASE WHEN $11::text = 'price' THEN i.price_min END ASC NULLS LAST,
+  CASE WHEN $11::text = 'price' THEN lower(i.title) END ASC,
+  CASE WHEN $12::text = 'number' THEN (i.metadata ->> $13::text)::numeric END ASC NULLS LAST,
+  CASE WHEN $12::text = 'date' THEN i.metadata ->> $13::text END ASC NULLS LAST,
+  CASE WHEN $12::text IN ('text', 'link') THEN lower(NULLIF(i.metadata ->> $13::text, '')) END ASC NULLS LAST,
+  CASE WHEN $12::text = 'streaming' THEN lower(i.metadata ->> $13::text) END ASC NULLS LAST,
+  CASE WHEN $12::text = 'boolean' THEN (i.metadata ->> $13::text)::boolean END ASC NULLS LAST,
   i.id
-LIMIT $6 OFFSET $5
+LIMIT $15 OFFSET $14
 `
 
 type ListItemsParams struct {
-	ListID      uuid.UUID
-	WorkspaceID uuid.UUID
-	Q           string
-	Sort        string
-	PageOffset  int32
-	PageLimit   int32
+	ListID       uuid.UUID
+	WorkspaceID  uuid.UUID
+	Q            string
+	FilterKey    string
+	FilterType   string
+	FilterValue  string
+	FilterMinSet bool
+	FilterMin    string
+	FilterMaxSet bool
+	FilterMax    string
+	Sort         string
+	SortType     string
+	SortKey      string
+	PageOffset   int32
+	PageLimit    int32
 }
 
 type ListItemsRow struct {
@@ -361,13 +411,22 @@ type ListItemsRow struct {
 	ContentVersion        int32
 }
 
-// @sort is manual, title, updated, price or director (movie only; empty director last) (kind_key has its own query, ListItemsByKindKey); @q matches title and, for movies, director.
+// @sort is manual, title, updated, price or a metadata field key. Field sorting is driven by its definition type.
 func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListItemsRow, error) {
 	rows, err := q.db.Query(ctx, listItems,
 		arg.ListID,
 		arg.WorkspaceID,
 		arg.Q,
+		arg.FilterKey,
+		arg.FilterType,
+		arg.FilterValue,
+		arg.FilterMinSet,
+		arg.FilterMin,
+		arg.FilterMaxSet,
+		arg.FilterMax,
 		arg.Sort,
+		arg.SortType,
+		arg.SortKey,
 		arg.PageOffset,
 		arg.PageLimit,
 	)
@@ -378,111 +437,6 @@ func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListIte
 	items := []ListItemsRow{}
 	for rows.Next() {
 		var i ListItemsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.ListID,
-			&i.Title,
-			&i.ImageUrl,
-			&i.ImageAttachmentID,
-			&i.PriceMin,
-			&i.PriceMax,
-			&i.Currency,
-			&i.WebsiteUrl,
-			&i.Metadata,
-			&i.SortOrder,
-			&i.Version,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-			&i.TrashBatchID,
-			&i.Kind,
-			&i.ImageWidth,
-			&i.ImageHeight,
-			&i.ImageOriginalFilename,
-			&i.ContentVersion,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listItemsByKindKey = `-- name: ListItemsByKindKey :many
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
-       l.kind              AS kind,
-       a.width             AS image_width,
-       a.height            AS image_height,
-       a.original_filename AS image_original_filename,
-       COALESCE((SELECT max(v.version) FROM item_content_versions v WHERE v.item_id = i.id), 0)::int AS content_version
-FROM items i
-LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
-JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-WHERE i.list_id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
-  AND (lower(i.title) LIKE '%' || lower($3::text) || '%' ESCAPE '\'
-       OR (l.kind = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower($3::text) || '%' ESCAPE '\'))
-ORDER BY
-  CASE WHEN jsonb_typeof(i.metadata -> $4::text) = 'number'
-       THEN (i.metadata ->> $4::text)::numeric END ASC NULLS LAST,
-  i.id
-LIMIT $6 OFFSET $5
-`
-
-type ListItemsByKindKeyParams struct {
-	ListID      uuid.UUID
-	WorkspaceID uuid.UUID
-	Q           string
-	Key         string
-	PageOffset  int32
-	PageLimit   int32
-}
-
-type ListItemsByKindKeyRow struct {
-	ID                    uuid.UUID
-	WorkspaceID           uuid.UUID
-	ListID                uuid.UUID
-	Title                 string
-	ImageUrl              *string
-	ImageAttachmentID     uuid.NullUUID
-	PriceMin              pgtype.Numeric
-	PriceMax              pgtype.Numeric
-	Currency              *string
-	WebsiteUrl            *string
-	Metadata              []byte
-	SortOrder             int32
-	Version               int32
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
-	DeletedAt             *time.Time
-	TrashBatchID          uuid.NullUUID
-	Kind                  string
-	ImageWidth            *int32
-	ImageHeight           *int32
-	ImageOriginalFilename *string
-	ContentVersion        int32
-}
-
-// Sort by the kind's sort key, ascending, empty (missing or non-numeric) values last. @key is the metadata key.
-func (q *Queries) ListItemsByKindKey(ctx context.Context, arg ListItemsByKindKeyParams) ([]ListItemsByKindKeyRow, error) {
-	rows, err := q.db.Query(ctx, listItemsByKindKey,
-		arg.ListID,
-		arg.WorkspaceID,
-		arg.Q,
-		arg.Key,
-		arg.PageOffset,
-		arg.PageLimit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListItemsByKindKeyRow{}
-	for rows.Next() {
-		var i ListItemsByKindKeyRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,

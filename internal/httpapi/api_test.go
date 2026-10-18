@@ -202,7 +202,6 @@ func TestBadRequests(t *testing.T) {
 		{"limit not a number", req{method: "GET", path: items + "?limit=abc"}, "invalid_parameter", `"limit"`},
 		{"limit zero", req{method: "GET", path: items + "?limit=0"}, "invalid_parameter", `"limit"`},
 		{"negative offset", req{method: "GET", path: items + "?offset=-1"}, "invalid_parameter", `"offset"`},
-		{"unknown sort", req{method: "GET", path: items + "?sort=random"}, "invalid_parameter", `"sort"`},
 		{"search without q", req{method: "GET", path: "/api/v1/search"}, "invalid_parameter", `"q"`},
 		{"search with empty q", req{method: "GET", path: "/api/v1/search?q="}, "invalid_parameter", `"q"`},
 		{"search with long q", req{method: "GET", path: "/api/v1/search?q=" + strings.Repeat("a", 201)}, "invalid_parameter", `"q"`},

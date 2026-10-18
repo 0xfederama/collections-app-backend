@@ -1015,8 +1015,8 @@ func TestF014B4_ListItemsSortsByDefinitionAndFilters(t *testing.T) {
 		cur = e.fetch("lists", lid)
 		wantStatus(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"release_year"}`, etagOf("l", cur)), 200)
 		rows, _ = e.page(lid, "")
-		if got := titlesOf(rows); !reflect.DeepEqual(got, manual) {
-			t.Fatalf("manual after switching back: %v", got)
+		if got := idsOf(rows...); !reflect.DeepEqual(got, want) {
+			t.Fatalf("field sort after switching back: %v", titlesOf(rows))
 		}
 		var orders []int
 		for _, id := range idsOf(late, none, early, tie, mid) {
@@ -1033,6 +1033,10 @@ func TestF014B4_ListItemsSortsByDefinitionAndFilters(t *testing.T) {
 		g := e.list("Plain", nil)
 		e.titled(g["id"].(string), "x")
 		wantProblem(t, e.call("GET", "/api/v1/lists/"+g["id"].(string)+"/items?sort=kind_key", "", ""), 400, "invalid_parameter")
+	})
+
+	t.Run("unknown definition field answers 400 invalid_parameter", func(t *testing.T) {
+		wantProblem(t, e.call("GET", "/api/v1/lists/"+lid+"/items?sort=random", "", ""), 400, "invalid_parameter")
 	})
 }
 

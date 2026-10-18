@@ -67,6 +67,9 @@ func newLookupEnv(t *testing.T, now time.Time) *lookupEnv {
 	if _, err := db.Exec(t.Context(), `INSERT INTO workspaces (id, name) VALUES ($1, 'W')`, ws); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.Exec(t.Context(), `SELECT seed_builtin_kind_definitions($1)`, ws); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Exec(t.Context(), `INSERT INTO workspace_settings (workspace_id) VALUES ($1)`, ws); err != nil {
 		t.Fatal(err)
 	}

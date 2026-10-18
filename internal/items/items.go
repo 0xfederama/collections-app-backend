@@ -195,6 +195,9 @@ func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (Ite
 	like := escapeLike(p.Q)
 	sortKey, sortType := "", ""
 	kindDefinition, err := q.GetKindDefinitionByKey(ctx, sqlc.GetKindDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: list.Kind})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ItemPage{}, ErrInvalidSort
+	}
 	if err != nil {
 		return ItemPage{}, fmt.Errorf("load list kind definition: %w", err)
 	}
@@ -261,6 +264,9 @@ func (s *Service) fieldType(ctx context.Context, q *sqlc.Queries, kind, key stri
 		return "", ErrInvalidSort
 	}
 	def, err := q.GetKindDefinitionByKey(ctx, sqlc.GetKindDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: kind})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrInvalidSort
+	}
 	if err != nil {
 		return "", err
 	}

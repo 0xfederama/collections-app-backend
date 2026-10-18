@@ -3,10 +3,11 @@ package httpapi
 import (
 	"context"
 
+	"github.com/oapi-codegen/nullable"
+
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/etag"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
-	"github.com/oapi-codegen/nullable"
 )
 
 func kindBody(k definitions.Kind) oapi.KindDefinition {

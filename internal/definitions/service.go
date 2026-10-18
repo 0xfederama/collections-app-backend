@@ -116,7 +116,8 @@ func validFieldKey(key string) bool {
 		return false
 	}
 	for _, r := range key[1:] {
-		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_') {
+		valid := r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_'
+		if !valid {
 			return false
 		}
 	}

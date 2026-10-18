@@ -357,20 +357,11 @@ func validateDefinitionPins(allowsPrice bool, fields []sqlc.KindField, in *Pinne
 		}
 		seen[key] = true
 	}
-	p := PinnedFields(*in)
+	p := *in
 	if p == nil {
 		p = PinnedFields{}
 	}
 	return &p, nil
-}
-
-// appendValidation adds the field errors of a validation error to errs. Any other error is not expected here.
-func appendValidation(errs []apperr.FieldError, err error) []apperr.FieldError {
-	var ve *apperr.ValidationError
-	if errors.As(err, &ve) {
-		return append(errs, ve.Errors...)
-	}
-	return errs
 }
 
 func equalPinned(a, b *PinnedFields) bool {

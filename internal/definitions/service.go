@@ -10,11 +10,12 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/database"
 	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
 type DB interface {
@@ -115,7 +116,7 @@ func validFieldKey(key string) bool {
 		return false
 	}
 	for _, r := range key[1:] {
-		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_') {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_') {
 			return false
 		}
 	}

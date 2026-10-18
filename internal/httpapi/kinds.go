@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/etag"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"

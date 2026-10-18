@@ -247,7 +247,7 @@ func itemBody(it items.Item) (oapi.Item, error) {
 
 func itemSummaryBody(it items.Item) oapi.ItemSummary {
 	out := oapi.ItemSummary{
-		Id: it.ID, ListId: it.ListID, Title: it.Title, Kind: oapi.ItemKind(it.Kind),
+		Id: it.ID, ListId: it.ListID, Title: it.Title, Kind: it.Kind,
 		Price: priceBody(it.Price), Website: nullableString(it.Website), ContentVersion: it.ContentVersion,
 		SortOrder: it.SortOrder, Version: it.Version, CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt,
 		Image: nullable.NewNullNullable[oapi.ImageSummary](),

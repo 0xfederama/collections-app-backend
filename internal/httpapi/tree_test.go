@@ -39,6 +39,9 @@ func newTreeEnv(t *testing.T) *treeEnv {
 	if _, err := pool.Exec(ctx, "INSERT INTO workspaces (id, name) VALUES ($1, 'W')", ws); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, "SELECT seed_builtin_kind_definitions($1)", ws); err != nil {
+		t.Fatal(err)
+	}
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: ws,
 		Tree: tree.New(pool, clock.System{}, ws), Items: items.New(pool, clock.System{}, ws),

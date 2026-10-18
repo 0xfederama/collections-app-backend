@@ -114,6 +114,7 @@ const listKindFields = `-- name: ListKindFields :many
 SELECT id, workspace_id, kind_id, key, label, field_type, position, is_locked, version, created_at, updated_at FROM kind_fields
 WHERE workspace_id = $1 AND kind_id = $2
 ORDER BY position, id
+FOR SHARE
 `
 
 type ListKindFieldsParams struct {

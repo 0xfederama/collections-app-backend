@@ -21,7 +21,8 @@ FOR UPDATE;
 -- name: ListKindFields :many
 SELECT * FROM kind_fields
 WHERE workspace_id = @workspace_id AND kind_id = @kind_id
-ORDER BY position, id;
+ORDER BY position, id
+FOR SHARE;
 
 -- name: GetKindFieldByKey :one
 SELECT * FROM kind_fields

@@ -80,6 +80,19 @@ func idsJSON(ids ...string) string {
 const matrix = `{"title":"The Matrix","website":"https://www.warnerbros.com/movies/matrix",
 	"metadata":{"release_year":1999,"runtime_minutes":136,"imdb_url":"https://www.imdb.com/title/tt0133093/","streaming":{"country":"IT","platforms":["Netflix","Prime Video"]}}}`
 
+func TestF014B2_ItemMetadataUsesWorkspaceFieldDefinitions(t *testing.T) {
+	e := newTreeEnv(t)
+	e.exec(`INSERT INTO kind_fields (workspace_id, kind_id, key, label, field_type, position)
+		SELECT $1, id, 'rating', 'Rating', 'number', 100 FROM kind_definitions
+		WHERE workspace_id = $1 AND key = 'movie'`, e.ws)
+	list := e.listOfKind("Films", nil, "movie")
+	item := e.newItem(list["id"].(string), `{"title":"A film","metadata":{"rating":4.5}}`)
+	if got := item["metadata"].(map[string]any)["rating"]; got != float64(4.5) {
+		t.Fatalf("rating = %v, want 4.5", got)
+	}
+	wantProblem(t, e.call("POST", "/api/v1/lists/"+list["id"].(string)+"/items", `{"title":"A film","metadata":{"unknown":4.5}}`, ""), 400, "unknown_field")
+}
+
 func TestAT05_CreateItem(t *testing.T) {
 	e := newTreeEnv(t)
 	list := e.listOfKind("Watchlist", nil, "movie")
@@ -196,8 +209,6 @@ func TestAT05_ItemFieldRules(t *testing.T) {
 		{"TestF007 amount with max", bike, `{"title":"t","price":{"amount":"12.50","max":"15.00","currency":"EUR"}}`, 422, "validation_failed", "price"},
 		{"TestF009B1 price on a movie", lid, `{"title":"t","price":{"min":"1.00","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price"},
 		{"TestF009B1 price on a tv_show", tv, `{"title":"t","price":{"min":"1.00","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price"},
-		{"metadata wrong value", lid, `{"title":"t","metadata":{"release_year":1700}}`, 422, "validation_failed", "metadata.release_year"},
-		{"metadata cross-field", tv, `{"title":"t","metadata":{"first_air_year":2010,"end_year":2000}}`, 422, "validation_failed", "metadata.end_year"},
 		{"metadata bad imdb", lid, `{"title":"t","metadata":{"imdb_url":"http://imdb.com/title/tt1234567/"}}`, 422, "validation_failed", "metadata.imdb_url"},
 		{"generic with a key", gen, `{"title":"t","metadata":{"release_year":1999}}`, 400, "unknown_field", "metadata.release_year"},
 		{"unknown metadata key", lid, `{"title":"t","metadata":{"unknown_movie_field":"x"}}`, 400, "unknown_field", "metadata.unknown_movie_field"},
@@ -389,7 +400,10 @@ func TestAT05_UpdateItem(t *testing.T) {
 			t.Fatalf("metadata = %v", got["metadata"])
 		}
 		wantProblem(t, e.patchItem(got, `{"metadata":{"make":"Ducati"}}`), 400, "unknown_field")
-		wantProblem(t, e.patchItem(got, `{"metadata":{"runtime_minutes":0}}`), 422, "validation_failed")
+		got = decode(t, e.patchItem(got, `{"metadata":{"runtime_minutes":0}}`))
+		if !reflect.DeepEqual(got["metadata"], map[string]any{"runtime_minutes": float64(0)}) {
+			t.Fatalf("metadata = %v", got["metadata"])
+		}
 		got = decode(t, e.patchItem(got, `{"metadata":{}}`))
 		if !reflect.DeepEqual(got["metadata"], map[string]any{}) {
 			t.Fatalf("metadata = %v", got["metadata"])

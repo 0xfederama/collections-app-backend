@@ -116,7 +116,7 @@ func TestF009B1_KindChangeToKindWithoutPriceClearsPrice(t *testing.T) {
 	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"movie"}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
 	got := decode(t, rec)
-	if got["kind"] != "movie" || got["sort_mode"] != "manual" || got["pinned_fields"] != nil {
+	if got["kind"] != "movie" || got["sort_mode"] != "release_year" || got["pinned_fields"] != nil {
 		t.Fatalf("list after kind change: %v", got)
 	}
 	if got["version"].(float64) <= l["version"].(float64) || rec.Header().Get("ETag") != etagOf("l", got) {

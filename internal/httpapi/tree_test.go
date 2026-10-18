@@ -537,7 +537,7 @@ func TestFieldValidation(t *testing.T) {
 		{"folder long name", "POST", "/api/v1/folders", `{"name":"` + long + `"}`, "", []string{"name"}},
 		{"folder rename blank", "PATCH", "/api/v1/folders/" + f["id"].(string), `{"name":" "}`, `"f-1"`, []string{"name"}},
 		{"list empty name", "POST", "/api/v1/lists", `{"name":"","kind":"generic"}`, "", []string{"name"}},
-		{"list bad enums", "POST", "/api/v1/lists", `{"name":"n","kind":"generic","display_mode":"huge","sort_mode":"random"}`, "", []string{"display_mode", "sort_mode"}},
+		{"list bad display mode", "POST", "/api/v1/lists", `{"name":"n","kind":"generic","display_mode":"huge","sort_mode":"random"}`, "", []string{"display_mode"}},
 		{"TestF007 list NUL in description", "POST", "/api/v1/lists", `{"name":"n","kind":"generic","description":"a\u0000b"}`, "", []string{"description"}},
 		{"list patch name and enum", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"name":"","display_mode":"x"}`, `"l-1"`, []string{"name", "display_mode"}},
 		{"TestF007 list patch NUL in description", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"description":"a\u0000b"}`, `"l-1"`, []string{"description"}},

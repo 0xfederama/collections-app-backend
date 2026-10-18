@@ -127,3 +127,15 @@ $$;
 -- One set of immutable definitions per existing workspace. This does not
 -- change item metadata or list keys.
 SELECT seed_builtin_kind_definitions(id) FROM workspaces;
+
+CREATE FUNCTION seed_builtin_kind_definitions_on_workspace_insert() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM seed_builtin_kind_definitions(NEW.id);
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER workspaces_seed_builtin_kind_definitions
+AFTER INSERT ON workspaces
+FOR EACH ROW EXECUTE FUNCTION seed_builtin_kind_definitions_on_workspace_insert();

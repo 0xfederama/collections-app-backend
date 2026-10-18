@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/etag"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
@@ -46,15 +45,38 @@ func (s *Server) DeleteKind(ctx context.Context, r oapi.DeleteKindRequestObject)
 	}
 	return oapi.DeleteKind204Response{}, nil
 }
-func (s *Server) CreateKindField(context.Context, oapi.CreateKindFieldRequestObject) (oapi.CreateKindFieldResponseObject, error) {
-	return nil, apperr.NotFound("kind field")
+func (s *Server) CreateKindField(ctx context.Context, r oapi.CreateKindFieldRequestObject) (oapi.CreateKindFieldResponseObject, error) {
+	f, err := s.deps.Definitions.CreateField(ctx, r.Key, IfMatchVersion(ctx), definitions.CreateField{Label: r.Body.Label, Type: string(r.Body.Type)})
+	if err != nil {
+		return nil, err
+	}
+	return oapi.CreateKindField201JSONResponse{Body: oapi.KindField{Key: f.Key, Label: f.Label, Type: oapi.KindFieldType(f.Type), Position: f.Position, IsLocked: f.Locked, Version: f.Version}, Headers: oapi.CreateKindField201ResponseHeaders{ETag: etag.Format(etag.Field, f.Version)}}, nil
 }
-func (s *Server) ReorderKindFields(context.Context, oapi.ReorderKindFieldsRequestObject) (oapi.ReorderKindFieldsResponseObject, error) {
-	return nil, apperr.NotFound("kind field")
+func (s *Server) ReorderKindFields(ctx context.Context, r oapi.ReorderKindFieldsRequestObject) (oapi.ReorderKindFieldsResponseObject, error) {
+	version, err := s.deps.Definitions.ReorderFields(ctx, r.Key, IfMatchVersion(ctx), r.Body.Keys)
+	if err != nil {
+		return nil, err
+	}
+	return oapi.ReorderKindFields204Response{Headers: oapi.ReorderKindFields204ResponseHeaders{ETag: etag.Format(etag.Kind, version)}}, nil
 }
-func (s *Server) UpdateKindField(context.Context, oapi.UpdateKindFieldRequestObject) (oapi.UpdateKindFieldResponseObject, error) {
-	return nil, apperr.NotFound("kind field")
+func (s *Server) UpdateKindField(ctx context.Context, r oapi.UpdateKindFieldRequestObject) (oapi.UpdateKindFieldResponseObject, error) {
+	f, err := s.deps.Definitions.RenameField(ctx, r.Key, r.FieldKey, IfMatchVersion(ctx), r.Body.Label)
+	if err != nil {
+		return nil, err
+	}
+	return oapi.UpdateKindField200JSONResponse{Body: oapi.KindField{Key: f.Key, Label: f.Label, Type: oapi.KindFieldType(f.Type), Position: f.Position, IsLocked: f.Locked, Version: f.Version}, Headers: oapi.UpdateKindField200ResponseHeaders{ETag: etag.Format(etag.Field, f.Version)}}, nil
 }
-func (s *Server) DeleteKindField(context.Context, oapi.DeleteKindFieldRequestObject) (oapi.DeleteKindFieldResponseObject, error) {
-	return nil, apperr.NotFound("kind field")
+func (s *Server) PreviewDeleteKindField(ctx context.Context, r oapi.PreviewDeleteKindFieldRequestObject) (oapi.PreviewDeleteKindFieldResponseObject, error) {
+	count, err := s.deps.Definitions.FieldDeletePreview(ctx, r.Key, r.FieldKey)
+	if err != nil {
+		return nil, err
+	}
+	return oapi.PreviewDeleteKindField200JSONResponse{PopulatedItemCount: count}, nil
+}
+func (s *Server) DeleteKindField(ctx context.Context, r oapi.DeleteKindFieldRequestObject) (oapi.DeleteKindFieldResponseObject, error) {
+	count, err := s.deps.Definitions.DeleteField(ctx, r.Key, r.FieldKey, IfMatchVersion(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return oapi.DeleteKindField200JSONResponse{PopulatedItemCount: count}, nil
 }

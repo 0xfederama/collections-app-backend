@@ -12,6 +12,25 @@ import (
 	"github.com/google/uuid"
 )
 
+const countKindFieldValues = `-- name: CountKindFieldValues :one
+SELECT count(*)::int FROM items i
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
+WHERE i.workspace_id = $1 AND l.kind = $2 AND i.metadata ? $3::text
+`
+
+type CountKindFieldValuesParams struct {
+	WorkspaceID uuid.UUID
+	Kind        string
+	Key         string
+}
+
+func (q *Queries) CountKindFieldValues(ctx context.Context, arg CountKindFieldValuesParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countKindFieldValues, arg.WorkspaceID, arg.Kind, arg.Key)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const deleteKindDefinition = `-- name: DeleteKindDefinition :exec
 DELETE FROM kind_definitions WHERE id = $1 AND workspace_id = $2
 `
@@ -382,25 +401,112 @@ func (q *Queries) NextKindFieldPosition(ctx context.Context, arg NextKindFieldPo
 	return column_1, err
 }
 
+const prepareReorderKindFields = `-- name: PrepareReorderKindFields :exec
+UPDATE kind_fields f
+SET position = position + (
+      SELECT COALESCE(MAX(position), 0) + 1
+      FROM kind_fields
+      WHERE kind_fields.workspace_id = $1 AND kind_fields.kind_id = $2
+    ),
+    updated_at = $3
+WHERE f.workspace_id = $1 AND f.kind_id = $2 AND f.key = ANY($4::text[])
+`
+
+type PrepareReorderKindFieldsParams struct {
+	WorkspaceID uuid.UUID
+	KindID      uuid.UUID
+	Now         time.Time
+	Keys        []string
+}
+
+func (q *Queries) PrepareReorderKindFields(ctx context.Context, arg PrepareReorderKindFieldsParams) error {
+	_, err := q.db.Exec(ctx, prepareReorderKindFields,
+		arg.WorkspaceID,
+		arg.KindID,
+		arg.Now,
+		arg.Keys,
+	)
+	return err
+}
+
 const reorderKindFields = `-- name: ReorderKindFields :exec
-UPDATE kind_fields f SET position = (o.ord - 1)::int, updated_at = $1
+UPDATE kind_fields f
+SET position = (
+      SELECT count(*)::int
+      FROM kind_fields locked
+      WHERE locked.workspace_id = $1 AND locked.kind_id = $2 AND locked.is_locked
+    ) + (o.ord - 1)::int,
+    version = version + 1,
+    updated_at = $3
 FROM unnest($4::text[]) WITH ORDINALITY AS o(key, ord)
-WHERE f.workspace_id = $2 AND f.kind_id = $3 AND f.key = o.key
+WHERE f.workspace_id = $1 AND f.kind_id = $2 AND f.key = o.key
 `
 
 type ReorderKindFieldsParams struct {
-	Now         time.Time
 	WorkspaceID uuid.UUID
 	KindID      uuid.UUID
+	Now         time.Time
 	Keys        []string
 }
 
 func (q *Queries) ReorderKindFields(ctx context.Context, arg ReorderKindFieldsParams) error {
 	_, err := q.db.Exec(ctx, reorderKindFields,
-		arg.Now,
 		arg.WorkspaceID,
 		arg.KindID,
+		arg.Now,
 		arg.Keys,
+	)
+	return err
+}
+
+const resetKindFieldDefaults = `-- name: ResetKindFieldDefaults :exec
+UPDATE kind_definitions
+SET default_sort_field = CASE WHEN default_sort_field = $1 THEN NULL ELSE default_sort_field END,
+    default_pinned_fields = CASE
+      WHEN default_pinned_fields ? $1::text THEN default_pinned_fields - $1::text
+      ELSE default_pinned_fields
+    END,
+    version = version + 1,
+    updated_at = $2
+WHERE id = $3 AND workspace_id = $4
+`
+
+type ResetKindFieldDefaultsParams struct {
+	Key         *string
+	Now         time.Time
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) ResetKindFieldDefaults(ctx context.Context, arg ResetKindFieldDefaultsParams) error {
+	_, err := q.db.Exec(ctx, resetKindFieldDefaults,
+		arg.Key,
+		arg.Now,
+		arg.ID,
+		arg.WorkspaceID,
+	)
+	return err
+}
+
+const resetListKindFieldPins = `-- name: ResetListKindFieldPins :exec
+UPDATE lists
+SET pinned_fields = NULL, version = version + 1, updated_at = $1
+WHERE workspace_id = $2 AND kind = $3 AND pinned_fields ? $4::text
+`
+
+type ResetListKindFieldPinsParams struct {
+	Now         time.Time
+	WorkspaceID uuid.UUID
+	Kind        string
+	Key         string
+}
+
+func (q *Queries) ResetListKindFieldPins(ctx context.Context, arg ResetListKindFieldPinsParams) error {
+	_, err := q.db.Exec(ctx, resetListKindFieldPins,
+		arg.Now,
+		arg.WorkspaceID,
+		arg.Kind,
+		arg.Key,
 	)
 	return err
 }
@@ -437,6 +543,22 @@ func (q *Queries) StripKindFieldValues(ctx context.Context, arg StripKindFieldVa
 		arg.WorkspaceID,
 		arg.Kind,
 	)
+	return err
+}
+
+const touchKindDefinition = `-- name: TouchKindDefinition :exec
+UPDATE kind_definitions SET version = version + 1, updated_at = $1
+WHERE id = $2 AND workspace_id = $3
+`
+
+type TouchKindDefinitionParams struct {
+	Now         time.Time
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) TouchKindDefinition(ctx context.Context, arg TouchKindDefinitionParams) error {
+	_, err := q.db.Exec(ctx, touchKindDefinition, arg.Now, arg.ID, arg.WorkspaceID)
 	return err
 }
 

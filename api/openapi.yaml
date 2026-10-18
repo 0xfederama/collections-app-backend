@@ -138,7 +138,7 @@ paths:
       summary: Reorder custom fields
       parameters: [{ $ref: '#/components/parameters/IfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReorderKindFieldsRequest' } } } }
-      responses: { '204': { description: Reordered } }
+      responses: { '204': { description: Reordered, headers: { ETag: { $ref: '#/components/headers/ETag' } } } }
   /api/v1/kinds/{key}/fields/{fieldKey}:
     parameters:
       - { name: key, in: path, required: true, schema: { type: string } }
@@ -150,12 +150,17 @@ paths:
       parameters: [{ $ref: '#/components/parameters/IfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateKindFieldRequest' } } } }
       responses: { '200': { description: Updated, headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/KindField' } } } } }
+    get:
+      tags: [kinds]
+      operationId: previewDeleteKindField
+      summary: Count item values that deleting a custom field would remove
+      responses: { '200': { description: Deletion preview, content: { application/json: { schema: { $ref: '#/components/schemas/KindFieldDeletePreview' } } } } }
     delete:
       tags: [kinds]
       operationId: deleteKindField
       summary: Delete a custom field and strip populated values
       parameters: [{ $ref: '#/components/parameters/IfMatch' }]
-      responses: { '204': { description: Deleted } }
+      responses: { '200': { description: Deleted, content: { application/json: { schema: { $ref: '#/components/schemas/KindFieldDeletePreview' } } } } }
   /api/v1/settings:
     get:
       tags: [settings]
@@ -2028,6 +2033,11 @@ components:
       required: [keys]
       additionalProperties: false
       properties: { keys: { type: array, items: { type: string }, uniqueItems: true } }
+    KindFieldDeletePreview:
+      type: object
+      required: [populated_item_count]
+      properties:
+        populated_item_count: { type: integer, minimum: 0, description: Number of items, including trashed items, with a value for this field. }
     Settings:
       type: object
       required: [workspace_name, streaming_country_code, metadata_language, lookup_available, markdown_history_limit, trash_retention_days, version]

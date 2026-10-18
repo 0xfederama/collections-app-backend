@@ -62,8 +62,25 @@ DELETE FROM kind_fields WHERE id = @id AND workspace_id = @workspace_id;
 -- name: NextKindFieldPosition :one
 SELECT COALESCE(MAX(position) + 1, 0)::int FROM kind_fields WHERE workspace_id = @workspace_id AND kind_id = @kind_id;
 
+-- name: PrepareReorderKindFields :exec
+UPDATE kind_fields f
+SET position = position + (
+      SELECT COALESCE(MAX(position), 0) + 1
+      FROM kind_fields
+      WHERE kind_fields.workspace_id = @workspace_id AND kind_fields.kind_id = @kind_id
+    ),
+    updated_at = @now
+WHERE f.workspace_id = @workspace_id AND f.kind_id = @kind_id AND f.key = ANY(@keys::text[]);
+
 -- name: ReorderKindFields :exec
-UPDATE kind_fields f SET position = (o.ord - 1)::int, updated_at = @now
+UPDATE kind_fields f
+SET position = (
+      SELECT count(*)::int
+      FROM kind_fields locked
+      WHERE locked.workspace_id = @workspace_id AND locked.kind_id = @kind_id AND locked.is_locked
+    ) + (o.ord - 1)::int,
+    version = version + 1,
+    updated_at = @now
 FROM unnest(@keys::text[]) WITH ORDINALITY AS o(key, ord)
 WHERE f.workspace_id = @workspace_id AND f.kind_id = @kind_id AND f.key = o.key;
 
@@ -71,3 +88,28 @@ WHERE f.workspace_id = @workspace_id AND f.kind_id = @kind_id AND f.key = o.key;
 UPDATE items i SET metadata = i.metadata - @key::text, version = version + 1, updated_at = @now
 FROM lists l WHERE l.id = i.list_id AND l.workspace_id = i.workspace_id
   AND i.workspace_id = @workspace_id AND l.kind = @kind AND i.metadata ? @key::text;
+
+-- name: CountKindFieldValues :one
+SELECT count(*)::int FROM items i
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
+WHERE i.workspace_id = @workspace_id AND l.kind = @kind AND i.metadata ? @key::text;
+
+-- name: ResetKindFieldDefaults :exec
+UPDATE kind_definitions
+SET default_sort_field = CASE WHEN default_sort_field = @key THEN NULL ELSE default_sort_field END,
+    default_pinned_fields = CASE
+      WHEN default_pinned_fields ? @key::text THEN default_pinned_fields - @key::text
+      ELSE default_pinned_fields
+    END,
+    version = version + 1,
+    updated_at = @now
+WHERE id = @id AND workspace_id = @workspace_id;
+
+-- name: ResetListKindFieldPins :exec
+UPDATE lists
+SET pinned_fields = NULL, version = version + 1, updated_at = @now
+WHERE workspace_id = @workspace_id AND kind = @kind AND pinned_fields ? @key::text;
+
+-- name: TouchKindDefinition :exec
+UPDATE kind_definitions SET version = version + 1, updated_at = @now
+WHERE id = @id AND workspace_id = @workspace_id;

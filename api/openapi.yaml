@@ -2054,7 +2054,7 @@ components:
       type: object
       required: [populated_item_count]
       properties:
-        populated_item_count: { type: integer, minimum: 0, description: Number of items, including trashed items, with a value for this field. }
+        populated_item_count: { type: integer, minimum: 0, description: "Number of items, including trashed items, with a value for this field." }
     Settings:
       type: object
       required: [workspace_name, streaming_country_code, metadata_language, lookup_available, markdown_history_limit, trash_retention_days, version]

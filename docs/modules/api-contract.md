@@ -2,11 +2,11 @@
 
 ## Purpose
 
-`api/openapi.yaml` is the canonical OpenAPI 3.0.3 contract for the HTTP API. Go models and server stubs are generated from it into `internal/httpapi/oapi`. F013 adds movie/TV TMDB suggestions and item lookup operations. Design context lives in `/Users/federico/Developer/collections-app/design-docs/`.
+`api/openapi.yaml` is the canonical OpenAPI 3.0.3 contract. It defines generated Go models and strict-server stubs, including workspace kind-definition management. Design context: `/Users/federico/Developer/collections-app/design-docs/`.
 
 ## Key files
 
-- `api/openapi.yaml`: the contract; examples feed the web MSW mocks
+- `api/openapi.yaml`: contract, kind and field schemas, examples
 - `oapi-codegen.yaml`: generator config (models, chi-server, strict-server, nullable-type)
 - `internal/httpapi/oapi/oapi.gen.go`: generated code, committed, never edit
 - `internal/httpapi/oapi/spec_test.go`: spec validity and route coverage tests (kin-openapi)
@@ -18,10 +18,11 @@
 - `make lint-api`: Redocly CLI 2.63.0 via npx (needs Node >= 24)
 - `make check-generate`: fails if regenerating changes tracked generated files
 - `StrictServerInterface`: one method per operationId, generated in `oapi.gen.go`
-- `GET /api/v1/tmdb/suggestions`: ranked movie or TV matches using workspace `metadata_language`; disabled servers return `available: false`
-- `POST /api/v1/items/{id}/lookup`: `fill`, `rematch`, or `refresh`; If-Match required
-- `POST /api/v1/lists/{id}/items`: movie/TV creation may request lookup or select a `tmdb_id`
-- Movie metadata: `director` is filterable, pinnable, and sortable; `metadata_language` accepts `xx` or `xx-YY`; `lookup_available` is read-only
+- `GET/POST /api/v1/kinds`: list definitions; create a custom kind
+- `PATCH/DELETE /api/v1/kinds/{key}`: rename or delete an unused custom kind (If-Match)
+- `POST /api/v1/kinds/{key}/fields`, `PUT .../fields/order`: add or reorder custom fields (If-Match)
+- `PATCH/GET/DELETE .../fields/{fieldKey}`: rename, preview deletion, or delete a custom field
+- `GET /api/v1/lists/{id}/items`: sort by a kind field and filter with `filter_field`, `filter_value`, `filter_min`, `filter_max`
 - `TestSpecIsValid`: loads and validates `api/openapi.yaml`
 - `TestSpecCoversAllAPIRoutes`: every API.md §5 route exists with a unique operationId
 
@@ -32,6 +33,5 @@
 - `If-Match` is `required: false` so a missing header reaches the handler, which returns 428.
 - An unset `nullable.Nullable` in a response marshals as a zero value, not `null`.
 - `nullable: true` must sit on the schema itself, not next to `allOf`.
-- Item metadata is a `oneOf` discriminated by `kind`. Items have no `kind` in request bodies; it is the list's kind (F-007, spec 0.3.0).
-- Spec 0.3.0 removed `default_currency`, item `summary`/`status`, and renamed `official_website_url` to `website`.
-- Item creation can request TMDB lookup for movie/TV lists; missing matches preserve the typed item, but explicit lookup failures return 503.
+- Kind and field versions have independent ETag streams; all mutations except creation require If-Match.
+- Item metadata is an object validated against its list kind's definition; the item `kind` is read-only.

@@ -135,3 +135,21 @@ func TestBootstrap_DefaultsAndInvalidName(t *testing.T) {
 		t.Errorf("settings = %+v, want %+v", got, want)
 	}
 }
+
+func TestBootstrap_SeedsBuiltinKindDefinitions(t *testing.T) {
+	pool := newPool(t)
+	workspaceID, err := workspace.Bootstrap(t.Context(), pool, "Ours")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kinds, fields int
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM kind_definitions WHERE workspace_id = $1 AND is_locked`, workspaceID).Scan(&kinds); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM kind_fields WHERE workspace_id = $1 AND is_locked`, workspaceID).Scan(&fields); err != nil {
+		t.Fatal(err)
+	}
+	if kinds != 6 || fields != 29 {
+		t.Errorf("seeded definitions = %d kinds, %d fields; want 6 kinds, 29 fields", kinds, fields)
+	}
+}

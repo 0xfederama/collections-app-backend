@@ -67,6 +67,35 @@ type ItemContentVersion struct {
 	CreatedAt time.Time
 }
 
+type KindDefinition struct {
+	ID                  uuid.UUID
+	WorkspaceID         uuid.UUID
+	Key                 string
+	Name                string
+	DefaultIcon         *string
+	AllowsPrice         bool
+	DefaultSortField    *string
+	DefaultPinnedFields []byte
+	IsLocked            bool
+	Version             int32
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+type KindField struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	KindID      uuid.UUID
+	Key         string
+	Label       string
+	FieldType   string
+	Position    int32
+	IsLocked    bool
+	Version     int32
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type List struct {
 	ID           uuid.UUID
 	WorkspaceID  uuid.UUID

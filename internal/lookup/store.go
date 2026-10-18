@@ -188,7 +188,7 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 		setPath(metadata, path, value)
 	}
 	metadata["tmdb_id"] = p.TMDBID
-	metadata, err = kinds.Validate(kind, metadata)
+	metadata, err = s.items.ValidateMetadata(ctx, q, kind, metadata)
 	if err != nil {
 		return uuid.Nil, false, err
 	}
@@ -261,7 +261,7 @@ func (s *DBStore) applyExisting(ctx context.Context, q *sqlc.Queries, p ApplyPar
 		merged = cloneLookupMap(metadata)
 		snapshots = cloneLookupMap(old.ImportedFields)
 	}
-	merged, err = kinds.Validate(cur.Kind, merged)
+	merged, err = s.items.ValidateMetadata(ctx, q, cur.Kind, merged)
 	if err != nil {
 		return false, nil, err
 	}

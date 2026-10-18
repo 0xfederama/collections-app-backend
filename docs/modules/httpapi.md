@@ -8,7 +8,7 @@ Serves the HTTP API: the generated strict server mounted on chi, behind request 
 
 - `internal/httpapi/router.go`: `NewRouter`, `Deps`, middleware order, chi mounting
 - `internal/httpapi/server.go`: `Server`, `/healthz` and `/readyz` handlers, DATA_DIR probe
-- `internal/httpapi/settings.go`, `tree.go`, `folders.go`, `lists.go`: settings, tree, folder and list handlers
+- `internal/httpapi/kinds.go`: kind and field definition management handlers
 - `internal/httpapi/items.go`, `content.go`, `search.go`, `images.go`, `tmdb.go`: item, content, search, file and TMDB suggestion handlers
 - `internal/httpapi/trash.go`: DELETE folder/list/item, trash list, restore and purge handlers
 - `internal/httpapi/middleware.go`: request id, security headers, access log, recovery, `IfMatchVersion`
@@ -21,10 +21,10 @@ Serves the HTTP API: the generated strict server mounted on chi, behind request 
 ## Interfaces
 
 - `NewRouter(d Deps) (http.Handler, error)`: defaults `Clock` to `clock.System{}`; fails if the embedded spec does not load
-- `Deps`: `DB`, `DataDir`, `Logger`, `Clock`, `WorkspaceID`, `Settings`, `TMDB`, `LookupAvailable`, `Tree`, `Items`, `Content`, `Search`, `Images`, `Trash`
+- `Deps`: includes `Definitions *definitions.Service` alongside the domain services
 - `IfMatchVersion(ctx) int`: version N of the validated `If-Match` in guarded handlers
 - `GET /healthz`: 200 `ok`, liveness only; `GET /readyz`: 200 `ready` or 503 (DB ping, DATA_DIR probe)
-- Settings, tree, folder, list, item, content, search, attachment and trash routes: see `api/openapi.yaml`
+- `GET/POST/PATCH/DELETE /api/v1/kinds...`: definition and custom-field management; see `api/openapi.yaml`
 - Delete folder/list/item: 204 with If-Match; trash supports list, restore, single purge and empty
 - `GET /api/v1/tmdb/suggestions?kind=movie|tv_show&q=...`: ranked suggestions; unavailable integration returns an empty disabled result
 - `POST /api/v1/items/{id}/lookup`: explicit metadata lookup with item If-Match
@@ -36,5 +36,5 @@ Serves the HTTP API: the generated strict server mounted on chi, behind request 
 - List create and update take 2 MiB JSON bodies (64 KiB Markdown `description`); other JSON bodies keep the 64 KiB limit.
 - Move and reorder bodies must carry the nullable parent field (`parent_folder_id` or `folder_id`): absent is 422, null means root.
 - Attachment responses set `Cache-Control: private, max-age=31536000, immutable` and `Content-Disposition: inline`; nosniff and CSP come from middleware.
-- Item `metadata` keys are checked by `items/kinds`, not the guard.
+- Item metadata keys are checked against database-backed kind fields, not by the guard.
 - No CORS (D-033); errors outside `apperr` become 500 `internal` with only the request id. Extend `ifMatchPrefix` in `guard.go` by hand for new If-Match operations.

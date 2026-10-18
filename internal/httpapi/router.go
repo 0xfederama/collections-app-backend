@@ -13,6 +13,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/clock"
 	"github.com/0xfederama/collections-app-backend/internal/content"
+	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
@@ -39,6 +40,7 @@ type Deps struct {
 	// WorkspaceID is the single workspace, from workspace.Bootstrap.
 	WorkspaceID uuid.UUID
 	Settings    *workspace.Service
+	Definitions *definitions.Service
 	// LookupAvailable reports whether the optional server-side TMDB key is configured (F013-B5).
 	LookupAvailable bool
 	// TMDB serves optional movie and TV metadata lookups (F013-B1..B3).

@@ -6,6 +6,7 @@
 - [config](modules/config.md): env var parsing and startup validation
 - [content](modules/content.md): item Markdown content, versions, restore and retention
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
+- [definitions](modules/definitions.md): workspace kind and field definitions
 - [httpapi](modules/httpapi.md): HTTP router, probes, settings, tree/folder/list/item/content handlers
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping (`strip-images` backfill), validation, thumbnails, serving, orphan sweeper
 - [items](modules/items.md): items CRUD, move and reorder, per-kind metadata validation (`items/kinds`)

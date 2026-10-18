@@ -11,7 +11,7 @@ func (s *Server) CreateList(ctx context.Context, r oapi.CreateListRequestObject)
 	b := r.Body
 	in := tree.CreateListInput{
 		Name:        b.Name,
-		Kind:        string(b.Kind),
+		Kind:        b.Kind,
 		FolderID:    optionalUUID(b.FolderId),
 		Description: optionalString(b.Description).Value,
 		DisplayMode: derefOr(enumPtr(b.DisplayMode)),

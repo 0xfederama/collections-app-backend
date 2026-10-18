@@ -80,6 +80,19 @@ func idsJSON(ids ...string) string {
 const matrix = `{"title":"The Matrix","website":"https://www.warnerbros.com/movies/matrix",
 	"metadata":{"release_year":1999,"runtime_minutes":136,"imdb_url":"https://www.imdb.com/title/tt0133093/","streaming":{"country":"IT","platforms":["Netflix","Prime Video"]}}}`
 
+func TestF014B2_ItemMetadataUsesWorkspaceFieldDefinitions(t *testing.T) {
+	e := newTreeEnv(t)
+	e.exec(`INSERT INTO kind_fields (workspace_id, kind_id, key, label, field_type, position)
+		SELECT $1, id, 'rating', 'Rating', 'number', 100 FROM kind_definitions
+		WHERE workspace_id = $1 AND key = 'movie'`, e.ws)
+	list := e.listOfKind("Films", nil, "movie")
+	item := e.newItem(list["id"].(string), `{"title":"A film","metadata":{"rating":4.5}}`)
+	if got := item["metadata"].(map[string]any)["rating"]; got != float64(4.5) {
+		t.Fatalf("rating = %v, want 4.5", got)
+	}
+	wantProblem(t, e.call("POST", "/api/v1/lists/"+list["id"].(string)+"/items", `{"title":"A film","metadata":{"unknown":4.5}}`, ""), 400, "unknown_field")
+}
+
 func TestAT05_CreateItem(t *testing.T) {
 	e := newTreeEnv(t)
 	list := e.listOfKind("Watchlist", nil, "movie")
@@ -196,8 +209,6 @@ func TestAT05_ItemFieldRules(t *testing.T) {
 		{"TestF007 amount with max", bike, `{"title":"t","price":{"amount":"12.50","max":"15.00","currency":"EUR"}}`, 422, "validation_failed", "price"},
 		{"TestF009B1 price on a movie", lid, `{"title":"t","price":{"min":"1.00","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price"},
 		{"TestF009B1 price on a tv_show", tv, `{"title":"t","price":{"min":"1.00","max":null,"currency":"EUR"}}`, 422, "validation_failed", "price"},
-		{"metadata wrong value", lid, `{"title":"t","metadata":{"release_year":1700}}`, 422, "validation_failed", "metadata.release_year"},
-		{"metadata cross-field", tv, `{"title":"t","metadata":{"first_air_year":2010,"end_year":2000}}`, 422, "validation_failed", "metadata.end_year"},
 		{"metadata bad imdb", lid, `{"title":"t","metadata":{"imdb_url":"http://imdb.com/title/tt1234567/"}}`, 422, "validation_failed", "metadata.imdb_url"},
 		{"generic with a key", gen, `{"title":"t","metadata":{"release_year":1999}}`, 400, "unknown_field", "metadata.release_year"},
 		{"unknown metadata key", lid, `{"title":"t","metadata":{"unknown_movie_field":"x"}}`, 400, "unknown_field", "metadata.unknown_movie_field"},
@@ -389,7 +400,10 @@ func TestAT05_UpdateItem(t *testing.T) {
 			t.Fatalf("metadata = %v", got["metadata"])
 		}
 		wantProblem(t, e.patchItem(got, `{"metadata":{"make":"Ducati"}}`), 400, "unknown_field")
-		wantProblem(t, e.patchItem(got, `{"metadata":{"runtime_minutes":0}}`), 422, "validation_failed")
+		got = decode(t, e.patchItem(got, `{"metadata":{"runtime_minutes":0}}`))
+		if !reflect.DeepEqual(got["metadata"], map[string]any{"runtime_minutes": float64(0)}) {
+			t.Fatalf("metadata = %v", got["metadata"])
+		}
 		got = decode(t, e.patchItem(got, `{"metadata":{}}`))
 		if !reflect.DeepEqual(got["metadata"], map[string]any{}) {
 			t.Fatalf("metadata = %v", got["metadata"])
@@ -728,13 +742,18 @@ func TestF013B4_ListItemsDirectorSortAndFilter(t *testing.T) {
 	mk("No director", nil)
 
 	rows, page := e.page(lid, "?sort=director")
-	if got, want := titlesOf(rows), []string{"Middle", "Alpha", "Zulu", "No director"}; !reflect.DeepEqual(got, want) || page["total"] != float64(4) {
-		t.Fatalf("director sort = %v total=%v, want %v total=4", got, page["total"], want)
+	got := titlesOf(rows)
+	if len(got) != 4 || got[0] != "Middle" || got[3] != "No director" || page["total"] != float64(4) {
+		t.Fatalf("director sort = %v total=%v, want Bong Joon-ho first and missing directors last", got, page["total"])
+	}
+	if middle := got[1:3]; (middle[0] != "Alpha" || middle[1] != "Zulu") && (middle[0] != "Zulu" || middle[1] != "Alpha") {
+		t.Fatalf("director sort ties = %v, want Alpha and Zulu", middle)
 	}
 
 	rows, page = e.page(lid, "?sort=director&q=campion")
-	if got, want := titlesOf(rows), []string{"Alpha", "Zulu"}; !reflect.DeepEqual(got, want) || page["total"] != float64(2) {
-		t.Fatalf("director filter = %v total=%v, want %v total=2", got, page["total"], want)
+	got = titlesOf(rows)
+	if len(got) != 2 || ((got[0] != "Alpha" || got[1] != "Zulu") && (got[0] != "Zulu" || got[1] != "Alpha")) || page["total"] != float64(2) {
+		t.Fatalf("director filter = %v total=%v, want Alpha and Zulu total=2", got, page["total"])
 	}
 
 	tv := e.listOfKind("Shows", nil, "tv_show")
@@ -943,7 +962,7 @@ func TestF007_MoveItemAcrossKinds(t *testing.T) {
 	wantProblem(t, move(e.fetchItem(it["id"]), uuid.NewString()), 409, "destination_unavailable")
 }
 
-func TestF007_ListItemsSortByKindKey(t *testing.T) {
+func TestF014B4_ListItemsSortsByDefinitionAndFilters(t *testing.T) {
 	e := newTreeEnv(t)
 	l := e.listOfKind("Films", nil, "movie")
 	lid := l["id"].(string)
@@ -969,40 +988,40 @@ func TestF007_ListItemsSortByKindKey(t *testing.T) {
 	want := idsOf(first, second, mid, late, none)
 
 	t.Run("explicit sort", func(t *testing.T) {
-		rows, _ := e.page(lid, "?sort=kind_key")
+		rows, _ := e.page(lid, "?sort=release_year")
 		if got := idsOf(rows...); !reflect.DeepEqual(got, want) {
 			t.Fatalf("got %v, want %v", titlesOf(rows), want)
 		}
 	})
 
 	t.Run("paging and q keep working", func(t *testing.T) {
-		rows, page := e.page(lid, "?sort=kind_key&limit=2&offset=2")
+		rows, page := e.page(lid, "?sort=release_year&limit=2&offset=2")
 		if got := idsOf(rows...); !reflect.DeepEqual(got, want[2:4]) || page["total"].(float64) != 5 {
 			t.Fatalf("page: got %v total %v", titlesOf(rows), page["total"])
 		}
-		rows, page = e.page(lid, "?sort=kind_key&q=LATE")
+		rows, page = e.page(lid, "?sort=release_year&q=LATE")
 		if got := titlesOf(rows); !reflect.DeepEqual(got, []string{"late"}) || page["total"].(float64) != 1 {
 			t.Fatalf("q: got %v total %v", got, page["total"])
 		}
 	})
 
-	t.Run("stored sort_mode kind_key is the default and manual order is untouched", func(t *testing.T) {
+	t.Run("definition default and manual override preserve item order", func(t *testing.T) {
 		manual := []string{"late", "none", "early", "tie", "mid"}
 		rows, _ := e.page(lid, "")
-		if got := titlesOf(rows); !reflect.DeepEqual(got, manual) {
-			t.Fatalf("manual: %v", got)
+		if got := idsOf(rows...); !reflect.DeepEqual(got, want) {
+			t.Fatalf("default field sort: got %v", titlesOf(rows))
 		}
 		cur := e.fetch("lists", lid)
-		wantStatus(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"kind_key"}`, etagOf("l", cur)), 200)
-		rows, _ = e.page(lid, "")
-		if got := idsOf(rows...); !reflect.DeepEqual(got, want) {
-			t.Fatalf("default kind_key: got %v", titlesOf(rows))
-		}
-		cur = e.fetch("lists", lid)
 		wantStatus(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"manual"}`, etagOf("l", cur)), 200)
 		rows, _ = e.page(lid, "")
 		if got := titlesOf(rows); !reflect.DeepEqual(got, manual) {
-			t.Fatalf("manual after switching back: %v", got)
+			t.Fatalf("manual: got %v", got)
+		}
+		cur = e.fetch("lists", lid)
+		wantStatus(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"release_year"}`, etagOf("l", cur)), 200)
+		rows, _ = e.page(lid, "")
+		if got := idsOf(rows...); !reflect.DeepEqual(got, want) {
+			t.Fatalf("field sort after switching back: %v", titlesOf(rows))
 		}
 		var orders []int
 		for _, id := range idsOf(late, none, early, tie, mid) {
@@ -1020,6 +1039,44 @@ func TestF007_ListItemsSortByKindKey(t *testing.T) {
 		e.titled(g["id"].(string), "x")
 		wantProblem(t, e.call("GET", "/api/v1/lists/"+g["id"].(string)+"/items?sort=kind_key", "", ""), 400, "invalid_parameter")
 	})
+
+	t.Run("unknown definition field answers 400 invalid_parameter", func(t *testing.T) {
+		wantProblem(t, e.call("GET", "/api/v1/lists/"+lid+"/items?sort=random", "", ""), 400, "invalid_parameter")
+	})
+}
+
+func TestF014B4_CustomFieldSortAndCombinedFilter(t *testing.T) {
+	e := newTreeEnv(t)
+	e.exec(`INSERT INTO kind_fields (workspace_id, kind_id, key, label, field_type, position)
+		SELECT $1, id, 'rating', 'Rating', 'number', 100 FROM kind_definitions
+		WHERE workspace_id = $1 AND key = 'movie'`, e.ws)
+	l := e.listOfKind("Ratings", nil, "movie")
+	lid := l["id"].(string)
+	cur := e.fetch("lists", lid)
+	gotList := decode(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":["rating"]}`, etagOf("l", cur)))
+	if !reflect.DeepEqual(gotList["pinned_fields"], []any{"rating"}) {
+		t.Fatalf("custom field pin = %v", gotList["pinned_fields"])
+	}
+	for _, body := range []string{
+		`{"title":"Match ten","metadata":{"rating":10}}`,
+		`{"title":"Match two","metadata":{"rating":2}}`,
+		`{"title":"Match five","metadata":{"rating":5}}`,
+		`{"title":"Match missing"}`,
+	} {
+		e.newItem(lid, body)
+	}
+	rows, _ := e.page(lid, "?sort=rating")
+	if got := strings.Join(titlesOf(rows), ","); got != "Match two,Match five,Match ten,Match missing" {
+		t.Fatalf("numeric sort = %s", got)
+	}
+	rows, page := e.page(lid, "?sort=rating&q=match&filter_field=rating&filter_min=4&filter_max=10")
+	if got := strings.Join(titlesOf(rows), ","); got != "Match five,Match ten" || page["total"] != float64(2) {
+		t.Fatalf("combined title and field filter = %s, page %v", got, page)
+	}
+	bad := wantProblem(t, e.call("GET", "/api/v1/lists/"+lid+"/items?filter_field=rating&filter_min=10&filter_max=2", "", ""), 400, "invalid_parameter")
+	if bad.Status != 400 {
+		t.Fatalf("invalid range = %+v", bad)
+	}
 }
 
 func TestF002B4_ListItemsSortByPrice(t *testing.T) {

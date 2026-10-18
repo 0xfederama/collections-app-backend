@@ -39,6 +39,9 @@ func Bootstrap(ctx context.Context, db database.TxBeginner, name string) (uuid.U
 			if err := q.InsertWorkspaceSettings(ctx, id); err != nil {
 				return fmt.Errorf("insert workspace settings: %w", err)
 			}
+			if err := q.SeedBuiltinKindDefinitions(ctx, id); err != nil {
+				return fmt.Errorf("seed built-in kind definitions: %w", err)
+			}
 		case 1:
 			id = ids[0]
 		default:

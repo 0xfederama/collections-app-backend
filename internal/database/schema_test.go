@@ -135,9 +135,9 @@ func schemaCases() []schemaCase {
 			wantCode: "23502", wantConstr: "",
 		},
 		{
-			name: "F007 list sort_mode kind_key is valid",
+			name: "F014-B4 list sort_mode field key is valid",
 			stmts: []string{sqlWorkspaces,
-				`INSERT INTO lists (workspace_id, name, kind, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'kind_key', 0)`},
+				`INSERT INTO lists (workspace_id, name, kind, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'release_year', 0)`},
 		},
 		{
 			name: "F002 list sort_mode price is valid",
@@ -145,10 +145,9 @@ func schemaCases() []schemaCase {
 				`INSERT INTO lists (workspace_id, name, kind, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'price', 0)`},
 		},
 		{
-			name: "F007 list sort_mode outside the enum",
+			name: "F014-B4 list sort_mode is unconstrained storage for definition keys",
 			stmts: []string{sqlWorkspaces,
 				`INSERT INTO lists (workspace_id, name, kind, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'random', 0)`},
-			wantCode: "23514", wantConstr: "lists_sort_mode_check",
 		},
 		{
 			name: "F007 list description up to 64 KiB is valid",

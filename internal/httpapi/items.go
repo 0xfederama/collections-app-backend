@@ -18,7 +18,11 @@ import (
 )
 
 func (s *Server) ListItems(ctx context.Context, r oapi.ListItemsRequestObject) (oapi.ListItemsResponseObject, error) {
-	p := items.ListParams{Sort: derefOr(enumPtr(r.Params.Sort)), Q: derefOr(r.Params.Q)}
+	p := items.ListParams{
+		Sort: derefOr(r.Params.Sort), Q: derefOr(r.Params.Q),
+		FilterField: derefOr(r.Params.FilterField), FilterValue: derefOr(r.Params.FilterValue),
+		FilterMin: derefOr(r.Params.FilterMin), FilterMax: derefOr(r.Params.FilterMax),
+	}
 	if r.Params.Limit != nil {
 		p.Limit = *r.Params.Limit
 	}
@@ -27,7 +31,15 @@ func (s *Server) ListItems(ctx context.Context, r oapi.ListItemsRequestObject) (
 	}
 	page, err := s.deps.Items.List(ctx, r.Id, p)
 	if errors.Is(err, items.ErrInvalidSort) {
-		pr := invalidParameter(`"sort=kind_key" is not available on lists of this kind.`)
+		pr := invalidParameter("sort must be manual, title, updated, price (when allowed), or a field key of this list's kind.")
+		return oapi.ListItems400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: oapi.BadRequestApplicationProblemPlusJSONResponse{
+				Type: pr.Type, Title: pr.Title, Status: pr.Status, Code: oapi.ProblemCode(pr.Code), Detail: &pr.Detail,
+			},
+		}, nil
+	}
+	if errors.Is(err, items.ErrInvalidFilter) {
+		pr := invalidParameter("field filter parameters must match a sortable field's type.")
 		return oapi.ListItems400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: oapi.BadRequestApplicationProblemPlusJSONResponse{
 				Type: pr.Type, Title: pr.Title, Status: pr.Status, Code: oapi.ProblemCode(pr.Code), Detail: &pr.Detail,
@@ -202,22 +214,23 @@ func imageBody(img *items.Image) (nullable.Nullable[oapi.Image], error) {
 	return nullable.NewNullableWithValue(out), nil
 }
 
-// itemWire is ItemBase plus the two fields the per-kind schemas add. Encoding
-// it and loading the bytes into the Item union avoids a switch over the six
-// kinds, and keeps the stored metadata exactly as validated.
-type itemWire struct {
-	oapi.ItemBase
-	Kind     string          `json:"kind"`
-	Metadata json.RawMessage `json:"metadata"`
-}
-
 func itemBody(it items.Item) (oapi.Item, error) {
 	image, err := imageBody(it.Image)
 	if err != nil {
 		return oapi.Item{}, err
 	}
-	base := oapi.ItemBase{
-		Id: it.ID, ListId: it.ListID, Title: it.Title,
+	var metadata map[string]interface{}
+	if len(it.Metadata) > 0 {
+		if err := json.Unmarshal(it.Metadata, &metadata); err != nil {
+			return oapi.Item{}, fmt.Errorf("decode item metadata: %w", err)
+		}
+	}
+	if metadata == nil {
+		metadata = map[string]interface{}{}
+	}
+	kind := it.Kind
+	out := oapi.Item{
+		Id: it.ID, ListId: it.ListID, Title: it.Title, Kind: &kind, Metadata: metadata,
 		Image: image, Price: priceBody(it.Price), Website: nullableString(it.Website),
 		ContentVersion: it.ContentVersion, SortOrder: it.SortOrder, Version: it.Version,
 		CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt,
@@ -227,22 +240,14 @@ func itemBody(it items.Item) (oapi.Item, error) {
 		for _, p := range it.Path {
 			path = append(path, oapi.PathSegment{Type: oapi.PathSegmentType(p.Type), Id: p.ID, Name: p.Name})
 		}
-		base.Path = &path
-	}
-	raw, err := json.Marshal(itemWire{ItemBase: base, Kind: it.Kind, Metadata: it.Metadata})
-	if err != nil {
-		return oapi.Item{}, fmt.Errorf("encode item: %w", err)
-	}
-	var out oapi.Item
-	if err := out.UnmarshalJSON(raw); err != nil {
-		return oapi.Item{}, fmt.Errorf("load item: %w", err)
+		out.Path = &path
 	}
 	return out, nil
 }
 
 func itemSummaryBody(it items.Item) oapi.ItemSummary {
 	out := oapi.ItemSummary{
-		Id: it.ID, ListId: it.ListID, Title: it.Title, Kind: oapi.ItemKind(it.Kind),
+		Id: it.ID, ListId: it.ListID, Title: it.Title, Kind: it.Kind,
 		Price: priceBody(it.Price), Website: nullableString(it.Website), ContentVersion: it.ContentVersion,
 		SortOrder: it.SortOrder, Version: it.Version, CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt,
 		Image: nullable.NewNullNullable[oapi.ImageSummary](),

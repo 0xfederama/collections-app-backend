@@ -16,6 +16,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/clock"
+	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/search"
@@ -39,9 +40,12 @@ func newTreeEnv(t *testing.T) *treeEnv {
 	if _, err := pool.Exec(ctx, "INSERT INTO workspaces (id, name) VALUES ($1, 'W')", ws); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, "SELECT seed_builtin_kind_definitions($1)", ws); err != nil {
+		t.Fatal(err)
+	}
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: ws,
-		Tree: tree.New(pool, clock.System{}, ws), Items: items.New(pool, clock.System{}, ws),
+		Definitions: definitions.New(pool, ws), Tree: tree.New(pool, clock.System{}, ws), Items: items.New(pool, clock.System{}, ws),
 		Search: search.New(pool, ws),
 	})
 	return &treeEnv{t: t, h: h, pool: pool, ws: ws}
@@ -533,7 +537,7 @@ func TestFieldValidation(t *testing.T) {
 		{"folder long name", "POST", "/api/v1/folders", `{"name":"` + long + `"}`, "", []string{"name"}},
 		{"folder rename blank", "PATCH", "/api/v1/folders/" + f["id"].(string), `{"name":" "}`, `"f-1"`, []string{"name"}},
 		{"list empty name", "POST", "/api/v1/lists", `{"name":"","kind":"generic"}`, "", []string{"name"}},
-		{"list bad enums", "POST", "/api/v1/lists", `{"name":"n","kind":"generic","display_mode":"huge","sort_mode":"random"}`, "", []string{"display_mode", "sort_mode"}},
+		{"list bad display mode", "POST", "/api/v1/lists", `{"name":"n","kind":"generic","display_mode":"huge","sort_mode":"random"}`, "", []string{"display_mode"}},
 		{"TestF007 list NUL in description", "POST", "/api/v1/lists", `{"name":"n","kind":"generic","description":"a\u0000b"}`, "", []string{"description"}},
 		{"list patch name and enum", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"name":"","display_mode":"x"}`, `"l-1"`, []string{"name", "display_mode"}},
 		{"TestF007 list patch NUL in description", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"description":"a\u0000b"}`, `"l-1"`, []string{"description"}},
@@ -612,15 +616,15 @@ func TestF007_ListKindIsRequiredAndReturned(t *testing.T) {
 	if !found {
 		t.Error("GET /tree must show the list kind")
 	}
-	// Every known kind can be created; kind_key is only valid when the kind has a sort key.
+	// Every built-in kind can be created and uses its definition's default sort field.
 	for _, kind := range []string{"generic", "movie", "tv_show", "motorcycle", "car", "camera"} {
 		e.listOfKind("K "+kind, nil, kind)
 	}
-	for _, kind := range []string{"movie", "tv_show", "motorcycle", "car", "camera"} {
-		rec := e.call("POST", "/api/v1/lists", fmt.Sprintf(`{"name":"S %s","kind":%q,"sort_mode":"kind_key"}`, kind, kind), "")
+	for kind, field := range map[string]string{"movie": "release_year", "tv_show": "first_air_year", "motorcycle": "displacement_cc", "car": "power_hp", "camera": "megapixels"} {
+		rec := e.call("POST", "/api/v1/lists", fmt.Sprintf(`{"name":"S %s","kind":%q}`, kind, kind), "")
 		wantStatus(t, rec, 201)
-		if decode(t, rec)["sort_mode"] != "kind_key" {
-			t.Errorf("%s: sort_mode not kept", kind)
+		if decode(t, rec)["sort_mode"] != field {
+			t.Errorf("%s: default sort = %v, want %s", kind, decode(t, rec)["sort_mode"], field)
 		}
 	}
 	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"S","kind":"generic","sort_mode":"kind_key"}`, ""), 422, "validation_failed")
@@ -682,42 +686,36 @@ func TestF007_ChangeListKindClearsItemMetadata(t *testing.T) {
 	}
 }
 
-func TestF007_ListSortModeKindKeyFollowsTheKind(t *testing.T) {
+func TestF014B4_ListSortModeUsesFieldDefinitions(t *testing.T) {
 	e := newTreeEnv(t)
 	gen := e.list("Plain", nil)
 	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+gen["id"].(string), `{"sort_mode":"kind_key"}`, etagOf("l", gen)), 422, "validation_failed")
 
 	l := e.listOfKind("Bikes", nil, "motorcycle")
 	lid := l["id"].(string)
-	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"kind_key"}`, etagOf("l", l))
+	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"displacement_cc"}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
 	l = decode(t, rec)
-	if l["sort_mode"] != "kind_key" {
+	if l["sort_mode"] != "displacement_cc" {
 		t.Fatalf("sort_mode = %v", l["sort_mode"])
 	}
 
-	// Switching to another kind with a sort key keeps the mode.
+	// Switching kind takes the new kind's default field sort.
 	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"car"}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
 	l = decode(t, rec)
-	if l["kind"] != "car" || l["sort_mode"] != "kind_key" {
+	if l["kind"] != "car" || l["sort_mode"] != "power_hp" {
 		t.Fatalf("after car: %v", l)
 	}
 
-	// Switching to generic while sorting by the kind key is rejected, on the kind.
-	p := wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"generic"}`, etagOf("l", l)), 422, "validation_failed")
-	if len(p.Errors) != 1 || p.Errors[0].Field != "kind" {
-		t.Fatalf("errors = %+v, want one on kind", p.Errors)
-	}
-	// ...but not when the same PATCH also leaves kind_key.
-	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"generic","sort_mode":"title"}`, etagOf("l", l))
+	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"generic"}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
-	if got := decode(t, rec); got["kind"] != "generic" || got["sort_mode"] != "title" {
+	if got := decode(t, rec); got["kind"] != "generic" || got["sort_mode"] != "manual" {
 		t.Fatalf("got %v", got)
 	}
-	// ...and a kind and kind_key together on a generic list is rejected on the sort mode.
+	// Unknown definition keys remain invalid.
 	cur := e.fetch("lists", lid)
-	p = wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"generic","sort_mode":"kind_key"}`, etagOf("l", cur)), 422, "validation_failed")
+	p := wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"kind_key"}`, etagOf("l", cur)), 422, "validation_failed")
 	if len(p.Errors) != 1 || p.Errors[0].Field != "sort_mode" {
 		t.Fatalf("errors = %+v, want one on sort_mode", p.Errors)
 	}

@@ -55,8 +55,9 @@ type Params struct {
 
 // Result is one match: the item and where it lives, root folder first, list last.
 type Result struct {
-	Item items.Item
-	Path []items.PathSegment
+	Item     items.Item
+	KindName string
+	Path     []items.PathSegment
 }
 
 // Page is one page of results and the total number of matches.
@@ -114,7 +115,7 @@ func (s *Service) Search(ctx context.Context, p Params) (Page, error) {
 			// row out rather than invent a path. Rare, and the next call is right.
 			continue
 		}
-		page.Results = append(page.Results, Result{Item: it, Path: path})
+		page.Results = append(page.Results, Result{Item: it, KindName: paths.kindName(it.ListID), Path: path})
 	}
 	return page, nil
 }
@@ -145,7 +146,7 @@ func (s *Service) Recent(ctx context.Context, limit int) ([]Result, error) {
 	for _, r := range rows {
 		it := items.FromRecentRow(r)
 		if path, ok := paths.of(it.ListID); ok {
-			results = append(results, Result{Item: it, Path: path})
+			results = append(results, Result{Item: it, KindName: paths.kindName(it.ListID), Path: path})
 		}
 	}
 	return results, nil
@@ -167,6 +168,7 @@ type listNode struct {
 	folder    uuid.NullUUID
 	icon      *string
 	iconColor *string
+	kindName  string
 }
 
 func (s *Service) loadPaths(ctx context.Context, db *sqlc.Queries) (tree, error) {
@@ -183,10 +185,12 @@ func (s *Service) loadPaths(ctx context.Context, db *sqlc.Queries) (tree, error)
 		t.folders[f.ID] = folderNode{name: f.Name, parent: f.ParentFolderID}
 	}
 	for _, l := range lists {
-		t.lists[l.ID] = listNode{name: l.Name, folder: l.FolderID, icon: l.Icon, iconColor: l.IconColor}
+		t.lists[l.ID] = listNode{name: l.Name, folder: l.FolderID, icon: l.Icon, iconColor: l.IconColor, kindName: l.KindName}
 	}
 	return t, nil
 }
+
+func (t tree) kindName(listID uuid.UUID) string { return t.lists[listID].kindName }
 
 // of returns the path of a list: its folders root first, then the list. ok is
 // false when the list or one of its folders is not active.

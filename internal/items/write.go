@@ -71,11 +71,8 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 				return err
 			}
 		}
-		meta, merrs, err := validateMetadata(list.Kind, in.Metadata)
+		meta, err := s.ValidateMetadata(ctx, q, list.Kind, in.Metadata)
 		if err != nil {
-			return err
-		}
-		if err := validate(merrs); err != nil {
 			return err
 		}
 		metaJSON, err := json.Marshal(meta)
@@ -142,7 +139,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 				return err
 			}
 		}
-		arg, changed, err := mergePatch(cur, list.Kind, p)
+		arg, changed, err := s.mergePatch(ctx, q, cur, list.Kind, p)
 		if err != nil {
 			return err
 		}
@@ -174,7 +171,7 @@ func priceKindError(kind string) error {
 // mergePatch applies a validated patch to the locked row. It returns the full
 // replacement values and whether anything differs from the stored row. kind is
 // the kind of the item's list, which the metadata is validated against.
-func mergePatch(cur sqlc.Item, kind string, p Patch) (sqlc.UpdateItemParams, bool, error) {
+func (s *Service) mergePatch(ctx context.Context, q *sqlc.Queries, cur sqlc.Item, kind string, p Patch) (sqlc.UpdateItemParams, bool, error) {
 	arg := sqlc.UpdateItemParams{
 		Title:    cur.Title,
 		PriceMin: cur.PriceMin, PriceMax: cur.PriceMax, Currency: cur.Currency,
@@ -192,12 +189,9 @@ func mergePatch(cur sqlc.Item, kind string, p Patch) (sqlc.UpdateItemParams, boo
 		changed = true
 	}
 	if p.Metadata != nil {
-		clean, merrs, err := validateMetadata(kind, p.Metadata)
+		clean, err := s.ValidateMetadata(ctx, q, kind, p.Metadata)
 		if err != nil {
 			return arg, false, err
-		}
-		if len(merrs) > 0 {
-			return arg, false, apperr.Validation(merrs...)
 		}
 		meta, err := json.Marshal(clean)
 		if err != nil {
@@ -279,23 +273,29 @@ func (s *Service) Reorder(ctx context.Context, listID uuid.UUID, ids []uuid.UUID
 	})
 }
 
-// validateMetadata runs the kind validator. An undeclared key comes back as
-// the error (a 400); field rule failures come back as field errors so they
-// merge with the other 422 errors of the request.
-func validateMetadata(kind string, in map[string]any) (map[string]any, []apperr.FieldError, error) {
+// ValidateMetadata loads this workspace's field definitions inside the active
+// transaction and validates metadata against them. It is also used by the TMDB
+// store, whose import write shares the transaction with its provenance row.
+func (s *Service) ValidateMetadata(ctx context.Context, q *sqlc.Queries, kind string, in map[string]any) (map[string]any, error) {
 	if in == nil {
 		in = map[string]any{}
 	}
-	out, err := kinds.Validate(kind, in)
-	var invalid *apperr.ValidationError
-	switch {
-	case err == nil:
-		return out, nil, nil
-	case errors.As(err, &invalid):
-		return nil, invalid.Errors, nil
-	default:
-		return nil, nil, err
+	definition, err := q.GetKindDefinitionByKey(ctx, sqlc.GetKindDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: kind})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.Validation(apperr.FieldError{Field: "kind", Message: "is not a known item kind"})
 	}
+	if err != nil {
+		return nil, fmt.Errorf("get kind definition: %w", err)
+	}
+	fields, err := q.ListKindFields(ctx, sqlc.ListKindFieldsParams{WorkspaceID: s.workspaceID, KindID: definition.ID})
+	if err != nil {
+		return nil, fmt.Errorf("list kind fields: %w", err)
+	}
+	definitions := make([]kinds.Field, len(fields))
+	for i, field := range fields {
+		definitions[i] = kinds.Field{Key: field.Key, Type: field.FieldType, Special: field.IsLocked}
+	}
+	return kinds.Validate(definitions, in)
 }
 
 func validate(errs []apperr.FieldError) error {

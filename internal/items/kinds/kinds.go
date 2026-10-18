@@ -1,8 +1,6 @@
-// Package kinds validates and normalizes item metadata per kind (DATA_MODEL
-// §2.1, trimmed by F-007 and F-002: motorcycle and camera have no make/model, camera has camera_type,
-// tv_show has episodes_per_season and episode_minutes). It is pure Go: no database, no HTTP. Every key is optional, `null`
-// means "key omitted", text is trimmed, and the enum-like values live here
-// (not in CHECK constraints) so a new value needs no migration.
+// Package kinds validates and normalizes item metadata from kind definitions.
+// It is pure Go: callers load the workspace-scoped definitions from the
+// database. Every key is optional and a null value means "key omitted".
 package kinds
 
 import (
@@ -10,9 +8,11 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
@@ -30,6 +30,7 @@ const (
 
 const (
 	defaultTextMax = 100
+	maxLinkLen     = 2048
 	maxPlatforms   = 30
 	maxPlatformLen = 60
 )
@@ -50,102 +51,33 @@ type outcome struct {
 // rule validates one value found at the dotted path "metadata.<key>".
 type rule func(path string, v any) outcome
 
-type schema struct {
-	fields map[string]rule
-	// cross checks rules that span keys, on the normalized values.
-	cross func(out map[string]any) []apperr.FieldError
+// Field is one persisted kind field definition, reduced to the values needed
+// for metadata validation.
+type Field struct {
+	Key     string
+	Type    string
+	Special bool // locked built-in field with an established wire shape
 }
 
-var registry = map[string]schema{
-	Generic: {fields: map[string]rule{}},
-	Movie: {fields: map[string]rule{
-		"release_year":    intRange(1870, 2100),
-		"runtime_minutes": intRange(1, 1000),
-		"director":        text(300),
-		"imdb_url":        imdbURL,
-		"streaming":       streaming,
-		"tmdb_id":         positiveInteger,
-		"lookup_disabled": boolean,
-	}},
-	TVShow: {
-		fields: map[string]rule{
-			"first_air_year":      intRange(1920, 2100),
-			"end_year":            intRange(1920, 2100),
-			"seasons":             intRange(1, 200),
-			"episodes_per_season": intRange(1, 500),
-			"episode_minutes":     intRange(1, 1000),
-			"imdb_url":            imdbURL,
-			"streaming":           streaming,
-			"tmdb_id":             positiveInteger,
-			"lookup_disabled":     boolean,
-		},
-		cross: func(out map[string]any) []apperr.FieldError {
-			first, ok1 := out["first_air_year"].(int)
-			end, ok2 := out["end_year"].(int)
-			if ok1 && ok2 && end < first {
-				return []apperr.FieldError{{Field: "metadata.end_year", Message: "must not be before first_air_year"}}
-			}
-			return nil
-		},
-	},
-	Motorcycle: {fields: map[string]rule{
-		"model_year":      intRange(1885, 2100),
-		"displacement_cc": intRange(1, 5000),
-		"power_hp":        decimalRange(0, 1000),
-		"license_class":   enum("AM", "A1", "A2", "A"),
-	}},
-	Car: {fields: map[string]rule{
-		"make":       text(defaultTextMax),
-		"model":      text(defaultTextMax),
-		"model_year": intRange(1885, 2100),
-		"fuel_type":  enum("petrol", "diesel", "hybrid", "plugin_hybrid", "electric", "lpg", "cng", "hydrogen", "other"),
-		"power_hp":   decimalRange(0, 2000),
-	}},
-	Camera: {fields: map[string]rule{
-		"camera_type":   enum("mirrorless", "dslr", "film"),
-		"release_year":  intRange(1900, 2100),
-		"sensor_format": enum("full_frame", "aps_c", "micro_four_thirds", "one_inch", "medium_format", "film_35mm", "other"),
-		"megapixels":    decimalRange(0.1, 500),
-	}},
-}
-
-// sortKeys is each kind's sort key, the metadata key of the kind_key sort mode (F-007).
-var sortKeys = map[string]string{
-	Movie:      "release_year",
-	TVShow:     "first_air_year",
-	Motorcycle: "displacement_cc",
-	Car:        "power_hp",
-	Camera:     "megapixels",
-}
-
-// SortKey returns the metadata key a list of this kind sorts by in kind_key
-// mode. ok is false for generic (and unknown kinds): they have no sort key.
-func SortKey(kind string) (key string, ok bool) {
-	key, ok = sortKeys[kind]
-	return key, ok
-}
-
-// Known reports whether kind is one of the six MVP kinds.
+// Known reports whether kind is one of the six built-in kinds. Definition
+// backed callers must not use it to decide whether a workspace kind exists.
 func Known(kind string) bool {
-	_, ok := registry[kind]
-	return ok
+	return slices.Contains([]string{Generic, Movie, TVShow, Motorcycle, Car, Camera}, kind)
 }
 
-// Validate checks metadata against the kind and returns the normalized map to
-// store: trimmed text, `null` keys dropped, integers as int, decimals rounded
-// to one place. The error is *apperr.UnknownFieldError for an undeclared key
-// (path "metadata.<key>") or *apperr.ValidationError with one entry per bad
-// field; an undeclared key wins over field errors. An unknown kind is a
-// validation error on `kind`.
-func Validate(kind string, in map[string]any) (map[string]any, error) {
-	sc, ok := registry[kind]
-	if !ok {
-		return nil, apperr.Validation(apperr.FieldError{Field: "kind", Message: "is not a known item kind"})
+// Validate checks metadata against the supplied kind fields and returns the
+// normalized map to store. Streaming and TMDB bookkeeping retain their
+// established validators by key; all other fields follow their stored type.
+// An undeclared key wins over field errors.
+func Validate(fields []Field, in map[string]any) (map[string]any, error) {
+	rules := make(map[string]rule, len(fields))
+	for _, field := range fields {
+		rules[field.Key] = ruleFor(field)
 	}
 	out := make(map[string]any, len(in))
 	var errs []apperr.FieldError
 	for _, key := range slices.Sorted(maps.Keys(in)) {
-		r, declared := sc.fields[key]
+		r, declared := rules[key]
 		if !declared {
 			return nil, apperr.UnknownField("metadata." + key)
 		}
@@ -162,13 +94,43 @@ func Validate(kind string, in map[string]any) (map[string]any, error) {
 		}
 		out[key] = res.val
 	}
-	if sc.cross != nil && len(errs) == 0 {
-		errs = append(errs, sc.cross(out)...)
-	}
 	if len(errs) > 0 {
 		return nil, apperr.Validation(errs...)
 	}
 	return out, nil
+}
+
+func ruleFor(field Field) rule {
+	// These keys are data imported from TMDB or maintain lookup state. Their
+	// wire shape must remain independent of a definition label/type edit.
+	if field.Special {
+		switch field.Key {
+		case "streaming":
+			return streaming
+		case "tmdb_id":
+			return positiveInteger
+		case "lookup_disabled":
+			return boolean
+		case "imdb_url":
+			return imdbURL
+		}
+	}
+	switch field.Type {
+	case "text":
+		return text(defaultTextMax)
+	case "number":
+		return finiteNumber
+	case "date":
+		return date
+	case "boolean":
+		return boolean
+	case "link":
+		return link
+	case "streaming":
+		return streaming
+	default:
+		return func(path string, _ any) outcome { return fail(path, "has an unsupported field type") }
+	}
 }
 
 func fail(path, format string, args ...any) outcome {
@@ -191,19 +153,6 @@ func number(v any) (float64, bool) {
 	return 0, false
 }
 
-func intRange(lo, hi int) rule {
-	return func(path string, v any) outcome {
-		f, ok := number(v)
-		if !ok || f != math.Trunc(f) {
-			return fail(path, "must be an integer")
-		}
-		if f < float64(lo) || f > float64(hi) {
-			return fail(path, "must be between %d and %d", lo, hi)
-		}
-		return outcome{val: int(f)}
-	}
-}
-
 func positiveInteger(path string, v any) outcome {
 	f, ok := number(v)
 	if !ok || f != math.Trunc(f) || f < 1 || f > 9007199254740991 {
@@ -212,31 +161,20 @@ func positiveInteger(path string, v any) outcome {
 	return outcome{val: int(f)}
 }
 
+func finiteNumber(path string, v any) outcome {
+	f, ok := number(v)
+	if !ok {
+		return fail(path, "must be a finite number")
+	}
+	return outcome{val: f}
+}
+
 func boolean(path string, v any) outcome {
 	b, ok := v.(bool)
 	if !ok {
 		return fail(path, "must be a boolean")
 	}
 	return outcome{val: b}
-}
-
-// decimalRange accepts numbers with at most one decimal place.
-func decimalRange(lo, hi float64) rule {
-	return func(path string, v any) outcome {
-		f, ok := number(v)
-		if !ok {
-			return fail(path, "must be a number")
-		}
-		tenths := f * 10
-		if math.Abs(tenths-math.Round(tenths)) > 1e-6 {
-			return fail(path, "must have at most 1 decimal place")
-		}
-		f = math.Round(tenths) / 10
-		if f < lo || f > hi {
-			return fail(path, "must be between %v and %v", lo, hi)
-		}
-		return outcome{val: f}
-	}
 }
 
 func text(maxLen int) rule {
@@ -253,19 +191,31 @@ func text(maxLen int) rule {
 	}
 }
 
-func enum(values ...string) rule {
-	return func(path string, v any) outcome {
-		s, ok := v.(string)
-		if !ok {
-			return fail(path, "must be a string")
-		}
-		for _, allowed := range values {
-			if s == allowed {
-				return outcome{val: s}
-			}
-		}
-		return fail(path, "must be one of %s", strings.Join(values, ", "))
+func date(path string, v any) outcome {
+	s, ok := v.(string)
+	if !ok {
+		return fail(path, "must be an ISO date")
 	}
+	if _, err := time.Parse(time.DateOnly, s); err != nil {
+		return fail(path, "must be an ISO date")
+	}
+	return outcome{val: s}
+}
+
+func link(path string, v any) outcome {
+	s, ok := v.(string)
+	if !ok {
+		return fail(path, "must be an http or https URL")
+	}
+	s = strings.TrimSpace(s)
+	if utf8.RuneCountInString(s) > maxLinkLen {
+		return fail(path, "must be at most %d characters", maxLinkLen)
+	}
+	u, err := url.Parse(s)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fail(path, "must be an http or https URL")
+	}
+	return outcome{val: s}
 }
 
 func imdbURL(path string, v any) outcome {
@@ -384,32 +334,33 @@ const PriceKey = "price"
 // have none.
 var priceKinds = map[string]bool{Motorcycle: true, Car: true, Camera: true}
 
+var builtinPinnableKeys = map[string][]string{
+	Generic:    {},
+	Movie:      {"director", "imdb_url", "release_year", "runtime_minutes", "streaming"},
+	TVShow:     {"end_year", "episode_minutes", "episodes_per_season", "first_air_year", "imdb_url", "seasons", "streaming"},
+	Motorcycle: {"displacement_cc", "license_class", "model_year", "power_hp"},
+	Car:        {"fuel_type", "make", "model", "model_year", "power_hp"},
+	Camera:     {"camera_type", "megapixels", "release_year", "sensor_format"},
+}
+
 // HasPrice reports whether items of this kind can carry a price (F009-B1).
 func HasPrice(kind string) bool { return priceKinds[kind] }
 
 // PinnableKeys returns the field keys a list of this kind can pin, sorted: the
-// kind's metadata keys, plus "price" only on the kinds that have one (generic
-// has no key at all; movie and tv_show have no price, F009-B1). Keys are looked
-// up through the registry, except provider bookkeeping fields, which are never
-// displayed as pins. An unknown kind has none.
+// kind's metadata keys, plus "price" only on the kinds that have one. This is
+// retained temporarily for the pre-F014-B4 list APIs; item validation itself
+// is definition-backed.
 func PinnableKeys(kind string) []string {
-	sc, ok := registry[kind]
+	fields, ok := builtinPinnableKeys[kind]
 	if !ok {
 		return nil
 	}
-	fields := maps.Clone(sc.fields)
-	delete(fields, "tmdb_id")
-	delete(fields, "lookup_disabled")
 	if !HasPrice(kind) {
-		return slices.Sorted(maps.Keys(fields))
+		return append([]string{}, fields...)
 	}
-	return slices.Sorted(maps.Keys(withPrice(fields)))
-}
-
-func withPrice(fields map[string]rule) map[string]rule {
-	out := make(map[string]rule, len(fields)+1)
-	maps.Copy(out, fields)
-	out[PriceKey] = nil
+	out := append([]string{}, fields...)
+	out = append(out, PriceKey)
+	slices.Sort(out)
 	return out
 }
 

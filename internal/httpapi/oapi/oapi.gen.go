@@ -26,123 +26,27 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// Defines values for CameraItemKind.
+// Defines values for CreateKindFieldRequestType.
 const (
-	CameraItemKindCamera CameraItemKind = "camera"
+	CreateKindFieldRequestTypeBoolean CreateKindFieldRequestType = "boolean"
+	CreateKindFieldRequestTypeDate    CreateKindFieldRequestType = "date"
+	CreateKindFieldRequestTypeLink    CreateKindFieldRequestType = "link"
+	CreateKindFieldRequestTypeNumber  CreateKindFieldRequestType = "number"
+	CreateKindFieldRequestTypeText    CreateKindFieldRequestType = "text"
 )
 
-// Valid indicates whether the value is a known member of the CameraItemKind enum.
-func (e CameraItemKind) Valid() bool {
+// Valid indicates whether the value is a known member of the CreateKindFieldRequestType enum.
+func (e CreateKindFieldRequestType) Valid() bool {
 	switch e {
-	case CameraItemKindCamera:
+	case CreateKindFieldRequestTypeBoolean:
 		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CameraMetadataCameraType.
-const (
-	Dslr       CameraMetadataCameraType = "dslr"
-	Film       CameraMetadataCameraType = "film"
-	Mirrorless CameraMetadataCameraType = "mirrorless"
-)
-
-// Valid indicates whether the value is a known member of the CameraMetadataCameraType enum.
-func (e CameraMetadataCameraType) Valid() bool {
-	switch e {
-	case Dslr:
+	case CreateKindFieldRequestTypeDate:
 		return true
-	case Film:
+	case CreateKindFieldRequestTypeLink:
 		return true
-	case Mirrorless:
+	case CreateKindFieldRequestTypeNumber:
 		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CameraMetadataSensorFormat.
-const (
-	CameraMetadataSensorFormatApsC            CameraMetadataSensorFormat = "aps_c"
-	CameraMetadataSensorFormatFilm35mm        CameraMetadataSensorFormat = "film_35mm"
-	CameraMetadataSensorFormatFullFrame       CameraMetadataSensorFormat = "full_frame"
-	CameraMetadataSensorFormatMediumFormat    CameraMetadataSensorFormat = "medium_format"
-	CameraMetadataSensorFormatMicroFourThirds CameraMetadataSensorFormat = "micro_four_thirds"
-	CameraMetadataSensorFormatOneInch         CameraMetadataSensorFormat = "one_inch"
-	CameraMetadataSensorFormatOther           CameraMetadataSensorFormat = "other"
-)
-
-// Valid indicates whether the value is a known member of the CameraMetadataSensorFormat enum.
-func (e CameraMetadataSensorFormat) Valid() bool {
-	switch e {
-	case CameraMetadataSensorFormatApsC:
-		return true
-	case CameraMetadataSensorFormatFilm35mm:
-		return true
-	case CameraMetadataSensorFormatFullFrame:
-		return true
-	case CameraMetadataSensorFormatMediumFormat:
-		return true
-	case CameraMetadataSensorFormatMicroFourThirds:
-		return true
-	case CameraMetadataSensorFormatOneInch:
-		return true
-	case CameraMetadataSensorFormatOther:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CarItemKind.
-const (
-	CarItemKindCar CarItemKind = "car"
-)
-
-// Valid indicates whether the value is a known member of the CarItemKind enum.
-func (e CarItemKind) Valid() bool {
-	switch e {
-	case CarItemKindCar:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CarMetadataFuelType.
-const (
-	CarMetadataFuelTypeCng          CarMetadataFuelType = "cng"
-	CarMetadataFuelTypeDiesel       CarMetadataFuelType = "diesel"
-	CarMetadataFuelTypeElectric     CarMetadataFuelType = "electric"
-	CarMetadataFuelTypeHybrid       CarMetadataFuelType = "hybrid"
-	CarMetadataFuelTypeHydrogen     CarMetadataFuelType = "hydrogen"
-	CarMetadataFuelTypeLpg          CarMetadataFuelType = "lpg"
-	CarMetadataFuelTypeOther        CarMetadataFuelType = "other"
-	CarMetadataFuelTypePetrol       CarMetadataFuelType = "petrol"
-	CarMetadataFuelTypePluginHybrid CarMetadataFuelType = "plugin_hybrid"
-)
-
-// Valid indicates whether the value is a known member of the CarMetadataFuelType enum.
-func (e CarMetadataFuelType) Valid() bool {
-	switch e {
-	case CarMetadataFuelTypeCng:
-		return true
-	case CarMetadataFuelTypeDiesel:
-		return true
-	case CarMetadataFuelTypeElectric:
-		return true
-	case CarMetadataFuelTypeHybrid:
-		return true
-	case CarMetadataFuelTypeHydrogen:
-		return true
-	case CarMetadataFuelTypeLpg:
-		return true
-	case CarMetadataFuelTypeOther:
-		return true
-	case CarMetadataFuelTypePetrol:
-		return true
-	case CarMetadataFuelTypePluginHybrid:
+	case CreateKindFieldRequestTypeText:
 		return true
 	default:
 		return false
@@ -170,45 +74,30 @@ func (e DisplayMode) Valid() bool {
 	}
 }
 
-// Defines values for GenericItemKind.
+// Defines values for KindFieldType.
 const (
-	GenericItemKindGeneric GenericItemKind = "generic"
+	KindFieldTypeBoolean   KindFieldType = "boolean"
+	KindFieldTypeDate      KindFieldType = "date"
+	KindFieldTypeLink      KindFieldType = "link"
+	KindFieldTypeNumber    KindFieldType = "number"
+	KindFieldTypeStreaming KindFieldType = "streaming"
+	KindFieldTypeText      KindFieldType = "text"
 )
 
-// Valid indicates whether the value is a known member of the GenericItemKind enum.
-func (e GenericItemKind) Valid() bool {
+// Valid indicates whether the value is a known member of the KindFieldType enum.
+func (e KindFieldType) Valid() bool {
 	switch e {
-	case GenericItemKindGeneric:
+	case KindFieldTypeBoolean:
 		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ItemKind.
-const (
-	ItemKindCamera     ItemKind = "camera"
-	ItemKindCar        ItemKind = "car"
-	ItemKindGeneric    ItemKind = "generic"
-	ItemKindMotorcycle ItemKind = "motorcycle"
-	ItemKindMovie      ItemKind = "movie"
-	ItemKindTvShow     ItemKind = "tv_show"
-)
-
-// Valid indicates whether the value is a known member of the ItemKind enum.
-func (e ItemKind) Valid() bool {
-	switch e {
-	case ItemKindCamera:
+	case KindFieldTypeDate:
 		return true
-	case ItemKindCar:
+	case KindFieldTypeLink:
 		return true
-	case ItemKindGeneric:
+	case KindFieldTypeNumber:
 		return true
-	case ItemKindMotorcycle:
+	case KindFieldTypeStreaming:
 		return true
-	case ItemKindMovie:
-		return true
-	case ItemKindTvShow:
+	case KindFieldTypeText:
 		return true
 	default:
 		return false
@@ -275,60 +164,6 @@ func (e LookupItemRequestMode) Valid() bool {
 	case Refresh:
 		return true
 	case Rematch:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for MotorcycleItemKind.
-const (
-	MotorcycleItemKindMotorcycle MotorcycleItemKind = "motorcycle"
-)
-
-// Valid indicates whether the value is a known member of the MotorcycleItemKind enum.
-func (e MotorcycleItemKind) Valid() bool {
-	switch e {
-	case MotorcycleItemKindMotorcycle:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for MotorcycleMetadataLicenseClass.
-const (
-	A  MotorcycleMetadataLicenseClass = "A"
-	A1 MotorcycleMetadataLicenseClass = "A1"
-	A2 MotorcycleMetadataLicenseClass = "A2"
-	AM MotorcycleMetadataLicenseClass = "AM"
-)
-
-// Valid indicates whether the value is a known member of the MotorcycleMetadataLicenseClass enum.
-func (e MotorcycleMetadataLicenseClass) Valid() bool {
-	switch e {
-	case A:
-		return true
-	case A1:
-		return true
-	case A2:
-		return true
-	case AM:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for MovieItemKind.
-const (
-	MovieItemKindMovie MovieItemKind = "movie"
-)
-
-// Valid indicates whether the value is a known member of the MovieItemKind enum.
-func (e MovieItemKind) Valid() bool {
-	switch e {
-	case MovieItemKindMovie:
 		return true
 	default:
 		return false
@@ -518,48 +353,18 @@ func (e SearchPathSegmentType) Valid() bool {
 	}
 }
 
-// Defines values for SortMode.
-const (
-	SortModeDirector SortMode = "director"
-	SortModeKindKey  SortMode = "kind_key"
-	SortModeManual   SortMode = "manual"
-	SortModePrice    SortMode = "price"
-	SortModeTitle    SortMode = "title"
-	SortModeUpdated  SortMode = "updated"
-)
-
-// Valid indicates whether the value is a known member of the SortMode enum.
-func (e SortMode) Valid() bool {
-	switch e {
-	case SortModeDirector:
-		return true
-	case SortModeKindKey:
-		return true
-	case SortModeManual:
-		return true
-	case SortModePrice:
-		return true
-	case SortModeTitle:
-		return true
-	case SortModeUpdated:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for TmdbKind.
 const (
-	TmdbKindMovie  TmdbKind = "movie"
-	TmdbKindTvShow TmdbKind = "tv_show"
+	Movie  TmdbKind = "movie"
+	TvShow TmdbKind = "tv_show"
 )
 
 // Valid indicates whether the value is a known member of the TmdbKind enum.
 func (e TmdbKind) Valid() bool {
 	switch e {
-	case TmdbKindMovie:
+	case Movie:
 		return true
-	case TmdbKindTvShow:
+	case TvShow:
 		return true
 	default:
 		return false
@@ -581,21 +386,6 @@ func (e TrashEntryRootType) Valid() bool {
 	case TrashEntryRootTypeItem:
 		return true
 	case TrashEntryRootTypeList:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for TvShowItemKind.
-const (
-	TvShowItemKindTvShow TvShowItemKind = "tv_show"
-)
-
-// Valid indicates whether the value is a known member of the TvShowItemKind enum.
-func (e TvShowItemKind) Valid() bool {
-	switch e {
-	case TvShowItemKindTvShow:
 		return true
 	default:
 		return false
@@ -761,94 +551,6 @@ func (e VersionConflictProblemCode) Valid() bool {
 // BinaryFile defines model for BinaryFile.
 type BinaryFile = openapi_types.File
 
-// CameraItem defines model for CameraItem.
-type CameraItem struct {
-	// ContentVersion Current Markdown version (0 = empty). For display only; use the content endpoints to edit.
-	ContentVersion int                `json:"content_version"`
-	CreatedAt      time.Time          `json:"created_at"`
-	Id             openapi_types.UUID `json:"id"`
-
-	// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
-	Image    nullable.Nullable[Image] `json:"image"`
-	Kind     *CameraItemKind          `json:"kind,omitempty"`
-	ListId   openapi_types.UUID       `json:"list_id"`
-	Metadata CameraMetadata           `json:"metadata"`
-
-	// Path Ancestor folders and the list. Present on `getItem` only.
-	Path *[]PathSegment `json:"path,omitempty"`
-
-	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
-	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
-	Price     nullable.Nullable[Price]  `json:"price"`
-	SortOrder int                       `json:"sort_order"`
-	Title     string                    `json:"title"`
-	UpdatedAt time.Time                 `json:"updated_at"`
-	Version   int                       `json:"version"`
-	Website   nullable.Nullable[string] `json:"website"`
-}
-
-// CameraItemKind defines model for CameraItem.Kind.
-type CameraItemKind string
-
-// CameraMetadata defines model for CameraMetadata.
-type CameraMetadata struct {
-	CameraType *CameraMetadataCameraType `json:"camera_type,omitempty"`
-
-	// Megapixels One decimal.
-	Megapixels   *float32                    `json:"megapixels,omitempty"`
-	ReleaseYear  *int                        `json:"release_year,omitempty"`
-	SensorFormat *CameraMetadataSensorFormat `json:"sensor_format,omitempty"`
-}
-
-// CameraMetadataCameraType defines model for CameraMetadata.CameraType.
-type CameraMetadataCameraType string
-
-// CameraMetadataSensorFormat defines model for CameraMetadata.SensorFormat.
-type CameraMetadataSensorFormat string
-
-// CarItem defines model for CarItem.
-type CarItem struct {
-	// ContentVersion Current Markdown version (0 = empty). For display only; use the content endpoints to edit.
-	ContentVersion int                `json:"content_version"`
-	CreatedAt      time.Time          `json:"created_at"`
-	Id             openapi_types.UUID `json:"id"`
-
-	// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
-	Image    nullable.Nullable[Image] `json:"image"`
-	Kind     *CarItemKind             `json:"kind,omitempty"`
-	ListId   openapi_types.UUID       `json:"list_id"`
-	Metadata CarMetadata              `json:"metadata"`
-
-	// Path Ancestor folders and the list. Present on `getItem` only.
-	Path *[]PathSegment `json:"path,omitempty"`
-
-	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
-	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
-	Price     nullable.Nullable[Price]  `json:"price"`
-	SortOrder int                       `json:"sort_order"`
-	Title     string                    `json:"title"`
-	UpdatedAt time.Time                 `json:"updated_at"`
-	Version   int                       `json:"version"`
-	Website   nullable.Nullable[string] `json:"website"`
-}
-
-// CarItemKind defines model for CarItem.Kind.
-type CarItemKind string
-
-// CarMetadata defines model for CarMetadata.
-type CarMetadata struct {
-	FuelType  *CarMetadataFuelType `json:"fuel_type,omitempty"`
-	Make      *string              `json:"make,omitempty"`
-	Model     *string              `json:"model,omitempty"`
-	ModelYear *int                 `json:"model_year,omitempty"`
-
-	// PowerHp One decimal.
-	PowerHp *float32 `json:"power_hp,omitempty"`
-}
-
-// CarMetadataFuelType defines model for CarMetadata.FuelType.
-type CarMetadataFuelType string
-
 // Content defines model for Content.
 type Content struct {
 	// Body Markdown source, up to 1 MiB UTF-8.
@@ -899,6 +601,24 @@ type CreateItemRequest struct {
 	Website nullable.Nullable[string] `json:"website,omitempty"`
 }
 
+// CreateKindFieldRequest defines model for CreateKindFieldRequest.
+type CreateKindFieldRequest struct {
+	Label string                     `json:"label"`
+	Type  CreateKindFieldRequestType `json:"type"`
+}
+
+// CreateKindFieldRequestType defines model for CreateKindFieldRequest.Type.
+type CreateKindFieldRequestType string
+
+// CreateKindRequest defines model for CreateKindRequest.
+type CreateKindRequest struct {
+	AllowsPrice         *bool                       `json:"allows_price,omitempty"`
+	DefaultIcon         nullable.Nullable[string]   `json:"default_icon,omitempty"`
+	DefaultPinnedFields nullable.Nullable[[]string] `json:"default_pinned_fields,omitempty"`
+	DefaultSortField    nullable.Nullable[string]   `json:"default_sort_field,omitempty"`
+	Name                string                      `json:"name"`
+}
+
 // CreateListRequest defines model for CreateListRequest.
 type CreateListRequest struct {
 	// Description Markdown, up to 64 KiB (UTF-8 bytes).
@@ -926,22 +646,15 @@ type CreateListRequest struct {
 	Name string   `json:"name"`
 
 	// PinnedFields The fields a list shows in its rows, in order: the first is the primary field, the second the secondary (F009-B2; replaces the
-	// `{under, right}` slots of F-002). `null` means the kind default (the web app owns the defaults). `[]` pins nothing, which is different
-	// from `null`, and a single-element list is valid. Allowed keys: the keys of the kind's `metadata` fields, plus `price` **only** on the
-	// kinds that have one (motorcycle, car, camera; F009-B1). `generic` has no key at all, and `movie` and `tv_show` have no `price`. At most
-	// 2 unique keys (`422 validation_failed` on `pinned_fields[i]`), else `422`. Provider bookkeeping fields (`tmdb_id`,
-	// `lookup_disabled`) are never pinnable. Changing the list's `kind` resets it to `null`.
+	// `{under, right}` slots of F-002). `null` means the kind default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
+	// Any field defined for the kind can be pinned; `price` is also available when the kind allows it. At most 2 unique keys
+	// (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `kind` resets it to `null`.
 	//
 	//
 	// Example: ["release_year","runtime_minutes"]
 	PinnedFields nullable.Nullable[PinnedFields] `json:"pinned_fields,omitempty"`
 
-	// SortMode `kind_key` sorts by the kind's sort key (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
-	// car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists.
-	// `price` is valid only on the kinds that have a price (motorcycle, car, camera; F009-B1), not on `generic`, `movie` or `tv_show`.
-	// It sorts by the lowest price (`price.min`) ascending, items without a price last, ties by title and then id. Currencies are not
-	// converted, so mixed currencies compare by amount only. The manual order is kept when the mode changes.
-	// `director` is valid only on movie lists. It sorts the director text case-insensitively, empty values last, then title and id.
+	// SortMode One of `manual`, `title`, `updated`, `price`, or a field key from the list kind. The manual order is kept when the mode changes.
 	SortMode *SortMode `json:"sort_mode,omitempty"`
 }
 
@@ -959,20 +672,29 @@ type Folder struct {
 	Version        int                                   `json:"version"`
 }
 
-// GenericItem defines model for GenericItem.
-type GenericItem struct {
+// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
+type Image struct {
+	union json.RawMessage
+}
+
+// ImageSummary The image reduced for list rows and search. `thumbnail_url` is present for uploads only.
+type ImageSummary struct {
+	ThumbnailUrl *string `json:"thumbnail_url,omitempty"`
+	Url          string  `json:"url"`
+}
+
+// Item An item. `kind` is read-only and derived from the item's list; `metadata` is validated against that workspace kind's field definitions.
+type Item struct {
 	// ContentVersion Current Markdown version (0 = empty). For display only; use the content endpoints to edit.
 	ContentVersion int                `json:"content_version"`
 	CreatedAt      time.Time          `json:"created_at"`
 	Id             openapi_types.UUID `json:"id"`
 
 	// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
-	Image  nullable.Nullable[Image] `json:"image"`
-	Kind   *GenericItemKind         `json:"kind,omitempty"`
-	ListId openapi_types.UUID       `json:"list_id"`
-
-	// Metadata Must be `{}`.
-	Metadata GenericMetadata `json:"metadata"`
+	Image    nullable.Nullable[Image] `json:"image"`
+	Kind     *string                  `json:"kind,omitempty"`
+	ListId   openapi_types.UUID       `json:"list_id"`
+	Metadata map[string]interface{}   `json:"metadata"`
 
 	// Path Ancestor folders and the list. Present on `getItem` only.
 	Path *[]PathSegment `json:"path,omitempty"`
@@ -985,28 +707,6 @@ type GenericItem struct {
 	UpdatedAt time.Time                 `json:"updated_at"`
 	Version   int                       `json:"version"`
 	Website   nullable.Nullable[string] `json:"website"`
-}
-
-// GenericItemKind defines model for GenericItem.Kind.
-type GenericItemKind string
-
-// GenericMetadata Must be `{}`.
-type GenericMetadata = map[string]interface{}
-
-// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
-type Image struct {
-	union json.RawMessage
-}
-
-// ImageSummary The image reduced for list rows and search. `thumbnail_url` is present for uploads only.
-type ImageSummary struct {
-	ThumbnailUrl *string `json:"thumbnail_url,omitempty"`
-	Url          string  `json:"url"`
-}
-
-// Item An item. `kind` is read-only and derived from the item's list; `metadata` has the shape of that kind (discriminated union).
-type Item struct {
-	union json.RawMessage
 }
 
 // ItemBase Fields shared by every item kind. `kind` (read-only, derived from the list) and `metadata` are added by the per-kind schemas.
@@ -1035,7 +735,7 @@ type ItemBase struct {
 
 // ItemKind The kind of a list. Items have no kind of their own: theirs is read-only and derived from their list. Changing the kind of a
 // list that has items clears the `metadata` of all its items.
-type ItemKind string
+type ItemKind = string
 
 // ItemPage defines model for ItemPage.
 type ItemPage struct {
@@ -1068,6 +768,38 @@ type ItemSummary struct {
 	UpdatedAt time.Time                 `json:"updated_at"`
 	Version   int                       `json:"version"`
 	Website   nullable.Nullable[string] `json:"website"`
+}
+
+// KindDefinition defines model for KindDefinition.
+type KindDefinition struct {
+	AllowsPrice         bool                        `json:"allows_price"`
+	DefaultIcon         nullable.Nullable[string]   `json:"default_icon,omitempty"`
+	DefaultPinnedFields nullable.Nullable[[]string] `json:"default_pinned_fields,omitempty"`
+	DefaultSortField    nullable.Nullable[string]   `json:"default_sort_field,omitempty"`
+	Fields              []KindField                 `json:"fields"`
+	IsLocked            bool                        `json:"is_locked"`
+	Key                 string                      `json:"key"`
+	Name                string                      `json:"name"`
+	Version             int                         `json:"version"`
+}
+
+// KindField defines model for KindField.
+type KindField struct {
+	IsLocked bool          `json:"is_locked"`
+	Key      string        `json:"key"`
+	Label    string        `json:"label"`
+	Position int           `json:"position"`
+	Type     KindFieldType `json:"type"`
+	Version  int           `json:"version"`
+}
+
+// KindFieldType defines model for KindField.Type.
+type KindFieldType string
+
+// KindFieldDeletePreview defines model for KindFieldDeletePreview.
+type KindFieldDeletePreview struct {
+	// PopulatedItemCount Number of items, including trashed items, with a value for this field.
+	PopulatedItemCount int `json:"populated_item_count"`
 }
 
 // List defines model for List.
@@ -1106,22 +838,15 @@ type List struct {
 	Path *[]PathSegment `json:"path,omitempty"`
 
 	// PinnedFields The fields a list shows in its rows, in order: the first is the primary field, the second the secondary (F009-B2; replaces the
-	// `{under, right}` slots of F-002). `null` means the kind default (the web app owns the defaults). `[]` pins nothing, which is different
-	// from `null`, and a single-element list is valid. Allowed keys: the keys of the kind's `metadata` fields, plus `price` **only** on the
-	// kinds that have one (motorcycle, car, camera; F009-B1). `generic` has no key at all, and `movie` and `tv_show` have no `price`. At most
-	// 2 unique keys (`422 validation_failed` on `pinned_fields[i]`), else `422`. Provider bookkeeping fields (`tmdb_id`,
-	// `lookup_disabled`) are never pinnable. Changing the list's `kind` resets it to `null`.
+	// `{under, right}` slots of F-002). `null` means the kind default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
+	// Any field defined for the kind can be pinned; `price` is also available when the kind allows it. At most 2 unique keys
+	// (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `kind` resets it to `null`.
 	//
 	//
 	// Example: ["release_year","runtime_minutes"]
 	PinnedFields nullable.Nullable[PinnedFields] `json:"pinned_fields"`
 
-	// SortMode `kind_key` sorts by the kind's sort key (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
-	// car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists.
-	// `price` is valid only on the kinds that have a price (motorcycle, car, camera; F009-B1), not on `generic`, `movie` or `tv_show`.
-	// It sorts by the lowest price (`price.min`) ascending, items without a price last, ties by title and then id. Currencies are not
-	// converted, so mixed currencies compare by amount only. The manual order is kept when the mode changes.
-	// `director` is valid only on movie lists. It sorts the director text case-insensitively, empty values last, then title and id.
+	// SortMode One of `manual`, `title`, `updated`, `price`, or a field key from the list kind. The manual order is kept when the mode changes.
 	SortMode  SortMode  `json:"sort_mode"`
 	SortOrder int       `json:"sort_order"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -1156,48 +881,6 @@ type LookupItemRequestMode string
 // Example: it-IT
 type MetadataLanguage = string
 
-// MotorcycleItem defines model for MotorcycleItem.
-type MotorcycleItem struct {
-	// ContentVersion Current Markdown version (0 = empty). For display only; use the content endpoints to edit.
-	ContentVersion int                `json:"content_version"`
-	CreatedAt      time.Time          `json:"created_at"`
-	Id             openapi_types.UUID `json:"id"`
-
-	// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
-	Image    nullable.Nullable[Image] `json:"image"`
-	Kind     *MotorcycleItemKind      `json:"kind,omitempty"`
-	ListId   openapi_types.UUID       `json:"list_id"`
-	Metadata MotorcycleMetadata       `json:"metadata"`
-
-	// Path Ancestor folders and the list. Present on `getItem` only.
-	Path *[]PathSegment `json:"path,omitempty"`
-
-	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
-	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
-	Price     nullable.Nullable[Price]  `json:"price"`
-	SortOrder int                       `json:"sort_order"`
-	Title     string                    `json:"title"`
-	UpdatedAt time.Time                 `json:"updated_at"`
-	Version   int                       `json:"version"`
-	Website   nullable.Nullable[string] `json:"website"`
-}
-
-// MotorcycleItemKind defines model for MotorcycleItem.Kind.
-type MotorcycleItemKind string
-
-// MotorcycleMetadata defines model for MotorcycleMetadata.
-type MotorcycleMetadata struct {
-	DisplacementCc *int                            `json:"displacement_cc,omitempty"`
-	LicenseClass   *MotorcycleMetadataLicenseClass `json:"license_class,omitempty"`
-	ModelYear      *int                            `json:"model_year,omitempty"`
-
-	// PowerHp One decimal.
-	PowerHp *float32 `json:"power_hp,omitempty"`
-}
-
-// MotorcycleMetadataLicenseClass defines model for MotorcycleMetadata.LicenseClass.
-type MotorcycleMetadataLicenseClass string
-
 // MoveFolderRequest defines model for MoveFolderRequest.
 type MoveFolderRequest struct {
 	// ParentFolderId `null` = root.
@@ -1213,51 +896,6 @@ type MoveItemRequest struct {
 type MoveListRequest struct {
 	// FolderId `null` = root.
 	FolderId nullable.Nullable[openapi_types.UUID] `json:"folder_id"`
-}
-
-// MovieItem defines model for MovieItem.
-type MovieItem struct {
-	// ContentVersion Current Markdown version (0 = empty). For display only; use the content endpoints to edit.
-	ContentVersion int                `json:"content_version"`
-	CreatedAt      time.Time          `json:"created_at"`
-	Id             openapi_types.UUID `json:"id"`
-
-	// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
-	Image    nullable.Nullable[Image] `json:"image"`
-	Kind     *MovieItemKind           `json:"kind,omitempty"`
-	ListId   openapi_types.UUID       `json:"list_id"`
-	Metadata MovieMetadata            `json:"metadata"`
-
-	// Path Ancestor folders and the list. Present on `getItem` only.
-	Path *[]PathSegment `json:"path,omitempty"`
-
-	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
-	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
-	Price     nullable.Nullable[Price]  `json:"price"`
-	SortOrder int                       `json:"sort_order"`
-	Title     string                    `json:"title"`
-	UpdatedAt time.Time                 `json:"updated_at"`
-	Version   int                       `json:"version"`
-	Website   nullable.Nullable[string] `json:"website"`
-}
-
-// MovieItemKind defines model for MovieItem.Kind.
-type MovieItemKind string
-
-// MovieMetadata defines model for MovieMetadata.
-type MovieMetadata struct {
-	// Director Movie directors joined with a comma when TMDB returns several.
-	Director *string `json:"director,omitempty"`
-	ImdbUrl  *string `json:"imdb_url,omitempty"`
-
-	// LookupDisabled Per-item opt-out from automatic TMDB lookup.
-	LookupDisabled *bool      `json:"lookup_disabled,omitempty"`
-	ReleaseYear    *int       `json:"release_year,omitempty"`
-	RuntimeMinutes *int       `json:"runtime_minutes,omitempty"`
-	Streaming      *Streaming `json:"streaming,omitempty"`
-
-	// TmdbId Stored provider identity used by refresh.
-	TmdbId *int `json:"tmdb_id,omitempty"`
 }
 
 // Page defines model for Page.
@@ -1280,11 +918,9 @@ type PathSegment struct {
 type PathSegmentType string
 
 // PinnedFields The fields a list shows in its rows, in order: the first is the primary field, the second the secondary (F009-B2; replaces the
-// `{under, right}` slots of F-002). `null` means the kind default (the web app owns the defaults). `[]` pins nothing, which is different
-// from `null`, and a single-element list is valid. Allowed keys: the keys of the kind's `metadata` fields, plus `price` **only** on the
-// kinds that have one (motorcycle, car, camera; F009-B1). `generic` has no key at all, and `movie` and `tv_show` have no `price`. At most
-// 2 unique keys (`422 validation_failed` on `pinned_fields[i]`), else `422`. Provider bookkeeping fields (`tmdb_id`,
-// `lookup_disabled`) are never pinnable. Changing the list's `kind` resets it to `null`.
+// `{under, right}` slots of F-002). `null` means the kind default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
+// Any field defined for the kind can be pinned; `price` is also available when the kind allows it. At most 2 unique keys
+// (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `kind` resets it to `null`.
 //
 // Example: ["release_year","runtime_minutes"]
 type PinnedFields = []string
@@ -1355,6 +991,11 @@ type ReorderFoldersRequest struct {
 // ReorderItemsRequest defines model for ReorderItemsRequest.
 type ReorderItemsRequest struct {
 	Ids []openapi_types.UUID `json:"ids"`
+}
+
+// ReorderKindFieldsRequest defines model for ReorderKindFieldsRequest.
+type ReorderKindFieldsRequest struct {
+	Keys []string `json:"keys"`
 }
 
 // ReorderListsRequest defines model for ReorderListsRequest.
@@ -1439,8 +1080,11 @@ type SearchPathSegmentType string
 // SearchResult defines model for SearchResult.
 type SearchResult struct {
 	// Item An item row in lists, search and recent items: the same `metadata` object as the full item (`{}` when the kind has none), and the image is reduced.
-	Item ItemSummary         `json:"item"`
-	Path []SearchPathSegment `json:"path"`
+	Item ItemSummary `json:"item"`
+
+	// KindName The display name from this workspace's kind definition.
+	KindName string              `json:"kind_name"`
+	Path     []SearchPathSegment `json:"path"`
 }
 
 // SetImageUrlRequest defines model for SetImageUrlRequest.
@@ -1465,25 +1109,8 @@ type Settings struct {
 	WorkspaceName        string                 `json:"workspace_name"`
 }
 
-// SortMode `kind_key` sorts by the kind's sort key (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
-// car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists.
-// `price` is valid only on the kinds that have a price (motorcycle, car, camera; F009-B1), not on `generic`, `movie` or `tv_show`.
-// It sorts by the lowest price (`price.min`) ascending, items without a price last, ties by title and then id. Currencies are not
-// converted, so mixed currencies compare by amount only. The manual order is kept when the mode changes.
-// `director` is valid only on movie lists. It sorts the director text case-insensitively, empty values last, then title and id.
-type SortMode string
-
-// Streaming defines model for Streaming.
-type Streaming struct {
-	// Country ISO 3166-1 alpha-2.
-	Country string `json:"country"`
-
-	// PaidPlatforms Platforms available only through per-title rental or purchase, not subscription, free, or ad-supported offers. Each entry must match (case-insensitively) an entry of `platforms` and is stored with that entry's casing. Unique case-insensitively. Omitted, null or empty means none paid.
-	PaidPlatforms *[]string `json:"paid_platforms,omitempty"`
-
-	// Platforms Unique case-insensitively.
-	Platforms *[]string `json:"platforms,omitempty"`
-}
+// SortMode One of `manual`, `title`, `updated`, `price`, or a field key from the list kind. The manual order is kept when the mode changes.
+type SortMode = string
 
 // TmdbKind defines model for TmdbKind.
 type TmdbKind string
@@ -1539,55 +1166,6 @@ type Tree struct {
 	Lists   []List   `json:"lists"`
 }
 
-// TvShowItem defines model for TvShowItem.
-type TvShowItem struct {
-	// ContentVersion Current Markdown version (0 = empty). For display only; use the content endpoints to edit.
-	ContentVersion int                `json:"content_version"`
-	CreatedAt      time.Time          `json:"created_at"`
-	Id             openapi_types.UUID `json:"id"`
-
-	// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
-	Image    nullable.Nullable[Image] `json:"image"`
-	Kind     *TvShowItemKind          `json:"kind,omitempty"`
-	ListId   openapi_types.UUID       `json:"list_id"`
-	Metadata TvShowMetadata           `json:"metadata"`
-
-	// Path Ancestor folders and the list. Present on `getItem` only.
-	Path *[]PathSegment `json:"path,omitempty"`
-
-	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
-	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
-	Price     nullable.Nullable[Price]  `json:"price"`
-	SortOrder int                       `json:"sort_order"`
-	Title     string                    `json:"title"`
-	UpdatedAt time.Time                 `json:"updated_at"`
-	Version   int                       `json:"version"`
-	Website   nullable.Nullable[string] `json:"website"`
-}
-
-// TvShowItemKind defines model for TvShowItem.Kind.
-type TvShowItemKind string
-
-// TvShowMetadata defines model for TvShowMetadata.
-type TvShowMetadata struct {
-	// EndYear At least `first_air_year`. Absent = ongoing.
-	EndYear *int `json:"end_year,omitempty"`
-
-	// EpisodeMinutes Average episode duration in minutes.
-	EpisodeMinutes    *int    `json:"episode_minutes,omitempty"`
-	EpisodesPerSeason *int    `json:"episodes_per_season,omitempty"`
-	FirstAirYear      *int    `json:"first_air_year,omitempty"`
-	ImdbUrl           *string `json:"imdb_url,omitempty"`
-
-	// LookupDisabled Per-item opt-out from automatic TMDB lookup.
-	LookupDisabled *bool      `json:"lookup_disabled,omitempty"`
-	Seasons        *int       `json:"seasons,omitempty"`
-	Streaming      *Streaming `json:"streaming,omitempty"`
-
-	// TmdbId Stored provider identity used by refresh.
-	TmdbId *int `json:"tmdb_id,omitempty"`
-}
-
 // UpdateContentRequest defines model for UpdateContentRequest.
 type UpdateContentRequest struct {
 	// Body Up to 1 MiB UTF-8 (the server checks bytes).
@@ -1610,6 +1188,16 @@ type UpdateItemRequest struct {
 	Price   nullable.Nullable[PriceInput] `json:"price,omitempty"`
 	Title   *string                       `json:"title,omitempty"`
 	Website nullable.Nullable[string]     `json:"website,omitempty"`
+}
+
+// UpdateKindFieldRequest defines model for UpdateKindFieldRequest.
+type UpdateKindFieldRequest struct {
+	Label string `json:"label"`
+}
+
+// UpdateKindRequest defines model for UpdateKindRequest.
+type UpdateKindRequest struct {
+	Name string `json:"name"`
 }
 
 // UpdateListRequest defines model for UpdateListRequest.
@@ -1638,22 +1226,15 @@ type UpdateListRequest struct {
 	Name *string   `json:"name,omitempty"`
 
 	// PinnedFields The fields a list shows in its rows, in order: the first is the primary field, the second the secondary (F009-B2; replaces the
-	// `{under, right}` slots of F-002). `null` means the kind default (the web app owns the defaults). `[]` pins nothing, which is different
-	// from `null`, and a single-element list is valid. Allowed keys: the keys of the kind's `metadata` fields, plus `price` **only** on the
-	// kinds that have one (motorcycle, car, camera; F009-B1). `generic` has no key at all, and `movie` and `tv_show` have no `price`. At most
-	// 2 unique keys (`422 validation_failed` on `pinned_fields[i]`), else `422`. Provider bookkeeping fields (`tmdb_id`,
-	// `lookup_disabled`) are never pinnable. Changing the list's `kind` resets it to `null`.
+	// `{under, right}` slots of F-002). `null` means the kind default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
+	// Any field defined for the kind can be pinned; `price` is also available when the kind allows it. At most 2 unique keys
+	// (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `kind` resets it to `null`.
 	//
 	//
 	// Example: ["release_year","runtime_minutes"]
 	PinnedFields nullable.Nullable[PinnedFields] `json:"pinned_fields,omitempty"`
 
-	// SortMode `kind_key` sorts by the kind's sort key (movie: `release_year`, tv_show: `first_air_year`, motorcycle: `displacement_cc`,
-	// car: `power_hp`, camera: `megapixels`), ascending, empty values last. It is not valid on `generic` lists.
-	// `price` is valid only on the kinds that have a price (motorcycle, car, camera; F009-B1), not on `generic`, `movie` or `tv_show`.
-	// It sorts by the lowest price (`price.min`) ascending, items without a price last, ties by title and then id. Currencies are not
-	// converted, so mixed currencies compare by amount only. The manual order is kept when the mode changes.
-	// `director` is valid only on movie lists. It sorts the director text case-insensitively, empty values last, then title and id.
+	// SortMode One of `manual`, `title`, `updated`, `price`, or a field key from the list kind. The manual order is kept when the mode changes.
 	SortMode *SortMode `json:"sort_mode,omitempty"`
 }
 
@@ -1884,6 +1465,48 @@ type MoveItemParams struct {
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
+// DeleteKindParams defines parameters for DeleteKind.
+type DeleteKindParams struct {
+	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
+	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// UpdateKindParams defines parameters for UpdateKind.
+type UpdateKindParams struct {
+	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
+	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// CreateKindFieldParams defines parameters for CreateKindField.
+type CreateKindFieldParams struct {
+	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
+	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// ReorderKindFieldsParams defines parameters for ReorderKindFields.
+type ReorderKindFieldsParams struct {
+	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
+	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// DeleteKindFieldParams defines parameters for DeleteKindField.
+type DeleteKindFieldParams struct {
+	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
+	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// UpdateKindFieldParams defines parameters for UpdateKindField.
+type UpdateKindFieldParams struct {
+	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
+	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
 // DeleteListParams defines parameters for DeleteList.
 type DeleteListParams struct {
 	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
@@ -1900,11 +1523,23 @@ type UpdateListParams struct {
 
 // ListItemsParams defines parameters for ListItems.
 type ListItemsParams struct {
-	// Sort Defaults to the list's `sort_mode`.
-	Sort *SortMode `form:"sort,omitempty" json:"sort,omitempty"`
+	// Sort Defaults to the list's `sort_mode`; may be a field key of the list kind.
+	Sort *string `form:"sort,omitempty" json:"sort,omitempty"`
 
 	// Q Case-insensitive title filter; on movie lists it also matches `metadata.director`.
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// FilterField Kind field key to filter. Requires value or range parameters matching the field type.
+	FilterField *string `form:"filter_field,omitempty" json:"filter_field,omitempty"`
+
+	// FilterValue Text/link substring or boolean (`true`/`false`) filter value.
+	FilterValue *string `form:"filter_value,omitempty" json:"filter_value,omitempty"`
+
+	// FilterMin Inclusive lower bound for number or ISO date field filters.
+	FilterMin *string `form:"filter_min,omitempty" json:"filter_min,omitempty"`
+
+	// FilterMax Inclusive upper bound for number or ISO date field filters.
+	FilterMax *string `form:"filter_max,omitempty" json:"filter_max,omitempty"`
 
 	// Limit Page size.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1991,6 +1626,21 @@ type LookupItemMetadataJSONRequestBody = LookupItemRequest
 
 // MoveItemJSONRequestBody defines body for MoveItem for application/json ContentType.
 type MoveItemJSONRequestBody = MoveItemRequest
+
+// CreateKindJSONRequestBody defines body for CreateKind for application/json ContentType.
+type CreateKindJSONRequestBody = CreateKindRequest
+
+// UpdateKindJSONRequestBody defines body for UpdateKind for application/json ContentType.
+type UpdateKindJSONRequestBody = UpdateKindRequest
+
+// CreateKindFieldJSONRequestBody defines body for CreateKindField for application/json ContentType.
+type CreateKindFieldJSONRequestBody = CreateKindFieldRequest
+
+// ReorderKindFieldsJSONRequestBody defines body for ReorderKindFields for application/json ContentType.
+type ReorderKindFieldsJSONRequestBody = ReorderKindFieldsRequest
+
+// UpdateKindFieldJSONRequestBody defines body for UpdateKindField for application/json ContentType.
+type UpdateKindFieldJSONRequestBody = UpdateKindFieldRequest
 
 // CreateListJSONRequestBody defines body for CreateList for application/json ContentType.
 type CreateListJSONRequestBody = CreateListRequest
@@ -2117,251 +1767,6 @@ func (t *Image) UnmarshalJSON(b []byte) error {
 	return err
 }
 
-// AsGenericItem returns the union data inside the Item as a GenericItem
-func (t Item) AsGenericItem() (GenericItem, error) {
-	var body GenericItem
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromGenericItem overwrites any union data inside the Item as the provided GenericItem
-func (t *Item) FromGenericItem(v GenericItem) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"kind":"generic"}`))
-	t.union = b
-	return err
-}
-
-// MergeGenericItem performs a merge with any union data inside the Item, using the provided GenericItem
-func (t *Item) MergeGenericItem(v GenericItem) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"kind":"generic"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsMovieItem returns the union data inside the Item as a MovieItem
-func (t Item) AsMovieItem() (MovieItem, error) {
-	var body MovieItem
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromMovieItem overwrites any union data inside the Item as the provided MovieItem
-func (t *Item) FromMovieItem(v MovieItem) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"kind":"movie"}`))
-	t.union = b
-	return err
-}
-
-// MergeMovieItem performs a merge with any union data inside the Item, using the provided MovieItem
-func (t *Item) MergeMovieItem(v MovieItem) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"kind":"movie"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsTvShowItem returns the union data inside the Item as a TvShowItem
-func (t Item) AsTvShowItem() (TvShowItem, error) {
-	var body TvShowItem
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromTvShowItem overwrites any union data inside the Item as the provided TvShowItem
-func (t *Item) FromTvShowItem(v TvShowItem) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"kind":"tv_show"}`))
-	t.union = b
-	return err
-}
-
-// MergeTvShowItem performs a merge with any union data inside the Item, using the provided TvShowItem
-func (t *Item) MergeTvShowItem(v TvShowItem) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"kind":"tv_show"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsMotorcycleItem returns the union data inside the Item as a MotorcycleItem
-func (t Item) AsMotorcycleItem() (MotorcycleItem, error) {
-	var body MotorcycleItem
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromMotorcycleItem overwrites any union data inside the Item as the provided MotorcycleItem
-func (t *Item) FromMotorcycleItem(v MotorcycleItem) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"kind":"motorcycle"}`))
-	t.union = b
-	return err
-}
-
-// MergeMotorcycleItem performs a merge with any union data inside the Item, using the provided MotorcycleItem
-func (t *Item) MergeMotorcycleItem(v MotorcycleItem) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"kind":"motorcycle"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsCarItem returns the union data inside the Item as a CarItem
-func (t Item) AsCarItem() (CarItem, error) {
-	var body CarItem
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromCarItem overwrites any union data inside the Item as the provided CarItem
-func (t *Item) FromCarItem(v CarItem) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"kind":"car"}`))
-	t.union = b
-	return err
-}
-
-// MergeCarItem performs a merge with any union data inside the Item, using the provided CarItem
-func (t *Item) MergeCarItem(v CarItem) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"kind":"car"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsCameraItem returns the union data inside the Item as a CameraItem
-func (t Item) AsCameraItem() (CameraItem, error) {
-	var body CameraItem
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromCameraItem overwrites any union data inside the Item as the provided CameraItem
-func (t *Item) FromCameraItem(v CameraItem) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"kind":"camera"}`))
-	t.union = b
-	return err
-}
-
-// MergeCameraItem performs a merge with any union data inside the Item, using the provided CameraItem
-func (t *Item) MergeCameraItem(v CameraItem) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"kind":"camera"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t Item) Discriminator() (string, error) {
-	var discriminator struct {
-		Discriminator string `json:"kind"`
-	}
-	err := json.Unmarshal(t.union, &discriminator)
-	return discriminator.Discriminator, err
-}
-
-func (t Item) ValueByDiscriminator() (interface{}, error) {
-	discriminator, err := t.Discriminator()
-	if err != nil {
-		return nil, err
-	}
-	switch discriminator {
-	case "camera":
-		return t.AsCameraItem()
-	case "car":
-		return t.AsCarItem()
-	case "generic":
-		return t.AsGenericItem()
-	case "motorcycle":
-		return t.AsMotorcycleItem()
-	case "movie":
-		return t.AsMovieItem()
-	case "tv_show":
-		return t.AsTvShowItem()
-	default:
-		return nil, errors.New("unknown discriminator value: " + discriminator)
-	}
-}
-
-func (t Item) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *Item) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// GetAttachmentFile Download the original image
@@ -2424,6 +1829,33 @@ type ServerInterface interface {
 	// MoveItem Move an item to another list
 	// (POST /api/v1/items/{id}/move)
 	MoveItem(w http.ResponseWriter, r *http.Request, id Id, params MoveItemParams)
+	// ListKinds List kind definitions and fields
+	// (GET /api/v1/kinds)
+	ListKinds(w http.ResponseWriter, r *http.Request)
+	// CreateKind Create a custom kind
+	// (POST /api/v1/kinds)
+	CreateKind(w http.ResponseWriter, r *http.Request)
+	// DeleteKind Delete a custom kind not used by any list
+	// (DELETE /api/v1/kinds/{key})
+	DeleteKind(w http.ResponseWriter, r *http.Request, key string, params DeleteKindParams)
+	// UpdateKind Rename a custom kind
+	// (PATCH /api/v1/kinds/{key})
+	UpdateKind(w http.ResponseWriter, r *http.Request, key string, params UpdateKindParams)
+	// CreateKindField Add a custom field
+	// (POST /api/v1/kinds/{key}/fields)
+	CreateKindField(w http.ResponseWriter, r *http.Request, key string, params CreateKindFieldParams)
+	// ReorderKindFields Reorder custom fields
+	// (PUT /api/v1/kinds/{key}/fields/order)
+	ReorderKindFields(w http.ResponseWriter, r *http.Request, key string, params ReorderKindFieldsParams)
+	// DeleteKindField Delete a custom field and strip populated values
+	// (DELETE /api/v1/kinds/{key}/fields/{fieldKey})
+	DeleteKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params DeleteKindFieldParams)
+	// PreviewDeleteKindField Count item values that deleting a custom field would remove
+	// (GET /api/v1/kinds/{key}/fields/{fieldKey})
+	PreviewDeleteKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string)
+	// UpdateKindField Rename a custom field
+	// (PATCH /api/v1/kinds/{key}/fields/{fieldKey})
+	UpdateKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params UpdateKindFieldParams)
 	// CreateList Create a list
 	// (POST /api/v1/lists)
 	CreateList(w http.ResponseWriter, r *http.Request)
@@ -2610,6 +2042,60 @@ func (_ Unimplemented) LookupItemMetadata(w http.ResponseWriter, r *http.Request
 // MoveItem Move an item to another list
 // (POST /api/v1/items/{id}/move)
 func (_ Unimplemented) MoveItem(w http.ResponseWriter, r *http.Request, id Id, params MoveItemParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListKinds List kind definitions and fields
+// (GET /api/v1/kinds)
+func (_ Unimplemented) ListKinds(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateKind Create a custom kind
+// (POST /api/v1/kinds)
+func (_ Unimplemented) CreateKind(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteKind Delete a custom kind not used by any list
+// (DELETE /api/v1/kinds/{key})
+func (_ Unimplemented) DeleteKind(w http.ResponseWriter, r *http.Request, key string, params DeleteKindParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateKind Rename a custom kind
+// (PATCH /api/v1/kinds/{key})
+func (_ Unimplemented) UpdateKind(w http.ResponseWriter, r *http.Request, key string, params UpdateKindParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateKindField Add a custom field
+// (POST /api/v1/kinds/{key}/fields)
+func (_ Unimplemented) CreateKindField(w http.ResponseWriter, r *http.Request, key string, params CreateKindFieldParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ReorderKindFields Reorder custom fields
+// (PUT /api/v1/kinds/{key}/fields/order)
+func (_ Unimplemented) ReorderKindFields(w http.ResponseWriter, r *http.Request, key string, params ReorderKindFieldsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteKindField Delete a custom field and strip populated values
+// (DELETE /api/v1/kinds/{key}/fields/{fieldKey})
+func (_ Unimplemented) DeleteKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params DeleteKindFieldParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PreviewDeleteKindField Count item values that deleting a custom field would remove
+// (GET /api/v1/kinds/{key}/fields/{fieldKey})
+func (_ Unimplemented) PreviewDeleteKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateKindField Rename a custom field
+// (PATCH /api/v1/kinds/{key}/fields/{fieldKey})
+func (_ Unimplemented) UpdateKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params UpdateKindFieldParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3517,6 +3003,387 @@ func (siw *ServerInterfaceWrapper) MoveItem(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// ListKinds operation middleware
+func (siw *ServerInterfaceWrapper) ListKinds(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListKinds(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateKind operation middleware
+func (siw *ServerInterfaceWrapper) CreateKind(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateKind(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteKind operation middleware
+func (siw *ServerInterfaceWrapper) DeleteKind(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteKindParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteKind(w, r, key, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateKind operation middleware
+func (siw *ServerInterfaceWrapper) UpdateKind(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateKindParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateKind(w, r, key, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateKindField operation middleware
+func (siw *ServerInterfaceWrapper) CreateKindField(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateKindFieldParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateKindField(w, r, key, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReorderKindFields operation middleware
+func (siw *ServerInterfaceWrapper) ReorderKindFields(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReorderKindFieldsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReorderKindFields(w, r, key, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteKindField operation middleware
+func (siw *ServerInterfaceWrapper) DeleteKindField(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "fieldKey" -------------
+	var fieldKey string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "fieldKey", chi.URLParam(r, "fieldKey"), &fieldKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fieldKey", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteKindFieldParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteKindField(w, r, key, fieldKey, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewDeleteKindField operation middleware
+func (siw *ServerInterfaceWrapper) PreviewDeleteKindField(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "fieldKey" -------------
+	var fieldKey string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "fieldKey", chi.URLParam(r, "fieldKey"), &fieldKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fieldKey", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewDeleteKindField(w, r, key, fieldKey)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateKindField operation middleware
+func (siw *ServerInterfaceWrapper) UpdateKindField(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "fieldKey" -------------
+	var fieldKey string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "fieldKey", chi.URLParam(r, "fieldKey"), &fieldKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fieldKey", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateKindFieldParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateKindField(w, r, key, fieldKey, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateList operation middleware
 func (siw *ServerInterfaceWrapper) CreateList(w http.ResponseWriter, r *http.Request) {
 
@@ -3711,6 +3578,58 @@ func (siw *ServerInterfaceWrapper) ListItems(w http.ResponseWriter, r *http.Requ
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "filter_field" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "filter_field", r.URL.Query(), &params.FilterField, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "filter_field"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filter_field", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "filter_value" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "filter_value", r.URL.Query(), &params.FilterValue, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "filter_value"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filter_value", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "filter_min" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "filter_min", r.URL.Query(), &params.FilterMin, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "filter_min"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filter_min", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "filter_max" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "filter_max", r.URL.Query(), &params.FilterMax, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "filter_max"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filter_max", Err: err})
 		}
 		return
 	}
@@ -4319,6 +4238,33 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/readyz", wrapper.CheckReadiness)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/v1/kinds", wrapper.ListKinds)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/v1/kinds", wrapper.CreateKind)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/api/v1/kinds/{key}", wrapper.DeleteKind)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/api/v1/kinds/{key}", wrapper.UpdateKind)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/v1/kinds/{key}/fields", wrapper.CreateKindField)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/v1/kinds/{key}/fields/order", wrapper.ReorderKindFields)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/api/v1/kinds/{key}/fields/{fieldKey}", wrapper.DeleteKindField)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/v1/kinds/{key}/fields/{fieldKey}", wrapper.PreviewDeleteKindField)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/api/v1/kinds/{key}/fields/{fieldKey}", wrapper.UpdateKindField)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/v1/settings", wrapper.GetSettings)
@@ -6806,6 +6752,308 @@ func (response MoveItem500ApplicationProblemPlusJSONResponse) VisitMoveItemRespo
 	return err
 }
 
+type ListKindsRequestObject struct {
+}
+
+type ListKindsResponseObject interface {
+	VisitListKindsResponse(w http.ResponseWriter) error
+}
+
+type ListKinds200JSONResponse []KindDefinition
+
+func (response ListKinds200JSONResponse) VisitListKindsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateKindRequestObject struct {
+	Body *CreateKindJSONRequestBody
+}
+
+type CreateKindResponseObject interface {
+	VisitCreateKindResponse(w http.ResponseWriter) error
+}
+
+type CreateKind201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type CreateKind201JSONResponse struct {
+	Body    KindDefinition
+	Headers CreateKind201ResponseHeaders
+}
+
+func (response CreateKind201JSONResponse) VisitCreateKindResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateKind400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateKind400ApplicationProblemPlusJSONResponse) VisitCreateKindResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateKind409ApplicationProblemPlusJSONResponse struct {
+	FolderMoveConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateKind409ApplicationProblemPlusJSONResponse) VisitCreateKindResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateKind422ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateKind422ApplicationProblemPlusJSONResponse) VisitCreateKindResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteKindRequestObject struct {
+	Key    string `json:"key"`
+	Params DeleteKindParams
+}
+
+type DeleteKindResponseObject interface {
+	VisitDeleteKindResponse(w http.ResponseWriter) error
+}
+
+type DeleteKind204Response struct {
+}
+
+func (response DeleteKind204Response) VisitDeleteKindResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteKind409ApplicationProblemPlusJSONResponse struct {
+	FolderMoveConflictApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteKind409ApplicationProblemPlusJSONResponse) VisitDeleteKindResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateKindRequestObject struct {
+	Key    string `json:"key"`
+	Params UpdateKindParams
+	Body   *UpdateKindJSONRequestBody
+}
+
+type UpdateKindResponseObject interface {
+	VisitUpdateKindResponse(w http.ResponseWriter) error
+}
+
+type UpdateKind200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateKind200JSONResponse struct {
+	Body    KindDefinition
+	Headers UpdateKind200ResponseHeaders
+}
+
+func (response UpdateKind200JSONResponse) VisitUpdateKindResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateKindFieldRequestObject struct {
+	Key    string `json:"key"`
+	Params CreateKindFieldParams
+	Body   *CreateKindFieldJSONRequestBody
+}
+
+type CreateKindFieldResponseObject interface {
+	VisitCreateKindFieldResponse(w http.ResponseWriter) error
+}
+
+type CreateKindField201ResponseHeaders struct {
+	ETag string
+}
+
+type CreateKindField201JSONResponse struct {
+	Body    KindField
+	Headers CreateKindField201ResponseHeaders
+}
+
+func (response CreateKindField201JSONResponse) VisitCreateKindFieldResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderKindFieldsRequestObject struct {
+	Key    string `json:"key"`
+	Params ReorderKindFieldsParams
+	Body   *ReorderKindFieldsJSONRequestBody
+}
+
+type ReorderKindFieldsResponseObject interface {
+	VisitReorderKindFieldsResponse(w http.ResponseWriter) error
+}
+
+type ReorderKindFields204ResponseHeaders struct {
+	ETag string
+}
+
+type ReorderKindFields204Response struct {
+	Headers ReorderKindFields204ResponseHeaders
+}
+
+func (response ReorderKindFields204Response) VisitReorderKindFieldsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteKindFieldRequestObject struct {
+	Key      string `json:"key"`
+	FieldKey string `json:"fieldKey"`
+	Params   DeleteKindFieldParams
+}
+
+type DeleteKindFieldResponseObject interface {
+	VisitDeleteKindFieldResponse(w http.ResponseWriter) error
+}
+
+type DeleteKindField200JSONResponse KindFieldDeletePreview
+
+func (response DeleteKindField200JSONResponse) VisitDeleteKindFieldResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewDeleteKindFieldRequestObject struct {
+	Key      string `json:"key"`
+	FieldKey string `json:"fieldKey"`
+}
+
+type PreviewDeleteKindFieldResponseObject interface {
+	VisitPreviewDeleteKindFieldResponse(w http.ResponseWriter) error
+}
+
+type PreviewDeleteKindField200JSONResponse KindFieldDeletePreview
+
+func (response PreviewDeleteKindField200JSONResponse) VisitPreviewDeleteKindFieldResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateKindFieldRequestObject struct {
+	Key      string `json:"key"`
+	FieldKey string `json:"fieldKey"`
+	Params   UpdateKindFieldParams
+	Body     *UpdateKindFieldJSONRequestBody
+}
+
+type UpdateKindFieldResponseObject interface {
+	VisitUpdateKindFieldResponse(w http.ResponseWriter) error
+}
+
+type UpdateKindField200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateKindField200JSONResponse struct {
+	Body    KindField
+	Headers UpdateKindField200ResponseHeaders
+}
+
+func (response UpdateKindField200JSONResponse) VisitUpdateKindFieldResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateListRequestObject struct {
 	Body *CreateListJSONRequestBody
 }
@@ -8586,6 +8834,33 @@ type StrictServerInterface interface {
 	// MoveItem Move an item to another list
 	// (POST /api/v1/items/{id}/move)
 	MoveItem(ctx context.Context, request MoveItemRequestObject) (MoveItemResponseObject, error)
+	// ListKinds List kind definitions and fields
+	// (GET /api/v1/kinds)
+	ListKinds(ctx context.Context, request ListKindsRequestObject) (ListKindsResponseObject, error)
+	// CreateKind Create a custom kind
+	// (POST /api/v1/kinds)
+	CreateKind(ctx context.Context, request CreateKindRequestObject) (CreateKindResponseObject, error)
+	// DeleteKind Delete a custom kind not used by any list
+	// (DELETE /api/v1/kinds/{key})
+	DeleteKind(ctx context.Context, request DeleteKindRequestObject) (DeleteKindResponseObject, error)
+	// UpdateKind Rename a custom kind
+	// (PATCH /api/v1/kinds/{key})
+	UpdateKind(ctx context.Context, request UpdateKindRequestObject) (UpdateKindResponseObject, error)
+	// CreateKindField Add a custom field
+	// (POST /api/v1/kinds/{key}/fields)
+	CreateKindField(ctx context.Context, request CreateKindFieldRequestObject) (CreateKindFieldResponseObject, error)
+	// ReorderKindFields Reorder custom fields
+	// (PUT /api/v1/kinds/{key}/fields/order)
+	ReorderKindFields(ctx context.Context, request ReorderKindFieldsRequestObject) (ReorderKindFieldsResponseObject, error)
+	// DeleteKindField Delete a custom field and strip populated values
+	// (DELETE /api/v1/kinds/{key}/fields/{fieldKey})
+	DeleteKindField(ctx context.Context, request DeleteKindFieldRequestObject) (DeleteKindFieldResponseObject, error)
+	// PreviewDeleteKindField Count item values that deleting a custom field would remove
+	// (GET /api/v1/kinds/{key}/fields/{fieldKey})
+	PreviewDeleteKindField(ctx context.Context, request PreviewDeleteKindFieldRequestObject) (PreviewDeleteKindFieldResponseObject, error)
+	// UpdateKindField Rename a custom field
+	// (PATCH /api/v1/kinds/{key}/fields/{fieldKey})
+	UpdateKindField(ctx context.Context, request UpdateKindFieldRequestObject) (UpdateKindFieldResponseObject, error)
 	// CreateList Create a list
 	// (POST /api/v1/lists)
 	CreateList(ctx context.Context, request CreateListRequestObject) (CreateListResponseObject, error)
@@ -9299,6 +9574,280 @@ func (sh *strictHandler) MoveItem(w http.ResponseWriter, r *http.Request, id Id,
 	}
 }
 
+// ListKinds operation middleware
+func (sh *strictHandler) ListKinds(w http.ResponseWriter, r *http.Request) {
+	var request ListKindsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListKinds(ctx, request.(ListKindsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListKinds")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListKindsResponseObject); ok {
+		if err := validResponse.VisitListKindsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateKind operation middleware
+func (sh *strictHandler) CreateKind(w http.ResponseWriter, r *http.Request) {
+	var request CreateKindRequestObject
+
+	var body CreateKindJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateKind(ctx, request.(CreateKindRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateKind")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateKindResponseObject); ok {
+		if err := validResponse.VisitCreateKindResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteKind operation middleware
+func (sh *strictHandler) DeleteKind(w http.ResponseWriter, r *http.Request, key string, params DeleteKindParams) {
+	var request DeleteKindRequestObject
+
+	request.Key = key
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteKind(ctx, request.(DeleteKindRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteKind")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteKindResponseObject); ok {
+		if err := validResponse.VisitDeleteKindResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateKind operation middleware
+func (sh *strictHandler) UpdateKind(w http.ResponseWriter, r *http.Request, key string, params UpdateKindParams) {
+	var request UpdateKindRequestObject
+
+	request.Key = key
+	request.Params = params
+
+	var body UpdateKindJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateKind(ctx, request.(UpdateKindRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateKind")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateKindResponseObject); ok {
+		if err := validResponse.VisitUpdateKindResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateKindField operation middleware
+func (sh *strictHandler) CreateKindField(w http.ResponseWriter, r *http.Request, key string, params CreateKindFieldParams) {
+	var request CreateKindFieldRequestObject
+
+	request.Key = key
+	request.Params = params
+
+	var body CreateKindFieldJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateKindField(ctx, request.(CreateKindFieldRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateKindField")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateKindFieldResponseObject); ok {
+		if err := validResponse.VisitCreateKindFieldResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReorderKindFields operation middleware
+func (sh *strictHandler) ReorderKindFields(w http.ResponseWriter, r *http.Request, key string, params ReorderKindFieldsParams) {
+	var request ReorderKindFieldsRequestObject
+
+	request.Key = key
+	request.Params = params
+
+	var body ReorderKindFieldsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReorderKindFields(ctx, request.(ReorderKindFieldsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReorderKindFields")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReorderKindFieldsResponseObject); ok {
+		if err := validResponse.VisitReorderKindFieldsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteKindField operation middleware
+func (sh *strictHandler) DeleteKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params DeleteKindFieldParams) {
+	var request DeleteKindFieldRequestObject
+
+	request.Key = key
+	request.FieldKey = fieldKey
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteKindField(ctx, request.(DeleteKindFieldRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteKindField")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteKindFieldResponseObject); ok {
+		if err := validResponse.VisitDeleteKindFieldResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewDeleteKindField operation middleware
+func (sh *strictHandler) PreviewDeleteKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string) {
+	var request PreviewDeleteKindFieldRequestObject
+
+	request.Key = key
+	request.FieldKey = fieldKey
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewDeleteKindField(ctx, request.(PreviewDeleteKindFieldRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewDeleteKindField")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewDeleteKindFieldResponseObject); ok {
+		if err := validResponse.VisitPreviewDeleteKindFieldResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateKindField operation middleware
+func (sh *strictHandler) UpdateKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params UpdateKindFieldParams) {
+	var request UpdateKindFieldRequestObject
+
+	request.Key = key
+	request.FieldKey = fieldKey
+	request.Params = params
+
+	var body UpdateKindFieldJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateKindField(ctx, request.(UpdateKindFieldRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateKindField")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateKindFieldResponseObject); ok {
+		if err := validResponse.VisitUpdateKindFieldResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CreateList operation middleware
 func (sh *strictHandler) CreateList(w http.ResponseWriter, r *http.Request) {
 	var request CreateListRequestObject
@@ -9899,281 +10448,274 @@ func (sh *strictHandler) CheckReadiness(w http.ResponseWriter, r *http.Request) 
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"2XOzNJapkNAkkUwpE5TtMRo1DMS8XB9v/v8BAA==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

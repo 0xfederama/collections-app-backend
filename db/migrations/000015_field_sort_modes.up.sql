@@ -1,7 +1,7 @@
 -- F014-B4 replaces the fixed kind_key token with its definition-backed field key.
 UPDATE lists l
 SET sort_mode = COALESCE(k.default_sort_field, 'manual'),
-    version = version + 1,
+    version = l.version + 1,
     updated_at = now()
 FROM kind_definitions k
 WHERE l.workspace_id = k.workspace_id

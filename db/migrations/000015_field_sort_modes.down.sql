@@ -1,7 +1,7 @@
 -- Restore the prior fixed token for lists on their kind's default field.
 UPDATE lists l
 SET sort_mode = 'kind_key',
-    version = version + 1,
+    version = l.version + 1,
     updated_at = now()
 FROM kind_definitions k
 WHERE l.workspace_id = k.workspace_id

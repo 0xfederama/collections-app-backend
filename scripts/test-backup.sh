@@ -132,7 +132,11 @@ docker compose exec -T db psql -U collection -d collection -q -v ON_ERROR_STOP=1
                              fetched_at, refresh_after, expires_at)
    SELECT workspace_id, id, 603, 'movie', '{\"tmdb_id\":603,\"release_year\":1999}', title, 'The Matrix',
           now(), now() + interval '5 months', now() + interval '6 months'
-   FROM items WHERE id = '$matrix';"
+   FROM items WHERE id = '$matrix'
+   ON CONFLICT (item_id) DO UPDATE
+   SET tmdb_id = EXCLUDED.tmdb_id, kind = EXCLUDED.kind, imported_fields = EXCLUDED.imported_fields,
+       imported_title = EXCLUDED.imported_title, original_title = EXCLUDED.original_title,
+       fetched_at = EXCLUDED.fetched_at, refresh_after = EXCLUDED.refresh_after, expires_at = EXCLUDED.expires_at;"
 
 step "snapshot of the API before the backup"
 snapshot() {

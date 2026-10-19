@@ -270,7 +270,7 @@ func (s *DBStore) applyExisting(ctx context.Context, q *sqlc.Queries, p ApplyPar
 	candidate := cloneLookupMap(p.Fields)
 	candidate[idKey] = idValue
 	merged, snapshots := mergeMetadata(p.Mode, metadata, candidate, old, hasOld, idKey)
-	if p.Mode == ModeFill {
+	if p.Mode == ModeFill || p.Mode == ModeRematch || p.Mode == ModeRefresh {
 		fillOnly(merged, p.FillOnly, true)
 	}
 	if p.Mode == ModeOwned && !p.RefreshFields && hasOld {

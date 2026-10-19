@@ -120,7 +120,7 @@ func TestAT12_SearchSubstringAndPath(t *testing.T) {
 			t.Errorf("item summary lacks %q", k)
 		}
 	}
-	if hit.Item["type"] != "movie" || got.Data[0].TypeName != "Movie" || hit.Item["website"] != "https://www.warnerbros.com/movies/matrix" || hit.Item["image"] != nil {
+	if hit.Item["type"] != "movie" || got.Data[0].TypeName != "Movies" || hit.Item["website"] != "https://www.warnerbros.com/movies/matrix" || hit.Item["image"] != nil {
 		t.Errorf("unexpected summary: %v", hit.Item)
 	}
 

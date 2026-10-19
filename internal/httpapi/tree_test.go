@@ -682,6 +682,7 @@ func TestF007_ChangeListTypeClearsItemMetadata(t *testing.T) {
 	// The item is validated against the new type from now on.
 	wantProblem(t, e.patchItem(got, `{"metadata":{"release_year":1999}}`), 400, "unknown_field")
 	wantStatus(t, e.patchItem(got, `{"metadata":{"make":"VW","model":"Golf"}}`), 200)
+	got = e.fetchItem(it["id"])
 	wantProblem(t, e.patchItem(got, `{"metadata":{"fuel_type":"electric"}}`), 400, "unknown_field")
 
 	// A stale version still loses.

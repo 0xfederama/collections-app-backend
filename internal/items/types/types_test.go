@@ -119,6 +119,20 @@ func TestF014B2_ValidateKeepsStreamingAndTMDBRules(t *testing.T) {
 	}
 }
 
+func TestStreamingLinkValidation(t *testing.T) {
+	fields := []types.Field{{Key: "streaming", Type: "streaming", Special: true}}
+	ok := "https://www.justwatch.com/it/movie/the-matrix"
+	got, err := types.Validate(fields, map[string]any{"streaming": map[string]any{"country": "IT", "link": ok}})
+	if err != nil || got["streaming"].(map[string]any)["link"] != ok {
+		t.Fatalf("valid link: %v, %v", got, err)
+	}
+	for _, link := range []any{"http://www.justwatch.com/x", "https://evil.example/x", "https://www.justwatch.com.evil.test/", 5} {
+		if _, err := types.Validate(fields, map[string]any{"streaming": map[string]any{"country": "IT", "link": link}}); err == nil {
+			t.Errorf("link %v accepted", link)
+		}
+	}
+}
+
 func TestF016B4_ValidateStoresField(t *testing.T) {
 	fields := []types.Field{{Key: "stores", Type: "stores", Special: true}}
 	for _, tt := range []struct {

@@ -11,6 +11,30 @@ import (
 	"github.com/google/uuid"
 )
 
+const clearItemStreamingLinks = `-- name: ClearItemStreamingLinks :exec
+UPDATE items
+SET metadata = metadata #- '{streaming,link}'
+WHERE workspace_id = $1 AND metadata #>> '{streaming,link}' IS NOT NULL
+`
+
+// The JustWatch page is per country: when the streaming country changes, every imported
+// streaming.link goes until the next lookup refresh. Derived data, so no version bump.
+func (q *Queries) ClearItemStreamingLinks(ctx context.Context, workspaceID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearItemStreamingLinks, workspaceID)
+	return err
+}
+
+const clearStreamingLinkSnapshots = `-- name: ClearStreamingLinkSnapshots :exec
+UPDATE lookup_imports
+SET imported_fields = imported_fields - 'streaming.link'
+WHERE workspace_id = $1 AND imported_fields ->> 'streaming.link' IS NOT NULL
+`
+
+func (q *Queries) ClearStreamingLinkSnapshots(ctx context.Context, workspaceID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearStreamingLinkSnapshots, workspaceID)
+	return err
+}
+
 const getSettings = `-- name: GetSettings :one
 SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_store, s.version
 FROM workspace_settings s

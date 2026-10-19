@@ -746,7 +746,7 @@ paths:
                     release_year: 1999
                     runtime_minutes: 136
                     imdb_url: https://www.imdb.com/title/tt0133093/
-                    streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
+                    streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix' }
       responses:
         '201':
           description: Created
@@ -1731,7 +1731,7 @@ components:
           release_year: 1999
           runtime_minutes: 136
           imdb_url: https://www.imdb.com/title/tt0133093/
-          streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
+          streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix' }
         content_version: 2
         sort_order: 0
         version: 3
@@ -1750,7 +1750,7 @@ components:
           release_year: 1999
           runtime_minutes: 136
           imdb_url: https://www.imdb.com/title/tt0133093/
-          streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
+          streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix' }
         content_version: 2
         sort_order: 0
         version: 3
@@ -1794,7 +1794,7 @@ components:
             metadata:
               release_year: 1999
               runtime_minutes: 136
-              streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
+              streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix' }
             content_version: 2
             sort_order: 0
             version: 3
@@ -1828,7 +1828,7 @@ components:
               metadata:
                 release_year: 1999
                 runtime_minutes: 136
-                streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
+                streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix' }
               content_version: 2
               sort_order: 0
               version: 3
@@ -1853,7 +1853,7 @@ components:
               metadata:
                 release_year: 1999
                 runtime_minutes: 136
-                streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video] }
+                streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix' }
               content_version: 2
               sort_order: 0
               version: 3
@@ -2585,6 +2585,12 @@ components:
           maxItems: 30
           description: Platforms available only through per-title rental or purchase, not subscription, free, or ad-supported offers. Each entry must match (case-insensitively) an entry of `platforms` and is stored with that entry's casing. Unique case-insensitively. Omitted, null or empty means none paid.
           items: { type: string, maxLength: 60 }
+        link:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
+          description: "The JustWatch page of the title for `country` (an https://www.justwatch.com URL), filled and refreshed by the TMDB lookup with the other imported streaming values and dropped with them when TMDB data expires (D-089). `null` or absent when there is none. Read-only for clients: a `link` sent in a write is ignored (not rejected), and the stored one is kept while `country` is unchanged, so a client can round-trip the whole `streaming` object. Changing the workspace `streaming_country_code` clears every item's link until its next lookup refresh. TMDB attributes this data to JustWatch."
     MovieMetadata:
       type: object
       additionalProperties: false

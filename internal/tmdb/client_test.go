@@ -57,6 +57,10 @@ func TestMockFixtureIsExactAndNeverReplacesManualTMDBQueries(t *testing.T) {
 	if err != nil || details.ID != mockMovieID || details.Title != matches[0].Title || details.Metadata["release_year"] != 2001 || details.Metadata["director"] != "Mock Director" {
 		t.Fatalf("fixture details = %+v, error = %v", details, err)
 	}
+	mockStreaming, _ := details.Metadata["streaming"].(map[string]any)
+	if mockStreaming["country"] != "US" || mockStreaming["link"] != "https://www.justwatch.com/us/movie/mock" {
+		t.Fatalf("fixture streaming = %#v", mockStreaming)
+	}
 	if calls != 0 {
 		t.Fatalf("fixture made %d HTTP calls", calls)
 	}
@@ -125,6 +129,9 @@ func TestDetailsMetadataAndProviders(t *testing.T) {
 		t.Fatalf("details = %+v", d)
 	}
 	streaming := d.Metadata["streaming"].(map[string]any)
+	if streaming["link"] != "https://www.justwatch.com/it/movie/example" {
+		t.Fatalf("streaming link = %v", streaming["link"])
+	}
 	if strings.Join(streaming["platforms"].([]string), ",") != "Netflix,Prime Video,Apple TV,Pluto TV" || strings.Join(streaming["paid_platforms"].([]string), ",") != "Apple TV" {
 		t.Fatalf("streaming = %#v", streaming)
 	}
@@ -275,5 +282,32 @@ func TestRequestTimeoutIncludesRateLimitWait(t *testing.T) {
 	}
 	if time.Since(start) > 250*time.Millisecond {
 		t.Fatalf("queued request took too long: %s", time.Since(start))
+	}
+}
+
+func TestJustWatchLinkAcceptsOnlyHTTPSJustWatch(t *testing.T) {
+	for raw, want := range map[string]string{
+		"https://www.justwatch.com/it/movie/x": "https://www.justwatch.com/it/movie/x",
+		"https://justwatch.com/it/movie/x":     "https://justwatch.com/it/movie/x",
+		"http://www.justwatch.com/it/movie/x":  "",
+		"https://evil.example/it/movie/x":      "",
+		"https://www.justwatch.com.evil.test/": "",
+		"https://user@www.justwatch.com/":      "",
+		"javascript:alert(1)":                  "",
+		"":                                     "",
+	} {
+		if got := justWatchLink(raw); got != want {
+			t.Errorf("justWatchLink(%q) = %q, want %q", raw, got, want)
+		}
+	}
+	c, _ := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":42,"title":"Example","watch/providers":{"results":{"IT":{"link":"https://evil.example/x","flatrate":[{"provider_name":"Netflix","provider_id":1}]}}}}`))
+	})
+	d, err := c.Details(context.Background(), "movie", 42, "it-IT", "IT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, has := d.Metadata["streaming"].(map[string]any)["link"]; has {
+		t.Errorf("a foreign link was kept: %v", d.Metadata["streaming"])
 	}
 }

@@ -67,7 +67,7 @@ WHERE i.list_id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
        WHEN 'date' THEN (NOT $7::boolean OR i.metadata ->> $4::text >= $8::text)
                       AND (NOT $9::boolean OR i.metadata ->> $4::text <= $10::text)
        WHEN 'boolean' THEN i.metadata -> $4::text = $6::jsonb
-       WHEN 'streaming' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
+       WHEN 'streaming' THEN lower(COALESCE((CASE WHEN jsonb_typeof(i.metadata -> $4::text) = 'object' THEN ((i.metadata -> $4::text) - 'link')::text ELSE i.metadata ->> $4::text END), '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
        ELSE false END)
 `
 
@@ -351,7 +351,7 @@ WHERE i.list_id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
        WHEN 'date' THEN (NOT $7::boolean OR i.metadata ->> $4::text >= $8::text)
                       AND (NOT $9::boolean OR i.metadata ->> $4::text <= $10::text)
        WHEN 'boolean' THEN i.metadata -> $4::text = $6::jsonb
-       WHEN 'streaming' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
+       WHEN 'streaming' THEN lower(COALESCE((CASE WHEN jsonb_typeof(i.metadata -> $4::text) = 'object' THEN ((i.metadata -> $4::text) - 'link')::text ELSE i.metadata ->> $4::text END), '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
        ELSE false END)
 ORDER BY
   CASE WHEN $11::text = 'manual' THEN i.sort_order END ASC,
@@ -362,7 +362,7 @@ ORDER BY
   CASE WHEN $12::text = 'number' THEN (i.metadata ->> $13::text)::numeric END ASC NULLS LAST,
   CASE WHEN $12::text = 'date' THEN i.metadata ->> $13::text END ASC NULLS LAST,
   CASE WHEN $12::text IN ('text', 'link') THEN lower(NULLIF(i.metadata ->> $13::text, '')) END ASC NULLS LAST,
-  CASE WHEN $12::text = 'streaming' THEN lower(i.metadata ->> $13::text) END ASC NULLS LAST,
+  CASE WHEN $12::text = 'streaming' THEN lower((CASE WHEN jsonb_typeof(i.metadata -> $13::text) = 'object' THEN ((i.metadata -> $13::text) - 'link')::text ELSE i.metadata ->> $13::text END)) END ASC NULLS LAST,
   CASE WHEN $12::text = 'boolean' THEN (i.metadata ->> $13::text)::boolean END ASC NULLS LAST,
   i.id
 LIMIT $15 OFFSET $14
@@ -411,6 +411,7 @@ type ListItemsRow struct {
 	ContentVersion        int32
 }
 
+// A streaming field filters and sorts on its object without the server-managed link.
 // @sort is manual, title, updated, price or a metadata field key. Field sorting is driven by its definition type.
 func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListItemsRow, error) {
 	rows, err := q.db.Query(ctx, listItems,

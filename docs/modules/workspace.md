@@ -32,6 +32,7 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 - A patch that changes nothing returns the current settings with no version bump.
 - A name change updates `workspaces.name` in the same transaction; it bumps `workspaces.version`, but the ETag stream is only `workspace_settings.version` (`"s-N"`).
 - `Update` writes in `database.InTx` and locks the settings row `FOR UPDATE`.
+- Changing `streaming_country_code` also runs `ClearItemStreamingLinks` and `ClearStreamingLinkSnapshots` (one UPDATE each, workspace-wide) in the same transaction: the imported `streaming.link` belongs to the old country. No version bump on items.
 - `trash_retention_days` (1 to 365, or null = off; migration 000010, default NULL) is read by the trash auto-purge (`internal/trash`). Setting it purges nothing at once.
 - `preferred_store` (migration 000023, NOT NULL, default `amazon`, CHECK on the five keys) is the one default store: new book items and book lookup (create, fill on empty stores) get `stores: [preferred_store]`. It replaced the `preferred_stores` list (backfilled from its first non-`openlibrary` element). An unknown key is 422 on `preferred_store`.
 - `book_lookup_available` is not stored: it is true when the Open Library client is enabled, which is always (no key or setting).

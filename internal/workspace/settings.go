@@ -116,6 +116,15 @@ func (s *Service) Update(ctx context.Context, workspaceID uuid.UUID, ifMatch int
 		if err != nil {
 			return fmt.Errorf("update settings: %w", err)
 		}
+		if next.StreamingCountryCode != cur.StreamingCountryCode {
+			// The imported JustWatch link belongs to the old country.
+			if err := q.ClearItemStreamingLinks(ctx, workspaceID); err != nil {
+				return fmt.Errorf("clear item streaming links: %w", err)
+			}
+			if err := q.ClearStreamingLinkSnapshots(ctx, workspaceID); err != nil {
+				return fmt.Errorf("clear streaming link snapshots: %w", err)
+			}
+		}
 		next.Version = cur.Version + 1
 		out = next
 		return nil

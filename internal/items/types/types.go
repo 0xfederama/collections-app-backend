@@ -39,6 +39,8 @@ const (
 var (
 	imdbRe    = regexp.MustCompile(`^https://(www\.|m\.)?imdb\.com/title/tt\d{7,10}/?$`)
 	countryRe = regexp.MustCompile(`^[A-Z]{2}$`)
+	// justWatchRe is the only streaming.link accepted: TMDB's JustWatch page of the country.
+	justWatchRe = regexp.MustCompile(`^https://(www\.)?justwatch\.com(/[^\s]{0,1000})?$`)
 )
 
 // outcome is what one field rule returns: the normalized value, or field
@@ -233,7 +235,7 @@ func imdbURL(path string, v any) outcome {
 	return outcome{val: s}
 }
 
-// streaming checks {country (required), platforms, paid_platforms}. Undeclared keys inside it
+// streaming checks {country (required), platforms, paid_platforms, link}. Undeclared keys inside it
 // are reported as unknown fields too.
 func streaming(path string, v any) outcome {
 	obj, ok := v.(map[string]any)
@@ -241,7 +243,7 @@ func streaming(path string, v any) outcome {
 		return fail(path, "must be an object")
 	}
 	for _, key := range slices.Sorted(maps.Keys(obj)) {
-		if key != "country" && key != "platforms" && key != "paid_platforms" {
+		if key != "country" && key != "platforms" && key != "paid_platforms" && key != "link" {
 			return outcome{unknown: path + "." + key}
 		}
 	}
@@ -258,6 +260,14 @@ func streaming(path string, v any) outcome {
 		}
 	default:
 		errs = append(errs, apperr.FieldError{Field: path + ".country", Message: "must be a string"})
+	}
+	if raw, present := obj["link"]; present && raw != nil {
+		// Set by the TMDB lookup only; item writes strip it before validation.
+		if l, ok := raw.(string); ok && justWatchRe.MatchString(l) {
+			out["link"] = l
+		} else {
+			errs = append(errs, apperr.FieldError{Field: path + ".link", Message: "must be a https://www.justwatch.com URL"})
+		}
 	}
 	if raw, present := obj["platforms"]; present && raw != nil {
 		platforms, perrs := platformList(path+".platforms", raw)

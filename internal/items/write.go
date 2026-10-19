@@ -71,7 +71,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 				return err
 			}
 		}
-		meta, err := s.ValidateMetadata(ctx, q, list.Type, in.Metadata)
+		meta, err := s.validateClientMetadata(ctx, q, list.Type, in.Metadata, nil)
 		if err != nil {
 			return err
 		}
@@ -205,7 +205,11 @@ func (s *Service) mergePatch(ctx context.Context, q *sqlc.Queries, cur sqlc.Item
 		changed = true
 	}
 	if p.Metadata != nil {
-		clean, err := s.ValidateMetadata(ctx, q, typ, p.Metadata)
+		var stored map[string]any
+		if err := json.Unmarshal(cur.Metadata, &stored); err != nil {
+			return arg, false, fmt.Errorf("decode item metadata: %w", err)
+		}
+		clean, err := s.validateClientMetadata(ctx, q, typ, p.Metadata, stored)
 		if err != nil {
 			return arg, false, err
 		}
@@ -297,8 +301,62 @@ func (s *Service) ValidateMetadata(ctx context.Context, q *sqlc.Queries, typ *st
 	if in == nil {
 		in = map[string]any{}
 	}
+	fields, err := s.typeFieldDefs(ctx, q, typ)
+	if err != nil {
+		return nil, err
+	}
+	return types.Validate(fields, in)
+}
+
+// validateClientMetadata validates metadata sent by a client. streaming.link is
+// server-managed (TMDB lookup): a client-sent link is dropped, and the stored one
+// is kept while the streaming country is unchanged, so a client that round-trips
+// the whole streaming object, or edits only the platforms, does not lose it.
+func (s *Service) validateClientMetadata(ctx context.Context, q *sqlc.Queries, typ *string, in, stored map[string]any) (map[string]any, error) {
+	if in == nil {
+		in = map[string]any{}
+	}
+	fields, err := s.typeFieldDefs(ctx, q, typ)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]any
+	for _, f := range fields {
+		if f.Type != "streaming" && (!f.Special || f.Key != "streaming") {
+			continue
+		}
+		obj, ok := in[f.Key].(map[string]any)
+		if !ok {
+			continue
+		}
+		if out == nil {
+			out = make(map[string]any, len(in))
+			for k, v := range in {
+				out[k] = v
+			}
+		}
+		next := make(map[string]any, len(obj))
+		for k, v := range obj {
+			if k != "link" {
+				next[k] = v
+			}
+		}
+		old, _ := stored[f.Key].(map[string]any)
+		if link, ok := old["link"].(string); ok && next["country"] != nil && next["country"] == old["country"] {
+			next["link"] = link
+		}
+		out[f.Key] = next
+	}
+	if out != nil {
+		in = out
+	}
+	return types.Validate(fields, in)
+}
+
+// typeFieldDefs loads the field definitions of a type; nil (no type) has none.
+func (s *Service) typeFieldDefs(ctx context.Context, q *sqlc.Queries, typ *string) ([]types.Field, error) {
 	if typ == nil {
-		return types.Validate(nil, in)
+		return nil, nil
 	}
 	definition, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: *typ})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -315,7 +373,7 @@ func (s *Service) ValidateMetadata(ctx context.Context, q *sqlc.Queries, typ *st
 	for i, field := range fields {
 		definitions[i] = types.Field{Key: field.Key, Type: field.FieldType, Special: field.IsLocked}
 	}
-	return types.Validate(definitions, in)
+	return definitions, nil
 }
 
 // sameType compares two list types; nil (no type) equals only nil.

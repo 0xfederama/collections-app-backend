@@ -230,3 +230,34 @@ func TestF016_RowsCarryStoreLinks(t *testing.T) {
 		t.Errorf("last row store_links = %v", page[29].StoreLinks)
 	}
 }
+
+func TestStreamingLink_RowsCarryItAndWholeObjectRoundTrips(t *testing.T) {
+	e := newTreeEnv(t)
+	lid := e.listOfType("Films", nil, "movie")["id"].(string)
+	it := e.newItem(lid, `{"title":"Matrix","metadata":{"streaming":{"country":"IT","platforms":["Netflix"]}}}`)
+	link := "https://www.justwatch.com/it/movie/the-matrix"
+	// The link is only ever written by the lookup: simulate it.
+	e.exec(`UPDATE items SET metadata = jsonb_set(metadata, '{streaming,link}', to_jsonb($2::text)), version = version + 1 WHERE id = $1`, it["id"], link)
+	it = e.fetchItem(it["id"])
+
+	rows, _ := e.page(lid, "")
+	if s, _ := rows[0]["metadata"].(map[string]any)["streaming"].(map[string]any); s["link"] != link {
+		t.Fatalf("row streaming = %v, want the link", s)
+	}
+
+	// A client that round-trips the whole streaming object (even with another link) is not rejected.
+	rec := e.patchItem(it, `{"metadata":{"streaming":{"country":"IT","platforms":["Netflix","Max"],"link":"https://evil.example/"}}}`)
+	wantStatus(t, rec, 200)
+	got := decode(t, rec)
+	if s, _ := got["metadata"].(map[string]any)["streaming"].(map[string]any); s["link"] != link || len(s["platforms"].([]any)) != 2 {
+		t.Errorf("streaming after round trip = %v", s)
+	}
+
+	// Filtering and sorting on streaming look at the platforms, not at the link.
+	if rows, _ := e.page(lid, "?filter_field=streaming&filter_value=justwatch"); len(rows) != 0 {
+		t.Errorf("filter matched the link: %v", titlesOf(rows))
+	}
+	if rows, _ := e.page(lid, "?filter_field=streaming&filter_value=max"); len(rows) != 1 {
+		t.Errorf("filter on a platform matched %d rows, want 1", len(rows))
+	}
+}

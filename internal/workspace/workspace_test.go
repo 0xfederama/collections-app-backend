@@ -150,7 +150,7 @@ func TestBootstrap_SeedsBuiltinTypeDefinitions(t *testing.T) {
 	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM type_fields WHERE workspace_id = $1 AND is_locked`, workspaceID).Scan(&fields); err != nil {
 		t.Fatal(err)
 	}
-	if types != 6 || fields != 35 {
-		t.Errorf("seeded definitions = %d types, %d fields; want 6 types, 35 fields", types, fields)
+	if types != 5 || fields != 27 {
+		t.Errorf("seeded definitions = %d types, %d fields; want 5 types, 27 fields", types, fields)
 	}
 }

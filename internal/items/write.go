@@ -178,6 +178,12 @@ func (s *Service) priceTypeError(ctx context.Context, q *sqlc.Queries, typ *stri
 	return apperr.Validation(apperr.FieldError{Field: "price", Message: "items of this type have no price"})
 }
 
+// CheckPriceAllowed is the 422 on price for a list type without a price
+// (definition allows_price false, or no type). q must be inside the caller's tx.
+func (s *Service) CheckPriceAllowed(ctx context.Context, q *sqlc.Queries, typ *string) error {
+	return s.priceTypeError(ctx, q, typ)
+}
+
 // mergePatch applies a validated patch to the locked row. It returns the full
 // replacement values and whether anything differs from the stored row. type is
 // the type of the item's list, which the metadata is validated against.

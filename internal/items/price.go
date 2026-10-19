@@ -127,3 +127,10 @@ func priceColumns(p *Price) (minV, maxV pgtype.Numeric, currency *string) {
 	c := p.Currency
 	return minV, maxV, &c
 }
+
+// ValidatePrice checks a price like Create does (422 on price.*). The lookup
+// package writes a book's price in its own atomic create.
+func ValidatePrice(p *Price) error { return validate(validatePrice(p)) }
+
+// PriceColumns converts a validated price (or nil) to the three item columns.
+func PriceColumns(p *Price) (minV, maxV pgtype.Numeric, currency *string) { return priceColumns(p) }

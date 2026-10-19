@@ -172,8 +172,14 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 		return uuid.Nil, false, apperr.TypeMismatch()
 	}
 	if p.CreateInput.Price != nil {
-		return uuid.Nil, false, apperr.Validation(apperr.FieldError{Field: "price", Message: "items of this type have no price"})
+		if err := items.ValidatePrice(p.CreateInput.Price); err != nil {
+			return uuid.Nil, false, err
+		}
+		if err := s.items.CheckPriceAllowed(ctx, q, typ); err != nil {
+			return uuid.Nil, false, err
+		}
 	}
+	priceMin, priceMax, currency := items.PriceColumns(p.CreateInput.Price)
 	original, err := cleanLookupTitle(p.OriginalTitle)
 	if p.OriginalTitle == "" {
 		original, err = cleanLookupTitle(p.CreateInput.Title)
@@ -216,7 +222,7 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 	now := s.clock.Now()
 	id, err := q.InsertLookupItem(ctx, sqlc.InsertLookupItemParams{
 		WorkspaceID: s.workspaceID, ListID: p.ListID, Title: title, WebsiteUrl: website,
-		Metadata: metaJSON, ImageAttachmentID: attachmentID, SortOrder: next, Now: now,
+		PriceMin: priceMin, PriceMax: priceMax, Currency: currency, Metadata: metaJSON, ImageAttachmentID: attachmentID, SortOrder: next, Now: now,
 	})
 	if err != nil {
 		return uuid.Nil, false, fmt.Errorf("insert lookup item: %w", err)

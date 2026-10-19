@@ -14,10 +14,10 @@ WHERE i.id = @id AND i.workspace_id = @workspace_id AND i.deleted_at IS NULL
 FOR UPDATE OF i;
 
 -- name: InsertLookupItem :one
-INSERT INTO items (workspace_id, list_id, title, website_url, metadata, image_attachment_id,
-                   sort_order, created_at, updated_at)
-VALUES (@workspace_id, @list_id, @title, sqlc.narg(website_url), @metadata,
-        sqlc.narg(image_attachment_id), @sort_order, @now, @now)
+INSERT INTO items (workspace_id, list_id, title, price_min, price_max, currency, website_url, metadata,
+                   image_attachment_id, sort_order, created_at, updated_at)
+VALUES (@workspace_id, @list_id, @title, sqlc.narg(price_min), sqlc.narg(price_max), sqlc.narg(currency),
+        sqlc.narg(website_url), @metadata, sqlc.narg(image_attachment_id), @sort_order, @now, @now)
 RETURNING id;
 
 -- name: GetLookupImport :one

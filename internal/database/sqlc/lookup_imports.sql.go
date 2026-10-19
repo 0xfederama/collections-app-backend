@@ -127,10 +127,10 @@ func (q *Queries) GetLookupListType(ctx context.Context, arg GetLookupListTypePa
 }
 
 const insertLookupItem = `-- name: InsertLookupItem :one
-INSERT INTO items (workspace_id, list_id, title, website_url, metadata, image_attachment_id,
-                   sort_order, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5,
-        $6, $7, $8, $8)
+INSERT INTO items (workspace_id, list_id, title, price_min, price_max, currency, website_url, metadata,
+                   image_attachment_id, sort_order, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10, $11, $11)
 RETURNING id
 `
 
@@ -138,6 +138,9 @@ type InsertLookupItemParams struct {
 	WorkspaceID       uuid.UUID
 	ListID            uuid.UUID
 	Title             string
+	PriceMin          pgtype.Numeric
+	PriceMax          pgtype.Numeric
+	Currency          *string
 	WebsiteUrl        *string
 	Metadata          []byte
 	ImageAttachmentID uuid.NullUUID
@@ -150,6 +153,9 @@ func (q *Queries) InsertLookupItem(ctx context.Context, arg InsertLookupItemPara
 		arg.WorkspaceID,
 		arg.ListID,
 		arg.Title,
+		arg.PriceMin,
+		arg.PriceMax,
+		arg.Currency,
 		arg.WebsiteUrl,
 		arg.Metadata,
 		arg.ImageAttachmentID,

@@ -23,6 +23,10 @@ const (
 // are mapped to API errors in one place (ProviderError).
 var ErrDisabled = errors.New("lookup is disabled")
 
+// ErrNoImage is returned by DownloadImage when the provider has no image for the
+// match (a book without a cover). The match is still applied, without an image.
+var ErrNoImage = errors.New("lookup has no image")
+
 // Suggestion is one provider-ranked search result. Fields a provider does not
 // have stay zero: Overview and OriginalTitle are TMDB's; Authors, Pages and ISBN
 // belong to books.

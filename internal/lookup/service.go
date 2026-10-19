@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -300,6 +301,9 @@ func (s *Service) poster(ctx context.Context, provider Provider, path string) (*
 		return nil, nil
 	}
 	raw, err := provider.DownloadImage(ctx, path)
+	if errors.Is(err, ErrNoImage) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, ProviderError(err)
 	}

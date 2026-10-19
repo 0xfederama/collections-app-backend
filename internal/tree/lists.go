@@ -346,8 +346,8 @@ func validateDefinitionSort(typ *string, sortMode string, allowsPrice bool, fiel
 }
 
 func validateDefinitionPins(allowsPrice bool, fields []sqlc.TypeField, in *PinnedFields) (*PinnedFields, error) {
-	if len(*in) > 2 {
-		return nil, apperr.Validation(apperr.FieldError{Field: "pinned_fields", Message: "must have at most 2 entries"})
+	if len(*in) > 3 {
+		return nil, apperr.Validation(apperr.FieldError{Field: "pinned_fields", Message: "must have at most 3 entries"})
 	}
 	seen := make(map[string]bool, len(*in))
 	for i, key := range *in {

@@ -139,7 +139,7 @@ func (s *Service) Create(ctx context.Context, in CreateType) (Type, error) {
 }
 
 func validFieldKey(key string) bool {
-	if len(key) == 0 || len(key) > 32 || key[0] < 'a' || key[0] > 'z' {
+	if key == "store_links" || len(key) == 0 || len(key) > 32 || key[0] < 'a' || key[0] > 'z' {
 		return false
 	}
 	for _, r := range key[1:] {

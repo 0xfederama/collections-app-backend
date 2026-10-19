@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.13.0
+  version: 0.14.0
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -2394,7 +2394,7 @@ components:
     Item:
       description: >-
         An item. `type` is read-only and derived from the item's list; `metadata` is validated against that workspace type's field definitions.
-        For a type with a `stores` field (F-016, D-096) the response `metadata` also carries a read-only `store_links` object: provider key
+        For a type with a `stores` field (F-016, D-096) the response `metadata` also carries a read-only `store_links` object (on the full item and on the rows of list items, search and recent items; since 0.14.0): provider key
         to URL, one entry per selected store that has a link (built from the item's title and `isbn`, never stored). Links follow the workspace country (`streaming_country_code`): Amazon uses the country's storefront (amazon.it for `IT`, amazon.com for countries without one), Bookshop.org uses its UK site for `GB`, Google Play Books adds the country; other stores are global. Because links are computed on read, changing the country changes them. Sending
         `store_links` in `metadata` is rejected as an unknown field (`400 unknown_field`, path `metadata.store_links`).
         A book item also carries the read-only `metadata.openlibrary_id`: it is set by lookup, used by refresh and by clients to build the Open Library link (`https://openlibrary.org/works/<id>`), and must not be edited. The built-in book type has no first publication year (removed in 0.13.0; a suggestion's `year` is display only).
@@ -2409,7 +2409,7 @@ components:
               additionalProperties: true
     ItemSummary:
       type: object
-      description: "An item row in lists, search and recent items: the same `metadata` object as the full item except `store_links`, which only the full item carries (`{}` when the type has none), and the image is reduced."
+      description: "An item row in lists, search and recent items: the same `metadata` object as the full item, including the read-only `store_links` for a type with a `stores` field, and the image is reduced."
       required: [id, list_id, title, type, image, price, website, metadata, content_version, sort_order, version, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
@@ -2421,7 +2421,7 @@ components:
         website: { type: string, nullable: true }
         metadata:
           type: object
-          description: 'Same object as `metadata` on the full item, without the read-only `store_links`; its shape depends on `type` (see the `*Metadata` schemas).'
+          description: 'Same object as `metadata` on the full item, with the read-only `store_links` when the type has a `stores` field; its shape depends on `type` (see the `*Metadata` schemas).'
           additionalProperties: true
         content_version: { type: integer }
         sort_order: { type: integer }

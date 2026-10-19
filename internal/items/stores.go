@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
@@ -41,21 +42,27 @@ func (s *Service) storeLinks(ctx context.Context, q *sqlc.Queries, it Item) (map
 	if storeKeys == nil {
 		return nil, nil
 	}
+	// Links follow the workspace country, so a later change of the setting moves them.
+	country := ""
+	settings, err := q.GetSettings(ctx, s.workspaceID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("get settings: %w", err)
+	}
+	if err == nil {
+		country = settings.StreamingCountryCode
+	}
+	return buildStoreLinks(it, storeKeys, country)
+}
+
+// buildStoreLinks computes the links of one item from its stores field keys.
+func buildStoreLinks(it Item, storeKeys []string, country string) (map[string]string, error) {
 	var meta map[string]any
 	if len(it.Metadata) > 0 {
 		if err := json.Unmarshal(it.Metadata, &meta); err != nil {
 			return nil, fmt.Errorf("decode item metadata: %w", err)
 		}
 	}
-	in := stores.LinkInput{Title: it.Title}
-	// Links follow the workspace country, so a later change of the setting moves them.
-	settings, err := q.GetSettings(ctx, s.workspaceID)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("get settings: %w", err)
-	}
-	if err == nil {
-		in.Country = settings.StreamingCountryCode
-	}
+	in := stores.LinkInput{Title: it.Title, Country: country}
 	in.ISBN, _ = meta["isbn"].(string)
 
 	links := map[string]string{}
@@ -72,6 +79,52 @@ func (s *Service) storeLinks(ctx context.Context, q *sqlc.Queries, it Item) (map
 		}
 	}
 	return links, nil
+}
+
+// FillStoreLinks sets StoreLinks on every item of a page (rows of a list, search
+// or recent items) with a fixed number of queries: the stores fields of all types
+// and the workspace settings, each read once, and only when a typed item is
+// present. Items whose type has no stores field keep nil.
+func FillStoreLinks(ctx context.Context, db sqlc.DBTX, workspaceID uuid.UUID, page []*Item) error {
+	typed := false
+	for _, it := range page {
+		if it.Type != nil {
+			typed = true
+			break
+		}
+	}
+	if !typed {
+		return nil
+	}
+	q := sqlc.New(db)
+	rows, err := q.ListStoresFieldKeys(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("list stores fields: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	byType := map[string][]string{}
+	for _, r := range rows {
+		byType[r.TypeKey] = append(byType[r.TypeKey], r.FieldKey)
+	}
+	country := ""
+	settings, err := q.GetSettings(ctx, workspaceID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("get settings: %w", err)
+	}
+	if err == nil {
+		country = settings.StreamingCountryCode
+	}
+	for _, it := range page {
+		if it.Type == nil || byType[*it.Type] == nil {
+			continue
+		}
+		if it.StoreLinks, err = buildStoreLinks(*it, byType[*it.Type], country); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // applyPreferredStores fills every stores field the create request left unset

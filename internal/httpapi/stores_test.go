@@ -1,9 +1,16 @@
 package httpapi_test
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/items"
 )
 
 // storeLinks returns the store_links of an item response and whether it is present.
@@ -20,7 +27,7 @@ func TestF016B4_ItemStoreLinksAreComputedOnRead(t *testing.T) {
 	it := e.newItem(lid, `{"title":"Dune","metadata":{"isbn":"978-0-441-17271-9","openlibrary_id":"OL893415W","stores":["kobo","amazon","bookshop"]}}`)
 	want := map[string]any{
 		"kobo":     "https://www.kobo.com/search?query=9780441172719",
-		"amazon":   "https://www.amazon.com/s?k=9780441172719",
+		"amazon":   "https://www.amazon.com/s?k=Dune",
 		"bookshop": "https://bookshop.org/search?keywords=9780441172719",
 	}
 	if got, ok := storeLinks(it); !ok || !reflect.DeepEqual(got, want) {
@@ -102,7 +109,7 @@ func TestF016_StoreLinksFollowTheWorkspaceCountry(t *testing.T) {
 
 	// New workspaces default to Italy.
 	want := map[string]any{
-		"amazon":            "https://www.amazon.it/s?k=9780441172719",
+		"amazon":            "https://www.amazon.it/s?k=Dune",
 		"google_play_books": "https://play.google.com/store/search?q=9780441172719&c=books&gl=IT",
 		"bookshop":          "https://bookshop.org/search?keywords=9780441172719",
 	}
@@ -113,7 +120,7 @@ func TestF016_StoreLinksFollowTheWorkspaceCountry(t *testing.T) {
 	// The links are computed on read, so a later change of the country moves them.
 	e.exec(`UPDATE workspace_settings SET streaming_country_code = 'GB'`)
 	want = map[string]any{
-		"amazon":            "https://www.amazon.co.uk/s?k=9780441172719",
+		"amazon":            "https://www.amazon.co.uk/s?k=Dune",
 		"google_play_books": "https://play.google.com/store/search?q=9780441172719&c=books&gl=GB",
 		"bookshop":          "https://uk.bookshop.org/search?keywords=9780441172719",
 	}
@@ -121,7 +128,105 @@ func TestF016_StoreLinksFollowTheWorkspaceCountry(t *testing.T) {
 		t.Errorf("after GB: store_links = %v, want %v", got, want)
 	}
 	e.exec(`UPDATE workspace_settings SET streaming_country_code = 'ZZ'`)
-	if got, _ := storeLinks(e.fetchItem(it["id"])); got["amazon"] != "https://www.amazon.com/s?k=9780441172719" {
+	if got, _ := storeLinks(e.fetchItem(it["id"])); got["amazon"] != "https://www.amazon.com/s?k=Dune" {
 		t.Errorf("unknown country: amazon = %v, want amazon.com", got["amazon"])
+	}
+}
+
+// countingDB counts the statements sent to the database.
+type countingDB struct {
+	sqlc.DBTX
+	n int
+}
+
+func (c *countingDB) Exec(ctx context.Context, q string, a ...any) (pgconn.CommandTag, error) {
+	c.n++
+	return c.DBTX.Exec(ctx, q, a...)
+}
+
+func (c *countingDB) Query(ctx context.Context, q string, a ...any) (pgx.Rows, error) {
+	c.n++
+	return c.DBTX.Query(ctx, q, a...)
+}
+
+func (c *countingDB) QueryRow(ctx context.Context, q string, a ...any) pgx.Row {
+	c.n++
+	return c.DBTX.QueryRow(ctx, q, a...)
+}
+
+func TestF016_RowsCarryStoreLinks(t *testing.T) {
+	e := newTreeEnv(t)
+	e.exec(`INSERT INTO workspace_settings (workspace_id) SELECT id FROM workspaces ON CONFLICT DO NOTHING`)
+	books := e.listOfType("Books", nil, "book")["id"].(string)
+	films := e.listOfType("Films", nil, "movie")["id"].(string)
+	plain := e.listOfType("Plain", nil, "")["id"].(string)
+	e.newItem(books, `{"title":"Dune","metadata":{"isbn":"9780441172719","stores":["kobo","amazon"]}}`)
+	e.newItem(books, `{"title":"Dune Messiah","metadata":{"stores":[]}}`)
+	e.newItem(books, `{"title":"Dune Third","metadata":{"stores":["bookshop"]}}`)
+	e.newItem(films, `{"title":"Dune film","metadata":{}}`)
+	e.newItem(plain, `{"title":"Dune plain","metadata":{}}`)
+
+	check := func(where string, rows map[string]obj) {
+		t.Helper()
+		if got, _ := storeLinks(rows["Dune"]); !reflect.DeepEqual(got, map[string]any{
+			"kobo":   "https://www.kobo.com/search?query=9780441172719",
+			"amazon": "https://www.amazon.it/s?k=Dune",
+		}) {
+			t.Errorf("%s: Dune store_links = %v", where, got)
+		}
+		if got, ok := storeLinks(rows["Dune Messiah"]); !ok || len(got) != 0 {
+			t.Errorf("%s: empty selection store_links = %v (present %v), want {}", where, got, ok)
+		}
+		if got, _ := storeLinks(rows["Dune Third"]); got["bookshop"] != "https://bookshop.org/search?keywords=Dune+Third" {
+			t.Errorf("%s: title fallback store_links = %v", where, got)
+		}
+		for _, title := range []string{"Dune film", "Dune plain"} {
+			if _, ok := storeLinks(rows[title]); ok {
+				t.Errorf("%s: %q has store_links", where, title)
+			}
+		}
+	}
+	byTitle := func(rows []obj) map[string]obj {
+		out := map[string]obj{}
+		for _, r := range rows {
+			out[r["title"].(string)] = r
+		}
+		return out
+	}
+
+	var listed []obj
+	for _, id := range []string{books, films, plain} {
+		rows, _ := e.page(id, "")
+		listed = append(listed, rows...)
+	}
+	check("list", byTitle(listed))
+
+	var found []obj
+	for _, r := range e.search("q=Dune").Data {
+		found = append(found, r.Item)
+	}
+	check("search", byTitle(found))
+	found = nil
+	for _, r := range e.recent("").Data {
+		found = append(found, r.Item)
+	}
+	check("recent", byTitle(found))
+
+	// A page costs a fixed number of statements, whatever its size: the stores
+	// fields of all types and the settings, read once.
+	db := &countingDB{DBTX: e.pool}
+	var page []*items.Item
+	for range 30 {
+		typ := "book"
+		page = append(page, &items.Item{Title: "x", Type: &typ, Metadata: []byte(`{"stores":["kobo"]}`)})
+	}
+	if err := items.FillStoreLinks(t.Context(), db, e.ws, page); err != nil {
+		t.Fatal(err)
+	}
+	if db.n != 2 {
+		t.Errorf("FillStoreLinks ran %d statements for 30 rows, want 2", db.n)
+	}
+	if page[29].StoreLinks["kobo"] == "" {
+		t.Errorf("last row store_links = %v", page[29].StoreLinks)
 	}
 }

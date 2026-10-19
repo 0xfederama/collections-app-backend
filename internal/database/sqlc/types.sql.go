@@ -241,6 +241,40 @@ func (q *Queries) ListActiveListsByType(ctx context.Context, arg ListActiveLists
 	return items, nil
 }
 
+const listStoresFieldKeys = `-- name: ListStoresFieldKeys :many
+SELECT td.key AS type_key, tf.key AS field_key
+FROM type_fields tf
+JOIN type_definitions td ON td.id = tf.type_id AND td.workspace_id = tf.workspace_id
+WHERE tf.workspace_id = $1 AND tf.field_type = 'stores'
+ORDER BY td.key, tf.position, tf.id
+`
+
+type ListStoresFieldKeysRow struct {
+	TypeKey  string
+	FieldKey string
+}
+
+// One row per stores field of every type, to build store_links for a page of rows.
+func (q *Queries) ListStoresFieldKeys(ctx context.Context, workspaceID uuid.UUID) ([]ListStoresFieldKeysRow, error) {
+	rows, err := q.db.Query(ctx, listStoresFieldKeys, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStoresFieldKeysRow{}
+	for rows.Next() {
+		var i ListStoresFieldKeysRow
+		if err := rows.Scan(&i.TypeKey, &i.FieldKey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTypeDefinitions = `-- name: ListTypeDefinitions :many
 SELECT id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at FROM type_definitions
 WHERE workspace_id = $1

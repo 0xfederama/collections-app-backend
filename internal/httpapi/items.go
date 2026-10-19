@@ -265,6 +265,10 @@ func itemSummaryBody(it items.Item) oapi.ItemSummary {
 			out.Metadata = meta
 		}
 	}
+	// store_links is computed at read and never stored (see itemBody).
+	if it.StoreLinks != nil {
+		out.Metadata["store_links"] = it.StoreLinks
+	}
 	if img := it.Image; img != nil {
 		sum := oapi.ImageSummary{Url: img.URL}
 		if img.Source == items.ImageSourceUpload {

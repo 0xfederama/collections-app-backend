@@ -117,6 +117,9 @@ func (s *Service) Search(ctx context.Context, p Params) (Page, error) {
 		}
 		page.Results = append(page.Results, Result{Item: it, TypeName: paths.typeName(it.ListID), Path: path})
 	}
+	if err := s.fillStoreLinks(ctx, page.Results); err != nil {
+		return Page{}, err
+	}
 	return page, nil
 }
 
@@ -149,7 +152,19 @@ func (s *Service) Recent(ctx context.Context, limit int) ([]Result, error) {
 			results = append(results, Result{Item: it, TypeName: paths.typeName(it.ListID), Path: path})
 		}
 	}
+	if err := s.fillStoreLinks(ctx, results); err != nil {
+		return nil, err
+	}
 	return results, nil
+}
+
+// fillStoreLinks adds the read-only store_links to the result rows (one pass, fixed queries).
+func (s *Service) fillStoreLinks(ctx context.Context, results []Result) error {
+	refs := make([]*items.Item, len(results))
+	for i := range results {
+		refs[i] = &results[i].Item
+	}
+	return items.FillStoreLinks(ctx, s.db, s.workspaceID, refs)
 }
 
 // tree holds the active folders and lists, enough to build any item's path.

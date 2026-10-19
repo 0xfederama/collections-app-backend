@@ -563,3 +563,34 @@ func equalStrings(got, want any) bool {
 	}
 	return true
 }
+
+func TestSelectionPicksTheIDThatFitsTheProvider(t *testing.T) {
+	tmdbID, sourceID := 603, "OL1W"
+	both := Selection{TMDBID: &tmdbID, SourceID: &sourceID}
+	if got := both.forProvider(ProviderTMDB); got == nil || *got != "603" {
+		t.Errorf("tmdb selection = %v", got)
+	}
+	if got := both.forProvider(ProviderOpenLibrary); got == nil || *got != "OL1W" {
+		t.Errorf("open library selection = %v", got)
+	}
+	if got := (Selection{TMDBID: &tmdbID}).forProvider(ProviderOpenLibrary); got != nil {
+		t.Errorf("a tmdb_id must be ignored for a book, got %v", *got)
+	}
+	if got := (Selection{SourceID: &sourceID}).forProvider(ProviderTMDB); got != nil {
+		t.Errorf("a source_id must be ignored for a movie, got %v", *got)
+	}
+}
+
+func TestF016B3_ApplyOnBookIgnoresTMDBIDAndSearchesByTitle(t *testing.T) {
+	id := uuid.New()
+	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "dune", Type: ptr("book"), Version: 1, Image: &items.Image{Source: items.ImageSourceURL, URL: "https://x.example/a.jpg"}}}
+	book := bookClient(true)
+	store := &fakeStore{result: itemSvc.item}
+	tmdbID := 603
+	if _, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 1, ModeRematch, Selection{TMDBID: &tmdbID}); err != nil || store.applied == nil {
+		t.Fatalf("err = %v", err)
+	}
+	if book.searchQuery != "dune" || store.applied.SourceID != "OL1W" {
+		t.Errorf("search = %q applied = %+v", book.searchQuery, store.applied)
+	}
+}

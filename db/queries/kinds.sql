@@ -38,8 +38,15 @@ INSERT INTO kind_definitions (workspace_id, key, name, default_icon, allows_pric
 VALUES (@workspace_id, @key, @name, sqlc.narg(default_icon), @allows_price, sqlc.narg(default_sort_field), sqlc.narg(default_pinned_fields), @now)
 RETURNING *;
 
--- name: UpdateKindDefinitionName :one
-UPDATE kind_definitions SET name = @name, version = version + 1, updated_at = @now
+-- name: UpdateKindDefinition :one
+UPDATE kind_definitions
+SET name = CASE WHEN @set_name::boolean THEN @name::text ELSE name END,
+    default_icon = CASE WHEN @set_default_icon::boolean THEN sqlc.narg(default_icon) ELSE default_icon END,
+    allows_price = CASE WHEN @set_allows_price::boolean THEN @allows_price::boolean ELSE allows_price END,
+    default_sort_field = CASE WHEN @set_default_sort_field::boolean THEN sqlc.narg(default_sort_field) ELSE default_sort_field END,
+    default_pinned_fields = CASE WHEN @set_default_pinned_fields::boolean THEN sqlc.narg(default_pinned_fields) ELSE default_pinned_fields END,
+    version = version + 1,
+    updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id RETURNING *;
 
 -- name: DeleteKindDefinition :exec

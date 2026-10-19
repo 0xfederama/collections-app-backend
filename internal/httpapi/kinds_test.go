@@ -58,6 +58,45 @@ func TestF014B3_KindFieldLifecycle(t *testing.T) {
 	}
 }
 
+func TestF014B3_CustomKindDefaultsCanBeUpdatedAfterFieldsExist(t *testing.T) {
+	e := newTreeEnv(t)
+	created := e.call(http.MethodPost, "/api/v1/kinds", `{"name":"Board game","default_icon":"i:dices"}`, "")
+	wantStatus(t, created, http.StatusCreated)
+	kind := decode(t, created)
+	if kind["default_icon"] != "i:dices" {
+		t.Fatalf("created kind default_icon = %#v", kind["default_icon"])
+	}
+
+	field := e.call(http.MethodPost, "/api/v1/kinds/board_game/fields", `{"label":"Rating","type":"number"}`, etagOf("k", kind))
+	wantStatus(t, field, http.StatusCreated)
+	kind = e.kind("board_game")
+	updated := e.call(http.MethodPatch, "/api/v1/kinds/board_game", `{"allows_price":true,"default_sort_field":"rating","default_pinned_fields":["rating","price"]}`, etagOf("k", kind))
+	wantStatus(t, updated, http.StatusOK)
+	kind = decode(t, updated)
+	if kind["name"] != "Board game" || kind["default_icon"] != "i:dices" || kind["allows_price"] != true || kind["default_sort_field"] != "rating" {
+		t.Fatalf("updated kind = %#v", kind)
+	}
+	pins, ok := kind["default_pinned_fields"].([]any)
+	if !ok || len(pins) != 2 || pins[0] != "rating" || pins[1] != "price" {
+		t.Fatalf("updated kind pins = %#v", kind["default_pinned_fields"])
+	}
+
+	cleared := e.call(http.MethodPatch, "/api/v1/kinds/board_game", `{"default_icon":null,"default_pinned_fields":null}`, etagOf("k", kind))
+	wantStatus(t, cleared, http.StatusOK)
+	kind = decode(t, cleared)
+	if kind["default_icon"] != nil || kind["default_pinned_fields"] != nil || kind["default_sort_field"] != "rating" {
+		t.Fatalf("cleared defaults = %#v", kind)
+	}
+
+	invalid := e.call(http.MethodPatch, "/api/v1/kinds/board_game", `{"default_sort_field":"missing"}`, etagOf("k", kind))
+	p := wantProblem(t, invalid, http.StatusUnprocessableEntity, "validation_failed")
+	if len(p.Errors) != 1 || p.Errors[0].Field != "default_sort_field" {
+		t.Fatalf("invalid defaults problem = %+v", p)
+	}
+	locked := e.call(http.MethodPatch, "/api/v1/kinds/movie", `{"name":"Films"}`, etagOf("k", e.kind("movie")))
+	wantProblem(t, locked, http.StatusUnprocessableEntity, "validation_failed")
+}
+
 func (e *treeEnv) kind(key string) obj {
 	e.t.Helper()
 	rec := e.call(http.MethodGet, "/api/v1/kinds", "", "")

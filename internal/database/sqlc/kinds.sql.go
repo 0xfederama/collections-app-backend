@@ -585,21 +585,46 @@ func (q *Queries) TouchKindDefinition(ctx context.Context, arg TouchKindDefiniti
 	return err
 }
 
-const updateKindDefinitionName = `-- name: UpdateKindDefinitionName :one
-UPDATE kind_definitions SET name = $1, version = version + 1, updated_at = $2
-WHERE id = $3 AND workspace_id = $4 RETURNING id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at
+const updateKindDefinition = `-- name: UpdateKindDefinition :one
+UPDATE kind_definitions
+SET name = CASE WHEN $1::boolean THEN $2::text ELSE name END,
+    default_icon = CASE WHEN $3::boolean THEN $4 ELSE default_icon END,
+    allows_price = CASE WHEN $5::boolean THEN $6::boolean ELSE allows_price END,
+    default_sort_field = CASE WHEN $7::boolean THEN $8 ELSE default_sort_field END,
+    default_pinned_fields = CASE WHEN $9::boolean THEN $10 ELSE default_pinned_fields END,
+    version = version + 1,
+    updated_at = $11
+WHERE id = $12 AND workspace_id = $13 RETURNING id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at
 `
 
-type UpdateKindDefinitionNameParams struct {
-	Name        string
-	Now         time.Time
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
+type UpdateKindDefinitionParams struct {
+	SetName                bool
+	Name                   string
+	SetDefaultIcon         bool
+	DefaultIcon            *string
+	SetAllowsPrice         bool
+	AllowsPrice            bool
+	SetDefaultSortField    bool
+	DefaultSortField       *string
+	SetDefaultPinnedFields bool
+	DefaultPinnedFields    []byte
+	Now                    time.Time
+	ID                     uuid.UUID
+	WorkspaceID            uuid.UUID
 }
 
-func (q *Queries) UpdateKindDefinitionName(ctx context.Context, arg UpdateKindDefinitionNameParams) (KindDefinition, error) {
-	row := q.db.QueryRow(ctx, updateKindDefinitionName,
+func (q *Queries) UpdateKindDefinition(ctx context.Context, arg UpdateKindDefinitionParams) (KindDefinition, error) {
+	row := q.db.QueryRow(ctx, updateKindDefinition,
+		arg.SetName,
 		arg.Name,
+		arg.SetDefaultIcon,
+		arg.DefaultIcon,
+		arg.SetAllowsPrice,
+		arg.AllowsPrice,
+		arg.SetDefaultSortField,
+		arg.DefaultSortField,
+		arg.SetDefaultPinnedFields,
+		arg.DefaultPinnedFields,
 		arg.Now,
 		arg.ID,
 		arg.WorkspaceID,

@@ -106,6 +106,58 @@ func TestF014B4_CustomKindDefaultsAllowAtMostTwoPins(t *testing.T) {
 	}
 }
 
+func TestF014B3_UpdateCustomKindDefaultsAfterFieldsExist(t *testing.T) {
+	svc, _ := newDefinitionsService(t)
+	icon := "i:dices"
+	kind, err := svc.Create(t.Context(), definitions.CreateKind{Name: "Board game", DefaultIcon: &icon})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rating, err := svc.CreateField(t.Context(), kind.Key, kind.Version, definitions.CreateField{Label: "Rating", Type: "number"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "Tabletop game"
+	allowsPrice := true
+	pins := []string{rating.Key, "price"}
+	updated, err := svc.Update(t.Context(), kind.Key, kind.Version+1, definitions.UpdateKind{
+		Name: &name, AllowsPrice: &allowsPrice,
+		DefaultSortField:    definitions.NullableString{Set: true, Value: &rating.Key},
+		DefaultPinnedFields: definitions.NullableStrings{Set: true, Value: &pins},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Name != name || updated.DefaultIcon == nil || *updated.DefaultIcon != icon || !updated.AllowsPrice || updated.DefaultSortField == nil || *updated.DefaultSortField != rating.Key || updated.DefaultPinnedFields == nil || !slices.Equal(*updated.DefaultPinnedFields, pins) {
+		t.Fatalf("updated kind = %#v", updated)
+	}
+
+	cleared, err := svc.Update(t.Context(), kind.Key, updated.Version, definitions.UpdateKind{
+		DefaultIcon:         definitions.NullableString{Set: true},
+		DefaultPinnedFields: definitions.NullableStrings{Set: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleared.DefaultIcon != nil || cleared.DefaultPinnedFields != nil || cleared.DefaultSortField == nil || *cleared.DefaultSortField != rating.Key {
+		t.Fatalf("cleared kind = %#v", cleared)
+	}
+
+	missing := "missing"
+	if _, err := svc.Update(t.Context(), kind.Key, cleared.Version, definitions.UpdateKind{DefaultSortField: definitions.NullableString{Set: true, Value: &missing}}); err == nil {
+		t.Fatal("Update accepted a default sort field that does not exist")
+	} else {
+		var validation *apperr.ValidationError
+		if !errors.As(err, &validation) || len(validation.Errors) != 1 || validation.Errors[0].Field != "default_sort_field" {
+			t.Fatalf("invalid default sort error = %#v", err)
+		}
+	}
+
+	if _, err := svc.Update(t.Context(), "movie", 1, definitions.UpdateKind{Name: &name}); err == nil {
+		t.Fatal("Update allowed a locked built-in kind")
+	}
+}
+
 func TestF014B3_DeleteFieldPreviewsAndAtomicallyStripsValues(t *testing.T) {
 	svc, db := newDefinitionsService(t)
 	kind, err := svc.Create(t.Context(), definitions.CreateKind{Name: "Board game"})

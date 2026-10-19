@@ -110,11 +110,12 @@ paths:
     patch:
       tags: [kinds]
       operationId: updateKind
-      summary: Rename a custom kind
+      summary: Update a custom kind
       parameters: [{ $ref: '#/components/parameters/IfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateKindRequest' } } } }
       responses:
         '200': { description: Updated, headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/KindDefinition' } } } }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
     delete:
       tags: [kinds]
       operationId: deleteKind
@@ -2030,9 +2031,13 @@ components:
         default_pinned_fields: { type: array, nullable: true, items: { type: string, maxLength: 32 }, maxItems: 2 }
     UpdateKindRequest:
       type: object
-      required: [name]
       additionalProperties: false
-      properties: { name: { type: string, minLength: 1, maxLength: 100 } }
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        default_icon: { type: string, nullable: true }
+        allows_price: { type: boolean }
+        default_sort_field: { type: string, nullable: true, maxLength: 32 }
+        default_pinned_fields: { type: array, nullable: true, items: { type: string, maxLength: 32 }, maxItems: 2 }
     CreateKindFieldRequest:
       type: object
       required: [label, type]

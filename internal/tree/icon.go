@@ -46,6 +46,10 @@ func validIcon(icon string) bool {
 	return validEmoji(icon)
 }
 
+// ValidIcon reports whether icon is a built-in icon key or one emoji. It is
+// shared by list icons and kind default icons.
+func ValidIcon(icon string) bool { return validIcon(icon) }
+
 // iconErrors checks a supplied icon and icon_color against each other (the colour needs a built-in icon).
 // icon is the icon that applies after the request (nil = none).
 func iconErrors(icon, iconColor *string) []apperr.FieldError {

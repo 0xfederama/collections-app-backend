@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -16,6 +17,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/database"
 	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
 
 type DB interface {
@@ -38,15 +40,37 @@ type Kind struct {
 	Key, Name           string
 	AllowsPrice, Locked bool
 	Version             int
+	DefaultIcon         *string
 	DefaultSortField    *string
 	DefaultPinnedFields *[]string
 	Fields              []Field
 }
 type CreateKind struct {
 	Name                string
+	DefaultIcon         *string
 	AllowsPrice         bool
 	DefaultSortField    *string
 	DefaultPinnedFields *[]string
+}
+
+// NullableString distinguishes an omitted property from a supplied null.
+type NullableString struct {
+	Set   bool
+	Value *string
+}
+
+// NullableStrings distinguishes an omitted property from a supplied null.
+type NullableStrings struct {
+	Set   bool
+	Value *[]string
+}
+
+type UpdateKind struct {
+	Name                *string
+	DefaultIcon         NullableString
+	AllowsPrice         *bool
+	DefaultSortField    NullableString
+	DefaultPinnedFields NullableStrings
 }
 type CreateField struct{ Label, Type string }
 
@@ -73,9 +97,12 @@ func (s *Service) List(ctx context.Context) ([]Kind, error) {
 	return out, nil
 }
 func (s *Service) Create(ctx context.Context, in CreateKind) (Kind, error) {
-	name := strings.TrimSpace(in.Name)
-	if name == "" {
-		return Kind{}, apperr.Validation(apperr.FieldError{Field: "name", Message: "is required"})
+	name, err := cleanKindName(in.Name)
+	if err != nil {
+		return Kind{}, err
+	}
+	if in.DefaultIcon != nil && !tree.ValidIcon(*in.DefaultIcon) {
+		return Kind{}, apperr.Validation(apperr.FieldError{Field: "default_icon", Message: "must be one emoji or i: followed by a lowercase name of 1 to 40 letters, digits or hyphens"})
 	}
 	key := keyFor(name)
 	if in.DefaultSortField != nil && (!validFieldKey(*in.DefaultSortField) || (*in.DefaultSortField == "price" && !in.AllowsPrice)) {
@@ -100,9 +127,9 @@ func (s *Service) Create(ctx context.Context, in CreateKind) (Kind, error) {
 		}
 	}
 	var row sqlc.KindDefinition
-	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
+	err = database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
 		var err error
-		row, err = q.InsertKindDefinition(ctx, sqlc.InsertKindDefinitionParams{WorkspaceID: s.workspaceID, Key: key, Name: name, AllowsPrice: in.AllowsPrice, DefaultSortField: in.DefaultSortField, DefaultPinnedFields: pinnedJSON, Now: time.Now().UTC()})
+		row, err = q.InsertKindDefinition(ctx, sqlc.InsertKindDefinitionParams{WorkspaceID: s.workspaceID, Key: key, Name: name, DefaultIcon: in.DefaultIcon, AllowsPrice: in.AllowsPrice, DefaultSortField: in.DefaultSortField, DefaultPinnedFields: pinnedJSON, Now: time.Now().UTC()})
 		return err
 	})
 	if err != nil {
@@ -123,15 +150,143 @@ func validFieldKey(key string) bool {
 	}
 	return true
 }
-func (s *Service) Rename(ctx context.Context, key string, v int, name string) (Kind, error) {
+
+func cleanKindName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if n := utf8.RuneCountInString(name); n < 1 || n > 100 {
+		return "", apperr.Validation(apperr.FieldError{Field: "name", Message: "must be 1 to 100 characters"})
+	}
+	return name, nil
+}
+
+func defaultPins(raw []byte) (*[]string, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var pins []string
+	if err := json.Unmarshal(raw, &pins); err != nil {
+		return nil, fmt.Errorf("decode default pinned fields: %w", err)
+	}
+	return &pins, nil
+}
+
+func validateDefaults(allowsPrice bool, fields []sqlc.KindField, sort *string, pins *[]string) error {
+	allowed := make(map[string]struct{}, len(fields)+1)
+	for _, field := range fields {
+		allowed[field.Key] = struct{}{}
+	}
+	if allowsPrice {
+		allowed["price"] = struct{}{}
+	}
+	var errs []apperr.FieldError
+	if sort != nil && (!validFieldKey(*sort) || !allowedField(allowed, *sort)) {
+		errs = append(errs, apperr.FieldError{Field: "default_sort_field", Message: "must be a field key of this kind"})
+	}
+	if pins != nil {
+		if len(*pins) > 2 {
+			errs = append(errs, apperr.FieldError{Field: "default_pinned_fields", Message: "must have at most 2 entries"})
+		} else {
+			seen := make(map[string]struct{}, len(*pins))
+			for i, pin := range *pins {
+				if !validFieldKey(pin) || !allowedField(allowed, pin) {
+					errs = append(errs, apperr.FieldError{Field: fmt.Sprintf("default_pinned_fields[%d]", i), Message: "must be a field key of this kind"})
+					continue
+				}
+				if _, exists := seen[pin]; exists {
+					errs = append(errs, apperr.FieldError{Field: fmt.Sprintf("default_pinned_fields[%d]", i), Message: "must be unique"})
+				}
+				seen[pin] = struct{}{}
+			}
+		}
+	}
+	if len(errs) > 0 {
+		return apperr.Validation(errs...)
+	}
+	return nil
+}
+
+func allowedField(fields map[string]struct{}, key string) bool {
+	_, ok := fields[key]
+	return ok
+}
+
+func equalStringPtr(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
+func equalStringSlices(a, b *[]string) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return slices.Equal(*a, *b)
+}
+func (s *Service) Update(ctx context.Context, key string, v int, in UpdateKind) (Kind, error) {
 	var out sqlc.KindDefinition
 	return s.mutateKind(ctx, key, v, func(q *sqlc.Queries, cur sqlc.KindDefinition) error {
 		if cur.IsLocked {
 			return apperr.Validation(apperr.FieldError{Field: "kind", Message: "is locked"})
 		}
-		var e error
-		out, e = q.UpdateKindDefinitionName(ctx, sqlc.UpdateKindDefinitionNameParams{ID: cur.ID, WorkspaceID: s.workspaceID, Name: strings.TrimSpace(name), Now: time.Now().UTC()})
-		return e
+		nextName := cur.Name
+		if in.Name != nil {
+			name, err := cleanKindName(*in.Name)
+			if err != nil {
+				return err
+			}
+			nextName = name
+		}
+		nextIcon := cur.DefaultIcon
+		if in.DefaultIcon.Set {
+			nextIcon = in.DefaultIcon.Value
+			if nextIcon != nil && !tree.ValidIcon(*nextIcon) {
+				return apperr.Validation(apperr.FieldError{Field: "default_icon", Message: "must be one emoji or i: followed by a lowercase name of 1 to 40 letters, digits or hyphens"})
+			}
+		}
+		nextAllowsPrice := cur.AllowsPrice
+		if in.AllowsPrice != nil {
+			nextAllowsPrice = *in.AllowsPrice
+		}
+		nextSort := cur.DefaultSortField
+		if in.DefaultSortField.Set {
+			nextSort = in.DefaultSortField.Value
+		}
+		nextPins, err := defaultPins(cur.DefaultPinnedFields)
+		if err != nil {
+			return err
+		}
+		currentPins := nextPins
+		if in.DefaultPinnedFields.Set {
+			nextPins = in.DefaultPinnedFields.Value
+		}
+		fields, err := q.ListKindFields(ctx, sqlc.ListKindFieldsParams{WorkspaceID: s.workspaceID, KindID: cur.ID})
+		if err != nil {
+			return err
+		}
+		if err := validateDefaults(nextAllowsPrice, fields, nextSort, nextPins); err != nil {
+			return err
+		}
+		if nextName == cur.Name && equalStringPtr(nextIcon, cur.DefaultIcon) && nextAllowsPrice == cur.AllowsPrice && equalStringPtr(nextSort, cur.DefaultSortField) && equalStringSlices(nextPins, currentPins) {
+			out = cur
+			return nil
+		}
+		var pinsJSON []byte
+		if nextPins != nil {
+			pinsJSON, err = json.Marshal(*nextPins)
+			if err != nil {
+				return fmt.Errorf("marshal default pinned fields: %w", err)
+			}
+		}
+		out, err = q.UpdateKindDefinition(ctx, sqlc.UpdateKindDefinitionParams{
+			ID: cur.ID, WorkspaceID: s.workspaceID, Name: nextName, SetName: in.Name != nil,
+			DefaultIcon: nextIcon, SetDefaultIcon: in.DefaultIcon.Set,
+			AllowsPrice: nextAllowsPrice, SetAllowsPrice: in.AllowsPrice != nil,
+			DefaultSortField: nextSort, SetDefaultSortField: in.DefaultSortField.Set,
+			DefaultPinnedFields: pinsJSON, SetDefaultPinnedFields: in.DefaultPinnedFields.Set,
+			Now: time.Now().UTC(),
+		})
+		return err
 	}, &out)
 }
 func (s *Service) mutateKind(ctx context.Context, key string, v int, fn func(*sqlc.Queries, sqlc.KindDefinition) error, out *sqlc.KindDefinition) (Kind, error) {
@@ -412,7 +567,7 @@ func sameStringSet(a, b []string) bool {
 	return len(seen) == 0
 }
 func kindRow(r sqlc.KindDefinition) Kind {
-	k := Kind{Key: r.Key, Name: r.Name, AllowsPrice: r.AllowsPrice, Locked: r.IsLocked, Version: int(r.Version), DefaultSortField: r.DefaultSortField}
+	k := Kind{Key: r.Key, Name: r.Name, AllowsPrice: r.AllowsPrice, Locked: r.IsLocked, Version: int(r.Version), DefaultIcon: r.DefaultIcon, DefaultSortField: r.DefaultSortField}
 	if len(r.DefaultPinnedFields) > 0 && string(r.DefaultPinnedFields) != "null" {
 		var pins []string
 		if json.Unmarshal(r.DefaultPinnedFields, &pins) == nil {

@@ -199,6 +199,13 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 		return uuid.Nil, false, err
 	}
 	title, _ := cleanLookupTitle(p.Title)
+	if typeKey(typ) == types.Book {
+		// Books keep the title the user typed (Italian stays Italian); only the
+		// movie/TV flow adopts the provider's title.
+		if typed, terr := cleanLookupTitle(p.CreateInput.Title); terr == nil {
+			title = typed
+		}
+	}
 	website, err := cleanLookupWebsite(p.CreateInput.Website)
 	if err != nil {
 		return uuid.Nil, false, err

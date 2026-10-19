@@ -53,7 +53,7 @@ func TestF016B3_BookCreateKeepsProvenanceWithoutRetention(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if it.Title != "Dune" || it.Image == nil || it.Price == nil || it.Price.Currency != "EUR" || it.Type == nil || *it.Type != "book" {
+	if it.Title != "dune" || it.Image == nil || it.Price == nil || it.Price.Currency != "EUR" || it.Type == nil || *it.Type != "book" {
 		t.Fatalf("created item = %+v", it)
 	}
 	metadata := decodeMetadata(t, it.Metadata)

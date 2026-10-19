@@ -34,3 +34,4 @@ Merges values imported from a metadata provider (TMDB for movie and TV, Open Lib
 - Poster expiry is tracked separately from metadata refresh; manual lookup modes keep the existing image.
 - A provider with no cover (Open Library) still applies the match, without an image (`ErrNoImage`).
 - TMDB backups must be retired within six months under [TMDB API terms](https://www.themoviedb.org/api-terms-of-use).
+- Books keep the title the user typed on create (also with an explicit pick or `source_id`); only movies and TV adopt the provider title. The provider title stays in `imported_title`, so a later refresh does not rename the item.

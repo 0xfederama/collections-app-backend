@@ -287,7 +287,11 @@ func (s *Service) resolve(ctx context.Context, provider Provider, typ, title str
 		if len(matches) == 0 {
 			return nil, nil
 		}
-		id = matches[0].SourceID
+		pick := 0
+		if provider.Name() == ProviderOpenLibrary {
+			pick = pickBest(title, matches)
+		}
+		id = matches[pick].SourceID
 		if provider.ValidateSourceID(id) != nil {
 			return nil, apperr.UpstreamUnavailable()
 		}

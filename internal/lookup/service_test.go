@@ -596,3 +596,28 @@ func TestF016B3_ApplyOnBookIgnoresTMDBIDAndSearchesByTitle(t *testing.T) {
 		t.Errorf("search = %q applied = %+v", book.searchQuery, store.applied)
 	}
 }
+
+func TestCreateBookPicksTheCompleteExactTitleMatch(t *testing.T) {
+	book := bookClient(true)
+	book.details.ImagePath = ""
+	book.matches = []Suggestion{
+		{SourceID: "OL34961077W", Title: "Il vecchio e il mare"},
+		{SourceID: "OL2W", Title: "Il vecchio e il mare", Authors: "Ernest Hemingway", Pages: 127},
+	}
+	store := &fakeStore{typ: "book", result: items.Item{Title: "Il vecchio e il mare"}}
+	_, err := bookService(book, &fakeClient{}, store, &fakeItems{}).Create(t.Context(), uuid.New(),
+		items.CreateInput{Title: "il vecchio e il mare"}, CreateOptions{})
+	if err != nil || book.detailsID != "OL2W" {
+		t.Fatalf("err=%v details id=%q", err, book.detailsID)
+	}
+}
+
+func TestCreateTMDBStillTakesTheFirstResult(t *testing.T) {
+	client := &fakeClient{enabled: true, matches: []Suggestion{{SourceID: "1", Title: "Other"}, {SourceID: "2", Title: "Movie", Authors: "x", Pages: 1}}}
+	// The create outcome is irrelevant here (the fake has no poster); only the id searched matters.
+	_, _ = newService(client, &fakeStore{typ: "movie"}, &fakeItems{}).Create(t.Context(), uuid.New(),
+		items.CreateInput{Title: "Movie"}, CreateOptions{})
+	if client.detailsID != "1" {
+		t.Fatalf("details id = %q, want 1", client.detailsID)
+	}
+}

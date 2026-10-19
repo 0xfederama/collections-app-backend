@@ -194,7 +194,7 @@ func TestDisabledClientNeverCalls(t *testing.T) {
 	if _, _, err := c.FindByISBN(t.Context(), "9780441172719"); !errors.Is(err, ErrDisabled) {
 		t.Fatalf("err = %v", err)
 	}
-	if _, err := c.DownloadCover(t.Context(), "https://assets.hardcover.app/x.jpg"); err != ErrDisabled {
+	if _, err := c.DownloadCover(t.Context(), "https://assets.hardcover.app/x.jpg"); !errors.Is(err, ErrDisabled) {
 		t.Fatalf("err = %v", err)
 	}
 	if calls.Load() != 0 || (*Client)(nil).Enabled() || New("", "").Enabled() {

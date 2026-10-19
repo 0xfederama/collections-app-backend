@@ -12,7 +12,7 @@ Parses and validates the API's environment configuration once at startup. Every 
 ## Interfaces
 
 - `Load(getenv func(string) string) (Config, error)`: pass `os.Getenv` in production
-- `Config`: `AppEnv`, `HTTPAddr`, `DatabaseURL`, `DBMaxConns`, `DataDir`, `WorkspaceName`, optional `TMDBAPIKey`, `TMDBMockFixture`, `OpenLibraryContact`, `OpenLibraryDisabled`, `LogLevel`, `LogFormat`
+- `Config`: `AppEnv`, `HTTPAddr`, `DatabaseURL`, `DBMaxConns`, `DataDir`, `WorkspaceName`, optional `TMDBAPIKey`, `TMDBMockFixture`, `LogLevel`, `LogFormat`
 - `APP_ENV`: `development` (default) or `production`, case-sensitive
 - `HTTP_ADDR`: `host:port` listen address, default `:8080`
 - `DATABASE_URL`: required; `postgres://` or `postgresql://` with a host
@@ -21,8 +21,6 @@ Parses and validates the API's environment configuration once at startup. Every 
 - `WORKSPACE_NAME`: default `Our Collection`
 - `TMDB_API_KEY`: optional server-side TMDB credential; blank disables lookup
 - `TMDB_MOCK_FIXTURE`: `true`/`false`, default false; test stacks only (rejected when `APP_ENV=production`); also enables the `[mock] book name` Open Library fixture
-- `OPENLIBRARY_CONTACT`: optional; goes into the Open Library User-Agent. No API key is needed
-- `OPENLIBRARY_DISABLED`: `true`/`false`, default false; turns book lookup off
 - `LOG_LEVEL`: `debug`, `info` (default), `warn`, `error`
 - `LOG_FORMAT`: `json` (default) or `text`
 
@@ -33,4 +31,4 @@ Parses and validates the API's environment configuration once at startup. Every 
 - Only `DATABASE_URL` is kept out of error text (it carries the password). Other messages echo the raw value, e.g. `LOG_LEVEL` and `DATA_DIR`.
 - `Load` has a side effect: it creates and deletes a `.startup-*` probe file in `DATA_DIR` to test writability.
 - Keep `TMDB_API_KEY` in the server environment (`deploy/server/.env`); never expose it to the browser. Get a key through [TMDB account API settings](https://www.themoviedb.org/settings/api).
-- Book lookup is on by default; with `OPENLIBRARY_DISABLED=true` the client makes no request, but `TMDB_MOCK_FIXTURE` still serves its fixture.
+- Book lookup (Open Library) has no config: always on, no key. `TMDB_MOCK_FIXTURE` serves the `[mock] book name` fixture only; every other book query reaches Open Library.

@@ -27,7 +27,9 @@ import (
 const (
 	apiOrigin          = "https://openlibrary.org"
 	coverOrigin        = "https://covers.openlibrary.org"
-	requestTimeout     = 10 * time.Second
+	requestTimeout     = 8 * time.Second
+	retryBackoff       = 300 * time.Millisecond // one retry of a transient failure
+	maxCoverRedirects  = 3
 	maxJSONBytes       = 2 << 20
 	maxCoverBytes      = 10 << 20
 	searchTTL          = 5 * time.Minute
@@ -94,6 +96,7 @@ type cacheEntry struct {
 // Client is safe for concurrent use.
 type Client struct {
 	http         *http.Client
+	coverHTTP    *http.Client // like http, but follows the few redirects a cover needs
 	apiBase      *url.URL
 	coverBase    *url.URL
 	timeout      time.Duration
@@ -137,13 +140,41 @@ func NewWithOptions(opts Options) *Client {
 		copy := *hc
 		hc = &copy
 	}
-	// Never follow a redirect: a 3xx could lead off the fixed origins.
+	// JSON requests never follow a redirect: a 3xx could lead off the fixed origins.
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Client{
-		http: hc, apiBase: api, coverBase: cover, timeout: opts.Timeout, interval: opts.RequestInterval,
+	coverClient := *hc
+	c := &Client{
+		http: hc, coverHTTP: &coverClient, apiBase: api, coverBase: cover, timeout: opts.Timeout, interval: opts.RequestInterval,
 		userAgent: userAgent(opts.Version, opts.Contact), disabled: opts.Disabled, mockFixture: opts.MockFixture,
 		cache: make(map[string]cacheEntry),
 	}
+	// Only a cover download may redirect (covers.openlibrary.org answers 302 to
+	// archive.org): at most 3 hops, https to archive.org hosts, or our own hosts.
+	coverClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) > maxCoverRedirects || !c.allowedCoverRedirect(req.URL) {
+			return http.ErrUseLastResponse
+		}
+		return nil
+	}
+	return c
+}
+
+// allowedCoverRedirect reports whether a cover download may follow a redirect to u:
+// https to archive.org or a subdomain, or one of the client's own configured hosts.
+func (c *Client) allowedCoverRedirect(u *url.URL) bool {
+	if u.User != nil {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	if u.Scheme == "https" && (host == "archive.org" || strings.HasSuffix(host, ".archive.org")) {
+		return true
+	}
+	for _, own := range []*url.URL{c.coverBase, c.apiBase} {
+		if u.Scheme == own.Scheme && strings.EqualFold(u.Host, own.Host) {
+			return true
+		}
+	}
+	return false
 }
 
 // userAgent is "CollectionsApp/<version> (<contact>)"; control characters are
@@ -197,8 +228,14 @@ func (c *Client) Search(ctx context.Context, query, language string) ([]Match, e
 		return nil, err
 	}
 	c.store(key, results)
+	for _, m := range results {
+		c.store(workKey(m.WorkID, lang), []Match{m})
+	}
 	return results, nil
 }
+
+// workKey is the cache key of one work seen in a search result.
+func workKey(workID, lang string) string { return "work\x00" + workID + "\x00" + lang }
 
 // Work fetches one work by its id (OL…W) through the search API, so it returns
 // exactly the fields Search does, in the same language preference.
@@ -212,7 +249,12 @@ func (c *Client) Work(ctx context.Context, workID, language string) (Match, erro
 	if c == nil || c.disabled {
 		return Match{}, ErrDisabled
 	}
-	results, err := c.search(ctx, "key:/works/"+workID, langOf(language), 1)
+	lang := langOf(language)
+	// A search of the last minutes already returned this work: no second request.
+	if cached, ok := c.cached(workKey(workID, lang)); ok && len(cached) == 1 {
+		return cached[0], nil
+	}
+	results, err := c.search(ctx, "key:/works/"+workID, lang, 1)
 	if err != nil {
 		return Match{}, err
 	}
@@ -284,81 +326,118 @@ func (c *Client) DownloadCover(ctx context.Context, coverID int) ([]byte, error)
 	if c == nil || c.disabled {
 		return nil, ErrDisabled
 	}
-	ctx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
-	if err := c.wait(ctx); err != nil {
-		return nil, err
-	}
 	u := *c.coverBase
 	u.Path = path.Join(u.Path, "b", "id", strconv.Itoa(coverID)+"-L.jpg")
 	u.RawQuery = url.Values{"default": {"false"}}.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	var out []byte
+	err := c.withRetry(ctx, func(ctx context.Context) (bool, error) {
+		b, transient, err := c.coverOnce(ctx, u.String())
+		out = b
+		return transient, err
+	})
+	return out, err
+}
+
+func (c *Client) coverOnce(ctx context.Context, rawURL string) ([]byte, bool, error) {
+	if err := c.wait(ctx); err != nil {
+		return nil, false, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return nil, ErrInvalid
+		return nil, false, ErrInvalid
 	}
 	req.Header.Set("User-Agent", c.userAgent)
-	response, err := c.http.Do(req)
+	response, err := c.coverHTTP.Do(req)
 	if err != nil {
-		return nil, safeNetworkError(ctx, err)
+		return nil, true, safeNetworkError(ctx, err)
 	}
 	defer func() { _ = response.Body.Close() }()
 	switch {
 	case response.StatusCode == http.StatusNotFound:
-		return nil, ErrNoCover
+		return nil, false, ErrNoCover
 	case response.StatusCode == http.StatusTooManyRequests:
 		c.note429(response.Header.Get("Retry-After"))
-		return nil, errors.New("open library rate limit exceeded")
+		return nil, false, errors.New("open library rate limit exceeded")
 	case response.StatusCode < 200 || response.StatusCode >= 300:
-		return nil, fmt.Errorf("open library cover request failed (HTTP %d)", response.StatusCode)
+		return nil, response.StatusCode >= 500, fmt.Errorf("open library cover request failed (HTTP %d)", response.StatusCode)
 	}
 	b, err := io.ReadAll(io.LimitReader(response.Body, maxCoverBytes+1))
 	if err != nil {
-		return nil, safeNetworkError(ctx, err)
+		return nil, true, safeNetworkError(ctx, err)
 	}
 	if len(b) > maxCoverBytes {
-		return nil, errors.New("open library cover exceeds size limit")
+		return nil, false, errors.New("open library cover exceeds size limit")
 	}
-	return b, nil
+	return b, false, nil
+}
+
+// withRetry runs attempt (each with its own timeout, which includes pacing) and
+// retries once after retryBackoff when it reports a transient failure (network
+// error, attempt timeout, HTTP 5xx). It never retries after the caller's context
+// is done and never waits past the caller's deadline.
+func (c *Client) withRetry(ctx context.Context, attempt func(ctx context.Context) (bool, error)) error {
+	for try := 0; ; try++ {
+		actx, cancel := context.WithTimeout(ctx, c.timeout)
+		transient, err := attempt(actx)
+		cancel()
+		if err == nil || !transient || try >= 1 || ctx.Err() != nil {
+			return err
+		}
+		if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= retryBackoff {
+			return err
+		}
+		timer := time.NewTimer(retryBackoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return err
+		case <-timer.C:
+		}
+	}
 }
 
 func (c *Client) getJSON(ctx context.Context, route string, query url.Values, out any) error {
-	ctx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
-	if err := c.wait(ctx); err != nil {
-		return err
-	}
 	u := *c.apiBase
 	u.Path = path.Join(u.Path, route)
 	u.RawQuery = query.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	return c.withRetry(ctx, func(ctx context.Context) (bool, error) {
+		return c.jsonOnce(ctx, u.String(), out)
+	})
+}
+
+func (c *Client) jsonOnce(ctx context.Context, rawURL string, out any) (bool, error) {
+	if err := c.wait(ctx); err != nil {
+		return false, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return ErrInvalid
+		return false, ErrInvalid
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.userAgent)
 	response, err := c.http.Do(req)
 	if err != nil {
-		return safeNetworkError(ctx, err)
+		return true, safeNetworkError(ctx, err)
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusTooManyRequests {
 		c.note429(response.Header.Get("Retry-After"))
-		return errors.New("open library rate limit exceeded")
+		return false, errors.New("open library rate limit exceeded")
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("open library request failed (HTTP %d)", response.StatusCode)
+		return response.StatusCode >= 500, fmt.Errorf("open library request failed (HTTP %d)", response.StatusCode)
 	}
 	b, err := io.ReadAll(io.LimitReader(response.Body, maxJSONBytes+1))
 	if err != nil {
-		return safeNetworkError(ctx, err)
+		return true, safeNetworkError(ctx, err)
 	}
 	if len(b) > maxJSONBytes {
-		return errors.New("open library response exceeds size limit")
+		return false, errors.New("open library response exceeds size limit")
 	}
 	if err := json.Unmarshal(b, out); err != nil {
-		return errors.New("open library returned an invalid response")
+		return false, errors.New("open library returned an invalid response")
 	}
-	return nil
+	return false, nil
 }
 
 // wait paces requests (one per interval) and honours a Retry-After block.

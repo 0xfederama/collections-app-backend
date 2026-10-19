@@ -18,6 +18,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/content"
 	"github.com/0xfederama/collections-app-backend/internal/database"
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
+	"github.com/0xfederama/collections-app-backend/internal/hardcover"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
@@ -89,7 +90,8 @@ func run() error {
 	bookProvider := lookup.NewOpenLibraryProvider(openlibrary.NewWithOptions(openlibrary.Options{
 		MockFixture: cfg.TMDBMockFixture, Contact: cfg.OpenLibraryContact,
 	}))
-	lookupSvc := lookup.New(lookup.Providers{types.Movie: tmdbProvider, types.TVShow: tmdbProvider, types.Book: bookProvider}, lookupStore, itemSvc, settingsSvc, clock.System{}, workspaceID)
+	lookupSvc := lookup.New(lookup.Providers{types.Movie: tmdbProvider, types.TVShow: tmdbProvider, types.Book: bookProvider}, lookupStore, itemSvc, settingsSvc, clock.System{}, workspaceID).
+		WithHardcover(hardcover.New(cfg.HardcoverAPIKey, cfg.OpenLibraryContact)) // optional gap-filler: disabled without a key
 	if _, err := lookupStore.Maintain(ctx, lookupSvc.RefreshOwned); err != nil {
 		logger.Warn("lookup retention maintenance failed at startup", "err", err)
 	}

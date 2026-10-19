@@ -295,3 +295,38 @@ func TestFillOnlyHelper(t *testing.T) {
 		})
 	}
 }
+
+func TestHardcover_UntrackedCreateKeepsTypedTitleAndWritesNoProvenance(t *testing.T) {
+	e := newLookupEnv(t, time.Now().UTC())
+	list := e.bookList()
+	it, err := e.store.Apply(t.Context(), ApplyParams{
+		Mode: ModeCreateUntracked, ListID: list, Type: "book", Title: "dune", OriginalTitle: "dune",
+		CreateInput: &items.CreateInput{Title: "dune", Metadata: map[string]any{"pages": 700}},
+		Fields:      bookFields(), FillOnly: map[string]any{"stores": []string{"kobo"}},
+		Poster: processedPoster("hc"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if it.Title != "dune" || it.Image == nil {
+		t.Fatalf("item = %+v", it)
+	}
+	want := map[string]any{"author": "Frank Herbert", "pages": float64(700), "isbn": "9780441172719", "stores": []any{"kobo"}}
+	if got := decodeMetadata(t, it.Metadata); !reflect.DeepEqual(got, want) {
+		t.Fatalf("metadata = %#v, want %#v", got, want)
+	}
+	var n int
+	if err := e.db.QueryRow(t.Context(), `SELECT count(*) FROM lookup_imports WHERE item_id = $1`, it.ID).Scan(&n); err != nil || n != 0 {
+		t.Errorf("lookup_imports rows = %d err = %v, want none", n, err)
+	}
+}
+
+func TestHardcover_UntrackedCreateRejectsNonBooks(t *testing.T) {
+	e := newLookupEnv(t, time.Now().UTC())
+	_, err := e.store.Apply(t.Context(), ApplyParams{
+		Mode: ModeCreateUntracked, ListID: e.bookList(), Type: "movie", Title: "x", CreateInput: &items.CreateInput{Title: "x"},
+	})
+	if err == nil {
+		t.Fatal("untracked create of a movie must fail")
+	}
+}

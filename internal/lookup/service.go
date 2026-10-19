@@ -39,11 +39,19 @@ type Service struct {
 	settings    SettingsReader
 	clock       clock.Clock
 	workspaceID uuid.UUID
+	hardcover   BookGapFiller
 }
 
 // New returns a lookup service bound to one workspace.
 func New(providers Providers, store Store, itemSvc ItemService, settings SettingsReader, clk clock.Clock, workspaceID uuid.UUID) *Service {
 	return &Service{providers: providers, store: store, items: itemSvc, settings: settings, clock: clk, workspaceID: workspaceID}
+}
+
+// WithHardcover sets the optional Hardcover gap-filler for the automatic book
+// lookup (see hardcover.go). A nil or disabled filler is simply skipped.
+func (s *Service) WithHardcover(h BookGapFiller) *Service {
+	s.hardcover = h
+	return s
 }
 
 // CreateOptions preserves whether lookup=true was explicit: an omitted default
@@ -111,16 +119,24 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 	if err != nil {
 		return items.Item{}, err
 	}
-	candidate, err := s.resolve(ctx, provider, typ, in.Title, selectedID, settings)
+	candidate, err := s.resolve(ctx, provider, typ, in.Title, selectedID, settings, !explicit)
 	if err != nil {
 		if explicit {
 			return items.Item{}, err
+		}
+		if it, ok := s.createFromHardcover(ctx, provider, listID, typ, in, settings); ok {
+			return it, nil
 		}
 		return s.items.Create(ctx, listID, in)
 	}
 	if candidate == nil {
 		if selectedID != nil {
 			return items.Item{}, apperr.UpstreamUnavailable()
+		}
+		if !explicit {
+			if it, ok := s.createFromHardcover(ctx, provider, listID, typ, in, settings); ok {
+				return it, nil
+			}
 		}
 		return s.items.Create(ctx, listID, in)
 	}
@@ -187,7 +203,7 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 			})
 		}
 	}
-	candidate, err := s.resolve(ctx, provider, itemType, it.Title, lookupID, settings)
+	candidate, err := s.resolve(ctx, provider, itemType, it.Title, lookupID, settings, lookupID == nil)
 	if err != nil {
 		return items.Item{}, err
 	}
@@ -244,7 +260,7 @@ func (s *Service) RefreshOwned(ctx context.Context, itemID uuid.UUID, expectedVe
 	if err != nil {
 		return err
 	}
-	candidate, err := s.resolve(ctx, provider, record.Type, it.Title, &record.SourceID, settings)
+	candidate, err := s.resolve(ctx, provider, record.Type, it.Title, &record.SourceID, settings, false)
 	if err != nil {
 		return err
 	}
@@ -275,7 +291,9 @@ func (s *Service) RefreshOwned(ctx context.Context, itemID uuid.UUID, expectedVe
 
 type candidate struct{ details Details }
 
-func (s *Service) resolve(ctx context.Context, provider Provider, typ, title string, selectedID *string, settings workspace.Settings) (*candidate, error) {
+// resolve finds the provider details. gapFill allows the optional Hardcover
+// gap-fill of an automatically picked Open Library work (never for a selected id).
+func (s *Service) resolve(ctx context.Context, provider Provider, typ, title string, selectedID *string, settings workspace.Settings, gapFill bool) (*candidate, error) {
 	id := ""
 	if selectedID != nil {
 		id = *selectedID
@@ -305,6 +323,9 @@ func (s *Service) resolve(ctx context.Context, provider Provider, typ, title str
 	}
 	if details.SourceID != id {
 		return nil, apperr.UpstreamUnavailable()
+	}
+	if gapFill && selectedID == nil && provider.Name() == ProviderOpenLibrary {
+		details = s.fillGaps(ctx, details)
 	}
 	return &candidate{details: details}, nil
 }

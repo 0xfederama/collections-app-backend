@@ -227,3 +227,28 @@ func TestLoad_OpenLibraryContact(t *testing.T) {
 		t.Fatalf("OpenLibraryContact = %q", c.OpenLibraryContact)
 	}
 }
+
+func TestLoad_HardcoverAPIKeyIsOptional(t *testing.T) {
+	for _, tc := range []struct{ name, in, want string }{
+		{"absent", "", ""},
+		{"trimmed", "  tok  ", "tok"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, err := config.Load(env(map[string]string{
+				"DATABASE_URL": validDB, "DATA_DIR": t.TempDir(), "HARDCOVER_API_KEY": tc.in,
+			}))
+			if err != nil || c.HardcoverAPIKey != tc.want {
+				t.Fatalf("Load() = %q, %v; want %q", c.HardcoverAPIKey, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoad_TMDBMockFixtureDoesNotEnableHardcover(t *testing.T) {
+	c, err := config.Load(env(map[string]string{
+		"DATABASE_URL": validDB, "DATA_DIR": t.TempDir(), "TMDB_MOCK_FIXTURE": "true",
+	}))
+	if err != nil || c.HardcoverAPIKey != "" {
+		t.Fatalf("Load() = %q, %v", c.HardcoverAPIKey, err)
+	}
+}

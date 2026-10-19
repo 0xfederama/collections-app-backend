@@ -21,6 +21,7 @@ WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 FOR UPDATE;
 
 -- name: ListItems :many
+-- A streaming field filters and sorts on its object without the server-managed link.
 -- @sort is manual, title, updated, price or a metadata field key. Field sorting is driven by its definition type.
 SELECT i.*,
        l.type              AS type,
@@ -42,7 +43,7 @@ WHERE i.list_id = @list_id AND i.workspace_id = @workspace_id AND i.deleted_at I
        WHEN 'date' THEN (NOT @filter_min_set::boolean OR i.metadata ->> @filter_key::text >= @filter_min::text)
                       AND (NOT @filter_max_set::boolean OR i.metadata ->> @filter_key::text <= @filter_max::text)
        WHEN 'boolean' THEN i.metadata -> @filter_key::text = @filter_value::jsonb
-       WHEN 'streaming' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
+       WHEN 'streaming' THEN lower(COALESCE((CASE WHEN jsonb_typeof(i.metadata -> @filter_key::text) = 'object' THEN ((i.metadata -> @filter_key::text) - 'link')::text ELSE i.metadata ->> @filter_key::text END), '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
        ELSE false END)
 ORDER BY
   CASE WHEN @sort::text = 'manual' THEN i.sort_order END ASC,
@@ -53,7 +54,7 @@ ORDER BY
   CASE WHEN @sort_type::text = 'number' THEN (i.metadata ->> @sort_key::text)::numeric END ASC NULLS LAST,
   CASE WHEN @sort_type::text = 'date' THEN i.metadata ->> @sort_key::text END ASC NULLS LAST,
   CASE WHEN @sort_type::text IN ('text', 'link') THEN lower(NULLIF(i.metadata ->> @sort_key::text, '')) END ASC NULLS LAST,
-  CASE WHEN @sort_type::text = 'streaming' THEN lower(i.metadata ->> @sort_key::text) END ASC NULLS LAST,
+  CASE WHEN @sort_type::text = 'streaming' THEN lower((CASE WHEN jsonb_typeof(i.metadata -> @sort_key::text) = 'object' THEN ((i.metadata -> @sort_key::text) - 'link')::text ELSE i.metadata ->> @sort_key::text END)) END ASC NULLS LAST,
   CASE WHEN @sort_type::text = 'boolean' THEN (i.metadata ->> @sort_key::text)::boolean END ASC NULLS LAST,
   i.id
 LIMIT @page_limit OFFSET @page_offset;
@@ -72,7 +73,7 @@ WHERE i.list_id = @list_id AND i.workspace_id = @workspace_id AND i.deleted_at I
        WHEN 'date' THEN (NOT @filter_min_set::boolean OR i.metadata ->> @filter_key::text >= @filter_min::text)
                       AND (NOT @filter_max_set::boolean OR i.metadata ->> @filter_key::text <= @filter_max::text)
        WHEN 'boolean' THEN i.metadata -> @filter_key::text = @filter_value::jsonb
-       WHEN 'streaming' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
+       WHEN 'streaming' THEN lower(COALESCE((CASE WHEN jsonb_typeof(i.metadata -> @filter_key::text) = 'object' THEN ((i.metadata -> @filter_key::text) - 'link')::text ELSE i.metadata ->> @filter_key::text END), '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
        ELSE false END);
 
 -- name: GetActiveListForItems :one

@@ -219,6 +219,9 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 		metadata[idKey] = idValue
 	}
 	for path, value := range flatten(p.CreateInput.Metadata) {
+		if path == "streaming.link" {
+			continue // server-managed: only the TMDB lookup sets it
+		}
 		setPath(metadata, path, value)
 	}
 	if !untracked {
@@ -257,7 +260,9 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 	}
 	requested := flatten(p.Fields)
 	for path := range flatten(p.CreateInput.Metadata) {
-		delete(requested, path)
+		if path != "streaming.link" {
+			delete(requested, path)
+		}
 	}
 	snapshots := snapshotPresent(metadata, requested)
 	snapshots[idKey] = metadata[idKey]

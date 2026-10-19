@@ -173,15 +173,19 @@ func (c *Client) Search(ctx context.Context, typ, query, language string) ([]Mat
 // Details fetches localized metadata, credits, IMDb id and regional providers.
 func (c *Client) Details(ctx context.Context, typ string, id int, language, country string) (Details, error) {
 	if c != nil && c.mockFixture && typ == "movie" && id == mockMovieID {
-		return Details{
-			ID:    mockMovieID,
-			Title: mockMovieQuery,
-			Metadata: map[string]any{
-				"release_year":    2001,
-				"runtime_minutes": 101,
-				"director":        "Mock Director",
-			},
-		}, nil
+		metadata := map[string]any{
+			"release_year":    2001,
+			"runtime_minutes": 101,
+			"director":        "Mock Director",
+		}
+		if country != "" {
+			// A deterministic JustWatch page so frontend e2e can follow the link.
+			metadata["streaming"] = map[string]any{
+				"country": strings.ToUpper(country),
+				"link":    "https://www.justwatch.com/" + strings.ToLower(country) + "/movie/mock",
+			}
+		}
+		return Details{ID: mockMovieID, Title: mockMovieQuery, Metadata: metadata}, nil
 	}
 	if c == nil || c.key == "" {
 		return Details{}, ErrDisabled
@@ -283,10 +287,23 @@ func (c *Client) Details(ctx context.Context, typ string, id int, language, coun
 		if len(paid) > 0 {
 			streaming["paid_platforms"] = paid
 		}
+		if link := justWatchLink(providers.Link); link != "" {
+			streaming["link"] = link
+		}
 		metadata["streaming"] = streaming
 		return Details{ID: data.ID, Title: title, Metadata: metadata, PosterPath: data.PosterPath, WatchURL: providers.Link}, nil
 	}
 	return Details{ID: data.ID, Title: title, Metadata: metadata, PosterPath: data.PosterPath}, nil
+}
+
+// justWatchLink returns raw when it is an https URL on justwatch.com (the one
+// page TMDB links watch providers to), otherwise "": nothing else is stored.
+func justWatchLink(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.User != nil || (u.Host != "www.justwatch.com" && u.Host != "justwatch.com") {
+		return ""
+	}
+	return raw
 }
 
 type provider struct {

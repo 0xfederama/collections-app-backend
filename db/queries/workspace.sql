@@ -42,3 +42,15 @@ WHERE workspace_id = $1;
 UPDATE workspaces
 SET name = $2, version = version + 1, updated_at = now()
 WHERE id = $1;
+
+-- name: ClearItemStreamingLinks :exec
+-- The JustWatch page is per country: when the streaming country changes, every imported
+-- streaming.link goes until the next lookup refresh. Derived data, so no version bump.
+UPDATE items
+SET metadata = metadata #- '{streaming,link}'
+WHERE workspace_id = $1 AND metadata #>> '{streaming,link}' IS NOT NULL;
+
+-- name: ClearStreamingLinkSnapshots :exec
+UPDATE lookup_imports
+SET imported_fields = imported_fields - 'streaming.link'
+WHERE workspace_id = $1 AND imported_fields ->> 'streaming.link' IS NOT NULL;

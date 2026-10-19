@@ -32,7 +32,8 @@ Owns items of a list: create, get, page, patch, move and reorder. Metadata, pric
 - Update order: field rules (422) first; then 404, 412 `version_conflict`, then metadata (400 or 422). No real change keeps the version.
 - Move order: 404, 412, 409 `destination_unavailable`, then 409 `type_mismatch`. Reorder: `ids` must equal the active items as a set, else 409 `order_stale`; no version bumps.
 - `metadata` replaces the object and drops nulls. Undeclared keys are 400 `unknown_field`; invalid values are 422. `store_links` is reserved and never stored.
-- `metadata.store_links` (provider key to URL) is built on read from title and `isbn`; single-item responses carry it, list pages do not.
+- `metadata.store_links` (provider key to URL) is built on read from title and `isbn`; single-item responses and the rows of list items, search and recent items carry it (API 0.14.0). Rows use `FillStoreLinks`: one query for the stores fields of all types plus one for the settings, whatever the page size; a type without a `stores` field has no key.
+- `streaming.link` (JustWatch page, set by the TMDB lookup) is server-managed: `validateClientMetadata` drops a client-sent link on create/PATCH and keeps the stored one while `streaming.country` is unchanged, so editing only the platforms or round-tripping the object keeps it. `ValidateMetadata` (lookup path) accepts it. Streaming filter/sort ignore the link.
 - `stores` fields are locked-only, hold provider keys, and are neither sortable nor filterable (400). Create fills unset (absent or null) stores fields with `[preferred_store]`; an explicit value, `[]` included, wins. `metadata.openlibrary_id` on books is lookup-owned, read-only by convention (clients build the Open Library link from it).
 - Field filters: text/link/streaming use `filter_value`; boolean uses `true`/`false`; number/date use a min/max range.
 - Price accepts amount or min/max, never both, and only when the definition allows it (`book` does).

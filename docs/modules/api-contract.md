@@ -36,4 +36,4 @@
 - Type and field versions have independent ETag streams; all mutations except creation require If-Match.
 - Type create and update responses preserve `default_icon`; PATCH fields are optional and nullable defaults may be cleared with JSON `null`.
 - Item metadata is an object validated against its list type's definition; the item `type` is read-only and `null` (with `{}` metadata) for a list with no type; `List.type` is nullable and optional on create.
-- `metadata.store_links` is read-only and computed, never stored; item create accepts `source_id` for books.
+- `metadata.store_links` is read-only and computed, never stored (also on item rows since 0.14.0); `streaming.link` is read-only, nullable, ignored when sent; item create accepts `source_id` for books.

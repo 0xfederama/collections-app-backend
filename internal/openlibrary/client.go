@@ -25,17 +25,18 @@ import (
 )
 
 const (
-	apiOrigin        = "https://openlibrary.org"
-	coverOrigin      = "https://covers.openlibrary.org"
-	requestTimeout   = 10 * time.Second
-	maxJSONBytes     = 2 << 20
-	maxCoverBytes    = 10 << 20
-	searchTTL        = 5 * time.Minute
-	maxSearchEntries = 128
-	searchLimit      = 10
-	requestInterval  = 1100 * time.Millisecond // above the 1 request/second limit of unidentified clients
-	maxRetryAfter    = time.Hour
-	searchFields     = "key,title,author_name,first_publish_year,number_of_pages_median,isbn,cover_i"
+	apiOrigin          = "https://openlibrary.org"
+	coverOrigin        = "https://covers.openlibrary.org"
+	requestTimeout     = 10 * time.Second
+	maxJSONBytes       = 2 << 20
+	maxCoverBytes      = 10 << 20
+	searchTTL          = 5 * time.Minute
+	maxSearchEntries   = 128
+	searchLimit        = 10
+	requestInterval    = 1100 * time.Millisecond // above the 1 request/second limit of unidentified clients
+	identifiedInterval = 600 * time.Millisecond  // well under the 3 requests/second of clients with a contact in the User-Agent
+	maxRetryAfter      = time.Hour
+	searchFields       = "key,title,author_name,first_publish_year,number_of_pages_median,isbn,cover_i"
 
 	mockBookQuery = "[mock] book name"
 	mockWorkID    = "OL900001W"
@@ -113,6 +114,9 @@ func NewWithOptions(opts Options) *Client {
 	}
 	if opts.RequestInterval <= 0 {
 		opts.RequestInterval = requestInterval
+		if strings.TrimSpace(opts.Contact) != "" {
+			opts.RequestInterval = identifiedInterval
+		}
 	}
 	if opts.APIBaseURL == "" {
 		opts.APIBaseURL = apiOrigin

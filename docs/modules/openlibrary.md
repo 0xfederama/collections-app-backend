@@ -22,7 +22,7 @@ Provides a bounded, server-side Open Library client for book search, work detail
 
 ## Gotchas
 
-- No key and no settings: always on, fixed User-Agent `CollectionsApp/1` (unidentified, so paced at one request per 1.1 s, under Open Library's 1 req/s limit).
+- No key, always on. Optional `OPENLIBRARY_CONTACT` (an e-mail) goes into the User-Agent `CollectionsApp/1 (<contact>)` and paces at 600 ms (3 req/s limit); without it requests are unidentified and paced at 1.1 s (1 req/s limit).
 - Requests are paced below the identified-client limit (3/s), bounded in size and timeout, and searches are cached briefly.
 - `TMDB_MOCK_FIXTURE=true` enables the fixture: the exact query `[mock] book name` returns work `OL900001W` without HTTP, even when disabled. Other queries behave normally.
 - Open Library data has no retention duty (D-095); it is kept until the user changes it.

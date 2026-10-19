@@ -213,3 +213,17 @@ func TestLoad_ErrorNeverLeaksDatabasePassword(t *testing.T) {
 		t.Errorf("unexpected error state: %v", err)
 	}
 }
+
+func TestLoad_OpenLibraryContact(t *testing.T) {
+	c, err := config.Load(env(map[string]string{
+		"DATABASE_URL":        validDB,
+		"DATA_DIR":            t.TempDir(),
+		"OPENLIBRARY_CONTACT": "  me@example.test  ",
+	}))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if c.OpenLibraryContact != "me@example.test" {
+		t.Fatalf("OpenLibraryContact = %q", c.OpenLibraryContact)
+	}
+}

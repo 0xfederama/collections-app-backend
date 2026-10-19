@@ -308,7 +308,8 @@ func (s *Service) ValidateMetadata(ctx context.Context, q *sqlc.Queries, typ *st
 	return types.Validate(fields, in)
 }
 
-// validateClientMetadata validates metadata sent by a client. streaming.link is
+// validateClientMetadata validates metadata sent by a client. streaming.platform_links
+// is computed at read and always dropped, never stored. streaming.link is
 // server-managed (TMDB lookup): a client-sent link is dropped, and the stored one
 // is kept while the streaming country is unchanged, so a client that round-trips
 // the whole streaming object, or edits only the platforms, does not lose it.
@@ -337,7 +338,7 @@ func (s *Service) validateClientMetadata(ctx context.Context, q *sqlc.Queries, t
 		}
 		next := make(map[string]any, len(obj))
 		for k, v := range obj {
-			if k != "link" {
+			if k != "link" && k != "platform_links" {
 				next[k] = v
 			}
 		}

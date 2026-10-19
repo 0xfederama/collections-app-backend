@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.14.0
+  version: 0.15.0
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -1731,7 +1731,7 @@ components:
           release_year: 1999
           runtime_minutes: 136
           imdb_url: https://www.imdb.com/title/tt0133093/
-          streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix' }
+          streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix', platform_links: { Netflix: 'https://www.netflix.com/search?q=The+Matrix', Prime Video: 'https://www.primevideo.com/search/?phrase=The+Matrix' } }
         content_version: 2
         sort_order: 0
         version: 3
@@ -1750,7 +1750,7 @@ components:
           release_year: 1999
           runtime_minutes: 136
           imdb_url: https://www.imdb.com/title/tt0133093/
-          streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix' }
+          streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix', platform_links: { Netflix: 'https://www.netflix.com/search?q=The+Matrix', Prime Video: 'https://www.primevideo.com/search/?phrase=The+Matrix' } }
         content_version: 2
         sort_order: 0
         version: 3
@@ -1794,7 +1794,7 @@ components:
             metadata:
               release_year: 1999
               runtime_minutes: 136
-              streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix' }
+              streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix', platform_links: { Netflix: 'https://www.netflix.com/search?q=The+Matrix', Prime Video: 'https://www.primevideo.com/search/?phrase=The+Matrix' } }
             content_version: 2
             sort_order: 0
             version: 3
@@ -1828,7 +1828,7 @@ components:
               metadata:
                 release_year: 1999
                 runtime_minutes: 136
-                streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix' }
+                streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix', platform_links: { Netflix: 'https://www.netflix.com/search?q=The+Matrix', Prime Video: 'https://www.primevideo.com/search/?phrase=The+Matrix' } }
               content_version: 2
               sort_order: 0
               version: 3
@@ -1853,7 +1853,7 @@ components:
               metadata:
                 release_year: 1999
                 runtime_minutes: 136
-                streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix' }
+                streaming: { country: IT, platforms: [Netflix, Prime Video], paid_platforms: [Prime Video], link: 'https://www.justwatch.com/it/movie/the-matrix', platform_links: { Netflix: 'https://www.netflix.com/search?q=The+Matrix', Prime Video: 'https://www.primevideo.com/search/?phrase=The+Matrix' } }
               content_version: 2
               sort_order: 0
               version: 3
@@ -2409,7 +2409,7 @@ components:
               additionalProperties: true
     ItemSummary:
       type: object
-      description: "An item row in lists, search and recent items: the same `metadata` object as the full item, including the read-only `store_links` for a type with a `stores` field, and the image is reduced."
+      description: "An item row in lists, search and recent items: the same `metadata` object as the full item, including the read-only `store_links` for a type with a `stores` field and the read-only `streaming.platform_links` for a streaming item, and the image is reduced."
       required: [id, list_id, title, type, image, price, website, metadata, content_version, sort_order, version, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
@@ -2591,6 +2591,11 @@ components:
           nullable: true
           readOnly: true
           description: "The JustWatch page of the title for `country` (an https://www.justwatch.com URL), filled and refreshed by the TMDB lookup with the other imported streaming values and dropped with them when TMDB data expires (D-089). `null` or absent when there is none. Read-only for clients: a `link` sent in a write is ignored (not rejected), and the stored one is kept while `country` is unchanged, so a client can round-trip the whole `streaming` object. Changing the workspace `streaming_country_code` clears every item's link until its next lookup refresh. TMDB attributes this data to JustWatch."
+        platform_links:
+          type: object
+          readOnly: true
+          additionalProperties: { type: string, format: uri }
+          description: "Computed on read and never stored (since 0.15.0): maps each name in `platforms` (exactly as stored) to an https URL that opens that streaming service's search for the item's title, so clicking a platform finds the title. Built from the title (URL-escaped) and the platform name; a platform that is not in the server's built-in table has no entry (clients fall back to `link`), and an item with an empty title has none. Present on the full item and on the rows of list items, search and recent items, and identical across them; an empty object when no platform has a link. Read-only: a `platform_links` sent in a write is ignored (not rejected) and never persisted, so a client can round-trip the whole `streaming` object. Changing the item's title changes the links."
     MovieMetadata:
       type: object
       additionalProperties: false

@@ -16,6 +16,11 @@ func kindBody(k definitions.Kind) oapi.KindDefinition {
 		fs[i] = oapi.KindField{Key: f.Key, Label: f.Label, Type: oapi.KindFieldType(f.Type), Position: f.Position, IsLocked: f.Locked, Version: f.Version}
 	}
 	out := oapi.KindDefinition{Key: k.Key, Name: k.Name, AllowsPrice: k.AllowsPrice, IsLocked: k.Locked, Version: k.Version, Fields: fs}
+	if k.DefaultIcon == nil {
+		out.DefaultIcon = nullable.NewNullNullable[string]()
+	} else {
+		out.DefaultIcon = nullable.NewNullableWithValue(*k.DefaultIcon)
+	}
 	if k.DefaultSortField == nil {
 		out.DefaultSortField = nullable.NewNullNullable[string]()
 	} else {
@@ -40,6 +45,10 @@ func (s *Server) ListKinds(ctx context.Context, _ oapi.ListKindsRequestObject) (
 	return out, nil
 }
 func (s *Server) CreateKind(ctx context.Context, r oapi.CreateKindRequestObject) (oapi.CreateKindResponseObject, error) {
+	var defaultIcon *string
+	if value, err := r.Body.DefaultIcon.Get(); err == nil {
+		defaultIcon = &value
+	}
 	var defaultSort *string
 	if value, err := r.Body.DefaultSortField.Get(); err == nil {
 		defaultSort = &value
@@ -49,7 +58,7 @@ func (s *Server) CreateKind(ctx context.Context, r oapi.CreateKindRequestObject)
 		defaultPins = &value
 	}
 	k, e := s.deps.Definitions.Create(ctx, definitions.CreateKind{
-		Name: r.Body.Name, AllowsPrice: r.Body.AllowsPrice != nil && *r.Body.AllowsPrice,
+		Name: r.Body.Name, DefaultIcon: defaultIcon, AllowsPrice: r.Body.AllowsPrice != nil && *r.Body.AllowsPrice,
 		DefaultSortField: defaultSort, DefaultPinnedFields: defaultPins,
 	})
 	if e != nil {
@@ -58,11 +67,38 @@ func (s *Server) CreateKind(ctx context.Context, r oapi.CreateKindRequestObject)
 	return oapi.CreateKind201JSONResponse{Body: kindBody(k), Headers: oapi.CreateKind201ResponseHeaders{ETag: etag.Format(etag.Kind, k.Version), Location: "/api/v1/kinds/" + k.Key}}, nil
 }
 func (s *Server) UpdateKind(ctx context.Context, r oapi.UpdateKindRequestObject) (oapi.UpdateKindResponseObject, error) {
-	k, e := s.deps.Definitions.Rename(ctx, r.Key, IfMatchVersion(ctx), r.Body.Name)
+	k, e := s.deps.Definitions.Update(ctx, r.Key, IfMatchVersion(ctx), definitions.UpdateKind{
+		Name: r.Body.Name, AllowsPrice: r.Body.AllowsPrice,
+		DefaultIcon:         kindNullableString(r.Body.DefaultIcon),
+		DefaultSortField:    kindNullableString(r.Body.DefaultSortField),
+		DefaultPinnedFields: kindNullableStrings(r.Body.DefaultPinnedFields),
+	})
 	if e != nil {
 		return nil, e
 	}
 	return oapi.UpdateKind200JSONResponse{Body: kindBody(k), Headers: oapi.UpdateKind200ResponseHeaders{ETag: etag.Format(etag.Kind, k.Version)}}, nil
+}
+
+func kindNullableString(value nullable.Nullable[string]) definitions.NullableString {
+	if !value.IsSpecified() {
+		return definitions.NullableString{}
+	}
+	if value.IsNull() {
+		return definitions.NullableString{Set: true}
+	}
+	v, _ := value.Get()
+	return definitions.NullableString{Set: true, Value: &v}
+}
+
+func kindNullableStrings(value nullable.Nullable[[]string]) definitions.NullableStrings {
+	if !value.IsSpecified() {
+		return definitions.NullableStrings{}
+	}
+	if value.IsNull() {
+		return definitions.NullableStrings{Set: true}
+	}
+	v, _ := value.Get()
+	return definitions.NullableStrings{Set: true, Value: &v}
 }
 func (s *Server) DeleteKind(ctx context.Context, r oapi.DeleteKindRequestObject) (oapi.DeleteKindResponseObject, error) {
 	if e := s.deps.Definitions.Delete(ctx, r.Key, IfMatchVersion(ctx)); e != nil {

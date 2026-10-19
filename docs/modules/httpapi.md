@@ -24,7 +24,7 @@ Serves the HTTP API: the generated strict server mounted on chi, behind request 
 - `Deps`: includes `Definitions *definitions.Service` alongside the domain services
 - `IfMatchVersion(ctx) int`: version N of the validated `If-Match` in guarded handlers
 - `GET /healthz`: 200 `ok`, liveness only; `GET /readyz`: 200 `ready` or 503 (DB ping, DATA_DIR probe)
-- `GET/POST/PATCH/DELETE /api/v1/kinds...`: definition and custom-field management; see `api/openapi.yaml`
+- `GET/POST/PATCH/DELETE /api/v1/kinds...`: definition and custom-field management; PATCH updates supplied custom-kind defaults as well as its name; see `api/openapi.yaml`
 - Delete folder/list/item: 204 with If-Match; trash supports list, restore, single purge and empty
 - `GET /api/v1/tmdb/suggestions?kind=movie|tv_show&q=...`: ranked suggestions; unavailable integration returns an empty disabled result
 - `POST /api/v1/items/{id}/lookup`: explicit metadata lookup with item If-Match

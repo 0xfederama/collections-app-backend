@@ -23,8 +23,8 @@ type Config struct {
 	WorkspaceName   string
 	TMDBAPIKey      string
 	TMDBMockFixture bool
-	LogLevel            slog.Level
-	LogFormat           string
+	LogLevel        slog.Level
+	LogFormat       string
 }
 
 // Load reads configuration through getenv (os.Getenv in production) and returns

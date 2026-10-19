@@ -32,5 +32,6 @@ Manages workspace-scoped type definitions and their fields. Built-in types (movi
 - `stores` is a locked-only field type (DB CHECK); custom fields cannot use it.
 - The built-in `book` has no first publication year since migration 000023 (6 fields, default sort manual/NULL, default pins `author, pages, stores`); a custom `book_custom` is untouched.
 - Migration 000021 renames a custom type keyed `book` to `book_custom` (`book_custom_2`, ... when taken) before the built-in takes the key; its lists follow.
+- Migration 000024 relabels the built-in movie `runtime_minutes` to "Runtime" (only from the seeded "Runtime (minutes)"; key unchanged, a customised label is kept).
 - Reorder accepts exactly the custom-field keys; locked fields retain their seed positions.
 - Deleting a custom field clears matching metadata, resets affected defaults/pins/sorts, and includes trashed items in its count.

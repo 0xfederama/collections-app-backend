@@ -3,6 +3,7 @@ package hardcover
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -176,7 +177,7 @@ func TestCancelledContextIsReturnedAsIs(t *testing.T) {
 	c := newTestClient(t, func(_ http.ResponseWriter, r *http.Request) { _, _ = io.Copy(io.Discard, r.Body); <-r.Context().Done() }, nil)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := c.SearchTitle(ctx, "Dune"); err != context.Canceled {
+	if _, err := c.SearchTitle(ctx, "Dune"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -187,10 +188,10 @@ func TestDisabledClientNeverCalls(t *testing.T) {
 	if c.Enabled() {
 		t.Fatal("blank token must disable")
 	}
-	if _, err := c.SearchTitle(t.Context(), "x"); err != ErrDisabled {
+	if _, err := c.SearchTitle(t.Context(), "x"); !errors.Is(err, ErrDisabled) {
 		t.Fatalf("err = %v", err)
 	}
-	if _, _, err := c.FindByISBN(t.Context(), "9780441172719"); err != ErrDisabled {
+	if _, _, err := c.FindByISBN(t.Context(), "9780441172719"); !errors.Is(err, ErrDisabled) {
 		t.Fatalf("err = %v", err)
 	}
 	if _, err := c.DownloadCover(t.Context(), "https://assets.hardcover.app/x.jpg"); err != ErrDisabled {

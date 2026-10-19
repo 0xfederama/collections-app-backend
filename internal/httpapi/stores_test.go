@@ -2,6 +2,7 @@ package httpapi_test
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -260,4 +261,118 @@ func TestStreamingLink_RowsCarryItAndWholeObjectRoundTrips(t *testing.T) {
 	if rows, _ := e.page(lid, "?filter_field=streaming&filter_value=max"); len(rows) != 1 {
 		t.Errorf("filter on a platform matched %d rows, want 1", len(rows))
 	}
+}
+
+// platformLinks returns metadata.streaming.platform_links of an item response and whether it is present.
+func platformLinks(it obj) (map[string]any, bool) {
+	meta, _ := it["metadata"].(map[string]any)
+	streaming, _ := meta["streaming"].(map[string]any)
+	links, ok := streaming["platform_links"].(map[string]any)
+	return links, ok
+}
+
+func TestPlatformLinks_ItemAndRowsCarryIdenticalLinks(t *testing.T) {
+	e := newTreeEnv(t)
+	films := e.listOfType("Films", nil, "movie")["id"].(string)
+	books := e.listOfType("Books", nil, "book")["id"].(string)
+	it := e.newItem(films, `{"title":"Dune","metadata":{"streaming":{"country":"IT","platforms":["Netflix","RaiPlay","Disney Plus"]}}}`)
+	e.newItem(films, `{"title":"No streaming","metadata":{"release_year":1999}}`)
+	e.newItem(books, `{"title":"Dune book","metadata":{}}`)
+
+	want := map[string]any{
+		"Netflix":     "https://www.netflix.com/search?q=Dune",
+		"Disney Plus": "https://www.disneyplus.com/search?q=Dune",
+	}
+	if got, ok := platformLinks(it); !ok || !reflect.DeepEqual(got, want) {
+		t.Fatalf("create: platform_links = %v (present %v), want %v", got, ok, want)
+	}
+	if got, ok := platformLinks(e.fetchItem(it["id"])); !ok || !reflect.DeepEqual(got, want) {
+		t.Errorf("GET: platform_links = %v (present %v), want %v", got, ok, want)
+	}
+
+	check := func(where string, rows []obj) {
+		t.Helper()
+		seen := false
+		for _, r := range rows {
+			links, ok := platformLinks(r)
+			switch r["title"] {
+			case "Dune":
+				seen = true
+				if !ok || !reflect.DeepEqual(links, want) {
+					t.Errorf("%s: Dune platform_links = %v (present %v), want %v", where, links, ok, want)
+				}
+			default:
+				if ok {
+					t.Errorf("%s: %q has platform_links", where, r["title"])
+				}
+			}
+		}
+		if !seen {
+			t.Errorf("%s: Dune row missing", where)
+		}
+	}
+	var listed []obj
+	for _, id := range []string{films, books} {
+		rows, _ := e.page(id, "")
+		listed = append(listed, rows...)
+	}
+	check("list", listed)
+	var found []obj
+	for _, r := range e.search("q=Dune").Data {
+		found = append(found, r.Item)
+	}
+	check("search", found)
+	found = nil
+	for _, r := range e.recent("").Data {
+		found = append(found, r.Item)
+	}
+	check("recent", found)
+
+	// The links follow the title.
+	rec := e.patchItem(e.fetchItem(it["id"]), `{"title":"Dune Part Two"}`)
+	wantStatus(t, rec, 200)
+	if got, _ := platformLinks(decode(t, rec)); got["Netflix"] != "https://www.netflix.com/search?q=Dune+Part+Two" {
+		t.Errorf("after title change: platform_links = %v", got)
+	}
+}
+
+func TestPlatformLinks_AreNeverWritten(t *testing.T) {
+	e := newTreeEnv(t)
+	lid := e.listOfType("Films", nil, "movie")["id"].(string)
+	evil := `"platform_links":{"Netflix":"https://evil.example/"}`
+
+	created := e.newItem(lid, `{"title":"Dune","metadata":{"streaming":{"country":"IT","platforms":["Netflix"],`+evil+`}}}`)
+	want := "https://www.netflix.com/search?q=Dune"
+	if got, _ := platformLinks(created); got["Netflix"] != want {
+		t.Errorf("create: platform_links = %v, want the computed link", got)
+	}
+	var stored bool
+	query := `SELECT metadata -> 'streaming' ? 'platform_links' FROM items WHERE id = $1`
+	e.queryRow(query, []any{created["id"]}, &stored)
+	if stored {
+		t.Error("create: platform_links was stored")
+	}
+
+	rec := e.patchItem(e.fetchItem(created["id"]), `{"metadata":{"streaming":{"country":"IT","platforms":["Netflix","Hulu"],`+evil+`}}}`)
+	wantStatus(t, rec, 200)
+	got, _ := platformLinks(decode(t, rec))
+	if got["Netflix"] != want || got["Hulu"] != "https://www.hulu.com/search?q=Dune" {
+		t.Errorf("patch: platform_links = %v", got)
+	}
+	e.queryRow(query, []any{created["id"]}, &stored)
+	if stored {
+		t.Error("patch: platform_links was stored")
+	}
+	if got, _ := platformLinks(e.fetchItem(created["id"])); got["Netflix"] != want {
+		t.Errorf("GET after patch: platform_links = %v", got)
+	}
+
+	// A client that round-trips the response's streaming object is not rejected.
+	rt := e.fetchItem(created["id"])
+	meta := rt["metadata"].(map[string]any)
+	body, err := json.Marshal(map[string]any{"metadata": meta})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantStatus(t, e.patchItem(rt, string(body)), 200)
 }

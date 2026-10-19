@@ -16,7 +16,12 @@ func TestF002B5_SummaryCarriesMetadata(t *testing.T) {
 
 	want := map[string]any{
 		"release_year": float64(1999), "runtime_minutes": float64(136),
-		"streaming": map[string]any{"country": "IT", "platforms": []any{"Netflix", "Prime Video"}, "paid_platforms": []any{"Prime Video"}},
+		"streaming": map[string]any{"country": "IT", "platforms": []any{"Netflix", "Prime Video"}, "paid_platforms": []any{"Prime Video"},
+			// Computed on read, never stored (spec 0.15.0).
+			"platform_links": map[string]any{
+				"Netflix":     "https://www.netflix.com/search?q=Matrix",
+				"Prime Video": "https://www.primevideo.com/search/?phrase=Matrix",
+			}},
 	}
 	check := func(name string, got any, want any) {
 		t.Helper()

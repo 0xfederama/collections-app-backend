@@ -37,3 +37,4 @@
 - Type create and update responses preserve `default_icon`; PATCH fields are optional and nullable defaults may be cleared with JSON `null`.
 - Item metadata is an object validated against its list type's definition; the item `type` is read-only and `null` (with `{}` metadata) for a list with no type; `List.type` is nullable and optional on create.
 - `metadata.store_links` is read-only and computed, never stored (also on item rows since 0.14.0); `streaming.link` is read-only, nullable, ignored when sent; item create accepts `source_id` for books.
+- `streaming.platform_links` (0.15.0) is read-only and computed on read (full item and rows), never stored; a client-sent one is ignored. Platforms outside the server's table have no entry (the web falls back to `streaming.link`).

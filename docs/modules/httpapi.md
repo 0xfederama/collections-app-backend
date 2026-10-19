@@ -37,4 +37,5 @@ Serves the HTTP API: the generated strict server mounted on chi, behind request 
 - Move and reorder bodies must carry the nullable parent field (`parent_folder_id` or `folder_id`): absent is 422, null means root.
 - Attachment responses set `Cache-Control: private, max-age=31536000, immutable` and `Content-Disposition: inline`; nosniff and CSP come from middleware.
 - Item metadata keys are checked against database-backed type fields, not by the guard. Single-item responses and item rows (list, search, recent) add read-only `metadata.store_links`.
+- `itemBody`/`itemSummaryBody` also add read-only `metadata.streaming.platform_links` (`streamlinks.AddToMetadata`, pure, no queries) for any streaming object with platforms.
 - No CORS (D-033); errors outside `apperr` become 500 `internal` with only the request id. Extend `ifMatchPrefix` in `guard.go` by hand for new If-Match operations.

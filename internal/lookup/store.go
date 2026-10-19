@@ -23,6 +23,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 )
 
@@ -117,7 +118,7 @@ func (s *DBStore) Apply(ctx context.Context, p ApplyParams) (items.Item, error) 
 		if err := q.LockTree(ctx, s.workspaceID); err != nil {
 			return fmt.Errorf("lock tree: %w", err)
 		}
-		if p.Mode == ModeCreate {
+		if p.Mode == ModeCreate || p.Mode == ModeCreateUntracked {
 			var txErr error
 			itemID, usedPoster, txErr = s.applyCreate(ctx, q, p, prepared)
 			return txErr
@@ -140,6 +141,16 @@ func (s *DBStore) Apply(ctx context.Context, p ApplyParams) (items.Item, error) 
 }
 
 func validateApply(p ApplyParams) error {
+	if p.Mode == ModeCreateUntracked {
+		// No provider, no source id: only a book create with the typed input.
+		if p.Type != types.Book || p.CreateInput == nil {
+			return fmt.Errorf("untracked lookup create needs a book and its input")
+		}
+		if _, err := cleanLookupTitle(p.Title); err != nil {
+			return err
+		}
+		return nil
+	}
 	if !slices.Contains(providerTypes[p.Provider], p.Type) {
 		return apperr.Validation(apperr.FieldError{Field: "type", Message: "lookup is available only for movie, tv_show and book"})
 	}
@@ -188,17 +199,31 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 		return uuid.Nil, false, err
 	}
 	title, _ := cleanLookupTitle(p.Title)
+	if typeKey(typ) == types.Book {
+		// Books keep the title the user typed (Italian stays Italian); only the
+		// movie/TV flow adopts the provider's title.
+		if typed, terr := cleanLookupTitle(p.CreateInput.Title); terr == nil {
+			title = typed
+		}
+	}
 	website, err := cleanLookupWebsite(p.CreateInput.Website)
 	if err != nil {
 		return uuid.Nil, false, err
 	}
-	idKey, idValue := identity(p.Provider, p.SourceID)
+	untracked := p.Mode == ModeCreateUntracked
+	var idKey string
+	var idValue any
 	metadata := cloneLookupMap(p.Fields)
-	metadata[idKey] = idValue
+	if !untracked {
+		idKey, idValue = identity(p.Provider, p.SourceID)
+		metadata[idKey] = idValue
+	}
 	for path, value := range flatten(p.CreateInput.Metadata) {
 		setPath(metadata, path, value)
 	}
-	metadata[idKey] = idValue
+	if !untracked {
+		metadata[idKey] = idValue
+	}
 	fillOnly(metadata, p.FillOnly, false)
 	metadata, err = s.items.ValidateMetadata(ctx, q, typ, metadata)
 	if err != nil {
@@ -226,6 +251,9 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 	})
 	if err != nil {
 		return uuid.Nil, false, fmt.Errorf("insert lookup item: %w", err)
+	}
+	if untracked {
+		return id, poster != nil, nil
 	}
 	requested := flatten(p.Fields)
 	for path := range flatten(p.CreateInput.Metadata) {

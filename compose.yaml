@@ -47,6 +47,7 @@ services:
       TMDB_API_KEY: ${TMDB_API_KEY:-}
       TMDB_MOCK_FIXTURE: ${TMDB_MOCK_FIXTURE:-false}
       OPENLIBRARY_CONTACT: ${OPENLIBRARY_CONTACT:-}
+      HARDCOVER_API_KEY: ${HARDCOVER_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-json}
     volumes:

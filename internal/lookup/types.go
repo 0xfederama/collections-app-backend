@@ -18,10 +18,14 @@ import (
 type Mode string
 
 const (
-	ModeCreate  Mode = "create"
-	ModeFill    Mode = "fill"
-	ModeRematch Mode = "rematch"
-	ModeRefresh Mode = "refresh"
+	ModeCreate Mode = "create"
+	// ModeCreateUntracked creates a book item from Hardcover data: fields and cover
+	// are applied but no provenance row and no provider id are written (Hardcover
+	// has no lookup_imports provider; the data is the user's own from then on).
+	ModeCreateUntracked Mode = "create_untracked"
+	ModeFill            Mode = "fill"
+	ModeRematch         Mode = "rematch"
+	ModeRefresh         Mode = "refresh"
 	// ModeOwned is the automatic retention refresh. It may replace only values
 	// that still equal their last imported snapshots.
 	ModeOwned Mode = "owned"

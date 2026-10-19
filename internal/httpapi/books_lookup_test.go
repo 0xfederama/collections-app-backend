@@ -276,7 +276,7 @@ func TestF016B3_CreateBookWithLookupFillsFieldsCoverAndStores(t *testing.T) {
 	lid := e.bookList()
 
 	it := e.newItem(lid, `{"title":"the hobbit","metadata":{"pages":999}}`)
-	if it["title"] != "The Hobbit" || it["type"] != "book" || it["image"] == nil {
+	if it["title"] != "the hobbit" || it["type"] != "book" || it["image"] == nil {
 		t.Fatalf("item = %v", it)
 	}
 	meta := metaOf(it)
@@ -299,13 +299,23 @@ func TestF016B3_CreateBookWithLookupFillsFieldsCoverAndStores(t *testing.T) {
 	}
 }
 
+// The typed title wins over the provider title (here "The Hobbit"), the lookup still fills the rest.
+func TestF016B3_CreateBookKeepsTypedTitleWhenLookupFills(t *testing.T) {
+	e := newBookEnv(t, bookEnvOptions{})
+	it := e.newItem(e.bookList(), `{"title":"lo hobbit"}`)
+	meta := metaOf(it)
+	if it["title"] != "lo hobbit" || meta["author"] != "J.R.R. Tolkien" || meta["pages"] != float64(310) || meta["openlibrary_id"] != "OL27482W" {
+		t.Fatalf("item = %v", it)
+	}
+}
+
 func TestF016B3_CreateBookWithSourceIDAndOptOut(t *testing.T) {
 	e := newBookEnv(t, bookEnvOptions{})
 	lid := e.bookList()
 
 	// A selected work id skips the title search; a tmdb_id on a book list is ignored.
 	it := e.newItem(lid, `{"title":"my own title","source_id":"OL27482W","tmdb_id":603}`)
-	if it["title"] != "The Hobbit" || metaOf(it)["openlibrary_id"] != "OL27482W" {
+	if it["title"] != "my own title" || metaOf(it)["openlibrary_id"] != "OL27482W" {
 		t.Fatalf("item = %v", it)
 	}
 	if q := e.lastQuery.Load().(url.Values); q.Get("q") != "key:/works/OL27482W" {
@@ -345,7 +355,7 @@ func TestF016B3_CreateBookWithFixtureNeedsNoNetwork(t *testing.T) {
 	lid := e.bookList()
 	it := e.newItem(lid, `{"title":"[mock] book name"}`)
 	meta := metaOf(it)
-	if it["title"] != "Mock Book Title" || meta["author"] != "Mock Author" || meta["pages"] != float64(321) ||
+	if it["title"] != "[mock] book name" || meta["author"] != "Mock Author" || meta["pages"] != float64(321) ||
 		meta["isbn"] != "9780000000002" || meta["openlibrary_id"] != "OL900001W" || it["image"] == nil {
 		t.Fatalf("fixture item = %v", it)
 	}
@@ -479,7 +489,7 @@ func TestF016B3_DisabledWithFixtureServesOnlyTheFixture(t *testing.T) {
 		t.Fatalf("non-fixture suggestions = %v", got)
 	}
 	lid := e.bookList()
-	if it := e.newItem(lid, `{"title":"[mock] book name"}`); it["title"] != "Mock Book Title" {
+	if it := e.newItem(lid, `{"title":"[mock] book name"}`); it["title"] != "[mock] book name" {
 		t.Errorf("fixture create = %v", it)
 	}
 	if it := e.newItem(lid, `{"title":"the hobbit"}`); it["title"] != "the hobbit" {
@@ -499,23 +509,24 @@ func (e *bookEnv) itemCount() int {
 
 func TestF016_BookCoverFailureKeepsTheMetadata(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		cover http.HandlerFunc
-		body  string
+		name      string
+		cover     http.HandlerFunc
+		body      string
+		wantTitle string
 	}{
-		{"cover 500 and lookup omitted", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(500) }, `{"title":"the hobbit"}`},
-		{"cover 500 and lookup true", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(500) }, `{"title":"the hobbit","lookup":true}`},
-		{"bad cover bytes and lookup omitted", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("not an image")) }, `{"title":"the hobbit"}`},
-		{"bad cover bytes and lookup true", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("not an image")) }, `{"title":"the hobbit","lookup":true}`},
+		{"cover 500 and lookup omitted", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(500) }, `{"title":"the hobbit"}`, "the hobbit"},
+		{"cover 500 and lookup true", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(500) }, `{"title":"the hobbit","lookup":true}`, "the hobbit"},
+		{"bad cover bytes and lookup omitted", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("not an image")) }, `{"title":"the hobbit"}`, "the hobbit"},
+		{"bad cover bytes and lookup true", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("not an image")) }, `{"title":"the hobbit","lookup":true}`, "the hobbit"},
 		{"cover 302 to a foreign host and a source id", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "https://example.invalid/cover.jpg", http.StatusFound)
-		}, `{"title":"x","source_id":"OL27482W"}`},
+		}, `{"title":"x","source_id":"OL27482W"}`, "x"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newBookEnv(t, bookEnvOptions{cover: tc.cover})
 			it := e.newItem(e.bookList(), tc.body)
 			meta := metaOf(it)
-			if it["title"] != "The Hobbit" || it["image"] != nil || meta["author"] != "J.R.R. Tolkien" || meta["pages"] != float64(310) || meta["openlibrary_id"] != "OL27482W" {
+			if it["title"] != tc.wantTitle || it["image"] != nil || meta["author"] != "J.R.R. Tolkien" || meta["pages"] != float64(310) || meta["openlibrary_id"] != "OL27482W" {
 				t.Fatalf("item = %v", it)
 			}
 		})

@@ -25,8 +25,10 @@ type Config struct {
 	TMDBMockFixture bool
 	// OpenLibraryContact (an e-mail) goes into the Open Library User-Agent. Optional: identified clients get 3 requests/second instead of 1.
 	OpenLibraryContact string
-	LogLevel           slog.Level
-	LogFormat          string
+	// HardcoverAPIKey is the optional Hardcover token (optional gap-filler of the automatic book lookup). Blank disables it; never required.
+	HardcoverAPIKey string
+	LogLevel        slog.Level
+	LogFormat       string
 }
 
 // Load reads configuration through getenv (os.Getenv in production) and returns
@@ -60,6 +62,7 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	c.OpenLibraryContact = strings.TrimSpace(getenv("OPENLIBRARY_CONTACT"))
+	c.HardcoverAPIKey = strings.TrimSpace(getenv("HARDCOVER_API_KEY"))
 
 	if c.AppEnv != "development" && c.AppEnv != "production" {
 		errs = append(errs, fmt.Errorf("APP_ENV must be development or production, got %q", c.AppEnv))

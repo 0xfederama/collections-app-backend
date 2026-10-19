@@ -12,7 +12,7 @@ Parses and validates the API's environment configuration once at startup. Every 
 ## Interfaces
 
 - `Load(getenv func(string) string) (Config, error)`: pass `os.Getenv` in production
-- `Config`: `AppEnv`, `HTTPAddr`, `DatabaseURL`, `DBMaxConns`, `DataDir`, `WorkspaceName`, optional `TMDBAPIKey`, `TMDBMockFixture`, optional `OpenLibraryContact`, `LogLevel`, `LogFormat`
+- `Config`: `AppEnv`, `HTTPAddr`, `DatabaseURL`, `DBMaxConns`, `DataDir`, `WorkspaceName`, optional `TMDBAPIKey`, `TMDBMockFixture`, optional `OpenLibraryContact`, optional `HardcoverAPIKey`, `LogLevel`, `LogFormat`
 - `APP_ENV`: `development` (default) or `production`, case-sensitive
 - `HTTP_ADDR`: `host:port` listen address, default `:8080`
 - `DATABASE_URL`: required; `postgres://` or `postgresql://` with a host
@@ -21,6 +21,7 @@ Parses and validates the API's environment configuration once at startup. Every 
 - `WORKSPACE_NAME`: default `Our Collection`
 - `TMDB_API_KEY`: optional server-side TMDB credential; blank disables lookup
 - `TMDB_MOCK_FIXTURE`: `true`/`false`, default false; test stacks only (rejected when `APP_ENV=production`); also enables the `[mock] book name` Open Library fixture
+- `HARDCOVER_API_KEY`: optional Hardcover token (gap-filler of the automatic book lookup); blank disables it, never required, never logged
 - `LOG_LEVEL`: `debug`, `info` (default), `warn`, `error`
 - `LOG_FORMAT`: `json` (default) or `text`
 
@@ -32,3 +33,4 @@ Parses and validates the API's environment configuration once at startup. Every 
 - `Load` has a side effect: it creates and deletes a `.startup-*` probe file in `DATA_DIR` to test writability.
 - Keep `TMDB_API_KEY` in the server environment (`deploy/server/.env`); never expose it to the browser. Get a key through [TMDB account API settings](https://www.themoviedb.org/settings/api).
 - `OPENLIBRARY_CONTACT`: optional e-mail for the Open Library User-Agent (faster pacing). Book lookup (Open Library) is always on, no key. `TMDB_MOCK_FIXTURE` serves the `[mock] book name` fixture only; every other book query reaches Open Library.
+- `HARDCOVER_API_KEY` is read like `TMDB_API_KEY` but is not enabled by `TMDB_MOCK_FIXTURE`; keep it server side (see [hardcover](hardcover.md)).

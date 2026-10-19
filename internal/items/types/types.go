@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
+	"github.com/0xfederama/collections-app-backend/internal/stores"
 )
 
 // Type names (also the `type` enum of the spec).
@@ -25,6 +26,7 @@ const (
 	Motorcycle = "motorcycle"
 	Car        = "car"
 	Camera     = "camera"
+	Book       = "book"
 )
 
 const (
@@ -61,7 +63,7 @@ type Field struct {
 // Known reports whether type is one of the five built-in types. Definition
 // backed callers must not use it to decide whether a workspace type exists.
 func Known(typ string) bool {
-	return slices.Contains([]string{Movie, TVShow, Motorcycle, Car, Camera}, typ)
+	return slices.Contains([]string{Movie, TVShow, Motorcycle, Car, Camera, Book}, typ)
 }
 
 // Validate checks metadata against the supplied type fields and returns the
@@ -127,6 +129,8 @@ func ruleFor(field Field) rule {
 		return link
 	case "streaming":
 		return streaming
+	case "stores":
+		return storeKeys
 	default:
 		return func(path string, _ any) outcome { return fail(path, "has an unsupported field type") }
 	}
@@ -291,6 +295,27 @@ func streaming(path string, v any) outcome {
 	return outcome{val: out}
 }
 
+// storeKeys checks a `stores` value: an array of unique provider keys (F-016).
+// The array is stored as given, with the keys in the order the client sent them.
+func storeKeys(path string, v any) outcome {
+	list, ok := v.([]any)
+	if !ok {
+		return fail(path, "must be an array of store keys")
+	}
+	keys := make([]string, 0, len(list))
+	for i, item := range list {
+		key, ok := item.(string)
+		if !ok {
+			return outcome{errs: []apperr.FieldError{{Field: fmt.Sprintf("%s[%d]", path, i), Message: "must be a string"}}}
+		}
+		keys = append(keys, key)
+	}
+	if err := stores.ValidateKeys(keys); err != nil {
+		return fail(path, "%s", err.Error())
+	}
+	return outcome{val: keys}
+}
+
 func platformList(path string, raw any) ([]string, []apperr.FieldError) {
 	list, ok := raw.([]any)
 	if !ok {
@@ -321,16 +346,16 @@ func platformList(path string, raw any) ([]string, []apperr.FieldError) {
 	return out, nil
 }
 
-// maxPinned is the most field keys a list can pin (F009-B2): the first is the
-// primary field, the second the secondary.
-const maxPinned = 2
+// maxPinned is the most field keys a list can pin (F009-B2, three since F-016):
+// the first is the primary field, the second the secondary, the third the tertiary.
+const maxPinned = 3
 
 // PriceKey is the item column that can be pinned next to a type's metadata fields.
 const PriceKey = "price"
 
 // priceTypes are the types whose items can carry a price (F009-B1): price lives
-// only on motorcycle, car and camera items. Movie and tv_show items have none.
-var priceTypes = map[string]bool{Motorcycle: true, Car: true, Camera: true}
+// only on motorcycle, car, camera and book items. Movie and tv_show items have none.
+var priceTypes = map[string]bool{Motorcycle: true, Car: true, Camera: true, Book: true}
 
 var builtinPinnableKeys = map[string][]string{
 	Movie:      {"director", "imdb_url", "release_year", "runtime_minutes", "streaming"},
@@ -338,6 +363,7 @@ var builtinPinnableKeys = map[string][]string{
 	Motorcycle: {"displacement_cc", "license_class", "model_year", "power_hp"},
 	Car:        {"fuel_type", "make", "model", "model_year", "power_hp"},
 	Camera:     {"camera_type", "megapixels", "release_year", "sensor_format"},
+	Book:       {"author", "first_publish_year", "isbn", "pages", "stores"},
 }
 
 // HasPrice reports whether items of this type can carry a price (F009-B1).
@@ -362,7 +388,7 @@ func PinnableKeys(typ string) []string {
 }
 
 // ValidatePinned checks the pinned fields of a list of this type (F009-B2): an
-// ordered list of at most 2 unique pinnable keys, the first the primary. Errors
+// ordered list of at most 3 unique pinnable keys, the first the primary. Errors
 // are on "pinned_fields[i]". The result is never nil for an unknown type (which
 // errors) but is the empty list for "pins nothing". A key that is not (or no
 // longer) a field of the type is rejected: a list of a price-less type cannot

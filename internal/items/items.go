@@ -73,7 +73,10 @@ type Item struct {
 	Price   *Price
 	Website *string
 	// Metadata is the stored JSON object, already validated at write time.
-	Metadata       json.RawMessage
+	Metadata json.RawMessage
+	// StoreLinks is the read-only store_links of an item whose type has a stores
+	// field (provider key -> URL), set by get only; nil when the type has none.
+	StoreLinks     map[string]string
 	ContentVersion int
 	SortOrder      int
 	Version        int
@@ -145,6 +148,9 @@ func (s *Service) get(ctx context.Context, id uuid.UUID, withPath bool) (Item, e
 		return Item{}, notFoundOr(err, "item")
 	}
 	it := itemFromRow(sqlc.ListItemsRow(row))
+	if it.StoreLinks, err = s.storeLinks(ctx, q, it); err != nil {
+		return Item{}, err
+	}
 	if withPath {
 		if it.Path, err = s.path(ctx, q, it.ListID); err != nil {
 			return Item{}, err
@@ -210,7 +216,8 @@ func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (Ite
 	}
 	if p.Sort != "manual" && p.Sort != "title" && p.Sort != "updated" && p.Sort != "price" {
 		sortType, err = s.fieldType(ctx, q, list.Type, p.Sort)
-		if errors.Is(err, ErrInvalidSort) {
+		if errors.Is(err, ErrInvalidSort) || sortType == "stores" {
+			// A stores field is neither sortable nor filterable (F-016).
 			return ItemPage{}, ErrInvalidSort
 		}
 		if err != nil {

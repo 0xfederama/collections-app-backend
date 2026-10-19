@@ -12,7 +12,7 @@ const priceBody = `{"title":"t","price":{"amount":"12.00","currency":"EUR"}}`
 // F008-B1 for lists with no type, ""); f009PriceTypes those that do.
 var (
 	f009NoPriceTypes = []string{"", "movie", "tv_show"}
-	f009PriceTypes   = []string{"motorcycle", "car", "camera"}
+	f009PriceTypes   = []string{"motorcycle", "car", "camera", "book"}
 )
 
 // typeJSON is the JSON value of a list type; "" is a list with no type.

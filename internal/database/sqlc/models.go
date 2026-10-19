@@ -87,10 +87,9 @@ type List struct {
 	IconColor    *string
 }
 
-type TmdbImport struct {
+type LookupImport struct {
 	WorkspaceID        uuid.UUID
 	ItemID             uuid.UUID
-	TmdbID             int32
 	Type               string
 	ImportedFields     []byte
 	ImportedTitle      *string
@@ -101,8 +100,10 @@ type TmdbImport struct {
 	PosterRefreshAfter *time.Time
 	PosterExpiresAt    *time.Time
 	FetchedAt          time.Time
-	RefreshAfter       time.Time
-	ExpiresAt          time.Time
+	RefreshAfter       *time.Time
+	ExpiresAt          *time.Time
+	Provider           string
+	SourceID           string
 }
 
 type TrashBatch struct {
@@ -161,4 +162,5 @@ type WorkspaceSetting struct {
 	UpdatedAt            time.Time
 	TrashRetentionDays   *int32
 	MetadataLanguage     string
+	PreferredStores      []string
 }

@@ -22,6 +22,10 @@ func TestF009B2_ValidatePinned(t *testing.T) {
 		{"movie", []string{"tmdb_id"}, []string{"pinned_fields[0]"}},
 		{"movie", []string{"price"}, []string{"pinned_fields[0]"}},
 		{"motorcycle", []string{"price", "power_hp"}, nil},
+		{"movie", []string{"release_year", "runtime_minutes", "streaming"}, nil},
+		{"motorcycle", []string{"price", "power_hp", "model_year"}, nil},
+		{"movie", []string{"release_year", "runtime_minutes", "streaming", "imdb_url"}, []string{"pinned_fields"}},
+		{"movie", []string{"release_year", "runtime_minutes", "release_year"}, []string{"pinned_fields[2]"}},
 	} {
 		got, err := types.ValidatePinned(tt.typ, tt.keys)
 		if tt.want == nil {
@@ -112,5 +116,42 @@ func TestF014B2_ValidateKeepsStreamingAndTMDBRules(t *testing.T) {
 		if _, err := types.Validate(fields, in); err == nil {
 			t.Fatalf("Validate(%#v) succeeded", in)
 		}
+	}
+}
+
+func TestF016B4_ValidateStoresField(t *testing.T) {
+	fields := []types.Field{{Key: "stores", Type: "stores", Special: true}}
+	for _, tt := range []struct {
+		name  string
+		value any
+		want  []string
+		path  string
+	}{
+		{"unique known keys keep their order", []any{"kobo", "openlibrary"}, []string{"kobo", "openlibrary"}, ""},
+		{"empty array", []any{}, []string{}, ""},
+		{"unknown key", []any{"kobo", "audible"}, nil, "metadata.stores"},
+		{"duplicate key", []any{"kobo", "kobo"}, nil, "metadata.stores"},
+		{"not an array", "kobo", nil, "metadata.stores"},
+		{"non-string entry", []any{"kobo", 3}, nil, "metadata.stores[1]"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := types.Validate(fields, map[string]any{"stores": tt.value})
+			if tt.path == "" {
+				if err != nil {
+					t.Fatalf("Validate: %v", err)
+				}
+				if !reflect.DeepEqual(got["stores"], tt.want) {
+					t.Fatalf("stores = %#v, want %#v", got["stores"], tt.want)
+				}
+				return
+			}
+			var validation *apperr.ValidationError
+			if !errors.As(err, &validation) || len(validation.Errors) != 1 || validation.Errors[0].Field != tt.path {
+				t.Fatalf("Validate error = %v, want a 422 on %s", err, tt.path)
+			}
+		})
+	}
+	if _, err := types.Validate(fields, map[string]any{"stores": nil}); err != nil {
+		t.Fatalf("null stores should be omitted: %v", err)
 	}
 }

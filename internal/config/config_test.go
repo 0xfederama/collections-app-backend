@@ -45,6 +45,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if c.TMDBMockFixture {
 		t.Error("TMDBMockFixture = true, want false by default")
 	}
+	if c.OpenLibraryDisabled || c.OpenLibraryContact != "" {
+		t.Errorf("Open Library defaults = disabled %v contact %q, want enabled with no contact", c.OpenLibraryDisabled, c.OpenLibraryContact)
+	}
 	if c.LogLevel != slog.LevelInfo {
 		t.Errorf("LogLevel = %v", c.LogLevel)
 	}
@@ -89,6 +92,21 @@ func TestLoad_TMDBMockFixture(t *testing.T) {
 	}
 }
 
+func TestLoad_OpenLibrary(t *testing.T) {
+	c, err := config.Load(env(map[string]string{
+		"DATABASE_URL":         validDB,
+		"DATA_DIR":             t.TempDir(),
+		"OPENLIBRARY_CONTACT":  "  me@example.test  ",
+		"OPENLIBRARY_DISABLED": "true",
+	}))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !c.OpenLibraryDisabled || c.OpenLibraryContact != "me@example.test" {
+		t.Fatalf("Open Library config = disabled %v contact %q", c.OpenLibraryDisabled, c.OpenLibraryContact)
+	}
+}
+
 func TestLoad_Validation(t *testing.T) {
 	dir := t.TempDir()
 	tests := []struct {
@@ -117,6 +135,8 @@ func TestLoad_Validation(t *testing.T) {
 		{"app env wrong case", map[string]string{"APP_ENV": "Production"}, "APP_ENV"},
 		{"invalid TMDB fixture flag", map[string]string{"TMDB_MOCK_FIXTURE": "sometimes"}, "TMDB_MOCK_FIXTURE"},
 		{"TMDB fixture forbidden in production", map[string]string{"APP_ENV": "production", "TMDB_MOCK_FIXTURE": "true"}, "TMDB_MOCK_FIXTURE cannot be enabled"},
+		{"invalid Open Library disabled flag", map[string]string{"OPENLIBRARY_DISABLED": "maybe"}, "OPENLIBRARY_DISABLED"},
+		{"Open Library disabled false ok", map[string]string{"OPENLIBRARY_DISABLED": "false"}, ""},
 		{"bad log level", map[string]string{"LOG_LEVEL": "verbose"}, "LOG_LEVEL"},
 		{"bad log format", map[string]string{"LOG_FORMAT": "xml"}, "LOG_FORMAT"},
 		{"http addr no port", map[string]string{"HTTP_ADDR": "localhost"}, "HTTP_ADDR"},

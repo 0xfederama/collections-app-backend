@@ -3,13 +3,14 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/oapi-codegen/nullable"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
-	"github.com/0xfederama/collections-app-backend/internal/tmdb"
+	"github.com/0xfederama/collections-app-backend/internal/lookup"
 )
 
 // ListTmdbSuggestions returns TMDB's ranked movie or TV matches in the
@@ -34,7 +35,7 @@ func (s *Server) ListTmdbSuggestions(ctx context.Context, r oapi.ListTmdbSuggest
 		return nil, err
 	}
 	matches, err := s.deps.TMDB.Search(ctx, string(r.Params.Type), r.Params.Q, settings.MetadataLanguage)
-	if errors.Is(err, tmdb.ErrDisabled) {
+	if errors.Is(err, lookup.ErrDisabled) {
 		return empty, nil
 	}
 	if err != nil {
@@ -46,12 +47,13 @@ func (s *Server) ListTmdbSuggestions(ctx context.Context, r oapi.ListTmdbSuggest
 
 	out := oapi.ListTmdbSuggestions200JSONResponse{Available: true, Results: make([]oapi.TmdbSuggestion, 0, len(matches))}
 	for _, match := range matches {
+		id, _ := strconv.Atoi(match.SourceID)
 		out.Results = append(out.Results, oapi.TmdbSuggestion{
-			TmdbId:        match.ID,
+			TmdbId:        id,
 			Title:         match.Title,
 			OriginalTitle: match.OriginalTitle,
 			Year:          nullableInt(match.Year),
-			PosterUrl:     nullableText(match.PosterURL),
+			PosterUrl:     nullableText(match.ImageURL),
 			Overview:      match.Overview,
 		})
 	}

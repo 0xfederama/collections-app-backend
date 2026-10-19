@@ -11,31 +11,47 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/items"
-	"github.com/0xfederama/collections-app-backend/internal/tmdb"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
+// fakeClient is a fake Provider. name defaults to the TMDB provider.
 type fakeClient struct {
+	name           string
 	enabled        bool
-	matches        []tmdb.Match
-	details        tmdb.Details
+	matches        []Suggestion
+	details        Details
 	err            error
 	downloads      int
 	searchType     string
 	searchQuery    string
 	searchLanguage string
+	detailsID      string
+	downloadErr    error
 }
 
+func (f *fakeClient) Name() string {
+	if f.name == "" {
+		return ProviderTMDB
+	}
+	return f.name
+}
 func (f *fakeClient) Enabled() bool { return f.enabled }
-func (f *fakeClient) Search(_ context.Context, typ, query, language string) ([]tmdb.Match, error) {
+func (f *fakeClient) ValidateSourceID(id string) error {
+	return ValidSourceID(f.Name(), id)
+}
+func (f *fakeClient) Search(_ context.Context, typ, query, language string) ([]Suggestion, error) {
 	f.searchType, f.searchQuery, f.searchLanguage = typ, query, language
 	return f.matches, f.err
 }
-func (f *fakeClient) Details(context.Context, string, int, string, string) (tmdb.Details, error) {
+func (f *fakeClient) Details(_ context.Context, _, id, _, _ string) (Details, error) {
+	f.detailsID = id
 	return f.details, f.err
 }
-func (f *fakeClient) DownloadPoster(context.Context, string) ([]byte, error) {
+func (f *fakeClient) DownloadImage(context.Context, string) ([]byte, error) {
 	f.downloads++
+	if f.downloadErr != nil {
+		return nil, f.downloadErr
+	}
 	return nil, f.err
 }
 
@@ -85,8 +101,12 @@ type testClock struct{ now time.Time }
 func (c testClock) Now() time.Time { return c.now }
 
 func newService(client *fakeClient, store *fakeStore, itemSvc *fakeItems) *Service {
-	return New(client, store, itemSvc, fakeSettings{workspace.Settings{
-		MetadataLanguage: "it-IT", StreamingCountryCode: "IT",
+	return newServiceWith(Providers{"movie": client, "tv_show": client}, store, itemSvc)
+}
+
+func newServiceWith(providers Providers, store *fakeStore, itemSvc *fakeItems) *Service {
+	return New(providers, store, itemSvc, fakeSettings{workspace.Settings{
+		MetadataLanguage: "it-IT", StreamingCountryCode: "IT", PreferredStores: []string{"kobo"},
 	}}, testClock{now: time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)}, uuid.New())
 }
 
@@ -140,7 +160,7 @@ func TestCreateOptOutStoresLookupDisabled(t *testing.T) {
 func TestCreateMetadataOptOutSuppressesDefaultLookup(t *testing.T) {
 	store := &fakeStore{typ: "movie"}
 	itemSvc := &fakeItems{}
-	client := &fakeClient{enabled: true, matches: []tmdb.Match{{ID: 7}}}
+	client := &fakeClient{enabled: true, matches: []Suggestion{{SourceID: "7"}}}
 	_, err := newService(client, store, itemSvc).Create(t.Context(), uuid.New(), items.CreateInput{
 		Title: "Movie", Metadata: map[string]any{"lookup_disabled": true},
 	}, CreateOptions{})
@@ -161,8 +181,8 @@ func TestCreateSelectedIDWithoutDetailsReturnsUpstreamUnavailable(t *testing.T) 
 }
 
 func TestCreateUsesFirstLocalizedMatchAndAtomicApply(t *testing.T) {
-	client := &fakeClient{enabled: true, matches: []tmdb.Match{{ID: 7}}, details: tmdb.Details{
-		ID: 7, Title: "Titolo locale", Metadata: map[string]any{"release_year": 1999},
+	client := &fakeClient{enabled: true, matches: []Suggestion{{SourceID: "7"}}, details: Details{
+		SourceID: "7", Title: "Titolo locale", Fields: map[string]any{"release_year": 1999},
 	}}
 	store := &fakeStore{typ: "movie", result: items.Item{Title: "Titolo locale"}}
 	itemSvc := &fakeItems{}
@@ -175,7 +195,7 @@ func TestCreateUsesFirstLocalizedMatchAndAtomicApply(t *testing.T) {
 		t.Fatalf("search = %q %q %q", client.searchType, client.searchQuery, client.searchLanguage)
 	}
 	p := store.applied
-	if p.Mode != ModeCreate || p.TMDBID != 7 || p.Title != "Titolo locale" || p.OriginalTitle != in.Title || p.CreateInput.Metadata["director"] != "User" {
+	if p.Mode != ModeCreate || p.Provider != ProviderTMDB || p.SourceID != "7" || p.Title != "Titolo locale" || p.OriginalTitle != in.Title || p.CreateInput.Metadata["director"] != "User" {
 		t.Fatalf("apply = %+v", p)
 	}
 }
@@ -184,7 +204,7 @@ func TestApplyNoMatchRechecksVersion(t *testing.T) {
 	id := uuid.New()
 	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "Unknown", Type: ptr("movie"), Version: 4}}
 	store := &fakeStore{}
-	got, err := newService(&fakeClient{enabled: true}, store, itemSvc).Apply(t.Context(), id, 4, ModeFill, nil)
+	got, err := newService(&fakeClient{enabled: true}, store, itemSvc).Apply(t.Context(), id, 4, ModeFill, Selection{})
 	if err != nil || got.Version != 4 || itemSvc.updateCalls != 1 || store.applied != nil {
 		t.Fatalf("got=%+v err=%v updates=%d applied=%v", got, err, itemSvc.updateCalls, store.applied)
 	}
@@ -192,7 +212,7 @@ func TestApplyNoMatchRechecksVersion(t *testing.T) {
 
 func TestApplyRejectsUnsupportedModeBeforeLookup(t *testing.T) {
 	client := &fakeClient{enabled: true}
-	_, err := newService(client, &fakeStore{}, &fakeItems{}).Apply(t.Context(), uuid.New(), 1, ModeCreate, nil)
+	_, err := newService(client, &fakeStore{}, &fakeItems{}).Apply(t.Context(), uuid.New(), 1, ModeCreate, Selection{})
 	var validation *apperr.ValidationError
 	if !errors.As(err, &validation) || client.searchQuery != "" {
 		t.Fatalf("err=%v search=%q", err, client.searchQuery)
@@ -206,10 +226,10 @@ func TestApplyPreservesExistingImageAndUsesStoredTMDBID(t *testing.T) {
 		Image:    &items.Image{Source: items.ImageSourceURL, URL: "https://user.example/image.jpg"},
 		Metadata: json.RawMessage(`{"tmdb_id":42}`),
 	}}
-	client := &fakeClient{enabled: true, details: tmdb.Details{ID: 42, Title: "Localized", PosterPath: "/poster.jpg"}}
+	client := &fakeClient{enabled: true, details: Details{SourceID: "42", Title: "Localized", ImagePath: "/poster.jpg"}}
 	store := &fakeStore{result: itemSvc.item}
-	_, err := newService(client, store, itemSvc).Apply(t.Context(), id, 2, ModeRefresh, nil)
-	if err != nil || store.applied == nil || store.applied.TMDBID != 42 || store.applied.RefreshPoster || client.downloads != 0 {
+	_, err := newService(client, store, itemSvc).Apply(t.Context(), id, 2, ModeRefresh, Selection{})
+	if err != nil || store.applied == nil || store.applied.SourceID != "42" || store.applied.RefreshPoster || client.downloads != 0 {
 		t.Fatalf("err=%v apply=%+v downloads=%d", err, store.applied, client.downloads)
 	}
 }
@@ -217,7 +237,7 @@ func TestApplyPreservesExistingImageAndUsesStoredTMDBID(t *testing.T) {
 func TestApplyRejectsStaleSnapshotBeforeNetwork(t *testing.T) {
 	itemSvc := &fakeItems{item: items.Item{Type: ptr("movie"), Version: 8}}
 	client := &fakeClient{enabled: true}
-	_, err := newService(client, &fakeStore{}, itemSvc).Apply(t.Context(), uuid.New(), 7, ModeFill, nil)
+	_, err := newService(client, &fakeStore{}, itemSvc).Apply(t.Context(), uuid.New(), 7, ModeFill, Selection{})
 	var stale *apperr.VersionConflictError
 	if !errors.As(err, &stale) || stale.Current != 8 || client.searchQuery != "" {
 		t.Fatalf("err=%v search=%q", err, client.searchQuery)
@@ -227,3 +247,350 @@ func TestApplyRejectsStaleSnapshotBeforeNetwork(t *testing.T) {
 func boolPtr(v bool) *bool { return &v }
 
 func ptr(s string) *string { return &s }
+
+// ---- Open Library (books, F016-B3) ----
+
+func bookClient(enabled bool) *fakeClient {
+	return &fakeClient{
+		name: ProviderOpenLibrary, enabled: enabled,
+		matches: []Suggestion{{SourceID: "OL1W"}},
+		details: Details{
+			SourceID: "OL1W", Title: "Dune", Fields: map[string]any{"author": "Frank Herbert", "pages": 608},
+			FillOnly: map[string]any{"stores": []string{"openlibrary"}}, ImagePath: "123",
+		},
+	}
+}
+
+func bookService(book *fakeClient, tm *fakeClient, store *fakeStore, itemSvc *fakeItems) *Service {
+	return newServiceWith(Providers{"book": book, "movie": tm, "tv_show": tm}, store, itemSvc)
+}
+
+func TestF016B3_CreateOnBookListUsesTheBookProviderAndPreferredStores(t *testing.T) {
+	book, tm := bookClient(true), &fakeClient{enabled: true}
+	store := &fakeStore{typ: "book", result: items.Item{Title: "Dune"}}
+	in := items.CreateInput{Title: " dune ", Metadata: map[string]any{"author": "Me"}}
+	_, err := bookService(book, tm, store, &fakeItems{}).Create(t.Context(), uuid.New(), in, CreateOptions{})
+	// The fake cannot download a cover (nil bytes are not an image): a default create then degrades to a plain create.
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if book.searchType != "book" || book.searchQuery != in.Title || book.searchLanguage != "it-IT" || tm.searchQuery != "" {
+		t.Fatalf("search = %q %q %q (tmdb searched %q)", book.searchType, book.searchQuery, book.searchLanguage, tm.searchQuery)
+	}
+}
+
+func TestF016B3_CreateAppliesBookDetailsWithoutCover(t *testing.T) {
+	book := bookClient(true)
+	book.details.ImagePath = "" // no cover: nothing to download
+	store := &fakeStore{typ: "book", result: items.Item{Title: "Dune"}}
+	in := items.CreateInput{Title: "dune"}
+	got, err := bookService(book, &fakeClient{}, store, &fakeItems{}).Create(t.Context(), uuid.New(), in, CreateOptions{})
+	if err != nil || got.Title != "Dune" || store.applied == nil {
+		t.Fatalf("got=%+v err=%v applied=%+v", got, err, store.applied)
+	}
+	p := store.applied
+	if p.Mode != ModeCreate || p.Provider != ProviderOpenLibrary || p.SourceID != "OL1W" || p.Type != "book" || p.OriginalTitle != "dune" {
+		t.Fatalf("apply = %+v", p)
+	}
+	if p.Fields["author"] != "Frank Herbert" {
+		t.Errorf("fields = %v", p.Fields)
+	}
+	// The Open Library link first, then the workspace's preferred stores (kobo in the fake settings).
+	if got, want := p.FillOnly["stores"], []string{"openlibrary", "kobo"}; !equalStrings(got, want) {
+		t.Errorf("fill-only stores = %v, want %v", got, want)
+	}
+}
+
+func TestF016B3_CreateWithSourceIDSelectsAndIgnoresTMDBID(t *testing.T) {
+	book := bookClient(true)
+	book.details.ImagePath = ""
+	book.details.SourceID = "OL9W"
+	store := &fakeStore{typ: "book", result: items.Item{Title: "Dune"}}
+	sourceID, tmdbID := "OL9W", 5
+	_, err := bookService(book, &fakeClient{}, store, &fakeItems{}).Create(t.Context(), uuid.New(), items.CreateInput{Title: "dune"}, CreateOptions{SourceID: &sourceID, TMDBID: &tmdbID})
+	if err != nil || store.applied == nil || store.applied.SourceID != "OL9W" || book.searchQuery != "" || book.detailsID != "OL9W" {
+		t.Fatalf("err=%v applied=%+v search=%q details=%q", err, store.applied, book.searchQuery, book.detailsID)
+	}
+}
+
+func TestF016B3_CreateRejectsMalformedSourceIDBeforeAnyRequest(t *testing.T) {
+	book := bookClient(true)
+	for _, id := range []string{"603", "OL1", "../x", "OL1W/../x"} {
+		itemSvc := &fakeItems{}
+		_, err := bookService(book, &fakeClient{}, &fakeStore{typ: "book"}, itemSvc).Create(t.Context(), uuid.New(), items.CreateInput{Title: "dune"}, CreateOptions{SourceID: &id})
+		var validation *apperr.ValidationError
+		if !errors.As(err, &validation) || book.detailsID != "" || itemSvc.created != nil {
+			t.Errorf("source_id %q: err=%v details=%q created=%v", id, err, book.detailsID, itemSvc.created)
+		}
+	}
+}
+
+func TestF016B3_BookCreateDisabledAndOptOut(t *testing.T) {
+	// Disabled: a default create degrades, an explicit one is 503 lookup_disabled; TMDB being on does not matter.
+	book, tm := bookClient(false), &fakeClient{enabled: true}
+	itemSvc := &fakeItems{}
+	if _, err := bookService(book, tm, &fakeStore{typ: "book"}, itemSvc).Create(t.Context(), uuid.New(), items.CreateInput{Title: "Dune"}, CreateOptions{}); err != nil || itemSvc.created == nil {
+		t.Fatalf("default create err=%v created=%v", err, itemSvc.created)
+	}
+	yes := true
+	var disabled *apperr.LookupDisabledError
+	if _, err := bookService(book, tm, &fakeStore{typ: "book"}, &fakeItems{}).Create(t.Context(), uuid.New(), items.CreateInput{Title: "Dune"}, CreateOptions{Lookup: &yes}); !errors.As(err, &disabled) {
+		t.Fatalf("explicit create err = %v", err)
+	}
+	// lookup:false stores the opt-out.
+	no := false
+	itemSvc = &fakeItems{}
+	if _, err := bookService(bookClient(true), tm, &fakeStore{typ: "book"}, itemSvc).Create(t.Context(), uuid.New(), items.CreateInput{Title: "Dune"}, CreateOptions{Lookup: &no}); err != nil || itemSvc.created.Metadata["lookup_disabled"] != true {
+		t.Fatalf("opt-out err=%v input=%+v", err, itemSvc.created)
+	}
+}
+
+func TestF016B3_UnservedTypesCreateWithoutLookup(t *testing.T) {
+	for _, typ := range []string{"", "motorcycle", "custom_type"} {
+		book, tm := bookClient(true), &fakeClient{enabled: true}
+		itemSvc := &fakeItems{}
+		if _, err := bookService(book, tm, &fakeStore{typ: typ}, itemSvc).Create(t.Context(), uuid.New(), items.CreateInput{Title: "x"}, CreateOptions{}); err != nil || itemSvc.created == nil || book.searchQuery != "" || tm.searchQuery != "" {
+			t.Errorf("type %q: err=%v created=%v", typ, err, itemSvc.created)
+		}
+	}
+}
+
+func TestF016B3_ApplyOnBookRefreshUsesStoredOpenLibraryID(t *testing.T) {
+	id := uuid.New()
+	itemSvc := &fakeItems{item: items.Item{
+		ID: id, Title: "Dune", Type: ptr("book"), Version: 3,
+		Image:    &items.Image{Source: items.ImageSourceURL, URL: "https://user.example/c.jpg"},
+		Metadata: json.RawMessage(`{"openlibrary_id":"OL77W"}`),
+	}}
+	book := bookClient(true)
+	book.details.SourceID = "OL77W"
+	store := &fakeStore{result: itemSvc.item}
+	_, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 3, ModeRefresh, Selection{})
+	if err != nil || store.applied == nil || store.applied.Provider != ProviderOpenLibrary || store.applied.SourceID != "OL77W" || store.applied.RefreshPoster || book.downloads != 0 {
+		t.Fatalf("err=%v apply=%+v downloads=%d", err, store.applied, book.downloads)
+	}
+	if store.applied.Mode != ModeRefresh {
+		t.Errorf("mode = %q", store.applied.Mode)
+	}
+}
+
+func TestF016B3_ApplyRefreshFallsBackToProvenanceThenAsksForAnID(t *testing.T) {
+	id := uuid.New()
+	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "Dune", Type: ptr("book"), Version: 1, Metadata: json.RawMessage(`{}`)}}
+	book := bookClient(true)
+	book.details.SourceID = "OL5W"
+	book.details.ImagePath = ""
+	store := &fakeStore{result: itemSvc.item, found: true, record: Record{Provider: ProviderOpenLibrary, SourceID: "OL5W"}}
+	if _, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 1, ModeRefresh, Selection{}); err != nil || store.applied == nil || store.applied.SourceID != "OL5W" {
+		t.Fatalf("err=%v applied=%+v", err, store.applied)
+	}
+	// A TMDB record on a book item is not a book match.
+	store = &fakeStore{found: true, record: Record{Provider: ProviderTMDB, SourceID: "603"}}
+	_, err := bookService(bookClient(true), &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 1, ModeRefresh, Selection{})
+	var validation *apperr.ValidationError
+	if !errors.As(err, &validation) || validation.Errors[0].Field != "source_id" || store.applied != nil {
+		t.Fatalf("err = %v applied = %v", err, store.applied)
+	}
+}
+
+func TestF016B3_ApplyFillAndRematchPassFillOnlyAndSelectedID(t *testing.T) {
+	id := uuid.New()
+	for _, mode := range []Mode{ModeFill, ModeRematch} {
+		itemSvc := &fakeItems{item: items.Item{ID: id, Title: "dune", Type: ptr("book"), Version: 2, Image: &items.Image{Source: items.ImageSourceURL, URL: "https://x.example/a.jpg"}}}
+		book := bookClient(true)
+		book.details.SourceID = "OL8W"
+		store := &fakeStore{result: itemSvc.item}
+		selected := "OL8W"
+		if _, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 2, mode, Selection{SourceID: &selected}); err != nil || store.applied == nil {
+			t.Fatalf("%s: err=%v", mode, err)
+		}
+		p := store.applied
+		if p.Mode != mode || p.SourceID != "OL8W" || p.OriginalTitle != "dune" || p.FillOnly["stores"] == nil || book.searchQuery != "" {
+			t.Errorf("%s: apply = %+v search=%q", mode, p, book.searchQuery)
+		}
+	}
+}
+
+func TestF016B3_ApplyDisabledProviderAndUnservedType(t *testing.T) {
+	id := uuid.New()
+	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "Dune", Type: ptr("book"), Version: 1}}
+	var disabled *apperr.LookupDisabledError
+	// Book lookup off, TMDB on: books are 503 lookup_disabled.
+	if _, err := bookService(bookClient(false), &fakeClient{enabled: true}, &fakeStore{}, itemSvc).Apply(t.Context(), id, 1, ModeFill, Selection{}); !errors.As(err, &disabled) {
+		t.Errorf("disabled book provider err = %v", err)
+	}
+	// Everything off: disabled even before the item is read.
+	if _, err := bookService(bookClient(false), &fakeClient{}, &fakeStore{}, &fakeItems{err: errors.New("must not be read")}).Apply(t.Context(), id, 1, ModeFill, Selection{}); !errors.As(err, &disabled) {
+		t.Errorf("all disabled err = %v", err)
+	}
+	// A type no provider serves is a validation error on `item`.
+	itemSvc = &fakeItems{item: items.Item{ID: id, Title: "Bike", Type: ptr("motorcycle"), Version: 1}}
+	_, err := bookService(bookClient(true), &fakeClient{enabled: true}, &fakeStore{}, itemSvc).Apply(t.Context(), id, 1, ModeFill, Selection{})
+	var validation *apperr.ValidationError
+	if !errors.As(err, &validation) || validation.Errors[0].Field != "item" {
+		t.Errorf("unserved type err = %v", err)
+	}
+}
+
+func TestF016B3_MissingCoverStillAppliesTheMatch(t *testing.T) {
+	id := uuid.New()
+	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "Dune", Type: ptr("book"), Version: 1}}
+	book := bookClient(true)
+	book.downloadErr = ErrNoImage
+	store := &fakeStore{result: itemSvc.item}
+	if _, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 1, ModeFill, Selection{}); err != nil || store.applied == nil || store.applied.Poster != nil || book.downloads != 1 {
+		t.Fatalf("err=%v applied=%+v downloads=%d", err, store.applied, book.downloads)
+	}
+}
+
+func TestF016B3_ProviderErrorMapping(t *testing.T) {
+	var disabled *apperr.LookupDisabledError
+	var upstream *apperr.UpstreamUnavailableError
+	if !errors.As(ProviderError(ErrDisabled), &disabled) || !errors.As(ProviderError(errors.New("boom")), &upstream) {
+		t.Fatal("ProviderError must map ErrDisabled to lookup_disabled and anything else to upstream_unavailable")
+	}
+	// A provider returning ErrDisabled mid-flight is mapped the same way by the service.
+	book := bookClient(true)
+	book.err = ErrDisabled
+	yes := true
+	if _, err := bookService(book, &fakeClient{}, &fakeStore{typ: "book"}, &fakeItems{}).Create(t.Context(), uuid.New(), items.CreateInput{Title: "x"}, CreateOptions{Lookup: &yes}); !errors.As(err, &disabled) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestF016B3_RefreshOwnedIgnoresProvidersWithoutRetention(t *testing.T) {
+	book := bookClient(true)
+	store := &fakeStore{found: true, record: Record{Provider: ProviderOpenLibrary, SourceID: "OL1W", Type: "book"}}
+	itemSvc := &fakeItems{err: errors.New("must not be read")}
+	if err := bookService(book, &fakeClient{}, store, itemSvc).RefreshOwned(t.Context(), uuid.New(), 1); err != nil || book.detailsID != "" || store.applied != nil {
+		t.Fatalf("err=%v details=%q applied=%v", err, book.detailsID, store.applied)
+	}
+}
+
+func TestF013B3_RefreshOwnedStillUsesTheFiveMonthRule(t *testing.T) {
+	id := uuid.New()
+	fetched := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC) // five calendar months before the fake clock (2027-01-01)
+	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "Matrix", Type: ptr("movie"), Version: 2}}
+	client := &fakeClient{enabled: true, details: Details{SourceID: "603", Title: "The Matrix", Fields: map[string]any{"release_year": 1999}}}
+	store := &fakeStore{found: true, result: itemSvc.item, record: Record{Provider: ProviderTMDB, SourceID: "603", Type: "movie", OriginalTitle: "Matrix", FetchedAt: fetched}}
+	if err := newService(client, store, itemSvc).RefreshOwned(t.Context(), id, 2); err != nil || store.applied == nil {
+		t.Fatalf("err=%v", err)
+	}
+	if p := store.applied; p.Mode != ModeOwned || !p.RefreshFields || p.SourceID != "603" || p.Provider != ProviderTMDB {
+		t.Errorf("apply = %+v", p)
+	}
+	// Four months old: poster/fields not due yet.
+	store.record.FetchedAt = time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	store.applied = nil
+	if err := newService(client, store, itemSvc).RefreshOwned(t.Context(), id, 2); err != nil || store.applied == nil || store.applied.RefreshFields {
+		t.Fatalf("young record: err=%v applied=%+v", err, store.applied)
+	}
+}
+
+func TestCreateFillOnlyAddsPreferredStoresAfterTheProviderLink(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		fill      map[string]any
+		preferred []string
+		want      any
+	}{
+		{"no stores proposed", map[string]any{"x": 1}, []string{"kobo"}, nil},
+		{"link first", map[string]any{"stores": []string{"openlibrary"}}, []string{"kobo", "amazon"}, []string{"openlibrary", "kobo", "amazon"}},
+		{"deduplicated", map[string]any{"stores": []string{"openlibrary"}}, []string{"kobo", "openlibrary"}, []string{"openlibrary", "kobo"}},
+		{"no preferred", map[string]any{"stores": []string{"openlibrary"}}, nil, []string{"openlibrary"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := createFillOnly(tc.fill, tc.preferred)["stores"]
+			if tc.want == nil && got != nil || tc.want != nil && !equalStrings(got, tc.want) {
+				t.Errorf("stores = %v, want %v", got, tc.want)
+			}
+			if s, ok := tc.fill["stores"].([]string); ok && len(s) != 1 {
+				t.Errorf("the provider's own map was modified: %v", tc.fill)
+			}
+		})
+	}
+}
+
+func TestMetadataSourceID(t *testing.T) {
+	for _, tc := range []struct {
+		provider, raw, want string
+	}{
+		{ProviderTMDB, `{"tmdb_id":42}`, "42"},
+		{ProviderTMDB, `{"tmdb_id":0}`, ""},
+		{ProviderTMDB, `{"tmdb_id":1.5}`, ""},
+		{ProviderTMDB, `{"tmdb_id":"42"}`, ""},
+		{ProviderTMDB, `{"openlibrary_id":"OL1W"}`, ""},
+		{ProviderOpenLibrary, `{"openlibrary_id":"OL1W"}`, "OL1W"},
+		{ProviderOpenLibrary, `{"openlibrary_id":"nope"}`, ""},
+		{ProviderOpenLibrary, `{"tmdb_id":5}`, ""},
+		{ProviderOpenLibrary, `not json`, ""},
+	} {
+		if got := metadataSourceID(tc.provider, json.RawMessage(tc.raw)); got != tc.want {
+			t.Errorf("metadataSourceID(%s, %s) = %q, want %q", tc.provider, tc.raw, got, tc.want)
+		}
+	}
+}
+
+func TestValidSourceID(t *testing.T) {
+	for _, tc := range []struct {
+		provider, id string
+		ok           bool
+	}{
+		{ProviderTMDB, "603", true}, {ProviderTMDB, "0", false}, {ProviderTMDB, "-1", false}, {ProviderTMDB, "abc", false},
+		{ProviderTMDB, "2147483648", false}, {ProviderTMDB, "2147483647", true},
+		{ProviderOpenLibrary, "OL45804W", true}, {ProviderOpenLibrary, "OL45804A", false}, {ProviderOpenLibrary, "ol1w", false},
+		{ProviderOpenLibrary, "OL1W\n", false}, {ProviderOpenLibrary, "", false}, {ProviderOpenLibrary, "603", false},
+	} {
+		if err := ValidSourceID(tc.provider, tc.id); (err == nil) != tc.ok {
+			t.Errorf("ValidSourceID(%s, %q) = %v, want ok=%v", tc.provider, tc.id, err, tc.ok)
+		}
+	}
+	if err := ValidSourceID("google", "1"); err == nil {
+		t.Error("unknown provider accepted")
+	}
+}
+
+func equalStrings(got, want any) bool {
+	g, ok1 := got.([]string)
+	w, ok2 := want.([]string)
+	if !ok1 || !ok2 || len(g) != len(w) {
+		return false
+	}
+	for i := range g {
+		if g[i] != w[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestSelectionPicksTheIDThatFitsTheProvider(t *testing.T) {
+	tmdbID, sourceID := 603, "OL1W"
+	both := Selection{TMDBID: &tmdbID, SourceID: &sourceID}
+	if got := both.forProvider(ProviderTMDB); got == nil || *got != "603" {
+		t.Errorf("tmdb selection = %v", got)
+	}
+	if got := both.forProvider(ProviderOpenLibrary); got == nil || *got != "OL1W" {
+		t.Errorf("open library selection = %v", got)
+	}
+	if got := (Selection{TMDBID: &tmdbID}).forProvider(ProviderOpenLibrary); got != nil {
+		t.Errorf("a tmdb_id must be ignored for a book, got %v", *got)
+	}
+	if got := (Selection{SourceID: &sourceID}).forProvider(ProviderTMDB); got != nil {
+		t.Errorf("a source_id must be ignored for a movie, got %v", *got)
+	}
+}
+
+func TestF016B3_ApplyOnBookIgnoresTMDBIDAndSearchesByTitle(t *testing.T) {
+	id := uuid.New()
+	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "dune", Type: ptr("book"), Version: 1, Image: &items.Image{Source: items.ImageSourceURL, URL: "https://x.example/a.jpg"}}}
+	book := bookClient(true)
+	store := &fakeStore{result: itemSvc.item}
+	tmdbID := 603
+	if _, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 1, ModeRematch, Selection{TMDBID: &tmdbID}); err != nil || store.applied == nil {
+		t.Fatalf("err = %v", err)
+	}
+	if book.searchQuery != "dune" || store.applied.SourceID != "OL1W" {
+		t.Errorf("search = %q applied = %+v", book.searchQuery, store.applied)
+	}
+}

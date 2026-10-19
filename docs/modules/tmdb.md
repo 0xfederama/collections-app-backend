@@ -2,11 +2,12 @@
 
 ## Purpose
 
-Provides an optional bounded server-side client for TMDB movie and TV search, details, and poster downloads. Production uses fixed TMDB HTTPS origins; design context lives in `/Users/federico/Developer/collections-app/design-docs/`.
+Provides an optional bounded server-side client for TMDB movie and TV search, details, and poster downloads. It is wrapped as the TMDB `Provider` in `internal/lookup`. Production uses fixed TMDB HTTPS origins; design context lives in `/Users/federico/Developer/collections-app/design-docs/`.
 
 ## Key files
 
 - `internal/tmdb/client.go`: API client, result mapping, cache, pacing, poster download
+- `internal/lookup/tmdb_provider.go`: adapter onto the lookup `Provider` interface
 - `internal/httpapi/tmdb.go`: suggestions endpoint mapping
 - `internal/config/config.go`: optional `TMDB_API_KEY` and E2E fixture switch
 - `cmd/api/main.go`: client construction and availability wiring
@@ -23,8 +24,8 @@ Provides an optional bounded server-side client for TMDB movie and TV search, de
 ## Gotchas
 
 - Key is optional and server-side only; blank means lookup disabled. Set it in `deploy/server/.env`, never browser configuration.
-- `TMDB_MOCK_FIXTURE=true` is an E2E-only development switch and is rejected when `APP_ENV=production`.
+- `TMDB_MOCK_FIXTURE=true` is an E2E-only development switch and is rejected when `APP_ENV=production`. It also enables the Open Library fixture (see [openlibrary](openlibrary.md)).
 - With that switch, the exact movie query `[mock] movie name` returns a disposable fixture without TMDB or HTTP: id `900001`, year `2001`, runtime `101`, and director `Mock Director`. Other queries retain normal TMDB behavior; an unconfigured key leaves them disabled.
 - Requests have timeouts and response-size bounds, are paced, handle retry-after, and stop redirects; search results are briefly cached.
 - TMDB attribution requires an [approved logo and notice](https://www.themoviedb.org/about/logos-attribution) in About. [Provider availability](https://developer.themoviedb.org/reference/tv-series-watch-providers) requires JustWatch attribution.
-- TMDB data and imported posters must expire by six months; see [TMDB API terms](https://www.themoviedb.org/api-terms-of-use). Design details: `/Users/federico/Developer/collections-app/design-docs/`.
+- TMDB data and imported posters must expire by six months; see [TMDB API terms](https://www.themoviedb.org/api-terms-of-use). Retention rules are in [lookup](lookup.md).

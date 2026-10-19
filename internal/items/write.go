@@ -75,6 +75,10 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 		if err != nil {
 			return err
 		}
+		meta, err = s.applyPreferredStores(ctx, q, list.Type, in.Metadata, meta)
+		if err != nil {
+			return err
+		}
 		metaJSON, err := json.Marshal(meta)
 		if err != nil {
 			return fmt.Errorf("encode metadata: %w", err)
@@ -172,6 +176,12 @@ func (s *Service) priceTypeError(ctx context.Context, q *sqlc.Queries, typ *stri
 		}
 	}
 	return apperr.Validation(apperr.FieldError{Field: "price", Message: "items of this type have no price"})
+}
+
+// CheckPriceAllowed is the 422 on price for a list type without a price
+// (definition allows_price false, or no type). q must be inside the caller's tx.
+func (s *Service) CheckPriceAllowed(ctx context.Context, q *sqlc.Queries, typ *string) error {
+	return s.priceTypeError(ctx, q, typ)
 }
 
 // mergePatch applies a validated patch to the locked row. It returns the full

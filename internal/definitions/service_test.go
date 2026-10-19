@@ -87,9 +87,9 @@ func TestF014B3_CustomFieldLifecycle(t *testing.T) {
 	}
 }
 
-func TestF014B4_CustomTypeDefaultsAllowAtMostTwoPins(t *testing.T) {
+func TestF014B4_CustomTypeDefaultsAllowAtMostThreePins(t *testing.T) {
 	svc, _ := newDefinitionsService(t)
-	pins := []string{"rating", "status"}
+	pins := []string{"rating", "status", "title"}
 	sortField := "rating"
 	typ, err := svc.Create(t.Context(), definitions.CreateType{
 		Name: "Board game", DefaultSortField: &sortField, DefaultPinnedFields: &pins,
@@ -100,9 +100,9 @@ func TestF014B4_CustomTypeDefaultsAllowAtMostTwoPins(t *testing.T) {
 	if typ.DefaultSortField == nil || *typ.DefaultSortField != "rating" || typ.DefaultPinnedFields == nil || !slices.Equal(*typ.DefaultPinnedFields, pins) {
 		t.Fatalf("type defaults = %#v", typ)
 	}
-	tooMany := []string{"one", "two", "three"}
+	tooMany := []string{"one", "two", "three", "four"}
 	if _, err := svc.Create(t.Context(), definitions.CreateType{Name: "Too many", DefaultPinnedFields: &tooMany}); err == nil {
-		t.Fatal("Create accepted more than two default pinned fields")
+		t.Fatal("Create accepted more than three default pinned fields")
 	}
 }
 
@@ -217,6 +217,7 @@ func TestF014_BuiltinTypesSeedDefaultPinnedFields(t *testing.T) {
 		"motorcycle": {"displacement_cc", "price"},
 		"car":        {"model_year", "price"},
 		"camera":     {"camera_type", "price"},
+		"book":       {"author", "pages", "stores"},
 	}
 	types, err := svc.List(t.Context())
 	if err != nil {

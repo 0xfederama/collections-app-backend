@@ -102,7 +102,7 @@ func TestF009B2_PinnedFieldsValidation(t *testing.T) {
 		{"unknown key", `{"pinned_fields":["make"]}`, "pinned_fields[0]"},
 		{"TestF009B1 price on a movie", `{"pinned_fields":["release_year","price"]}`, "pinned_fields[1]"},
 		{"duplicate", `{"pinned_fields":["release_year","release_year"]}`, "pinned_fields[1]"},
-		{"three keys", `{"pinned_fields":["release_year","runtime_minutes","imdb_url"]}`, "pinned_fields"},
+		{"four keys", `{"pinned_fields":["release_year","runtime_minutes","streaming","imdb_url"]}`, "pinned_fields"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -117,6 +117,8 @@ func TestF009B2_PinnedFieldsValidation(t *testing.T) {
 	if got := e.fetch("lists", lid); got["version"] != l["version"] || got["pinned_fields"] != nil {
 		t.Fatalf("rejected patches changed the list: %v", got)
 	}
+	// Three keys are valid since API 0.12.0 (F-016): the third sits at the far right.
+	wantStatus(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":["release_year","runtime_minutes","streaming"]}`, etagOf("l", l)), 200)
 }
 
 func TestF009B2_ChangeTypeResetsPinnedFields(t *testing.T) {

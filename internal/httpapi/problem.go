@@ -122,10 +122,10 @@ func toProblem(err error, requestID string) (p problem, unexpected bool) {
 			"Only JPEG, PNG and WebP images are accepted."), false
 	case errors.As(err, &lookupOff):
 		return newProblem(http.StatusServiceUnavailable, "lookup_disabled", "Lookup disabled",
-			"TMDB lookup is not configured on this server."), false
+			"Lookup is not configured on this server."), false
 	case errors.As(err, &upstream):
 		return newProblem(http.StatusServiceUnavailable, "upstream_unavailable", "Lookup unavailable",
-			"TMDB is temporarily unavailable. Try again later."), false
+			"The lookup service is temporarily unavailable. Try again later."), false
 	default:
 		p = newProblem(http.StatusInternalServerError, "internal", "Internal error", "Something went wrong.")
 		p.RequestID = requestID

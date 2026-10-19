@@ -7,9 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"net/url"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -23,7 +23,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
-	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 )
 
@@ -64,7 +63,7 @@ func (s *DBStore) ListType(ctx context.Context, listID uuid.UUID) (string, error
 	return typeKey(typ), nil
 }
 
-// typeKey is the list type key, "" when the list has no type (never movie or tv_show).
+// typeKey is the list type key, "" when the list has no type (which no provider serves).
 func typeKey(typ *string) string {
 	if typ == nil {
 		return ""
@@ -75,19 +74,19 @@ func typeKey(typ *string) string {
 // Read returns the current provenance record, including the item's current
 // version. A missing record is not an error.
 func (s *DBStore) Read(ctx context.Context, itemID uuid.UUID) (Record, bool, error) {
-	r, err := sqlc.New(s.db).GetTMDBImport(ctx, sqlc.GetTMDBImportParams{ItemID: itemID, WorkspaceID: s.workspaceID})
+	r, err := sqlc.New(s.db).GetLookupImport(ctx, sqlc.GetLookupImportParams{ItemID: itemID, WorkspaceID: s.workspaceID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Record{}, false, nil
 	}
 	if err != nil {
-		return Record{}, false, fmt.Errorf("get TMDB import: %w", err)
+		return Record{}, false, fmt.Errorf("get lookup import: %w", err)
 	}
 	fields := map[string]any{}
 	if err := json.Unmarshal(r.ImportedFields, &fields); err != nil {
-		return Record{}, false, fmt.Errorf("decode TMDB import fields: %w", err)
+		return Record{}, false, fmt.Errorf("decode lookup import fields: %w", err)
 	}
 	return Record{
-		ItemID: r.ItemID, ItemVersion: int(r.ItemVersion), TMDBID: int(r.TmdbID), Type: r.Type,
+		ItemID: r.ItemID, ItemVersion: int(r.ItemVersion), Provider: r.Provider, SourceID: r.SourceID, Type: r.Type,
 		ImportedFields: fields, ImportedTitle: r.ImportedTitle, OriginalTitle: r.OriginalTitle,
 		AttachmentID: nullUUIDPtr(r.AttachmentID), PosterPath: valueOrEmpty(r.PosterPath),
 		PosterFetchedAt: r.PosterFetchedAt, FetchedAt: r.FetchedAt,
@@ -100,7 +99,7 @@ type preparedPoster struct {
 	processed     *images.Processed
 }
 
-// Apply atomically changes the item, attachment row and TMDB provenance.
+// Apply atomically changes the item, attachment row and lookup provenance.
 // Processed poster bytes are written before the transaction and old files are
 // removed only after commit.
 func (s *DBStore) Apply(ctx context.Context, p ApplyParams) (items.Item, error) {
@@ -141,14 +140,11 @@ func (s *DBStore) Apply(ctx context.Context, p ApplyParams) (items.Item, error) 
 }
 
 func validateApply(p ApplyParams) error {
-	if p.Type != types.Movie && p.Type != types.TVShow {
-		return apperr.Validation(apperr.FieldError{Field: "type", Message: "lookup is available only for movie and tv_show"})
+	if !slices.Contains(providerTypes[p.Provider], p.Type) {
+		return apperr.Validation(apperr.FieldError{Field: "type", Message: "lookup is available only for movie, tv_show and book"})
 	}
-	if p.TMDBID <= 0 {
-		return apperr.Validation(apperr.FieldError{Field: "tmdb_id", Message: "must be greater than zero"})
-	}
-	if p.TMDBID > math.MaxInt32 {
-		return apperr.Validation(apperr.FieldError{Field: "tmdb_id", Message: "is too large"})
+	if err := ValidSourceID(p.Provider, p.SourceID); err != nil {
+		return err
 	}
 	switch p.Mode {
 	case ModeCreate, ModeFill, ModeRematch, ModeRefresh, ModeOwned:
@@ -176,8 +172,14 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 		return uuid.Nil, false, apperr.TypeMismatch()
 	}
 	if p.CreateInput.Price != nil {
-		return uuid.Nil, false, apperr.Validation(apperr.FieldError{Field: "price", Message: "items of this type have no price"})
+		if err := items.ValidatePrice(p.CreateInput.Price); err != nil {
+			return uuid.Nil, false, err
+		}
+		if err := s.items.CheckPriceAllowed(ctx, q, typ); err != nil {
+			return uuid.Nil, false, err
+		}
 	}
+	priceMin, priceMax, currency := items.PriceColumns(p.CreateInput.Price)
 	original, err := cleanLookupTitle(p.OriginalTitle)
 	if p.OriginalTitle == "" {
 		original, err = cleanLookupTitle(p.CreateInput.Title)
@@ -190,12 +192,14 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 	if err != nil {
 		return uuid.Nil, false, err
 	}
+	idKey, idValue := identity(p.Provider, p.SourceID)
 	metadata := cloneLookupMap(p.Fields)
-	metadata["tmdb_id"] = p.TMDBID
+	metadata[idKey] = idValue
 	for path, value := range flatten(p.CreateInput.Metadata) {
 		setPath(metadata, path, value)
 	}
-	metadata["tmdb_id"] = p.TMDBID
+	metadata[idKey] = idValue
+	fillOnly(metadata, p.FillOnly, false)
 	metadata, err = s.items.ValidateMetadata(ctx, q, typ, metadata)
 	if err != nil {
 		return uuid.Nil, false, err
@@ -218,7 +222,7 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 	now := s.clock.Now()
 	id, err := q.InsertLookupItem(ctx, sqlc.InsertLookupItemParams{
 		WorkspaceID: s.workspaceID, ListID: p.ListID, Title: title, WebsiteUrl: website,
-		Metadata: metaJSON, ImageAttachmentID: attachmentID, SortOrder: next, Now: now,
+		PriceMin: priceMin, PriceMax: priceMax, Currency: currency, Metadata: metaJSON, ImageAttachmentID: attachmentID, SortOrder: next, Now: now,
 	})
 	if err != nil {
 		return uuid.Nil, false, fmt.Errorf("insert lookup item: %w", err)
@@ -228,7 +232,7 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 		delete(requested, path)
 	}
 	snapshots := snapshotPresent(metadata, requested)
-	snapshots["tmdb_id"] = metadata["tmdb_id"]
+	snapshots[idKey] = metadata[idKey]
 	var posterFetchedAt *time.Time
 	if poster != nil {
 		posterFetchedAt = &now
@@ -262,9 +266,13 @@ func (s *DBStore) applyExisting(ctx context.Context, q *sqlc.Queries, p ApplyPar
 	if err := json.Unmarshal(cur.Metadata, &metadata); err != nil {
 		return false, nil, fmt.Errorf("decode item metadata: %w", err)
 	}
+	idKey, idValue := identity(p.Provider, p.SourceID)
 	candidate := cloneLookupMap(p.Fields)
-	candidate["tmdb_id"] = p.TMDBID
-	merged, snapshots := mergeMetadata(p.Mode, metadata, candidate, old, hasOld)
+	candidate[idKey] = idValue
+	merged, snapshots := mergeMetadata(p.Mode, metadata, candidate, old, hasOld, idKey)
+	if p.Mode == ModeFill {
+		fillOnly(merged, p.FillOnly, true)
+	}
 	if p.Mode == ModeOwned && !p.RefreshFields && hasOld {
 		merged = cloneLookupMap(metadata)
 		snapshots = cloneLookupMap(old.ImportedFields)
@@ -353,6 +361,7 @@ func (s *DBStore) saveProvenance(ctx context.Context, q *sqlc.Queries, itemID uu
 	// any streaming leaf remains. It is structural context rather than TMDB
 	// content, so retaining it lets a user-edited platform leaf survive expiry.
 	delete(snapshots, "streaming.country")
+	retention := retentionFor(p.Provider)
 	fieldsJSON, err := json.Marshal(snapshots)
 	if err != nil {
 		return fmt.Errorf("encode imported fields: %w", err)
@@ -365,45 +374,54 @@ func (s *DBStore) saveProvenance(ctx context.Context, q *sqlc.Queries, itemID uu
 			path = p.PosterPath
 		}
 		posterPath = &path
-		refresh := addMonthsClamped(*posterFetchedAt, 5)
-		expires := addMonthsClamped(*posterFetchedAt, 6)
-		posterRefresh = &refresh
-		posterExpiry = &expires
+		if retention != nil {
+			refresh := addMonthsClamped(*posterFetchedAt, retention.RefreshMonths)
+			expires := addMonthsClamped(*posterFetchedAt, retention.ExpireMonths)
+			posterRefresh = &refresh
+			posterExpiry = &expires
+		}
 	} else {
 		attachmentID = uuid.NullUUID{}
 		posterFetchedAt = nil
 	}
-	if err := q.UpsertTMDBImport(ctx, sqlc.UpsertTMDBImportParams{
-		WorkspaceID: s.workspaceID, ItemID: itemID, TmdbID: int32(p.TMDBID), Type: p.Type, //nolint:gosec // validated positive TMDB id
+	// Open Library imports carry no retention duty (D-095): no deadlines at all.
+	var refreshAfter, expiresAt *time.Time
+	if retention != nil {
+		refresh := addMonthsClamped(now, retention.RefreshMonths)
+		expires := addMonthsClamped(now, retention.ExpireMonths)
+		refreshAfter, expiresAt = &refresh, &expires
+	}
+	if err := q.UpsertLookupImport(ctx, sqlc.UpsertLookupImportParams{
+		WorkspaceID: s.workspaceID, ItemID: itemID, Provider: p.Provider, SourceID: p.SourceID, Type: p.Type,
 		ImportedFields: fieldsJSON, ImportedTitle: importedTitle, OriginalTitle: originalTitle,
 		AttachmentID: attachmentID, PosterPath: posterPath, PosterFetchedAt: posterFetchedAt,
 		PosterRefreshAfter: posterRefresh, PosterExpiresAt: posterExpiry,
-		FetchedAt: now, RefreshAfter: addMonthsClamped(now, 5), ExpiresAt: addMonthsClamped(now, 6),
+		FetchedAt: now, RefreshAfter: refreshAfter, ExpiresAt: expiresAt,
 	}); err != nil {
-		return fmt.Errorf("save TMDB import: %w", err)
+		return fmt.Errorf("save lookup import: %w", err)
 	}
 	return nil
 }
 
 func readImportTx(ctx context.Context, q *sqlc.Queries, itemID, workspaceID uuid.UUID) (Record, bool, error) {
-	r, err := q.GetTMDBImport(ctx, sqlc.GetTMDBImportParams{ItemID: itemID, WorkspaceID: workspaceID})
+	r, err := q.GetLookupImport(ctx, sqlc.GetLookupImportParams{ItemID: itemID, WorkspaceID: workspaceID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Record{}, false, nil
 	}
 	if err != nil {
-		return Record{}, false, fmt.Errorf("get TMDB import: %w", err)
+		return Record{}, false, fmt.Errorf("get lookup import: %w", err)
 	}
 	fields := map[string]any{}
 	if err := json.Unmarshal(r.ImportedFields, &fields); err != nil {
-		return Record{}, false, fmt.Errorf("decode TMDB import fields: %w", err)
+		return Record{}, false, fmt.Errorf("decode lookup import fields: %w", err)
 	}
-	return Record{ItemID: r.ItemID, ItemVersion: int(r.ItemVersion), TMDBID: int(r.TmdbID), Type: r.Type,
+	return Record{ItemID: r.ItemID, ItemVersion: int(r.ItemVersion), Provider: r.Provider, SourceID: r.SourceID, Type: r.Type,
 		ImportedFields: fields, ImportedTitle: r.ImportedTitle, OriginalTitle: r.OriginalTitle,
 		AttachmentID: nullUUIDPtr(r.AttachmentID), PosterPath: valueOrEmpty(r.PosterPath),
 		PosterFetchedAt: r.PosterFetchedAt, FetchedAt: r.FetchedAt}, true, nil
 }
 
-func mergeMetadata(mode Mode, current, candidate map[string]any, old Record, hasOld bool) (map[string]any, map[string]any) {
+func mergeMetadata(mode Mode, current, candidate map[string]any, old Record, hasOld bool, idKey string) (map[string]any, map[string]any) {
 	out := cloneLookupMap(current)
 	flatCandidate := flatten(candidate)
 	snapshots := map[string]any{}
@@ -457,9 +475,24 @@ func mergeMetadata(mode Mode, current, candidate map[string]any, old Record, has
 	}
 	// The provider identity is part of every successful match, including fill.
 	// Maintenance relies on this owned snapshot to detect user removal/opt-out.
-	setPath(out, "tmdb_id", flatCandidate["tmdb_id"])
-	snapshots["tmdb_id"] = flatCandidate["tmdb_id"]
+	setPath(out, idKey, flatCandidate[idKey])
+	snapshots[idKey] = flatCandidate[idKey]
 	return out, snapshots
+}
+
+// fillOnly sets provider values that are applied only where the item has none:
+// a missing (or null) key and, with emptyLists, an empty list. They are not
+// snapshots, so they are never treated as imported and never replaced or removed.
+func fillOnly(metadata, values map[string]any, emptyLists bool) {
+	for path, value := range flatten(values) {
+		current, present := getPath(metadata, path)
+		if present && current != nil {
+			if list, isList := current.([]any); !emptyLists || !isList || len(list) != 0 {
+				continue
+			}
+		}
+		setPath(metadata, path, normalizeValue(value))
+	}
 }
 
 func mergeTitle(p ApplyParams, current string, old Record, hasOld bool) (string, *string, string) {

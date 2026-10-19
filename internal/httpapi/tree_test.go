@@ -545,11 +545,11 @@ func TestFieldValidation(t *testing.T) {
 		{"TestF007 list NUL in description", "POST", "/api/v1/lists", `{"name":"n","description":"a\u0000b"}`, "", []string{"description"}},
 		{"list patch name and enum", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"name":"","display_mode":"x"}`, `"l-1"`, []string{"name", "display_mode"}},
 		{"TestF007 list patch NUL in description", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"description":"a\u0000b"}`, `"l-1"`, []string{"description"}},
-		{"TestF007 list unknown type", "POST", "/api/v1/lists", `{"name":"n","type":"book"}`, "", []string{"type"}},
+		{"TestF007 list unknown type", "POST", "/api/v1/lists", `{"name":"n","type":"unknown"}`, "", []string{"type"}},
 		{"TestF007 list type_key on generic", "POST", "/api/v1/lists", `{"name":"n","sort_mode":"type_key"}`, "", []string{"sort_mode"}},
 		{"TestF013B4 director sort on generic", "POST", "/api/v1/lists", `{"name":"n","sort_mode":"director"}`, "", []string{"sort_mode"}},
 		{"TestF013B4 director sort on tv", "POST", "/api/v1/lists", `{"name":"n","type":"tv_show","sort_mode":"director"}`, "", []string{"sort_mode"}},
-		{"TestF007 list patch unknown type", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"type":"book"}`, `"l-1"`, []string{"type"}},
+		{"TestF007 list patch unknown type", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"type":"unknown"}`, `"l-1"`, []string{"type"}},
 		{"TestF007 list patch type_key on generic", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"sort_mode":"type_key"}`, `"l-1"`, []string{"sort_mode"}},
 		{"TestF013B4 list patch director on generic", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"sort_mode":"director"}`, `"l-1"`, []string{"sort_mode"}},
 		{"folder move without parent_folder_id", "POST", "/api/v1/folders/" + f["id"].(string) + "/move", `{}`, `"f-1"`, []string{"parent_folder_id"}},
@@ -623,10 +623,10 @@ func TestF007_ListTypeIsOptionalAndReturned(t *testing.T) {
 		t.Error("GET /tree must show the list type")
 	}
 	// Every built-in type can be created and uses its definition's default sort field.
-	for _, typ := range []string{"", "movie", "tv_show", "motorcycle", "car", "camera"} {
+	for _, typ := range []string{"", "movie", "tv_show", "motorcycle", "car", "camera", "book"} {
 		e.listOfType("K "+typ, nil, typ)
 	}
-	for typ, field := range map[string]string{"movie": "release_year", "tv_show": "first_air_year", "motorcycle": "displacement_cc", "car": "power_hp", "camera": "megapixels"} {
+	for typ, field := range map[string]string{"movie": "release_year", "tv_show": "first_air_year", "motorcycle": "displacement_cc", "car": "power_hp", "camera": "megapixels", "book": "first_publish_year"} {
 		rec := e.call("POST", "/api/v1/lists", fmt.Sprintf(`{"name":"S %s","type":%q}`, typ, typ), "")
 		wantStatus(t, rec, 201)
 		if decode(t, rec)["sort_mode"] != field {
@@ -686,7 +686,7 @@ func TestF007_ChangeListTypeClearsItemMetadata(t *testing.T) {
 	// A stale version still loses.
 	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"camera"}`, etagOf("l", l)), 412, "version_conflict")
 	// An unknown type is a 422 and changes nothing.
-	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"book"}`, etagOf("l", changed)), 422, "validation_failed")
+	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"unknown"}`, etagOf("l", changed)), 422, "validation_failed")
 	if cur := e.fetch("lists", lid); cur["type"] != "car" || cur["version"] != changed["version"] {
 		t.Fatalf("rejected patch changed the list: %v", cur)
 	}

@@ -208,3 +208,46 @@ WHERE l.id = $1`, listID).Scan(&listPins, &listSort, &defaultSort, &defaultPins)
 		t.Errorf("field references remain: list pins=%v sort=%v default sort=%v pins=%v", listPins, listSort, defaultSort, defaultPins)
 	}
 }
+
+func TestF014_BuiltinKindsSeedDefaultPinnedFields(t *testing.T) {
+	svc, _ := newDefinitionsService(t)
+	want := map[string][]string{
+		"movie":      {"runtime_minutes", "streaming"},
+		"tv_show":    {"seasons", "streaming"},
+		"motorcycle": {"displacement_cc", "price"},
+		"car":        {"model_year", "price"},
+		"camera":     {"camera_type", "price"},
+		"generic":    {},
+	}
+	kinds, err := svc.List(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := 0
+	for _, k := range kinds {
+		pins, ok := want[k.Key]
+		if !ok || !k.Locked {
+			continue
+		}
+		seen++
+		if k.DefaultPinnedFields == nil || !slices.Equal(*k.DefaultPinnedFields, pins) {
+			t.Errorf("%s default pins = %v, want %v", k.Key, k.DefaultPinnedFields, pins)
+			continue
+		}
+		fields := map[string]bool{}
+		if k.AllowsPrice {
+			fields["price"] = true
+		}
+		for _, f := range k.Fields {
+			fields[f.Key] = true
+		}
+		for _, pin := range *k.DefaultPinnedFields {
+			if !fields[pin] {
+				t.Errorf("%s pins %q, not a field of the kind", k.Key, pin)
+			}
+		}
+	}
+	if seen != len(want) {
+		t.Fatalf("found %d built-in kinds, want %d", seen, len(want))
+	}
+}

@@ -2134,7 +2134,7 @@ components:
         streaming_country_code: { type: string, pattern: '^[A-Z]{2}$' }
         metadata_language: { $ref: '#/components/schemas/MetadataLanguage' }
         lookup_available: { type: boolean, readOnly: true, description: Whether this server has TMDB lookup (movies and TV) configured. }
-        book_lookup_available: { type: boolean, readOnly: true, description: Whether book lookup (Open Library) is available. It needs no key and is always on, so this is true. }
+        book_lookup_available: { type: boolean, readOnly: true, description: Whether book lookup (Open Library) is available. It needs no key and is always on. }
         markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
         trash_retention_days: { type: integer, nullable: true, minimum: 1, maximum: 365 }
         preferred_stores: { $ref: '#/components/schemas/PreferredStores' }

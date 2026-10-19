@@ -79,20 +79,26 @@ json 201 POST /api/v1/folders -d "{\"name\":\"$RUN folder\"}"
 FOLDER_ID="$(field .id)"
 FOLDER_ETAG="$(etag)"
 
-step "create motorcycle list"
-json 201 POST /api/v1/lists -d "{\"name\":\"$RUN bikes\",\"type\":\"motorcycle\",\"folder_id\":\"$FOLDER_ID\"}"
+step "create vehicle list"
+json 201 POST /api/v1/lists -d "{\"name\":\"$RUN vehicles\",\"type\":\"vehicle\",\"folder_id\":\"$FOLDER_ID\"}"
 LIST_ID="$(field .id)"
-expect "list type" motorcycle "$(field .type)"
+expect "list type" vehicle "$(field .type)"
 
-step "create item with metadata and a single price"
+step "create item with vehicle metadata"
 json 201 POST "/api/v1/lists/$LIST_ID/items" \
-  -d "{\"title\":\"$RUN big\",\"price\":{\"amount\":\"1299.00\",\"currency\":\"EUR\"},\"metadata\":{\"model_year\":2020,\"displacement_cc\":900}}"
+  -d "{\"title\":\"$RUN big\",\"metadata\":{\"model_year\":2020,\"displacement_cc\":900}}"
 ITEM_ID="$(field .id)"
 ITEM_ETAG="$(etag)"
-expect "item type" motorcycle "$(field .type)"
+expect "item type" vehicle "$(field .type)"
+expect "displacement_cc" 900 "$(field .metadata.displacement_cc)"
+
+step "create wishlist item with a single price"
+json 201 POST /api/v1/lists -d "{\"name\":\"$RUN wishes\",\"type\":\"wishlist\",\"folder_id\":\"$FOLDER_ID\"}"
+WISH_LIST_ID="$(field .id)"
+json 201 POST "/api/v1/lists/$WISH_LIST_ID/items" \
+  -d "{\"title\":\"$RUN gift\",\"price\":{\"amount\":\"1299.00\",\"currency\":\"EUR\"}}"
 expect "price min" "1299.00" "$(field .price.min)"
 expect "price max" "1299.00" "$(field .price.max)"
-expect "displacement_cc" 900 "$(field .metadata.displacement_cc)"
 
 step "create second item and sort by displacement_cc"
 json 201 POST "/api/v1/lists/$LIST_ID/items" -d "{\"title\":\"$RUN small\",\"metadata\":{\"displacement_cc\":125}}"

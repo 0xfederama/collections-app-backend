@@ -105,9 +105,9 @@ func TestNoType_MoveItems(t *testing.T) {
 
 func TestNoType_ChangeTypeToAndFromNullClearsItems(t *testing.T) {
 	e := newTreeEnv(t)
-	l := e.listOfType("Bikes", nil, "motorcycle")
+	l := e.listOfType("Bikes", nil, "vehicle")
 	lid := l["id"].(string)
-	it := e.newItem(lid, `{"title":"Monster","price":{"amount":"12000.00","currency":"EUR"},"metadata":{"displacement_cc":937}}`)
+	it := e.newItem(lid, `{"title":"Monster","metadata":{"displacement_cc":937}}`)
 
 	// To no type: metadata and price go, the sort falls back to manual.
 	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"type":null,"sort_mode":"manual"}`, etagOf("l", l))

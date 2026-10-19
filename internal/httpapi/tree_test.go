@@ -609,24 +609,24 @@ func TestF007_ListTypeIsOptionalAndReturned(t *testing.T) {
 	wantStatus(t, e.call("POST", "/api/v1/lists", `{"name":"n"}`, ""), 201)
 	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"n","type":""}`, ""), 422, "validation_failed")
 
-	l := e.listOfType("Bikes", nil, "motorcycle")
-	if l["type"] != "motorcycle" || e.fetch("lists", l["id"].(string))["type"] != "motorcycle" {
+	l := e.listOfType("Bikes", nil, "vehicle")
+	if l["type"] != "vehicle" || e.fetch("lists", l["id"].(string))["type"] != "vehicle" {
 		t.Fatalf("type not returned: %v", l)
 	}
 	found := false
 	for _, tl := range e.tree("lists") {
 		if tl["id"] == l["id"] {
-			found = tl["type"] == "motorcycle"
+			found = tl["type"] == "vehicle"
 		}
 	}
 	if !found {
 		t.Error("GET /tree must show the list type")
 	}
 	// Every built-in type can be created and uses its definition's default sort field.
-	for _, typ := range []string{"", "movie", "tv_show", "motorcycle", "car", "camera", "book"} {
+	for _, typ := range []string{"", "movie", "tv_show", "vehicle", "wishlist", "book"} {
 		e.listOfType("K "+typ, nil, typ)
 	}
-	for typ, field := range map[string]string{"movie": "release_year", "tv_show": "first_air_year", "motorcycle": "displacement_cc", "car": "power_hp", "camera": "megapixels", "book": "manual"} {
+	for typ, field := range map[string]string{"movie": "release_year", "tv_show": "first_air_year", "vehicle": "manual", "wishlist": "manual", "book": "manual"} {
 		rec := e.call("POST", "/api/v1/lists", fmt.Sprintf(`{"name":"S %s","type":%q}`, typ, typ), "")
 		wantStatus(t, rec, 201)
 		if decode(t, rec)["sort_mode"] != field {
@@ -657,14 +657,14 @@ func TestF007_ChangeListTypeClearsItemMetadata(t *testing.T) {
 		t.Fatal("same type touched the items")
 	}
 
-	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"car"}`, etagOf("l", l))
+	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"vehicle"}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
 	changed := decode(t, rec)
-	if changed["type"] != "car" || changed["version"].(float64) <= l["version"].(float64) || rec.Header().Get("ETag") != etagOf("l", changed) {
+	if changed["type"] != "vehicle" || changed["version"].(float64) <= l["version"].(float64) || rec.Header().Get("ETag") != etagOf("l", changed) {
 		t.Fatalf("after type change: %v etag=%s", changed, rec.Header().Get("ETag"))
 	}
 	got := e.fetchItem(it["id"])
-	if got["type"] != "car" || !reflect.DeepEqual(got["metadata"], map[string]any{}) || got["version"] != float64(2) || got["title"] != "The Matrix" {
+	if got["type"] != "vehicle" || !reflect.DeepEqual(got["metadata"], map[string]any{}) || got["version"] != float64(2) || got["title"] != "The Matrix" {
 		t.Fatalf("item after type change: %v", got)
 	}
 	if got["website"] != "https://www.warnerbros.com/movies/matrix" || got["price"] != nil {
@@ -681,13 +681,14 @@ func TestF007_ChangeListTypeClearsItemMetadata(t *testing.T) {
 
 	// The item is validated against the new type from now on.
 	wantProblem(t, e.patchItem(got, `{"metadata":{"release_year":1999}}`), 400, "unknown_field")
-	wantStatus(t, e.patchItem(got, `{"metadata":{"make":"VW","fuel_type":"electric"}}`), 200)
+	wantStatus(t, e.patchItem(got, `{"metadata":{"make":"VW","model":"Golf"}}`), 200)
+	wantProblem(t, e.patchItem(got, `{"metadata":{"fuel_type":"electric"}}`), 400, "unknown_field")
 
 	// A stale version still loses.
-	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"camera"}`, etagOf("l", l)), 412, "version_conflict")
+	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"wishlist"}`, etagOf("l", l)), 412, "version_conflict")
 	// An unknown type is a 422 and changes nothing.
 	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"unknown"}`, etagOf("l", changed)), 422, "validation_failed")
-	if cur := e.fetch("lists", lid); cur["type"] != "car" || cur["version"] != changed["version"] {
+	if cur := e.fetch("lists", lid); cur["type"] != "vehicle" || cur["version"] != changed["version"] {
 		t.Fatalf("rejected patch changed the list: %v", cur)
 	}
 }
@@ -697,7 +698,7 @@ func TestF014B4_ListSortModeUsesFieldDefinitions(t *testing.T) {
 	gen := e.list("Plain", nil)
 	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+gen["id"].(string), `{"sort_mode":"type_key"}`, etagOf("l", gen)), 422, "validation_failed")
 
-	l := e.listOfType("Bikes", nil, "motorcycle")
+	l := e.listOfType("Bikes", nil, "vehicle")
 	lid := l["id"].(string)
 	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"displacement_cc"}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
@@ -706,12 +707,12 @@ func TestF014B4_ListSortModeUsesFieldDefinitions(t *testing.T) {
 		t.Fatalf("sort_mode = %v", l["sort_mode"])
 	}
 
-	// Switching type takes the new type's default field sort.
-	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"car"}`, etagOf("l", l))
+	// Switching type takes the new type's default field sort (movie: release_year).
+	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"movie"}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
 	l = decode(t, rec)
-	if l["type"] != "car" || l["sort_mode"] != "power_hp" {
-		t.Fatalf("after car: %v", l)
+	if l["type"] != "movie" || l["sort_mode"] != "release_year" {
+		t.Fatalf("after movie: %v", l)
 	}
 
 	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"type":null}`, etagOf("l", l))

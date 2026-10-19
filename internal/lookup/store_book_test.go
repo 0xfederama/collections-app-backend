@@ -42,18 +42,17 @@ func TestF016B3_BookCreateKeepsProvenanceWithoutRetention(t *testing.T) {
 	now := time.Date(2026, time.January, 31, 12, 0, 0, 0, time.UTC)
 	e := newLookupEnv(t, now)
 	list := e.bookList()
-	amount := "12.00"
 	it, err := e.store.Apply(t.Context(), ApplyParams{
 		Mode: ModeCreate, ListID: list, Type: "book", Provider: ProviderOpenLibrary, SourceID: "OL893415W",
 		Title: "Dune", OriginalTitle: "dune",
-		CreateInput: &items.CreateInput{Title: "dune", Price: &items.Price{Amount: &amount, Currency: "EUR"}, Metadata: map[string]any{"pages": 700}},
+		CreateInput: &items.CreateInput{Title: "dune", Metadata: map[string]any{"pages": 700}},
 		Fields:      bookFields(), FillOnly: map[string]any{"stores": []string{"amazon", "kobo"}},
 		PosterPath: "12547191", Poster: processedPoster("cover"), RefreshFields: true, RefreshPoster: true,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if it.Title != "dune" || it.Image == nil || it.Price == nil || it.Price.Currency != "EUR" || it.Type == nil || *it.Type != "book" {
+	if it.Title != "dune" || it.Image == nil || it.Price != nil || it.Type == nil || *it.Type != "book" {
 		t.Fatalf("created item = %+v", it)
 	}
 	metadata := decodeMetadata(t, it.Metadata)

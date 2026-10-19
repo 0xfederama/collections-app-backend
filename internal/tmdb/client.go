@@ -120,19 +120,19 @@ func NewWithOptions(apiKey string, opts Options) *Client {
 func (c *Client) Enabled() bool { return c != nil && (c.key != "" || c.mockFixture) }
 
 // Search returns TMDB results in upstream ranking order, localized by language.
-func (c *Client) Search(ctx context.Context, kind, query, language string) ([]Match, error) {
-	endpoint, err := kindEndpoint(kind)
+func (c *Client) Search(ctx context.Context, typ, query, language string) ([]Match, error) {
+	endpoint, err := typeEndpoint(typ)
 	if err != nil || strings.TrimSpace(query) == "" {
 		return nil, ErrInvalid
 	}
-	if c != nil && c.mockFixture && kind == "movie" && query == mockMovieQuery {
+	if c != nil && c.mockFixture && typ == "movie" && query == mockMovieQuery {
 		return []Match{{ID: mockMovieID, Title: mockMovieQuery, OriginalTitle: mockMovieQuery, Year: 2001, Overview: "Deterministic TMDB fixture for frontend end-to-end tests."}}, nil
 	}
 	if c == nil || c.key == "" {
 		return nil, ErrDisabled
 	}
 	query = strings.TrimSpace(query)
-	key := strings.Join([]string{kind, strings.ToLower(query), language}, "\x00")
+	key := strings.Join([]string{typ, strings.ToLower(query), language}, "\x00")
 	if results, ok := c.cached(key); ok {
 		return results, nil
 	}
@@ -155,7 +155,7 @@ func (c *Client) Search(ctx context.Context, kind, query, language string) ([]Ma
 	results := make([]Match, 0, len(data.Results))
 	for _, item := range data.Results {
 		title, original, date := item.Title, item.OriginalTitle, item.ReleaseDate
-		if kind == "tv_show" {
+		if typ == "tv_show" {
 			title, original, date = item.Name, item.OriginalName, item.FirstAirDate
 		}
 		if title == "" {
@@ -171,8 +171,8 @@ func (c *Client) Search(ctx context.Context, kind, query, language string) ([]Ma
 }
 
 // Details fetches localized metadata, credits, IMDb id and regional providers.
-func (c *Client) Details(ctx context.Context, kind string, id int, language, country string) (Details, error) {
-	if c != nil && c.mockFixture && kind == "movie" && id == mockMovieID {
+func (c *Client) Details(ctx context.Context, typ string, id int, language, country string) (Details, error) {
+	if c != nil && c.mockFixture && typ == "movie" && id == mockMovieID {
 		return Details{
 			ID:    mockMovieID,
 			Title: mockMovieQuery,
@@ -186,7 +186,7 @@ func (c *Client) Details(ctx context.Context, kind string, id int, language, cou
 	if c == nil || c.key == "" {
 		return Details{}, ErrDisabled
 	}
-	endpoint, err := kindEndpoint(kind)
+	endpoint, err := typeEndpoint(typ)
 	if err != nil || id <= 0 {
 		return Details{}, ErrInvalid
 	}
@@ -223,7 +223,7 @@ func (c *Client) Details(ctx context.Context, kind string, id int, language, cou
 		} `json:"watch/providers"`
 	}
 	appendTo := "external_ids,watch/providers"
-	if kind == "movie" {
+	if typ == "movie" {
 		appendTo += ",credits"
 	}
 	if err := c.getJSON(ctx, "/"+endpoint+"/"+strconv.Itoa(id), url.Values{"language": {language}, "append_to_response": {appendTo}}, &data); err != nil {
@@ -233,12 +233,12 @@ func (c *Client) Details(ctx context.Context, kind string, id int, language, cou
 		return Details{}, errors.New("TMDB returned invalid details")
 	}
 	title, date := data.Title, data.ReleaseDate
-	if kind == "tv_show" {
+	if typ == "tv_show" {
 		title, date = data.Name, data.FirstAirDate
 	}
 	metadata := make(map[string]any)
 	if y := year(date); y != 0 {
-		if kind == "movie" {
+		if typ == "movie" {
 			metadata["release_year"] = y
 		} else {
 			metadata["first_air_year"] = y
@@ -247,7 +247,7 @@ func (c *Client) Details(ctx context.Context, kind string, id int, language, cou
 	if data.External.IMDBID != "" {
 		metadata["imdb_url"] = "https://www.imdb.com/title/" + data.External.IMDBID + "/"
 	}
-	if kind == "movie" {
+	if typ == "movie" {
 		if data.Runtime != nil && *data.Runtime > 0 {
 			metadata["runtime_minutes"] = *data.Runtime
 		}
@@ -461,8 +461,8 @@ func (c *Client) posterURL(p string) string {
 	u.Path = path.Join(u.Path, "w185", strings.TrimPrefix(p, "/"))
 	return u.String()
 }
-func kindEndpoint(kind string) (string, error) {
-	switch kind {
+func typeEndpoint(typ string) (string, error) {
+	switch typ {
 	case "movie":
 		return "movie", nil
 	case "tv_show":

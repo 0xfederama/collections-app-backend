@@ -239,7 +239,7 @@ func (q *Queries) GetTrashedItem(ctx context.Context, arg GetTrashedItemParams) 
 }
 
 const getTrashedList = `-- name: GetTrashedList :one
-SELECT id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, kind, pinned_fields, icon, icon_color FROM lists WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
+SELECT id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, pinned_fields, icon, icon_color FROM lists WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
 `
 
 type GetTrashedListParams struct {
@@ -265,7 +265,7 @@ func (q *Queries) GetTrashedList(ctx context.Context, arg GetTrashedListParams) 
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
-		&i.Kind,
+		&i.Type,
 		&i.PinnedFields,
 		&i.Icon,
 		&i.IconColor,
@@ -367,15 +367,15 @@ SELECT b.id, b.root_type, b.root_id, b.root_name, b.former_path, b.deleted_at,
        (SELECT count(*) FROM items i WHERE i.trash_batch_id = b.id)::int AS item_count,
        EXISTS (
          SELECT 1 FROM (
-             SELECT f.parent_folder_id AS pid, 'folder'::text AS pkind FROM folders f WHERE b.root_type = 'folder' AND f.id = b.root_id
+             SELECT f.parent_folder_id AS pid, 'folder'::text AS ptype FROM folders f WHERE b.root_type = 'folder' AND f.id = b.root_id
            UNION ALL
              SELECT l.folder_id, 'folder'::text FROM lists l WHERE b.root_type = 'list' AND l.id = b.root_id
            UNION ALL
              SELECT i.list_id, 'list'::text FROM items i WHERE b.root_type = 'item' AND i.id = b.root_id
          ) rp
          WHERE rp.pid IS NULL
-            OR (rp.pkind = 'folder' AND EXISTS (SELECT 1 FROM folders pf WHERE pf.id = rp.pid AND pf.deleted_at IS NULL))
-            OR (rp.pkind = 'list' AND EXISTS (SELECT 1 FROM lists pl WHERE pl.id = rp.pid AND pl.deleted_at IS NULL))
+            OR (rp.ptype = 'folder' AND EXISTS (SELECT 1 FROM folders pf WHERE pf.id = rp.pid AND pf.deleted_at IS NULL))
+            OR (rp.ptype = 'list' AND EXISTS (SELECT 1 FROM lists pl WHERE pl.id = rp.pid AND pl.deleted_at IS NULL))
        ) AS restorable_in_place
 FROM trash_batches b
 WHERE b.workspace_id = $1

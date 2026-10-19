@@ -57,7 +57,7 @@ func (q *Queries) FolderPath(ctx context.Context, arg FolderPathParams) ([]Folde
 
 const getList = `-- name: GetList :one
 
-SELECT l.id, l.workspace_id, l.folder_id, l.name, l.description, l.display_mode, l.sort_mode, l.sort_order, l.version, l.created_at, l.updated_at, l.deleted_at, l.trash_batch_id, l.kind, l.pinned_fields, l.icon, l.icon_color,
+SELECT l.id, l.workspace_id, l.folder_id, l.name, l.description, l.display_mode, l.sort_mode, l.sort_order, l.version, l.created_at, l.updated_at, l.deleted_at, l.trash_batch_id, l.type, l.pinned_fields, l.icon, l.icon_color,
        (SELECT count(*) FROM items i
          WHERE i.list_id = l.id AND i.workspace_id = l.workspace_id AND i.deleted_at IS NULL)::int AS item_count
 FROM lists l
@@ -83,7 +83,7 @@ type GetListRow struct {
 	UpdatedAt    time.Time
 	DeletedAt    *time.Time
 	TrashBatchID uuid.NullUUID
-	Kind         string
+	Type         *string
 	PinnedFields []byte
 	Icon         *string
 	IconColor    *string
@@ -108,7 +108,7 @@ func (q *Queries) GetList(ctx context.Context, arg GetListParams) (GetListRow, e
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
-		&i.Kind,
+		&i.Type,
 		&i.PinnedFields,
 		&i.Icon,
 		&i.IconColor,
@@ -118,16 +118,16 @@ func (q *Queries) GetList(ctx context.Context, arg GetListParams) (GetListRow, e
 }
 
 const insertList = `-- name: InsertList :one
-INSERT INTO lists (workspace_id, folder_id, name, kind, description, display_mode, sort_mode, pinned_fields, icon, icon_color, sort_order, created_at, updated_at)
+INSERT INTO lists (workspace_id, folder_id, name, type, description, display_mode, sort_mode, pinned_fields, icon, icon_color, sort_order, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
-RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, kind, pinned_fields, icon, icon_color
+RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, pinned_fields, icon, icon_color
 `
 
 type InsertListParams struct {
 	WorkspaceID  uuid.UUID
 	FolderID     uuid.NullUUID
 	Name         string
-	Kind         string
+	Type         *string
 	Description  *string
 	DisplayMode  string
 	SortMode     string
@@ -143,7 +143,7 @@ func (q *Queries) InsertList(ctx context.Context, arg InsertListParams) (List, e
 		arg.WorkspaceID,
 		arg.FolderID,
 		arg.Name,
-		arg.Kind,
+		arg.Type,
 		arg.Description,
 		arg.DisplayMode,
 		arg.SortMode,
@@ -168,7 +168,7 @@ func (q *Queries) InsertList(ctx context.Context, arg InsertListParams) (List, e
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
-		&i.Kind,
+		&i.Type,
 		&i.PinnedFields,
 		&i.Icon,
 		&i.IconColor,
@@ -209,7 +209,7 @@ func (q *Queries) ListActiveListIDsByFolder(ctx context.Context, arg ListActiveL
 }
 
 const listActiveLists = `-- name: ListActiveLists :many
-SELECT l.id, l.workspace_id, l.folder_id, l.name, l.description, l.display_mode, l.sort_mode, l.sort_order, l.version, l.created_at, l.updated_at, l.deleted_at, l.trash_batch_id, l.kind, l.pinned_fields, l.icon, l.icon_color,
+SELECT l.id, l.workspace_id, l.folder_id, l.name, l.description, l.display_mode, l.sort_mode, l.sort_order, l.version, l.created_at, l.updated_at, l.deleted_at, l.trash_batch_id, l.type, l.pinned_fields, l.icon, l.icon_color,
        (SELECT count(*) FROM items i
          WHERE i.list_id = l.id AND i.workspace_id = l.workspace_id AND i.deleted_at IS NULL)::int AS item_count
 FROM lists l
@@ -231,7 +231,7 @@ type ListActiveListsRow struct {
 	UpdatedAt    time.Time
 	DeletedAt    *time.Time
 	TrashBatchID uuid.NullUUID
-	Kind         string
+	Type         *string
 	PinnedFields []byte
 	Icon         *string
 	IconColor    *string
@@ -261,7 +261,7 @@ func (q *Queries) ListActiveLists(ctx context.Context, workspaceID uuid.UUID) ([
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.TrashBatchID,
-			&i.Kind,
+			&i.Type,
 			&i.PinnedFields,
 			&i.Icon,
 			&i.IconColor,
@@ -278,7 +278,7 @@ func (q *Queries) ListActiveLists(ctx context.Context, workspaceID uuid.UUID) ([
 }
 
 const lockList = `-- name: LockList :one
-SELECT id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, kind, pinned_fields, icon, icon_color FROM lists
+SELECT id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, pinned_fields, icon, icon_color FROM lists
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 FOR UPDATE
 `
@@ -305,7 +305,7 @@ func (q *Queries) LockList(ctx context.Context, arg LockListParams) (List, error
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
-		&i.Kind,
+		&i.Type,
 		&i.PinnedFields,
 		&i.Icon,
 		&i.IconColor,
@@ -317,7 +317,7 @@ const moveList = `-- name: MoveList :one
 UPDATE lists
 SET folder_id = $1, sort_order = $2, version = version + 1, updated_at = $3
 WHERE id = $4 AND workspace_id = $5 AND deleted_at IS NULL
-RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, kind, pinned_fields, icon, icon_color
+RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, pinned_fields, icon, icon_color
 `
 
 type MoveListParams struct {
@@ -351,7 +351,7 @@ func (q *Queries) MoveList(ctx context.Context, arg MoveListParams) (List, error
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
-		&i.Kind,
+		&i.Type,
 		&i.PinnedFields,
 		&i.Icon,
 		&i.IconColor,
@@ -403,7 +403,7 @@ SET name = $1, description = $2, display_mode = $3, sort_mode = $4,
     pinned_fields = $5, icon = $6, icon_color = $7,
     version = version + 1, updated_at = $8
 WHERE id = $9 AND workspace_id = $10 AND deleted_at IS NULL
-RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, kind, pinned_fields, icon, icon_color
+RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, pinned_fields, icon, icon_color
 `
 
 type UpdateListParams struct {
@@ -419,7 +419,7 @@ type UpdateListParams struct {
 	WorkspaceID  uuid.UUID
 }
 
-// A full replacement of the editable fields (description is Markdown, up to 64 KiB, checked in the service; kind has UpdateListKind): the service merges the PATCH into the locked row first.
+// A full replacement of the editable fields (description is Markdown, up to 64 KiB, checked in the service; type has UpdateListType): the service merges the PATCH into the locked row first.
 func (q *Queries) UpdateList(ctx context.Context, arg UpdateListParams) (List, error) {
 	row := q.db.QueryRow(ctx, updateList,
 		arg.Name,
@@ -448,7 +448,7 @@ func (q *Queries) UpdateList(ctx context.Context, arg UpdateListParams) (List, e
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
-		&i.Kind,
+		&i.Type,
 		&i.PinnedFields,
 		&i.Icon,
 		&i.IconColor,
@@ -456,24 +456,24 @@ func (q *Queries) UpdateList(ctx context.Context, arg UpdateListParams) (List, e
 	return i, err
 }
 
-const updateListKind = `-- name: UpdateListKind :one
+const updateListType = `-- name: UpdateListType :one
 UPDATE lists
-SET kind = $1, pinned_fields = NULL, version = version + 1, updated_at = $2
+SET type = $1, pinned_fields = NULL, version = version + 1, updated_at = $2
 WHERE id = $3 AND workspace_id = $4 AND deleted_at IS NULL
-RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, kind, pinned_fields, icon, icon_color
+RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, pinned_fields, icon, icon_color
 `
 
-type UpdateListKindParams struct {
-	Kind        string
+type UpdateListTypeParams struct {
+	Type        *string
 	Now         time.Time
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
 }
 
-// The service clears the items' kind fields (ClearListItemsMetadata) in the same transaction. Pinned fields reset to the kind default.
-func (q *Queries) UpdateListKind(ctx context.Context, arg UpdateListKindParams) (List, error) {
-	row := q.db.QueryRow(ctx, updateListKind,
-		arg.Kind,
+// The service clears the items' type fields (ClearListItemsMetadata) in the same transaction. Pinned fields reset to the type default.
+func (q *Queries) UpdateListType(ctx context.Context, arg UpdateListTypeParams) (List, error) {
+	row := q.db.QueryRow(ctx, updateListType,
+		arg.Type,
 		arg.Now,
 		arg.ID,
 		arg.WorkspaceID,
@@ -493,7 +493,7 @@ func (q *Queries) UpdateListKind(ctx context.Context, arg UpdateListKindParams) 
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
-		&i.Kind,
+		&i.Type,
 		&i.PinnedFields,
 		&i.Icon,
 		&i.IconColor,

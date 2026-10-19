@@ -26,27 +26,27 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// Defines values for CreateKindFieldRequestType.
+// Defines values for CreateTypeFieldRequestType.
 const (
-	CreateKindFieldRequestTypeBoolean CreateKindFieldRequestType = "boolean"
-	CreateKindFieldRequestTypeDate    CreateKindFieldRequestType = "date"
-	CreateKindFieldRequestTypeLink    CreateKindFieldRequestType = "link"
-	CreateKindFieldRequestTypeNumber  CreateKindFieldRequestType = "number"
-	CreateKindFieldRequestTypeText    CreateKindFieldRequestType = "text"
+	CreateTypeFieldRequestTypeBoolean CreateTypeFieldRequestType = "boolean"
+	CreateTypeFieldRequestTypeDate    CreateTypeFieldRequestType = "date"
+	CreateTypeFieldRequestTypeLink    CreateTypeFieldRequestType = "link"
+	CreateTypeFieldRequestTypeNumber  CreateTypeFieldRequestType = "number"
+	CreateTypeFieldRequestTypeText    CreateTypeFieldRequestType = "text"
 )
 
-// Valid indicates whether the value is a known member of the CreateKindFieldRequestType enum.
-func (e CreateKindFieldRequestType) Valid() bool {
+// Valid indicates whether the value is a known member of the CreateTypeFieldRequestType enum.
+func (e CreateTypeFieldRequestType) Valid() bool {
 	switch e {
-	case CreateKindFieldRequestTypeBoolean:
+	case CreateTypeFieldRequestTypeBoolean:
 		return true
-	case CreateKindFieldRequestTypeDate:
+	case CreateTypeFieldRequestTypeDate:
 		return true
-	case CreateKindFieldRequestTypeLink:
+	case CreateTypeFieldRequestTypeLink:
 		return true
-	case CreateKindFieldRequestTypeNumber:
+	case CreateTypeFieldRequestTypeNumber:
 		return true
-	case CreateKindFieldRequestTypeText:
+	case CreateTypeFieldRequestTypeText:
 		return true
 	default:
 		return false
@@ -68,36 +68,6 @@ func (e DisplayMode) Valid() bool {
 	case Grid:
 		return true
 	case Thumbnail:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for KindFieldType.
-const (
-	KindFieldTypeBoolean   KindFieldType = "boolean"
-	KindFieldTypeDate      KindFieldType = "date"
-	KindFieldTypeLink      KindFieldType = "link"
-	KindFieldTypeNumber    KindFieldType = "number"
-	KindFieldTypeStreaming KindFieldType = "streaming"
-	KindFieldTypeText      KindFieldType = "text"
-)
-
-// Valid indicates whether the value is a known member of the KindFieldType enum.
-func (e KindFieldType) Valid() bool {
-	switch e {
-	case KindFieldTypeBoolean:
-		return true
-	case KindFieldTypeDate:
-		return true
-	case KindFieldTypeLink:
-		return true
-	case KindFieldTypeNumber:
-		return true
-	case KindFieldTypeStreaming:
-		return true
-	case KindFieldTypeText:
 		return true
 	default:
 		return false
@@ -194,7 +164,6 @@ const (
 	ProblemCodeDestinationUnavailable ProblemCode = "destination_unavailable"
 	ProblemCodeInternal               ProblemCode = "internal"
 	ProblemCodeInvalidParameter       ProblemCode = "invalid_parameter"
-	ProblemCodeKindMismatch           ProblemCode = "kind_mismatch"
 	ProblemCodeLookupDisabled         ProblemCode = "lookup_disabled"
 	ProblemCodeMalformedRequest       ProblemCode = "malformed_request"
 	ProblemCodeNotFound               ProblemCode = "not_found"
@@ -202,6 +171,7 @@ const (
 	ProblemCodeParentInTrash          ProblemCode = "parent_in_trash"
 	ProblemCodePayloadTooLarge        ProblemCode = "payload_too_large"
 	ProblemCodePreconditionRequired   ProblemCode = "precondition_required"
+	ProblemCodeTypeMismatch           ProblemCode = "type_mismatch"
 	ProblemCodeUnknownField           ProblemCode = "unknown_field"
 	ProblemCodeUnsupportedMediaType   ProblemCode = "unsupported_media_type"
 	ProblemCodeUpstreamUnavailable    ProblemCode = "upstream_unavailable"
@@ -220,8 +190,6 @@ func (e ProblemCode) Valid() bool {
 		return true
 	case ProblemCodeInvalidParameter:
 		return true
-	case ProblemCodeKindMismatch:
-		return true
 	case ProblemCodeLookupDisabled:
 		return true
 	case ProblemCodeMalformedRequest:
@@ -235,6 +203,8 @@ func (e ProblemCode) Valid() bool {
 	case ProblemCodePayloadTooLarge:
 		return true
 	case ProblemCodePreconditionRequired:
+		return true
+	case ProblemCodeTypeMismatch:
 		return true
 	case ProblemCodeUnknownField:
 		return true
@@ -257,7 +227,6 @@ const (
 	RestoreConflictProblemCodeDestinationUnavailable RestoreConflictProblemCode = "destination_unavailable"
 	RestoreConflictProblemCodeInternal               RestoreConflictProblemCode = "internal"
 	RestoreConflictProblemCodeInvalidParameter       RestoreConflictProblemCode = "invalid_parameter"
-	RestoreConflictProblemCodeKindMismatch           RestoreConflictProblemCode = "kind_mismatch"
 	RestoreConflictProblemCodeLookupDisabled         RestoreConflictProblemCode = "lookup_disabled"
 	RestoreConflictProblemCodeMalformedRequest       RestoreConflictProblemCode = "malformed_request"
 	RestoreConflictProblemCodeNotFound               RestoreConflictProblemCode = "not_found"
@@ -265,6 +234,7 @@ const (
 	RestoreConflictProblemCodeParentInTrash          RestoreConflictProblemCode = "parent_in_trash"
 	RestoreConflictProblemCodePayloadTooLarge        RestoreConflictProblemCode = "payload_too_large"
 	RestoreConflictProblemCodePreconditionRequired   RestoreConflictProblemCode = "precondition_required"
+	RestoreConflictProblemCodeTypeMismatch           RestoreConflictProblemCode = "type_mismatch"
 	RestoreConflictProblemCodeUnknownField           RestoreConflictProblemCode = "unknown_field"
 	RestoreConflictProblemCodeUnsupportedMediaType   RestoreConflictProblemCode = "unsupported_media_type"
 	RestoreConflictProblemCodeUpstreamUnavailable    RestoreConflictProblemCode = "upstream_unavailable"
@@ -283,8 +253,6 @@ func (e RestoreConflictProblemCode) Valid() bool {
 		return true
 	case RestoreConflictProblemCodeInvalidParameter:
 		return true
-	case RestoreConflictProblemCodeKindMismatch:
-		return true
 	case RestoreConflictProblemCodeLookupDisabled:
 		return true
 	case RestoreConflictProblemCodeMalformedRequest:
@@ -298,6 +266,8 @@ func (e RestoreConflictProblemCode) Valid() bool {
 	case RestoreConflictProblemCodePayloadTooLarge:
 		return true
 	case RestoreConflictProblemCodePreconditionRequired:
+		return true
+	case RestoreConflictProblemCodeTypeMismatch:
 		return true
 	case RestoreConflictProblemCodeUnknownField:
 		return true
@@ -353,14 +323,14 @@ func (e SearchPathSegmentType) Valid() bool {
 	}
 }
 
-// Defines values for TmdbKind.
+// Defines values for TmdbType.
 const (
-	Movie  TmdbKind = "movie"
-	TvShow TmdbKind = "tv_show"
+	Movie  TmdbType = "movie"
+	TvShow TmdbType = "tv_show"
 )
 
-// Valid indicates whether the value is a known member of the TmdbKind enum.
-func (e TmdbKind) Valid() bool {
+// Valid indicates whether the value is a known member of the TmdbType enum.
+func (e TmdbType) Valid() bool {
 	switch e {
 	case Movie:
 		return true
@@ -386,6 +356,36 @@ func (e TrashEntryRootType) Valid() bool {
 	case TrashEntryRootTypeItem:
 		return true
 	case TrashEntryRootTypeList:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TypeFieldType.
+const (
+	TypeFieldTypeBoolean   TypeFieldType = "boolean"
+	TypeFieldTypeDate      TypeFieldType = "date"
+	TypeFieldTypeLink      TypeFieldType = "link"
+	TypeFieldTypeNumber    TypeFieldType = "number"
+	TypeFieldTypeStreaming TypeFieldType = "streaming"
+	TypeFieldTypeText      TypeFieldType = "text"
+)
+
+// Valid indicates whether the value is a known member of the TypeFieldType enum.
+func (e TypeFieldType) Valid() bool {
+	switch e {
+	case TypeFieldTypeBoolean:
+		return true
+	case TypeFieldTypeDate:
+		return true
+	case TypeFieldTypeLink:
+		return true
+	case TypeFieldTypeNumber:
+		return true
+	case TypeFieldTypeStreaming:
+		return true
+	case TypeFieldTypeText:
 		return true
 	default:
 		return false
@@ -428,7 +428,6 @@ const (
 	ValidationProblemCodeDestinationUnavailable ValidationProblemCode = "destination_unavailable"
 	ValidationProblemCodeInternal               ValidationProblemCode = "internal"
 	ValidationProblemCodeInvalidParameter       ValidationProblemCode = "invalid_parameter"
-	ValidationProblemCodeKindMismatch           ValidationProblemCode = "kind_mismatch"
 	ValidationProblemCodeLookupDisabled         ValidationProblemCode = "lookup_disabled"
 	ValidationProblemCodeMalformedRequest       ValidationProblemCode = "malformed_request"
 	ValidationProblemCodeNotFound               ValidationProblemCode = "not_found"
@@ -436,6 +435,7 @@ const (
 	ValidationProblemCodeParentInTrash          ValidationProblemCode = "parent_in_trash"
 	ValidationProblemCodePayloadTooLarge        ValidationProblemCode = "payload_too_large"
 	ValidationProblemCodePreconditionRequired   ValidationProblemCode = "precondition_required"
+	ValidationProblemCodeTypeMismatch           ValidationProblemCode = "type_mismatch"
 	ValidationProblemCodeUnknownField           ValidationProblemCode = "unknown_field"
 	ValidationProblemCodeUnsupportedMediaType   ValidationProblemCode = "unsupported_media_type"
 	ValidationProblemCodeUpstreamUnavailable    ValidationProblemCode = "upstream_unavailable"
@@ -454,8 +454,6 @@ func (e ValidationProblemCode) Valid() bool {
 		return true
 	case ValidationProblemCodeInvalidParameter:
 		return true
-	case ValidationProblemCodeKindMismatch:
-		return true
 	case ValidationProblemCodeLookupDisabled:
 		return true
 	case ValidationProblemCodeMalformedRequest:
@@ -469,6 +467,8 @@ func (e ValidationProblemCode) Valid() bool {
 	case ValidationProblemCodePayloadTooLarge:
 		return true
 	case ValidationProblemCodePreconditionRequired:
+		return true
+	case ValidationProblemCodeTypeMismatch:
 		return true
 	case ValidationProblemCodeUnknownField:
 		return true
@@ -491,7 +491,6 @@ const (
 	VersionConflictProblemCodeDestinationUnavailable VersionConflictProblemCode = "destination_unavailable"
 	VersionConflictProblemCodeInternal               VersionConflictProblemCode = "internal"
 	VersionConflictProblemCodeInvalidParameter       VersionConflictProblemCode = "invalid_parameter"
-	VersionConflictProblemCodeKindMismatch           VersionConflictProblemCode = "kind_mismatch"
 	VersionConflictProblemCodeLookupDisabled         VersionConflictProblemCode = "lookup_disabled"
 	VersionConflictProblemCodeMalformedRequest       VersionConflictProblemCode = "malformed_request"
 	VersionConflictProblemCodeNotFound               VersionConflictProblemCode = "not_found"
@@ -499,6 +498,7 @@ const (
 	VersionConflictProblemCodeParentInTrash          VersionConflictProblemCode = "parent_in_trash"
 	VersionConflictProblemCodePayloadTooLarge        VersionConflictProblemCode = "payload_too_large"
 	VersionConflictProblemCodePreconditionRequired   VersionConflictProblemCode = "precondition_required"
+	VersionConflictProblemCodeTypeMismatch           VersionConflictProblemCode = "type_mismatch"
 	VersionConflictProblemCodeUnknownField           VersionConflictProblemCode = "unknown_field"
 	VersionConflictProblemCodeUnsupportedMediaType   VersionConflictProblemCode = "unsupported_media_type"
 	VersionConflictProblemCodeUpstreamUnavailable    VersionConflictProblemCode = "upstream_unavailable"
@@ -517,8 +517,6 @@ func (e VersionConflictProblemCode) Valid() bool {
 		return true
 	case VersionConflictProblemCodeInvalidParameter:
 		return true
-	case VersionConflictProblemCodeKindMismatch:
-		return true
 	case VersionConflictProblemCodeLookupDisabled:
 		return true
 	case VersionConflictProblemCodeMalformedRequest:
@@ -532,6 +530,8 @@ func (e VersionConflictProblemCode) Valid() bool {
 	case VersionConflictProblemCodePayloadTooLarge:
 		return true
 	case VersionConflictProblemCodePreconditionRequired:
+		return true
+	case VersionConflictProblemCodeTypeMismatch:
 		return true
 	case VersionConflictProblemCodeUnknownField:
 		return true
@@ -584,10 +584,10 @@ type CreateFolderRequest struct {
 
 // CreateItemRequest defines model for CreateItemRequest.
 type CreateItemRequest struct {
-	// Lookup For movie and TV lists, run TMDB lookup during creation. Ignored on other kinds.
+	// Lookup For movie and TV lists, run TMDB lookup during creation. Ignored on other types.
 	Lookup *bool `json:"lookup,omitempty"`
 
-	// Metadata Free-form here because its shape depends on the list's kind. Validated against that kind: see the `*Metadata` schemas.
+	// Metadata Free-form here because its shape depends on the list's type. Validated against that type: see the `*Metadata` schemas.
 	Metadata *map[string]interface{} `json:"metadata,omitempty"`
 
 	// Price A price in requests, either a single price `{amount, currency}` or a range `{min, max, currency}`. `amount` and `min`/`max`
@@ -599,24 +599,6 @@ type CreateItemRequest struct {
 	// TmdbId Optional selected TMDB suggestion. Used only when lookup runs on a movie or TV item.
 	TmdbId  *int                      `json:"tmdb_id,omitempty"`
 	Website nullable.Nullable[string] `json:"website,omitempty"`
-}
-
-// CreateKindFieldRequest defines model for CreateKindFieldRequest.
-type CreateKindFieldRequest struct {
-	Label string                     `json:"label"`
-	Type  CreateKindFieldRequestType `json:"type"`
-}
-
-// CreateKindFieldRequestType defines model for CreateKindFieldRequest.Type.
-type CreateKindFieldRequestType string
-
-// CreateKindRequest defines model for CreateKindRequest.
-type CreateKindRequest struct {
-	AllowsPrice         *bool                       `json:"allows_price,omitempty"`
-	DefaultIcon         nullable.Nullable[string]   `json:"default_icon,omitempty"`
-	DefaultPinnedFields nullable.Nullable[[]string] `json:"default_pinned_fields,omitempty"`
-	DefaultSortField    nullable.Nullable[string]   `json:"default_sort_field,omitempty"`
-	Name                string                      `json:"name"`
 }
 
 // CreateListRequest defines model for CreateListRequest.
@@ -639,23 +621,43 @@ type CreateListRequest struct {
 	//
 	// Example: indigo
 	IconColor nullable.Nullable[ListIconColor] `json:"icon_color,omitempty"`
-
-	// Kind The kind of a list. Items have no kind of their own: theirs is read-only and derived from their list. Changing the kind of a
-	// list that has items clears the `metadata` of all its items.
-	Kind ItemKind `json:"kind"`
-	Name string   `json:"name"`
+	Name      string                           `json:"name"`
 
 	// PinnedFields The fields a list shows in its rows, in order: the first is the primary field, the second the secondary (F009-B2; replaces the
-	// `{under, right}` slots of F-002). `null` means the kind default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
-	// Any field defined for the kind can be pinned; `price` is also available when the kind allows it. At most 2 unique keys
-	// (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `kind` resets it to `null`.
+	// `{under, right}` slots of F-002). `null` means the type default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
+	// Any field defined for the type can be pinned; `price` is also available when the type allows it. At most 2 unique keys
+	// (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `type` resets it to `null`.
 	//
 	//
 	// Example: ["release_year","runtime_minutes"]
 	PinnedFields nullable.Nullable[PinnedFields] `json:"pinned_fields,omitempty"`
 
-	// SortMode One of `manual`, `title`, `updated`, `price`, or a field key from the list kind. The manual order is kept when the mode changes.
+	// SortMode One of `manual`, `title`, `updated`, `price`, or a field key from the list type. The manual order is kept when the mode changes.
 	SortMode *SortMode `json:"sort_mode,omitempty"`
+
+	// Type The type of a list: the key of a type defined in the workspace, or `null` for a list with no type (nothing selected; the default
+	// on create). Items have no type of their own: theirs is read-only and derived from their list (`null` for a list with no type). A list
+	// with no type has no custom fields, no price, only the built-in sort modes and no pinned fields; its items' `metadata` is `{}`. Changing the
+	// type of a list that has items (to another type or to/from `null`) clears the `metadata` of all its items.
+	Type nullable.Nullable[ItemType] `json:"type,omitempty"`
+}
+
+// CreateTypeFieldRequest defines model for CreateTypeFieldRequest.
+type CreateTypeFieldRequest struct {
+	Label string                     `json:"label"`
+	Type  CreateTypeFieldRequestType `json:"type"`
+}
+
+// CreateTypeFieldRequestType defines model for CreateTypeFieldRequest.Type.
+type CreateTypeFieldRequestType string
+
+// CreateTypeRequest defines model for CreateTypeRequest.
+type CreateTypeRequest struct {
+	AllowsPrice         *bool                       `json:"allows_price,omitempty"`
+	DefaultIcon         nullable.Nullable[string]   `json:"default_icon,omitempty"`
+	DefaultPinnedFields nullable.Nullable[[]string] `json:"default_pinned_fields,omitempty"`
+	DefaultSortField    nullable.Nullable[string]   `json:"default_sort_field,omitempty"`
+	Name                string                      `json:"name"`
 }
 
 // DisplayMode defines model for DisplayMode.
@@ -683,7 +685,7 @@ type ImageSummary struct {
 	Url          string  `json:"url"`
 }
 
-// Item An item. `kind` is read-only and derived from the item's list; `metadata` is validated against that workspace kind's field definitions.
+// Item An item. `type` is read-only and derived from the item's list; `metadata` is validated against that workspace type's field definitions.
 type Item struct {
 	// ContentVersion Current Markdown version (0 = empty). For display only; use the content endpoints to edit.
 	ContentVersion int                `json:"content_version"`
@@ -692,7 +694,6 @@ type Item struct {
 
 	// Image An item image, either an external URL or an uploaded attachment. `null` when the item has no image.
 	Image    nullable.Nullable[Image] `json:"image"`
-	Kind     *string                  `json:"kind,omitempty"`
 	ListId   openapi_types.UUID       `json:"list_id"`
 	Metadata map[string]interface{}   `json:"metadata"`
 
@@ -701,15 +702,18 @@ type Item struct {
 
 	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
 	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
-	Price     nullable.Nullable[Price]  `json:"price"`
-	SortOrder int                       `json:"sort_order"`
-	Title     string                    `json:"title"`
+	Price     nullable.Nullable[Price] `json:"price"`
+	SortOrder int                      `json:"sort_order"`
+	Title     string                   `json:"title"`
+
+	// Type `null` when the list has no type.
+	Type      nullable.Nullable[string] `json:"type,omitempty"`
 	UpdatedAt time.Time                 `json:"updated_at"`
 	Version   int                       `json:"version"`
 	Website   nullable.Nullable[string] `json:"website"`
 }
 
-// ItemBase Fields shared by every item kind. `kind` (read-only, derived from the list) and `metadata` are added by the per-kind schemas.
+// ItemBase Fields shared by every item type. `type` (read-only, derived from the list) and `metadata` are added by the per-type schemas.
 type ItemBase struct {
 	// ContentVersion Current Markdown version (0 = empty). For display only; use the content endpoints to edit.
 	ContentVersion int                `json:"content_version"`
@@ -733,74 +737,46 @@ type ItemBase struct {
 	Website   nullable.Nullable[string] `json:"website"`
 }
 
-// ItemKind The kind of a list. Items have no kind of their own: theirs is read-only and derived from their list. Changing the kind of a
-// list that has items clears the `metadata` of all its items.
-type ItemKind = string
-
 // ItemPage defines model for ItemPage.
 type ItemPage struct {
 	Data []ItemSummary `json:"data"`
 	Page Page          `json:"page"`
 }
 
-// ItemSummary An item row in lists, search and recent items: the same `metadata` object as the full item (`{}` when the kind has none), and the image is reduced.
+// ItemSummary An item row in lists, search and recent items: the same `metadata` object as the full item (`{}` when the type has none), and the image is reduced.
 type ItemSummary struct {
 	ContentVersion int                `json:"content_version"`
 	CreatedAt      time.Time          `json:"created_at"`
 	Id             openapi_types.UUID `json:"id"`
 
 	// Image The image reduced for list rows and search. `thumbnail_url` is present for uploads only.
-	Image nullable.Nullable[ImageSummary] `json:"image"`
+	Image  nullable.Nullable[ImageSummary] `json:"image"`
+	ListId openapi_types.UUID              `json:"list_id"`
 
-	// Kind The kind of a list. Items have no kind of their own: theirs is read-only and derived from their list. Changing the kind of a
-	// list that has items clears the `metadata` of all its items.
-	Kind   ItemKind           `json:"kind"`
-	ListId openapi_types.UUID `json:"list_id"`
-
-	// Metadata Same object as `metadata` on the full item; its shape depends on `kind` (see the `*Metadata` schemas).
+	// Metadata Same object as `metadata` on the full item; its shape depends on `type` (see the `*Metadata` schemas).
 	Metadata map[string]interface{} `json:"metadata"`
 
 	// Price A price in responses: always `min`, `max` and `currency`. A single price has `min` equal to `max`. Money is a decimal string
 	// (D-062). An open range (only one bound) can exist for prices created before 0.3.0.
-	Price     nullable.Nullable[Price]  `json:"price"`
-	SortOrder int                       `json:"sort_order"`
-	Title     string                    `json:"title"`
-	UpdatedAt time.Time                 `json:"updated_at"`
-	Version   int                       `json:"version"`
-	Website   nullable.Nullable[string] `json:"website"`
+	Price     nullable.Nullable[Price] `json:"price"`
+	SortOrder int                      `json:"sort_order"`
+	Title     string                   `json:"title"`
+
+	// Type The type of a list: the key of a type defined in the workspace, or `null` for a list with no type (nothing selected; the default
+	// on create). Items have no type of their own: theirs is read-only and derived from their list (`null` for a list with no type). A list
+	// with no type has no custom fields, no price, only the built-in sort modes and no pinned fields; its items' `metadata` is `{}`. Changing the
+	// type of a list that has items (to another type or to/from `null`) clears the `metadata` of all its items.
+	Type      nullable.Nullable[ItemType] `json:"type"`
+	UpdatedAt time.Time                   `json:"updated_at"`
+	Version   int                         `json:"version"`
+	Website   nullable.Nullable[string]   `json:"website"`
 }
 
-// KindDefinition defines model for KindDefinition.
-type KindDefinition struct {
-	AllowsPrice         bool                        `json:"allows_price"`
-	DefaultIcon         nullable.Nullable[string]   `json:"default_icon,omitempty"`
-	DefaultPinnedFields nullable.Nullable[[]string] `json:"default_pinned_fields,omitempty"`
-	DefaultSortField    nullable.Nullable[string]   `json:"default_sort_field,omitempty"`
-	Fields              []KindField                 `json:"fields"`
-	IsLocked            bool                        `json:"is_locked"`
-	Key                 string                      `json:"key"`
-	Name                string                      `json:"name"`
-	Version             int                         `json:"version"`
-}
-
-// KindField defines model for KindField.
-type KindField struct {
-	IsLocked bool          `json:"is_locked"`
-	Key      string        `json:"key"`
-	Label    string        `json:"label"`
-	Position int           `json:"position"`
-	Type     KindFieldType `json:"type"`
-	Version  int           `json:"version"`
-}
-
-// KindFieldType defines model for KindField.Type.
-type KindFieldType string
-
-// KindFieldDeletePreview defines model for KindFieldDeletePreview.
-type KindFieldDeletePreview struct {
-	// PopulatedItemCount Number of items, including trashed items, with a value for this field.
-	PopulatedItemCount int `json:"populated_item_count"`
-}
+// ItemType The type of a list: the key of a type defined in the workspace, or `null` for a list with no type (nothing selected; the default
+// on create). Items have no type of their own: theirs is read-only and derived from their list (`null` for a list with no type). A list
+// with no type has no custom fields, no price, only the built-in sort modes and no pinned fields; its items' `metadata` is `{}`. Changing the
+// type of a list that has items (to another type or to/from `null`) clears the `metadata` of all its items.
+type ItemType = string
 
 // List defines model for List.
 type List struct {
@@ -827,30 +803,32 @@ type List struct {
 	Id        openapi_types.UUID               `json:"id"`
 
 	// ItemCount Number of active items.
-	ItemCount int `json:"item_count"`
-
-	// Kind The kind of a list. Items have no kind of their own: theirs is read-only and derived from their list. Changing the kind of a
-	// list that has items clears the `metadata` of all its items.
-	Kind ItemKind `json:"kind"`
-	Name string   `json:"name"`
+	ItemCount int    `json:"item_count"`
+	Name      string `json:"name"`
 
 	// Path Ancestor folders. Present on `getList` only.
 	Path *[]PathSegment `json:"path,omitempty"`
 
 	// PinnedFields The fields a list shows in its rows, in order: the first is the primary field, the second the secondary (F009-B2; replaces the
-	// `{under, right}` slots of F-002). `null` means the kind default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
-	// Any field defined for the kind can be pinned; `price` is also available when the kind allows it. At most 2 unique keys
-	// (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `kind` resets it to `null`.
+	// `{under, right}` slots of F-002). `null` means the type default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
+	// Any field defined for the type can be pinned; `price` is also available when the type allows it. At most 2 unique keys
+	// (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `type` resets it to `null`.
 	//
 	//
 	// Example: ["release_year","runtime_minutes"]
 	PinnedFields nullable.Nullable[PinnedFields] `json:"pinned_fields"`
 
-	// SortMode One of `manual`, `title`, `updated`, `price`, or a field key from the list kind. The manual order is kept when the mode changes.
-	SortMode  SortMode  `json:"sort_mode"`
-	SortOrder int       `json:"sort_order"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Version   int       `json:"version"`
+	// SortMode One of `manual`, `title`, `updated`, `price`, or a field key from the list type. The manual order is kept when the mode changes.
+	SortMode  SortMode `json:"sort_mode"`
+	SortOrder int      `json:"sort_order"`
+
+	// Type The type of a list: the key of a type defined in the workspace, or `null` for a list with no type (nothing selected; the default
+	// on create). Items have no type of their own: theirs is read-only and derived from their list (`null` for a list with no type). A list
+	// with no type has no custom fields, no price, only the built-in sort modes and no pinned fields; its items' `metadata` is `{}`. Changing the
+	// type of a list that has items (to another type or to/from `null`) clears the `metadata` of all its items.
+	Type      nullable.Nullable[ItemType] `json:"type"`
+	UpdatedAt time.Time                   `json:"updated_at"`
+	Version   int                         `json:"version"`
 }
 
 // ListIcon The icon of a list (F012-B1): an emoji (one grapheme) or `i:<name>` for a built-in icon key. `null` is the default icon.
@@ -918,9 +896,9 @@ type PathSegment struct {
 type PathSegmentType string
 
 // PinnedFields The fields a list shows in its rows, in order: the first is the primary field, the second the secondary (F009-B2; replaces the
-// `{under, right}` slots of F-002). `null` means the kind default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
-// Any field defined for the kind can be pinned; `price` is also available when the kind allows it. At most 2 unique keys
-// (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `kind` resets it to `null`.
+// `{under, right}` slots of F-002). `null` means the type default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
+// Any field defined for the type can be pinned; `price` is also available when the type allows it. At most 2 unique keys
+// (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `type` resets it to `null`.
 //
 // Example: ["release_year","runtime_minutes"]
 type PinnedFields = []string
@@ -993,16 +971,16 @@ type ReorderItemsRequest struct {
 	Ids []openapi_types.UUID `json:"ids"`
 }
 
-// ReorderKindFieldsRequest defines model for ReorderKindFieldsRequest.
-type ReorderKindFieldsRequest struct {
-	Keys []string `json:"keys"`
-}
-
 // ReorderListsRequest defines model for ReorderListsRequest.
 type ReorderListsRequest struct {
 	// FolderId `null` = root.
 	FolderId nullable.Nullable[openapi_types.UUID] `json:"folder_id"`
 	Ids      []openapi_types.UUID                  `json:"ids"`
+}
+
+// ReorderTypeFieldsRequest defines model for ReorderTypeFieldsRequest.
+type ReorderTypeFieldsRequest struct {
+	Keys []string `json:"keys"`
 }
 
 // RestoreConflictProblem `409` from a trash restore. `blocking_parent` is present for `parent_in_trash`.
@@ -1079,12 +1057,12 @@ type SearchPathSegmentType string
 
 // SearchResult defines model for SearchResult.
 type SearchResult struct {
-	// Item An item row in lists, search and recent items: the same `metadata` object as the full item (`{}` when the kind has none), and the image is reduced.
-	Item ItemSummary `json:"item"`
+	// Item An item row in lists, search and recent items: the same `metadata` object as the full item (`{}` when the type has none), and the image is reduced.
+	Item ItemSummary         `json:"item"`
+	Path []SearchPathSegment `json:"path"`
 
-	// KindName The display name from this workspace's kind definition.
-	KindName string              `json:"kind_name"`
-	Path     []SearchPathSegment `json:"path"`
+	// TypeName The display name from this workspace's type definition, `null` when the list has no type.
+	TypeName nullable.Nullable[string] `json:"type_name"`
 }
 
 // SetImageUrlRequest defines model for SetImageUrlRequest.
@@ -1109,11 +1087,8 @@ type Settings struct {
 	WorkspaceName        string                 `json:"workspace_name"`
 }
 
-// SortMode One of `manual`, `title`, `updated`, `price`, or a field key from the list kind. The manual order is kept when the mode changes.
+// SortMode One of `manual`, `title`, `updated`, `price`, or a field key from the list type. The manual order is kept when the mode changes.
 type SortMode = string
-
-// TmdbKind defines model for TmdbKind.
-type TmdbKind string
 
 // TmdbSuggestion defines model for TmdbSuggestion.
 type TmdbSuggestion struct {
@@ -1130,6 +1105,9 @@ type TmdbSuggestions struct {
 	Available bool             `json:"available"`
 	Results   []TmdbSuggestion `json:"results"`
 }
+
+// TmdbType defines model for TmdbType.
+type TmdbType string
 
 // TrashEntry defines model for TrashEntry.
 type TrashEntry struct {
@@ -1166,6 +1144,38 @@ type Tree struct {
 	Lists   []List   `json:"lists"`
 }
 
+// TypeDefinition defines model for TypeDefinition.
+type TypeDefinition struct {
+	AllowsPrice         bool                        `json:"allows_price"`
+	DefaultIcon         nullable.Nullable[string]   `json:"default_icon,omitempty"`
+	DefaultPinnedFields nullable.Nullable[[]string] `json:"default_pinned_fields,omitempty"`
+	DefaultSortField    nullable.Nullable[string]   `json:"default_sort_field,omitempty"`
+	Fields              []TypeField                 `json:"fields"`
+	IsLocked            bool                        `json:"is_locked"`
+	Key                 string                      `json:"key"`
+	Name                string                      `json:"name"`
+	Version             int                         `json:"version"`
+}
+
+// TypeField defines model for TypeField.
+type TypeField struct {
+	IsLocked bool          `json:"is_locked"`
+	Key      string        `json:"key"`
+	Label    string        `json:"label"`
+	Position int           `json:"position"`
+	Type     TypeFieldType `json:"type"`
+	Version  int           `json:"version"`
+}
+
+// TypeFieldType defines model for TypeField.Type.
+type TypeFieldType string
+
+// TypeFieldDeletePreview defines model for TypeFieldDeletePreview.
+type TypeFieldDeletePreview struct {
+	// PopulatedItemCount Number of items, including trashed items, with a value for this field.
+	PopulatedItemCount int `json:"populated_item_count"`
+}
+
 // UpdateContentRequest defines model for UpdateContentRequest.
 type UpdateContentRequest struct {
 	// Body Up to 1 MiB UTF-8 (the server checks bytes).
@@ -1179,7 +1189,7 @@ type UpdateFolderRequest struct {
 
 // UpdateItemRequest defines model for UpdateItemRequest.
 type UpdateItemRequest struct {
-	// Metadata Free-form here because its shape depends on the list's kind. Validated against that kind: see the `*Metadata` schemas.
+	// Metadata Free-form here because its shape depends on the list's type. Validated against that type: see the `*Metadata` schemas.
 	Metadata *map[string]interface{} `json:"metadata,omitempty"`
 
 	// Price A price in requests, either a single price `{amount, currency}` or a range `{min, max, currency}`. `amount` and `min`/`max`
@@ -1188,20 +1198,6 @@ type UpdateItemRequest struct {
 	Price   nullable.Nullable[PriceInput] `json:"price,omitempty"`
 	Title   *string                       `json:"title,omitempty"`
 	Website nullable.Nullable[string]     `json:"website,omitempty"`
-}
-
-// UpdateKindFieldRequest defines model for UpdateKindFieldRequest.
-type UpdateKindFieldRequest struct {
-	Label string `json:"label"`
-}
-
-// UpdateKindRequest defines model for UpdateKindRequest.
-type UpdateKindRequest struct {
-	AllowsPrice         *bool                       `json:"allows_price,omitempty"`
-	DefaultIcon         nullable.Nullable[string]   `json:"default_icon,omitempty"`
-	DefaultPinnedFields nullable.Nullable[[]string] `json:"default_pinned_fields,omitempty"`
-	DefaultSortField    nullable.Nullable[string]   `json:"default_sort_field,omitempty"`
-	Name                *string                     `json:"name,omitempty"`
 }
 
 // UpdateListRequest defines model for UpdateListRequest.
@@ -1223,23 +1219,25 @@ type UpdateListRequest struct {
 	//
 	// Example: indigo
 	IconColor nullable.Nullable[ListIconColor] `json:"icon_color,omitempty"`
-
-	// Kind The kind of a list. Items have no kind of their own: theirs is read-only and derived from their list. Changing the kind of a
-	// list that has items clears the `metadata` of all its items.
-	Kind *ItemKind `json:"kind,omitempty"`
-	Name *string   `json:"name,omitempty"`
+	Name      *string                          `json:"name,omitempty"`
 
 	// PinnedFields The fields a list shows in its rows, in order: the first is the primary field, the second the secondary (F009-B2; replaces the
-	// `{under, right}` slots of F-002). `null` means the kind default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
-	// Any field defined for the kind can be pinned; `price` is also available when the kind allows it. At most 2 unique keys
-	// (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `kind` resets it to `null`.
+	// `{under, right}` slots of F-002). `null` means the type default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
+	// Any field defined for the type can be pinned; `price` is also available when the type allows it. At most 2 unique keys
+	// (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `type` resets it to `null`.
 	//
 	//
 	// Example: ["release_year","runtime_minutes"]
 	PinnedFields nullable.Nullable[PinnedFields] `json:"pinned_fields,omitempty"`
 
-	// SortMode One of `manual`, `title`, `updated`, `price`, or a field key from the list kind. The manual order is kept when the mode changes.
+	// SortMode One of `manual`, `title`, `updated`, `price`, or a field key from the list type. The manual order is kept when the mode changes.
 	SortMode *SortMode `json:"sort_mode,omitempty"`
+
+	// Type The type of a list: the key of a type defined in the workspace, or `null` for a list with no type (nothing selected; the default
+	// on create). Items have no type of their own: theirs is read-only and derived from their list (`null` for a list with no type). A list
+	// with no type has no custom fields, no price, only the built-in sort modes and no pinned fields; its items' `metadata` is `{}`. Changing the
+	// type of a list that has items (to another type or to/from `null`) clears the `metadata` of all its items.
+	Type nullable.Nullable[ItemType] `json:"type,omitempty"`
 }
 
 // UpdateSettingsRequest defines model for UpdateSettingsRequest.
@@ -1253,6 +1251,20 @@ type UpdateSettingsRequest struct {
 	StreamingCountryCode *string                `json:"streaming_country_code,omitempty"`
 	TrashRetentionDays   nullable.Nullable[int] `json:"trash_retention_days,omitempty"`
 	WorkspaceName        *string                `json:"workspace_name,omitempty"`
+}
+
+// UpdateTypeFieldRequest defines model for UpdateTypeFieldRequest.
+type UpdateTypeFieldRequest struct {
+	Label string `json:"label"`
+}
+
+// UpdateTypeRequest defines model for UpdateTypeRequest.
+type UpdateTypeRequest struct {
+	AllowsPrice         *bool                       `json:"allows_price,omitempty"`
+	DefaultIcon         nullable.Nullable[string]   `json:"default_icon,omitempty"`
+	DefaultPinnedFields nullable.Nullable[[]string] `json:"default_pinned_fields,omitempty"`
+	DefaultSortField    nullable.Nullable[string]   `json:"default_sort_field,omitempty"`
+	Name                *string                     `json:"name,omitempty"`
 }
 
 // UploadImage defines model for UploadImage.
@@ -1469,48 +1481,6 @@ type MoveItemParams struct {
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
-// DeleteKindParams defines parameters for DeleteKind.
-type DeleteKindParams struct {
-	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
-	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
-	IfMatch *IfMatch `json:"If-Match,omitempty"`
-}
-
-// UpdateKindParams defines parameters for UpdateKind.
-type UpdateKindParams struct {
-	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
-	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
-	IfMatch *IfMatch `json:"If-Match,omitempty"`
-}
-
-// CreateKindFieldParams defines parameters for CreateKindField.
-type CreateKindFieldParams struct {
-	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
-	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
-	IfMatch *IfMatch `json:"If-Match,omitempty"`
-}
-
-// ReorderKindFieldsParams defines parameters for ReorderKindFields.
-type ReorderKindFieldsParams struct {
-	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
-	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
-	IfMatch *IfMatch `json:"If-Match,omitempty"`
-}
-
-// DeleteKindFieldParams defines parameters for DeleteKindField.
-type DeleteKindFieldParams struct {
-	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
-	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
-	IfMatch *IfMatch `json:"If-Match,omitempty"`
-}
-
-// UpdateKindFieldParams defines parameters for UpdateKindField.
-type UpdateKindFieldParams struct {
-	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
-	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
-	IfMatch *IfMatch `json:"If-Match,omitempty"`
-}
-
 // DeleteListParams defines parameters for DeleteList.
 type DeleteListParams struct {
 	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
@@ -1527,13 +1497,13 @@ type UpdateListParams struct {
 
 // ListItemsParams defines parameters for ListItems.
 type ListItemsParams struct {
-	// Sort Defaults to the list's `sort_mode`; may be a field key of the list kind.
+	// Sort Defaults to the list's `sort_mode`; may be a field key of the list type.
 	Sort *string `form:"sort,omitempty" json:"sort,omitempty"`
 
 	// Q Case-insensitive title filter; on movie lists it also matches `metadata.director`.
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
 
-	// FilterField Kind field key to filter. Requires value or range parameters matching the field type.
+	// FilterField Type field key to filter. Requires value or range parameters matching the field type.
 	FilterField *string `form:"filter_field,omitempty" json:"filter_field,omitempty"`
 
 	// FilterValue Text/link substring or boolean (`true`/`false`) filter value.
@@ -1585,7 +1555,7 @@ type UpdateSettingsParams struct {
 
 // ListTmdbSuggestionsParams defines parameters for ListTmdbSuggestions.
 type ListTmdbSuggestionsParams struct {
-	Kind TmdbKind `form:"kind" json:"kind"`
+	Type TmdbType `form:"type" json:"type"`
 	Q    string   `form:"q" json:"q"`
 }
 
@@ -1596,6 +1566,48 @@ type ListTrashParams struct {
 
 	// Offset Number of rows to skip.
 	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// DeleteTypeParams defines parameters for DeleteType.
+type DeleteTypeParams struct {
+	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
+	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// UpdateTypeParams defines parameters for UpdateType.
+type UpdateTypeParams struct {
+	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
+	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// CreateTypeFieldParams defines parameters for CreateTypeField.
+type CreateTypeFieldParams struct {
+	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
+	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// ReorderTypeFieldsParams defines parameters for ReorderTypeFields.
+type ReorderTypeFieldsParams struct {
+	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
+	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// DeleteTypeFieldParams defines parameters for DeleteTypeField.
+type DeleteTypeFieldParams struct {
+	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
+	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// UpdateTypeFieldParams defines parameters for UpdateTypeField.
+type UpdateTypeFieldParams struct {
+	// IfMatch **Required.** The typed ETag of the resource being changed (`"i-7"`, `"c-3"`, …). Declared optional only so the generated server
+	// does not answer 400 itself: a missing header (or `*`) returns `428 precondition_required`, a stale one `412 version_conflict`.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
 // CreateFolderJSONRequestBody defines body for CreateFolder for application/json ContentType.
@@ -1631,21 +1643,6 @@ type LookupItemMetadataJSONRequestBody = LookupItemRequest
 // MoveItemJSONRequestBody defines body for MoveItem for application/json ContentType.
 type MoveItemJSONRequestBody = MoveItemRequest
 
-// CreateKindJSONRequestBody defines body for CreateKind for application/json ContentType.
-type CreateKindJSONRequestBody = CreateKindRequest
-
-// UpdateKindJSONRequestBody defines body for UpdateKind for application/json ContentType.
-type UpdateKindJSONRequestBody = UpdateKindRequest
-
-// CreateKindFieldJSONRequestBody defines body for CreateKindField for application/json ContentType.
-type CreateKindFieldJSONRequestBody = CreateKindFieldRequest
-
-// ReorderKindFieldsJSONRequestBody defines body for ReorderKindFields for application/json ContentType.
-type ReorderKindFieldsJSONRequestBody = ReorderKindFieldsRequest
-
-// UpdateKindFieldJSONRequestBody defines body for UpdateKindField for application/json ContentType.
-type UpdateKindFieldJSONRequestBody = UpdateKindFieldRequest
-
 // CreateListJSONRequestBody defines body for CreateList for application/json ContentType.
 type CreateListJSONRequestBody = CreateListRequest
 
@@ -1669,6 +1666,21 @@ type UpdateSettingsJSONRequestBody = UpdateSettingsRequest
 
 // RestoreTrashBatchJSONRequestBody defines body for RestoreTrashBatch for application/json ContentType.
 type RestoreTrashBatchJSONRequestBody = RestoreTrashRequest
+
+// CreateTypeJSONRequestBody defines body for CreateType for application/json ContentType.
+type CreateTypeJSONRequestBody = CreateTypeRequest
+
+// UpdateTypeJSONRequestBody defines body for UpdateType for application/json ContentType.
+type UpdateTypeJSONRequestBody = UpdateTypeRequest
+
+// CreateTypeFieldJSONRequestBody defines body for CreateTypeField for application/json ContentType.
+type CreateTypeFieldJSONRequestBody = CreateTypeFieldRequest
+
+// ReorderTypeFieldsJSONRequestBody defines body for ReorderTypeFields for application/json ContentType.
+type ReorderTypeFieldsJSONRequestBody = ReorderTypeFieldsRequest
+
+// UpdateTypeFieldJSONRequestBody defines body for UpdateTypeField for application/json ContentType.
+type UpdateTypeFieldJSONRequestBody = UpdateTypeFieldRequest
 
 // AsUrlImage returns the union data inside the Image as a UrlImage
 func (t Image) AsUrlImage() (UrlImage, error) {
@@ -1833,33 +1845,6 @@ type ServerInterface interface {
 	// MoveItem Move an item to another list
 	// (POST /api/v1/items/{id}/move)
 	MoveItem(w http.ResponseWriter, r *http.Request, id Id, params MoveItemParams)
-	// ListKinds List kind definitions and fields
-	// (GET /api/v1/kinds)
-	ListKinds(w http.ResponseWriter, r *http.Request)
-	// CreateKind Create a custom kind
-	// (POST /api/v1/kinds)
-	CreateKind(w http.ResponseWriter, r *http.Request)
-	// DeleteKind Delete a custom kind not used by any list
-	// (DELETE /api/v1/kinds/{key})
-	DeleteKind(w http.ResponseWriter, r *http.Request, key string, params DeleteKindParams)
-	// UpdateKind Update a custom kind
-	// (PATCH /api/v1/kinds/{key})
-	UpdateKind(w http.ResponseWriter, r *http.Request, key string, params UpdateKindParams)
-	// CreateKindField Add a custom field
-	// (POST /api/v1/kinds/{key}/fields)
-	CreateKindField(w http.ResponseWriter, r *http.Request, key string, params CreateKindFieldParams)
-	// ReorderKindFields Reorder custom fields
-	// (PUT /api/v1/kinds/{key}/fields/order)
-	ReorderKindFields(w http.ResponseWriter, r *http.Request, key string, params ReorderKindFieldsParams)
-	// DeleteKindField Delete a custom field and strip populated values
-	// (DELETE /api/v1/kinds/{key}/fields/{fieldKey})
-	DeleteKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params DeleteKindFieldParams)
-	// PreviewDeleteKindField Count item values that deleting a custom field would remove
-	// (GET /api/v1/kinds/{key}/fields/{fieldKey})
-	PreviewDeleteKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string)
-	// UpdateKindField Rename a custom field
-	// (PATCH /api/v1/kinds/{key}/fields/{fieldKey})
-	UpdateKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params UpdateKindFieldParams)
 	// CreateList Create a list
 	// (POST /api/v1/lists)
 	CreateList(w http.ResponseWriter, r *http.Request)
@@ -1917,6 +1902,33 @@ type ServerInterface interface {
 	// GetTree Get the sidebar tree
 	// (GET /api/v1/tree)
 	GetTree(w http.ResponseWriter, r *http.Request)
+	// ListTypes List type definitions and fields
+	// (GET /api/v1/types)
+	ListTypes(w http.ResponseWriter, r *http.Request)
+	// CreateType Create a custom type
+	// (POST /api/v1/types)
+	CreateType(w http.ResponseWriter, r *http.Request)
+	// DeleteType Delete a custom type not used by any list
+	// (DELETE /api/v1/types/{key})
+	DeleteType(w http.ResponseWriter, r *http.Request, key string, params DeleteTypeParams)
+	// UpdateType Update a custom type
+	// (PATCH /api/v1/types/{key})
+	UpdateType(w http.ResponseWriter, r *http.Request, key string, params UpdateTypeParams)
+	// CreateTypeField Add a custom field
+	// (POST /api/v1/types/{key}/fields)
+	CreateTypeField(w http.ResponseWriter, r *http.Request, key string, params CreateTypeFieldParams)
+	// ReorderTypeFields Reorder custom fields
+	// (PUT /api/v1/types/{key}/fields/order)
+	ReorderTypeFields(w http.ResponseWriter, r *http.Request, key string, params ReorderTypeFieldsParams)
+	// DeleteTypeField Delete a custom field and strip populated values
+	// (DELETE /api/v1/types/{key}/fields/{fieldKey})
+	DeleteTypeField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params DeleteTypeFieldParams)
+	// PreviewDeleteTypeField Count item values that deleting a custom field would remove
+	// (GET /api/v1/types/{key}/fields/{fieldKey})
+	PreviewDeleteTypeField(w http.ResponseWriter, r *http.Request, key string, fieldKey string)
+	// UpdateTypeField Rename a custom field
+	// (PATCH /api/v1/types/{key}/fields/{fieldKey})
+	UpdateTypeField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params UpdateTypeFieldParams)
 	// CheckHealth Liveness probe
 	// (GET /healthz)
 	CheckHealth(w http.ResponseWriter, r *http.Request)
@@ -2049,60 +2061,6 @@ func (_ Unimplemented) MoveItem(w http.ResponseWriter, r *http.Request, id Id, p
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// ListKinds List kind definitions and fields
-// (GET /api/v1/kinds)
-func (_ Unimplemented) ListKinds(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// CreateKind Create a custom kind
-// (POST /api/v1/kinds)
-func (_ Unimplemented) CreateKind(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// DeleteKind Delete a custom kind not used by any list
-// (DELETE /api/v1/kinds/{key})
-func (_ Unimplemented) DeleteKind(w http.ResponseWriter, r *http.Request, key string, params DeleteKindParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// UpdateKind Update a custom kind
-// (PATCH /api/v1/kinds/{key})
-func (_ Unimplemented) UpdateKind(w http.ResponseWriter, r *http.Request, key string, params UpdateKindParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// CreateKindField Add a custom field
-// (POST /api/v1/kinds/{key}/fields)
-func (_ Unimplemented) CreateKindField(w http.ResponseWriter, r *http.Request, key string, params CreateKindFieldParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// ReorderKindFields Reorder custom fields
-// (PUT /api/v1/kinds/{key}/fields/order)
-func (_ Unimplemented) ReorderKindFields(w http.ResponseWriter, r *http.Request, key string, params ReorderKindFieldsParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// DeleteKindField Delete a custom field and strip populated values
-// (DELETE /api/v1/kinds/{key}/fields/{fieldKey})
-func (_ Unimplemented) DeleteKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params DeleteKindFieldParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// PreviewDeleteKindField Count item values that deleting a custom field would remove
-// (GET /api/v1/kinds/{key}/fields/{fieldKey})
-func (_ Unimplemented) PreviewDeleteKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// UpdateKindField Rename a custom field
-// (PATCH /api/v1/kinds/{key}/fields/{fieldKey})
-func (_ Unimplemented) UpdateKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params UpdateKindFieldParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
 // CreateList Create a list
 // (POST /api/v1/lists)
 func (_ Unimplemented) CreateList(w http.ResponseWriter, r *http.Request) {
@@ -2214,6 +2172,60 @@ func (_ Unimplemented) RestoreTrashBatch(w http.ResponseWriter, r *http.Request,
 // GetTree Get the sidebar tree
 // (GET /api/v1/tree)
 func (_ Unimplemented) GetTree(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListTypes List type definitions and fields
+// (GET /api/v1/types)
+func (_ Unimplemented) ListTypes(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateType Create a custom type
+// (POST /api/v1/types)
+func (_ Unimplemented) CreateType(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteType Delete a custom type not used by any list
+// (DELETE /api/v1/types/{key})
+func (_ Unimplemented) DeleteType(w http.ResponseWriter, r *http.Request, key string, params DeleteTypeParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateType Update a custom type
+// (PATCH /api/v1/types/{key})
+func (_ Unimplemented) UpdateType(w http.ResponseWriter, r *http.Request, key string, params UpdateTypeParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateTypeField Add a custom field
+// (POST /api/v1/types/{key}/fields)
+func (_ Unimplemented) CreateTypeField(w http.ResponseWriter, r *http.Request, key string, params CreateTypeFieldParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ReorderTypeFields Reorder custom fields
+// (PUT /api/v1/types/{key}/fields/order)
+func (_ Unimplemented) ReorderTypeFields(w http.ResponseWriter, r *http.Request, key string, params ReorderTypeFieldsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteTypeField Delete a custom field and strip populated values
+// (DELETE /api/v1/types/{key}/fields/{fieldKey})
+func (_ Unimplemented) DeleteTypeField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params DeleteTypeFieldParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PreviewDeleteTypeField Count item values that deleting a custom field would remove
+// (GET /api/v1/types/{key}/fields/{fieldKey})
+func (_ Unimplemented) PreviewDeleteTypeField(w http.ResponseWriter, r *http.Request, key string, fieldKey string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateTypeField Rename a custom field
+// (PATCH /api/v1/types/{key}/fields/{fieldKey})
+func (_ Unimplemented) UpdateTypeField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params UpdateTypeFieldParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3007,387 +3019,6 @@ func (siw *ServerInterfaceWrapper) MoveItem(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
-// ListKinds operation middleware
-func (siw *ServerInterfaceWrapper) ListKinds(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListKinds(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateKind operation middleware
-func (siw *ServerInterfaceWrapper) CreateKind(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateKind(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteKind operation middleware
-func (siw *ServerInterfaceWrapper) DeleteKind(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "key" -------------
-	var key string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params DeleteKindParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteKind(w, r, key, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UpdateKind operation middleware
-func (siw *ServerInterfaceWrapper) UpdateKind(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "key" -------------
-	var key string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params UpdateKindParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateKind(w, r, key, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateKindField operation middleware
-func (siw *ServerInterfaceWrapper) CreateKindField(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "key" -------------
-	var key string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params CreateKindFieldParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateKindField(w, r, key, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ReorderKindFields operation middleware
-func (siw *ServerInterfaceWrapper) ReorderKindFields(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "key" -------------
-	var key string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ReorderKindFieldsParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ReorderKindFields(w, r, key, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteKindField operation middleware
-func (siw *ServerInterfaceWrapper) DeleteKindField(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "key" -------------
-	var key string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "fieldKey" -------------
-	var fieldKey string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "fieldKey", chi.URLParam(r, "fieldKey"), &fieldKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fieldKey", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params DeleteKindFieldParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteKindField(w, r, key, fieldKey, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// PreviewDeleteKindField operation middleware
-func (siw *ServerInterfaceWrapper) PreviewDeleteKindField(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "key" -------------
-	var key string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "fieldKey" -------------
-	var fieldKey string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "fieldKey", chi.URLParam(r, "fieldKey"), &fieldKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fieldKey", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.PreviewDeleteKindField(w, r, key, fieldKey)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UpdateKindField operation middleware
-func (siw *ServerInterfaceWrapper) UpdateKindField(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "key" -------------
-	var key string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "fieldKey" -------------
-	var fieldKey string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "fieldKey", chi.URLParam(r, "fieldKey"), &fieldKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fieldKey", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params UpdateKindFieldParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateKindField(w, r, key, fieldKey, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // CreateList operation middleware
 func (siw *ServerInterfaceWrapper) CreateList(w http.ResponseWriter, r *http.Request) {
 
@@ -3933,15 +3564,15 @@ func (siw *ServerInterfaceWrapper) ListTmdbSuggestions(w http.ResponseWriter, r 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListTmdbSuggestionsParams
 
-	// ------------- Required query parameter "kind" -------------
+	// ------------- Required query parameter "type" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
 		}
 		return
 	}
@@ -4087,6 +3718,387 @@ func (siw *ServerInterfaceWrapper) GetTree(w http.ResponseWriter, r *http.Reques
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetTree(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTypes operation middleware
+func (siw *ServerInterfaceWrapper) ListTypes(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTypes(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateType operation middleware
+func (siw *ServerInterfaceWrapper) CreateType(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateType(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteType operation middleware
+func (siw *ServerInterfaceWrapper) DeleteType(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteTypeParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteType(w, r, key, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateType operation middleware
+func (siw *ServerInterfaceWrapper) UpdateType(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateTypeParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateType(w, r, key, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateTypeField operation middleware
+func (siw *ServerInterfaceWrapper) CreateTypeField(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateTypeFieldParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTypeField(w, r, key, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReorderTypeFields operation middleware
+func (siw *ServerInterfaceWrapper) ReorderTypeFields(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReorderTypeFieldsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReorderTypeFields(w, r, key, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTypeField operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTypeField(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "fieldKey" -------------
+	var fieldKey string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "fieldKey", chi.URLParam(r, "fieldKey"), &fieldKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fieldKey", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteTypeFieldParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTypeField(w, r, key, fieldKey, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewDeleteTypeField operation middleware
+func (siw *ServerInterfaceWrapper) PreviewDeleteTypeField(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "fieldKey" -------------
+	var fieldKey string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "fieldKey", chi.URLParam(r, "fieldKey"), &fieldKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fieldKey", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewDeleteTypeField(w, r, key, fieldKey)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateTypeField operation middleware
+func (siw *ServerInterfaceWrapper) UpdateTypeField(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "fieldKey" -------------
+	var fieldKey string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "fieldKey", chi.URLParam(r, "fieldKey"), &fieldKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fieldKey", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateTypeFieldParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateTypeField(w, r, key, fieldKey, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4244,31 +4256,31 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/readyz", wrapper.CheckReadiness)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/api/v1/kinds", wrapper.ListKinds)
+		r.Get(options.BaseURL+"/api/v1/types", wrapper.ListTypes)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/api/v1/kinds", wrapper.CreateKind)
+		r.Post(options.BaseURL+"/api/v1/types", wrapper.CreateType)
 	})
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/api/v1/kinds/{key}", wrapper.DeleteKind)
+		r.Delete(options.BaseURL+"/api/v1/types/{key}", wrapper.DeleteType)
 	})
 	r.Group(func(r chi.Router) {
-		r.Patch(options.BaseURL+"/api/v1/kinds/{key}", wrapper.UpdateKind)
+		r.Patch(options.BaseURL+"/api/v1/types/{key}", wrapper.UpdateType)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/api/v1/kinds/{key}/fields", wrapper.CreateKindField)
+		r.Post(options.BaseURL+"/api/v1/types/{key}/fields", wrapper.CreateTypeField)
 	})
 	r.Group(func(r chi.Router) {
-		r.Put(options.BaseURL+"/api/v1/kinds/{key}/fields/order", wrapper.ReorderKindFields)
+		r.Put(options.BaseURL+"/api/v1/types/{key}/fields/order", wrapper.ReorderTypeFields)
 	})
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/api/v1/kinds/{key}/fields/{fieldKey}", wrapper.DeleteKindField)
+		r.Delete(options.BaseURL+"/api/v1/types/{key}/fields/{fieldKey}", wrapper.DeleteTypeField)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/api/v1/kinds/{key}/fields/{fieldKey}", wrapper.PreviewDeleteKindField)
+		r.Get(options.BaseURL+"/api/v1/types/{key}/fields/{fieldKey}", wrapper.PreviewDeleteTypeField)
 	})
 	r.Group(func(r chi.Router) {
-		r.Patch(options.BaseURL+"/api/v1/kinds/{key}/fields/{fieldKey}", wrapper.UpdateKindField)
+		r.Patch(options.BaseURL+"/api/v1/types/{key}/fields/{fieldKey}", wrapper.UpdateTypeField)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/v1/settings", wrapper.GetSettings)
@@ -6756,324 +6768,6 @@ func (response MoveItem500ApplicationProblemPlusJSONResponse) VisitMoveItemRespo
 	return err
 }
 
-type ListKindsRequestObject struct {
-}
-
-type ListKindsResponseObject interface {
-	VisitListKindsResponse(w http.ResponseWriter) error
-}
-
-type ListKinds200JSONResponse []KindDefinition
-
-func (response ListKinds200JSONResponse) VisitListKindsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateKindRequestObject struct {
-	Body *CreateKindJSONRequestBody
-}
-
-type CreateKindResponseObject interface {
-	VisitCreateKindResponse(w http.ResponseWriter) error
-}
-
-type CreateKind201ResponseHeaders struct {
-	ETag     string
-	Location string
-}
-
-type CreateKind201JSONResponse struct {
-	Body    KindDefinition
-	Headers CreateKind201ResponseHeaders
-}
-
-func (response CreateKind201JSONResponse) VisitCreateKindResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
-	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
-	w.WriteHeader(201)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateKind400ApplicationProblemPlusJSONResponse struct {
-	BadRequestApplicationProblemPlusJSONResponse
-}
-
-func (response CreateKind400ApplicationProblemPlusJSONResponse) VisitCreateKindResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateKind409ApplicationProblemPlusJSONResponse struct {
-	FolderMoveConflictApplicationProblemPlusJSONResponse
-}
-
-func (response CreateKind409ApplicationProblemPlusJSONResponse) VisitCreateKindResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(409)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateKind422ApplicationProblemPlusJSONResponse struct {
-	ValidationFailedApplicationProblemPlusJSONResponse
-}
-
-func (response CreateKind422ApplicationProblemPlusJSONResponse) VisitCreateKindResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(422)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteKindRequestObject struct {
-	Key    string `json:"key"`
-	Params DeleteKindParams
-}
-
-type DeleteKindResponseObject interface {
-	VisitDeleteKindResponse(w http.ResponseWriter) error
-}
-
-type DeleteKind204Response struct {
-}
-
-func (response DeleteKind204Response) VisitDeleteKindResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
-}
-
-type DeleteKind409ApplicationProblemPlusJSONResponse struct {
-	FolderMoveConflictApplicationProblemPlusJSONResponse
-}
-
-func (response DeleteKind409ApplicationProblemPlusJSONResponse) VisitDeleteKindResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(409)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateKindRequestObject struct {
-	Key    string `json:"key"`
-	Params UpdateKindParams
-	Body   *UpdateKindJSONRequestBody
-}
-
-type UpdateKindResponseObject interface {
-	VisitUpdateKindResponse(w http.ResponseWriter) error
-}
-
-type UpdateKind200ResponseHeaders struct {
-	ETag string
-}
-
-type UpdateKind200JSONResponse struct {
-	Body    KindDefinition
-	Headers UpdateKind200ResponseHeaders
-}
-
-func (response UpdateKind200JSONResponse) VisitUpdateKindResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateKind422ApplicationProblemPlusJSONResponse struct {
-	ValidationFailedApplicationProblemPlusJSONResponse
-}
-
-func (response UpdateKind422ApplicationProblemPlusJSONResponse) VisitUpdateKindResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(422)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateKindFieldRequestObject struct {
-	Key    string `json:"key"`
-	Params CreateKindFieldParams
-	Body   *CreateKindFieldJSONRequestBody
-}
-
-type CreateKindFieldResponseObject interface {
-	VisitCreateKindFieldResponse(w http.ResponseWriter) error
-}
-
-type CreateKindField201ResponseHeaders struct {
-	ETag string
-}
-
-type CreateKindField201JSONResponse struct {
-	Body    KindField
-	Headers CreateKindField201ResponseHeaders
-}
-
-func (response CreateKindField201JSONResponse) VisitCreateKindFieldResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
-	w.WriteHeader(201)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ReorderKindFieldsRequestObject struct {
-	Key    string `json:"key"`
-	Params ReorderKindFieldsParams
-	Body   *ReorderKindFieldsJSONRequestBody
-}
-
-type ReorderKindFieldsResponseObject interface {
-	VisitReorderKindFieldsResponse(w http.ResponseWriter) error
-}
-
-type ReorderKindFields204ResponseHeaders struct {
-	ETag string
-}
-
-type ReorderKindFields204Response struct {
-	Headers ReorderKindFields204ResponseHeaders
-}
-
-func (response ReorderKindFields204Response) VisitReorderKindFieldsResponse(w http.ResponseWriter) error {
-	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
-	w.WriteHeader(204)
-	return nil
-}
-
-type DeleteKindFieldRequestObject struct {
-	Key      string `json:"key"`
-	FieldKey string `json:"fieldKey"`
-	Params   DeleteKindFieldParams
-}
-
-type DeleteKindFieldResponseObject interface {
-	VisitDeleteKindFieldResponse(w http.ResponseWriter) error
-}
-
-type DeleteKindField200JSONResponse KindFieldDeletePreview
-
-func (response DeleteKindField200JSONResponse) VisitDeleteKindFieldResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type PreviewDeleteKindFieldRequestObject struct {
-	Key      string `json:"key"`
-	FieldKey string `json:"fieldKey"`
-}
-
-type PreviewDeleteKindFieldResponseObject interface {
-	VisitPreviewDeleteKindFieldResponse(w http.ResponseWriter) error
-}
-
-type PreviewDeleteKindField200JSONResponse KindFieldDeletePreview
-
-func (response PreviewDeleteKindField200JSONResponse) VisitPreviewDeleteKindFieldResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateKindFieldRequestObject struct {
-	Key      string `json:"key"`
-	FieldKey string `json:"fieldKey"`
-	Params   UpdateKindFieldParams
-	Body     *UpdateKindFieldJSONRequestBody
-}
-
-type UpdateKindFieldResponseObject interface {
-	VisitUpdateKindFieldResponse(w http.ResponseWriter) error
-}
-
-type UpdateKindField200ResponseHeaders struct {
-	ETag string
-}
-
-type UpdateKindField200JSONResponse struct {
-	Body    KindField
-	Headers UpdateKindField200ResponseHeaders
-}
-
-func (response UpdateKindField200JSONResponse) VisitUpdateKindFieldResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type CreateListRequestObject struct {
 	Body *CreateListJSONRequestBody
 }
@@ -8745,6 +8439,324 @@ func (response GetTree500ApplicationProblemPlusJSONResponse) VisitGetTreeRespons
 	return err
 }
 
+type ListTypesRequestObject struct {
+}
+
+type ListTypesResponseObject interface {
+	VisitListTypesResponse(w http.ResponseWriter) error
+}
+
+type ListTypes200JSONResponse []TypeDefinition
+
+func (response ListTypes200JSONResponse) VisitListTypesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTypeRequestObject struct {
+	Body *CreateTypeJSONRequestBody
+}
+
+type CreateTypeResponseObject interface {
+	VisitCreateTypeResponse(w http.ResponseWriter) error
+}
+
+type CreateType201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type CreateType201JSONResponse struct {
+	Body    TypeDefinition
+	Headers CreateType201ResponseHeaders
+}
+
+func (response CreateType201JSONResponse) VisitCreateTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateType400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateType400ApplicationProblemPlusJSONResponse) VisitCreateTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateType409ApplicationProblemPlusJSONResponse struct {
+	FolderMoveConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateType409ApplicationProblemPlusJSONResponse) VisitCreateTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateType422ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateType422ApplicationProblemPlusJSONResponse) VisitCreateTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTypeRequestObject struct {
+	Key    string `json:"key"`
+	Params DeleteTypeParams
+}
+
+type DeleteTypeResponseObject interface {
+	VisitDeleteTypeResponse(w http.ResponseWriter) error
+}
+
+type DeleteType204Response struct {
+}
+
+func (response DeleteType204Response) VisitDeleteTypeResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteType409ApplicationProblemPlusJSONResponse struct {
+	FolderMoveConflictApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteType409ApplicationProblemPlusJSONResponse) VisitDeleteTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTypeRequestObject struct {
+	Key    string `json:"key"`
+	Params UpdateTypeParams
+	Body   *UpdateTypeJSONRequestBody
+}
+
+type UpdateTypeResponseObject interface {
+	VisitUpdateTypeResponse(w http.ResponseWriter) error
+}
+
+type UpdateType200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateType200JSONResponse struct {
+	Body    TypeDefinition
+	Headers UpdateType200ResponseHeaders
+}
+
+func (response UpdateType200JSONResponse) VisitUpdateTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateType422ApplicationProblemPlusJSONResponse struct {
+	ValidationFailedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateType422ApplicationProblemPlusJSONResponse) VisitUpdateTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTypeFieldRequestObject struct {
+	Key    string `json:"key"`
+	Params CreateTypeFieldParams
+	Body   *CreateTypeFieldJSONRequestBody
+}
+
+type CreateTypeFieldResponseObject interface {
+	VisitCreateTypeFieldResponse(w http.ResponseWriter) error
+}
+
+type CreateTypeField201ResponseHeaders struct {
+	ETag string
+}
+
+type CreateTypeField201JSONResponse struct {
+	Body    TypeField
+	Headers CreateTypeField201ResponseHeaders
+}
+
+func (response CreateTypeField201JSONResponse) VisitCreateTypeFieldResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderTypeFieldsRequestObject struct {
+	Key    string `json:"key"`
+	Params ReorderTypeFieldsParams
+	Body   *ReorderTypeFieldsJSONRequestBody
+}
+
+type ReorderTypeFieldsResponseObject interface {
+	VisitReorderTypeFieldsResponse(w http.ResponseWriter) error
+}
+
+type ReorderTypeFields204ResponseHeaders struct {
+	ETag string
+}
+
+type ReorderTypeFields204Response struct {
+	Headers ReorderTypeFields204ResponseHeaders
+}
+
+func (response ReorderTypeFields204Response) VisitReorderTypeFieldsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteTypeFieldRequestObject struct {
+	Key      string `json:"key"`
+	FieldKey string `json:"fieldKey"`
+	Params   DeleteTypeFieldParams
+}
+
+type DeleteTypeFieldResponseObject interface {
+	VisitDeleteTypeFieldResponse(w http.ResponseWriter) error
+}
+
+type DeleteTypeField200JSONResponse TypeFieldDeletePreview
+
+func (response DeleteTypeField200JSONResponse) VisitDeleteTypeFieldResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewDeleteTypeFieldRequestObject struct {
+	Key      string `json:"key"`
+	FieldKey string `json:"fieldKey"`
+}
+
+type PreviewDeleteTypeFieldResponseObject interface {
+	VisitPreviewDeleteTypeFieldResponse(w http.ResponseWriter) error
+}
+
+type PreviewDeleteTypeField200JSONResponse TypeFieldDeletePreview
+
+func (response PreviewDeleteTypeField200JSONResponse) VisitPreviewDeleteTypeFieldResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTypeFieldRequestObject struct {
+	Key      string `json:"key"`
+	FieldKey string `json:"fieldKey"`
+	Params   UpdateTypeFieldParams
+	Body     *UpdateTypeFieldJSONRequestBody
+}
+
+type UpdateTypeFieldResponseObject interface {
+	VisitUpdateTypeFieldResponse(w http.ResponseWriter) error
+}
+
+type UpdateTypeField200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateTypeField200JSONResponse struct {
+	Body    TypeField
+	Headers UpdateTypeField200ResponseHeaders
+}
+
+func (response UpdateTypeField200JSONResponse) VisitUpdateTypeFieldResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CheckHealthRequestObject struct {
 }
 
@@ -8854,33 +8866,6 @@ type StrictServerInterface interface {
 	// MoveItem Move an item to another list
 	// (POST /api/v1/items/{id}/move)
 	MoveItem(ctx context.Context, request MoveItemRequestObject) (MoveItemResponseObject, error)
-	// ListKinds List kind definitions and fields
-	// (GET /api/v1/kinds)
-	ListKinds(ctx context.Context, request ListKindsRequestObject) (ListKindsResponseObject, error)
-	// CreateKind Create a custom kind
-	// (POST /api/v1/kinds)
-	CreateKind(ctx context.Context, request CreateKindRequestObject) (CreateKindResponseObject, error)
-	// DeleteKind Delete a custom kind not used by any list
-	// (DELETE /api/v1/kinds/{key})
-	DeleteKind(ctx context.Context, request DeleteKindRequestObject) (DeleteKindResponseObject, error)
-	// UpdateKind Update a custom kind
-	// (PATCH /api/v1/kinds/{key})
-	UpdateKind(ctx context.Context, request UpdateKindRequestObject) (UpdateKindResponseObject, error)
-	// CreateKindField Add a custom field
-	// (POST /api/v1/kinds/{key}/fields)
-	CreateKindField(ctx context.Context, request CreateKindFieldRequestObject) (CreateKindFieldResponseObject, error)
-	// ReorderKindFields Reorder custom fields
-	// (PUT /api/v1/kinds/{key}/fields/order)
-	ReorderKindFields(ctx context.Context, request ReorderKindFieldsRequestObject) (ReorderKindFieldsResponseObject, error)
-	// DeleteKindField Delete a custom field and strip populated values
-	// (DELETE /api/v1/kinds/{key}/fields/{fieldKey})
-	DeleteKindField(ctx context.Context, request DeleteKindFieldRequestObject) (DeleteKindFieldResponseObject, error)
-	// PreviewDeleteKindField Count item values that deleting a custom field would remove
-	// (GET /api/v1/kinds/{key}/fields/{fieldKey})
-	PreviewDeleteKindField(ctx context.Context, request PreviewDeleteKindFieldRequestObject) (PreviewDeleteKindFieldResponseObject, error)
-	// UpdateKindField Rename a custom field
-	// (PATCH /api/v1/kinds/{key}/fields/{fieldKey})
-	UpdateKindField(ctx context.Context, request UpdateKindFieldRequestObject) (UpdateKindFieldResponseObject, error)
 	// CreateList Create a list
 	// (POST /api/v1/lists)
 	CreateList(ctx context.Context, request CreateListRequestObject) (CreateListResponseObject, error)
@@ -8938,6 +8923,33 @@ type StrictServerInterface interface {
 	// GetTree Get the sidebar tree
 	// (GET /api/v1/tree)
 	GetTree(ctx context.Context, request GetTreeRequestObject) (GetTreeResponseObject, error)
+	// ListTypes List type definitions and fields
+	// (GET /api/v1/types)
+	ListTypes(ctx context.Context, request ListTypesRequestObject) (ListTypesResponseObject, error)
+	// CreateType Create a custom type
+	// (POST /api/v1/types)
+	CreateType(ctx context.Context, request CreateTypeRequestObject) (CreateTypeResponseObject, error)
+	// DeleteType Delete a custom type not used by any list
+	// (DELETE /api/v1/types/{key})
+	DeleteType(ctx context.Context, request DeleteTypeRequestObject) (DeleteTypeResponseObject, error)
+	// UpdateType Update a custom type
+	// (PATCH /api/v1/types/{key})
+	UpdateType(ctx context.Context, request UpdateTypeRequestObject) (UpdateTypeResponseObject, error)
+	// CreateTypeField Add a custom field
+	// (POST /api/v1/types/{key}/fields)
+	CreateTypeField(ctx context.Context, request CreateTypeFieldRequestObject) (CreateTypeFieldResponseObject, error)
+	// ReorderTypeFields Reorder custom fields
+	// (PUT /api/v1/types/{key}/fields/order)
+	ReorderTypeFields(ctx context.Context, request ReorderTypeFieldsRequestObject) (ReorderTypeFieldsResponseObject, error)
+	// DeleteTypeField Delete a custom field and strip populated values
+	// (DELETE /api/v1/types/{key}/fields/{fieldKey})
+	DeleteTypeField(ctx context.Context, request DeleteTypeFieldRequestObject) (DeleteTypeFieldResponseObject, error)
+	// PreviewDeleteTypeField Count item values that deleting a custom field would remove
+	// (GET /api/v1/types/{key}/fields/{fieldKey})
+	PreviewDeleteTypeField(ctx context.Context, request PreviewDeleteTypeFieldRequestObject) (PreviewDeleteTypeFieldResponseObject, error)
+	// UpdateTypeField Rename a custom field
+	// (PATCH /api/v1/types/{key}/fields/{fieldKey})
+	UpdateTypeField(ctx context.Context, request UpdateTypeFieldRequestObject) (UpdateTypeFieldResponseObject, error)
 	// CheckHealth Liveness probe
 	// (GET /healthz)
 	CheckHealth(ctx context.Context, request CheckHealthRequestObject) (CheckHealthResponseObject, error)
@@ -9594,280 +9606,6 @@ func (sh *strictHandler) MoveItem(w http.ResponseWriter, r *http.Request, id Id,
 	}
 }
 
-// ListKinds operation middleware
-func (sh *strictHandler) ListKinds(w http.ResponseWriter, r *http.Request) {
-	var request ListKindsRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListKinds(ctx, request.(ListKindsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListKinds")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListKindsResponseObject); ok {
-		if err := validResponse.VisitListKindsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CreateKind operation middleware
-func (sh *strictHandler) CreateKind(w http.ResponseWriter, r *http.Request) {
-	var request CreateKindRequestObject
-
-	var body CreateKindJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CreateKind(ctx, request.(CreateKindRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CreateKind")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CreateKindResponseObject); ok {
-		if err := validResponse.VisitCreateKindResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// DeleteKind operation middleware
-func (sh *strictHandler) DeleteKind(w http.ResponseWriter, r *http.Request, key string, params DeleteKindParams) {
-	var request DeleteKindRequestObject
-
-	request.Key = key
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.DeleteKind(ctx, request.(DeleteKindRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "DeleteKind")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(DeleteKindResponseObject); ok {
-		if err := validResponse.VisitDeleteKindResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// UpdateKind operation middleware
-func (sh *strictHandler) UpdateKind(w http.ResponseWriter, r *http.Request, key string, params UpdateKindParams) {
-	var request UpdateKindRequestObject
-
-	request.Key = key
-	request.Params = params
-
-	var body UpdateKindJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.UpdateKind(ctx, request.(UpdateKindRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "UpdateKind")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(UpdateKindResponseObject); ok {
-		if err := validResponse.VisitUpdateKindResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CreateKindField operation middleware
-func (sh *strictHandler) CreateKindField(w http.ResponseWriter, r *http.Request, key string, params CreateKindFieldParams) {
-	var request CreateKindFieldRequestObject
-
-	request.Key = key
-	request.Params = params
-
-	var body CreateKindFieldJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CreateKindField(ctx, request.(CreateKindFieldRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CreateKindField")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CreateKindFieldResponseObject); ok {
-		if err := validResponse.VisitCreateKindFieldResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ReorderKindFields operation middleware
-func (sh *strictHandler) ReorderKindFields(w http.ResponseWriter, r *http.Request, key string, params ReorderKindFieldsParams) {
-	var request ReorderKindFieldsRequestObject
-
-	request.Key = key
-	request.Params = params
-
-	var body ReorderKindFieldsJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ReorderKindFields(ctx, request.(ReorderKindFieldsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ReorderKindFields")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ReorderKindFieldsResponseObject); ok {
-		if err := validResponse.VisitReorderKindFieldsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// DeleteKindField operation middleware
-func (sh *strictHandler) DeleteKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params DeleteKindFieldParams) {
-	var request DeleteKindFieldRequestObject
-
-	request.Key = key
-	request.FieldKey = fieldKey
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.DeleteKindField(ctx, request.(DeleteKindFieldRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "DeleteKindField")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(DeleteKindFieldResponseObject); ok {
-		if err := validResponse.VisitDeleteKindFieldResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// PreviewDeleteKindField operation middleware
-func (sh *strictHandler) PreviewDeleteKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string) {
-	var request PreviewDeleteKindFieldRequestObject
-
-	request.Key = key
-	request.FieldKey = fieldKey
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.PreviewDeleteKindField(ctx, request.(PreviewDeleteKindFieldRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "PreviewDeleteKindField")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(PreviewDeleteKindFieldResponseObject); ok {
-		if err := validResponse.VisitPreviewDeleteKindFieldResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// UpdateKindField operation middleware
-func (sh *strictHandler) UpdateKindField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params UpdateKindFieldParams) {
-	var request UpdateKindFieldRequestObject
-
-	request.Key = key
-	request.FieldKey = fieldKey
-	request.Params = params
-
-	var body UpdateKindFieldJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.UpdateKindField(ctx, request.(UpdateKindFieldRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "UpdateKindField")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(UpdateKindFieldResponseObject); ok {
-		if err := validResponse.VisitUpdateKindFieldResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // CreateList operation middleware
 func (sh *strictHandler) CreateList(w http.ResponseWriter, r *http.Request) {
 	var request CreateListRequestObject
@@ -10415,6 +10153,280 @@ func (sh *strictHandler) GetTree(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ListTypes operation middleware
+func (sh *strictHandler) ListTypes(w http.ResponseWriter, r *http.Request) {
+	var request ListTypesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTypes(ctx, request.(ListTypesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTypes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTypesResponseObject); ok {
+		if err := validResponse.VisitListTypesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateType operation middleware
+func (sh *strictHandler) CreateType(w http.ResponseWriter, r *http.Request) {
+	var request CreateTypeRequestObject
+
+	var body CreateTypeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateType(ctx, request.(CreateTypeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateType")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateTypeResponseObject); ok {
+		if err := validResponse.VisitCreateTypeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteType operation middleware
+func (sh *strictHandler) DeleteType(w http.ResponseWriter, r *http.Request, key string, params DeleteTypeParams) {
+	var request DeleteTypeRequestObject
+
+	request.Key = key
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteType(ctx, request.(DeleteTypeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteType")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteTypeResponseObject); ok {
+		if err := validResponse.VisitDeleteTypeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateType operation middleware
+func (sh *strictHandler) UpdateType(w http.ResponseWriter, r *http.Request, key string, params UpdateTypeParams) {
+	var request UpdateTypeRequestObject
+
+	request.Key = key
+	request.Params = params
+
+	var body UpdateTypeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateType(ctx, request.(UpdateTypeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateType")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateTypeResponseObject); ok {
+		if err := validResponse.VisitUpdateTypeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateTypeField operation middleware
+func (sh *strictHandler) CreateTypeField(w http.ResponseWriter, r *http.Request, key string, params CreateTypeFieldParams) {
+	var request CreateTypeFieldRequestObject
+
+	request.Key = key
+	request.Params = params
+
+	var body CreateTypeFieldJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateTypeField(ctx, request.(CreateTypeFieldRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateTypeField")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateTypeFieldResponseObject); ok {
+		if err := validResponse.VisitCreateTypeFieldResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReorderTypeFields operation middleware
+func (sh *strictHandler) ReorderTypeFields(w http.ResponseWriter, r *http.Request, key string, params ReorderTypeFieldsParams) {
+	var request ReorderTypeFieldsRequestObject
+
+	request.Key = key
+	request.Params = params
+
+	var body ReorderTypeFieldsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReorderTypeFields(ctx, request.(ReorderTypeFieldsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReorderTypeFields")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReorderTypeFieldsResponseObject); ok {
+		if err := validResponse.VisitReorderTypeFieldsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteTypeField operation middleware
+func (sh *strictHandler) DeleteTypeField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params DeleteTypeFieldParams) {
+	var request DeleteTypeFieldRequestObject
+
+	request.Key = key
+	request.FieldKey = fieldKey
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteTypeField(ctx, request.(DeleteTypeFieldRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteTypeField")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteTypeFieldResponseObject); ok {
+		if err := validResponse.VisitDeleteTypeFieldResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewDeleteTypeField operation middleware
+func (sh *strictHandler) PreviewDeleteTypeField(w http.ResponseWriter, r *http.Request, key string, fieldKey string) {
+	var request PreviewDeleteTypeFieldRequestObject
+
+	request.Key = key
+	request.FieldKey = fieldKey
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewDeleteTypeField(ctx, request.(PreviewDeleteTypeFieldRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewDeleteTypeField")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewDeleteTypeFieldResponseObject); ok {
+		if err := validResponse.VisitPreviewDeleteTypeFieldResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateTypeField operation middleware
+func (sh *strictHandler) UpdateTypeField(w http.ResponseWriter, r *http.Request, key string, fieldKey string, params UpdateTypeFieldParams) {
+	var request UpdateTypeFieldRequestObject
+
+	request.Key = key
+	request.FieldKey = fieldKey
+	request.Params = params
+
+	var body UpdateTypeFieldJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateTypeField(ctx, request.(UpdateTypeFieldRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateTypeField")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateTypeFieldResponseObject); ok {
+		if err := validResponse.VisitUpdateTypeFieldResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CheckHealth operation middleware
 func (sh *strictHandler) CheckHealth(w http.ResponseWriter, r *http.Request) {
 	var request CheckHealthRequestObject
@@ -10468,275 +10480,277 @@ func (sh *strictHandler) CheckReadiness(w http.ResponseWriter, r *http.Request) 
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"0KbliCOvlCgQq8F9uvu/AwA=",
+	"7L1pc9tIsij6VypwT0RLeiBFanG35Zh44bbbPbrj7dly973H9CFKRFGsFlhgo0Ato1DEfH2f329454fN",
+	"L7mRmVWFwsZN8jajEyd6LBCoJTMrK/e8CUbpdJYqoXIdHN0E4opPZ4nAfz9LVS5UDv+84MlcwD9O0/g6",
+	"OAr+B3ud5kIP1ED9mgmes7FMpiHLxCXPRxMmFTv4WzcIA5mL6VDGwVHw46gvDnm/1+n1er3OAfznp16P",
+	"/sT/6/f6QRjMZzHPRTzkeXAU7PX2HnX6vU7/4KTfO+rB//9nEAYXItMyVcHR3u1taFf5y3SWXzctdd1V",
+	"7FVWoeZJ4s3Z8+b8jR6+lLoMpJjnPDj6eBOMMuHGaduNln8Xw9PrHGC+/6i0u7B9hN7jo4PDhhF+8gbo",
+	"336Cxb5Ik1hkpQUuGHXfrms1ePUQXopPRXAUvEovpNBBGMx4JlQ+HOPMw1VHAvzrNMuHaYYL7rWTg79Q",
+	"b7+3YXCci+mrNE+z0fUoEeVdE9aGBS7DRZDYWw8SRDlyys9wMp3OsxEAZZ4lQFFZEhwFkzyf6aPdXXPK",
+	"uml2totf6N1pqnQusu4fs7PgNgwSqfNVAdeHiaci50R3N0Es9SzhIzGF3Y5GwdHj/R9hyJFQWgxHCdc6",
+	"OAqewldpLJLhteBZcLTX2zsIg1l6KbLhZBYc9fv92zCYZXJE0JtnmVAjOFK/fHgH3/Kr4Cjo7x/2et1e",
+	"Dx5IBQ/2evTgtobNXOaAkuD5fMRzyV7RloMwyK9n8Hxa4G0h6g/qnCAMLsWplrnwoHx5edmNcaruKJ3u",
+	"BgV5XMgllLG3kDL2+2tSRt+nDJ7nfDRB3Kz2/R5+PxHybJIHR/3DXi8M0kyeScWT4Vgmwhy/Kc8zeYUU",
+	"FHr0N0tSHgOQJ/PpqeIyGRIx7vKZ3L3o7xbr0burrGXXDeToeuOhYPVBGFzKOJ8ER/1er7cu7fcrtC+n",
+	"8emwfNqADuAxUgHS4G6e9/r7+73H+7tBGGQiEVwLcwz6jx8/DoNsrnI5FcOpVHNkrH3gzTrPBJ9KdUZE",
+	"M1d5Bufh+AR5noyHs4Tn4zSb6uDoY/A2k1PBfpOxSINPYVD67bXIx4m8CsLyW7fFiaN7p+UEnUwEe4Xo",
+	"9k/PhVx0cBqv0P22g3PJMyWy0yzVCDYcXO8SiZVP0u8yn7zl+eRrnSgC1L870SACPt4E61y29toWseQF",
+	"HdGtHdyGqw/WJANsPFrfW9rvIE4CaosB8a/bT1/xnMCM9gS8NUy9Qfb7knfKN8vb78rOH3izR3Ph2jLs",
+	"/uGaVLXvU9VSofU02+sdPN5IZq0gehFs+wVsf054LNi7uVIiYzD36iD2oVGoDFUQAy2Y3SdyKvPg6LAX",
+	"Bul4rEVOWE5znqDqeRsGNc1vFcUqFnqUyVmOCwheyGSqWZ4y1JyD0Ajv10MQzYOjwD+Qa+pTqI+McBZ5",
+	"BAq6+Xs4SpM0g6cqlmfp6rpev2+VaTxfyNIaGPVMKiXi4ViKJMYDVTrE9fP7yaDb7HjK1ZwndV1wDTw3",
+	"q4aArWZh5QFr34EE8enbpax3YiRUDvKAbhYGAPzfn1j8cPn6l693QvB40jr8o2me3Ov5uZepVpTP753r",
+	"rCDFw99Df20BWS3fC56NJu3i9cOJejhRDydq1RO1olTbv6Wjl+dSnZWvsiRNz+ezIb/gMuGnQBl5Nhdh",
+	"MOXZeZxequFE6jzNrodmgr1eQfnDhKuzOS4gkHkHadjR99AQ93BElzT+mmdcT4aZgKMtUzWM+bWuuWIO",
+	"wuAyzc71jI/cht/MM/YsTRIxgu/QUHUCYy3S0+fG90WI0wgQSXd5/0c68PDP2zCIRSIa6b1f0DucO5EN",
+	"1xan9gvs/iYmcpS0yECrjbePhyETgBNA11CqIfoELN6yNF2dje0H5gML5SRmIz4VGdf2lxIVhsvA6qDa",
+	"a4Xq/kn/p6O9u0L1PoXU/kEx2DNgpQ2Hb1Xs7LVhZ8wTvR56+r2DCnr+KnhewQtel2tqtyeZKJ8Zh8mP",
+	"C3Wm3rouxAYk1T2IjZfUAlG91yCqh/+6rs/FW+sdrrm1Zm60Clb6i7FSN8EAVRpu8PFBF/92LSiLKazf",
+	"iBwijwpCzjIZr4+LfYeLO8pu/b0KDvreKc7T7FSeC11HgkfplrBQQm6H8sbObNCAbsNgIjix25vglxOO",
+	"ikCZ8k+uZyJm8BuLRSYvRMzGWTplkRkqYlvRIBh3Xg+CKGTRIEiKf8rin6Pinxr/ud1lH7RgMmdcs+h4",
+	"3HkFtBl1g9DGBwVHAQyxPwjwHvtzLjMRW9FCjyZiiuqOAYXOM1Bk0Gcync5zuPKe8dFEQBxNlib1nT1N",
+	"Lvm1ZtEskxc8FyGb8qsOPxN/2e8f7j/q9Xohk3akyrpW+WTNRb9MR5wWVl3nh3cvWTpm+UQwczZYJsj1",
+	"Xl6V9aKgALS7ot65+hpRl8r4VOSGYH4GjB3HDTQD0jA7hZ/Z8XO2FeGDX0AC78o42oZlYxwHilruZOAH",
+	"QxkvXBUIaUjh8zm+2YD+hhW9MwBjx89bJr/7tGOk4PrcOzvvzLDdnR0Gqm5enCmDWItQdiqkOmOjCVdn",
+	"IsajJTs/FodoH//5z3/893aXPRejhGciZinOxBOWquSa6RRHPBNKZEgsWmQXIhuoOBWaqTRnXOlLkbGD",
+	"Xo/JXItkfMQ4m0qtYWpiCGwrzVi0E22zTOTzTGkWHez9xGaZGKUqlqgvWWBFIeNM5zwRLFWCRQf9PWaY",
+	"w3CUqnEiR3nUHajayf5xEFhc0KwFNiw/CHwcTPnVS6HOQDp/dNCEgpckb1YRAHoZgwA2h/o/5yK7LmYj",
+	"OdWfKhZjPk+M7DrlV3I6n4K+2cMIJPqr75YgVS7OQM6/DYM3RtCtLuL1fHoqMsB3ll6iKKHP5axtRUZc",
+	"blySv4Ze4xp+s1y+uggTU2jRwxQuquVEmJcWHouFwLiFL/UsVVoYfhHDSRA694xq8E8+myWS2N/uLEtP",
+	"EzH9v/7QtAE/WFSqC56AWcqyoUo4SEzzV18Kg1jkXCZIdojrQcCmc52zUzhw+aUQivUZVzHb6/UAGjrn",
+	"+VwHRwc9z0h1TAMzf2CzZ+u+HDmrQIfPZl2zFLsnvWsedIohAEhTnqDqGQ+zAjzVbdVf8rZ1giwEHzMI",
+	"SWWSTjot+H++f/O6dVev7LisGHfNXbmldewQsKu5Oldgs0HZpmlH5Re83XygHxj+wAYBCGDzbBC07qH0",
+	"wfrrNwvp0OdItwWF/0cmxhCMvFvEMO/Sr3r3LY1An5RPWgFWgH7I5qU9pRmTjpryyS6efo+wbsPgudC5",
+	"VHgmPijPIrbRwYmLwYbz8mhVrLS9WqE27zVGQjZsClQL5u4ZcQV/wl41kwpvJbS5lfH42IvZ9AYtz70m",
+	"Rr3VdfyB7ge3S/YvtbtM04x2LOLABUm/Si/EM3MtbohOlPiHscjFKBeNZ6vyhoe8p3a5I64ASaeCTVOQ",
+	"6qXKUyMPwLrhKk/H8AD2OhIq5irXrah7BhMyb8I1MYYL7rjvDdA/P9H+2xGr1Lg3s/0C39xDc2jg0EzG",
+	"xyoXmeLJL1mWZhvf5DRG8wVufvOw9z6dinwCa7kE+eUyS9VZ10gmwvrKDk97o358uNf5cdzvdQ5ET3Qe",
+	"88PDzv7pXrw/6o0f8X7fw+Zh+XKnSZnAXW1ws5tF3w/WPihxNROjQnyndXXZawF/AMS5VJq9/39ehniF",
+	"aECSzvnoHFA1Ejoowmfvym4ebg97II3jayr11Op6VQiUX1iwb9zthGs4eXI8FhkQNnzN8gmn/YIi37pd",
+	"MMwwb6I1Nwmvd9znn4fXtF+HyGFw8yrNJyJr2PgPmhlHT/AS/YJ3F4OMfzGWGgZpvDirr/gIfPX8Z0a/",
+	"W/ka1Ft5NkclHFYutTmu3RKf2S+wRlth3vhr4o0W0HEDoKg9I0/nstPZ+F51h3BBiOkszXgmk2v/JHXZ",
+	"SXbN+BmXiiU8X77LO51Cu9jPcCc+VUxcAcnInPlYNSJRNlfsVIz4XAsP3xbiSMUTwez6EONyJOCd0lLD",
+	"4HWav0jnKt6QXFUKbhDzfRWXxY8eAoHhI2HiL2XWcVCg57V9Y32sqDTv0Kf3xzKc8atV5HgDhu/3Od/4",
+	"5KPlfKjtCFVg+j9XWDbyMBSExVRbw1yXvRNJymO0GeT2ULSyalw+7M7OsCbQcXkd+vh+wB7JWEeWi4kr",
+	"PsqTa7IwYwZezrTAXfNRLi8E0/I0wWiN2zB4y69h6ydp+pJnZ5siZEajDPM0HSZ2nCpa6i8tsnmIq5EQ",
+	"MYm3aOVhYzyqUrMsneeihJ6+x63MjliepsxOsyaGzEo7eZp2aIj7wRMYD2h3Kch9sDXcC20wZK9MZAz9",
+	"3Gev5M8kvEM0mXnYg6eIOc96+86Z9DZDX5MhuBGFjS/6kr1QMe3LcgG0ixuJz9qBjVm6hMK9nzwUetMw",
+	"b5p10egN03HD3NORcz4un89ZO3uAEb46T7NvzDhAASQP9oFvUx0xwRJSDXExpb2fJunoHILf6CV4dK9x",
+	"YmHBpsuL8KBqSBrBRa+xscw0WRhGkzTVgiwPdoet4HxLX1egvwmnhnE6UnVogDUOd+V8LpFqbPY0mzWu",
+	"HE/+WarEdmglytEk1UJVrTVzNddWoPyg9Hw2S7NcxBjEdHI9M2S+NpuYF0MNpzCWieJqstM3vulh+Q34",
+	"Hf/n219+Ddnb17+iUPS7OH1Lt5BmPBOMj0ZilouyTNo/9G34bhaGszAzy9rGfDdOB8fp4AD3J61SrruV",
+	"nbi37zTzts223v/2K7zFKcwgE38g60JO/xusGXH0gstk41v4wg0zHLtxquirv1TCHBAqm8IZpSAUxJaB",
+	"KiAL7U4UNmU8ORTR3YXSDGEwFVpT0K11qJ1hjEJGynyaMfHnnCfg7zSfSYUxgsU1vlcQQQEX5ta6Jv6L",
+	"7XbMEGugvph/kfZonDjZPBHskmt2IdOE56SpGNfrHe/wqvu8Ea/Vd0JTPsPLU/ipqhtecqfDsFOIFZgK",
+	"uMhFoivisYcUFzsBH0/TWI7lRoihRXXcetfBSxmqK0tZVmWy85AbWiqeXb+QiSgFdpzi43poR+jXKJpl",
+	"6UxkuSQ0UfWfm5rrz8jkBLaQzWdA/iicsw8nLzo/dZtmcQWElgablEO9qtP/PhHGFGW9/IA3zS9AbY0g",
+	"wixCxcj+ig5vNyOM28kp7hje9cPwa8u4aIsz6LG/MIWWapo3WBqyUOgQHx0kiglCAnVp45/cOOkpsNag",
+	"VjPpWI3TOtL8+MKb5o3XNupXP7pZuJUSUJaEivh7LnbqzVXKMlq+X5spXN6vqz9hMwcXHbQGAN66eXmW",
+	"8evaynH8xsXh2snp6cV98Jj0K5689dZpQtLLSycRtBT4Y0Nw7N/9BmzVI4jrR2oJbVf2iAtp3yOw1s12",
+	"SObFUngPracSfox39IUUKFud/IZWKR2ipdI3YMbzDMPHMkHCNDs+U6mxThd2du3xn9M0TQRXwW2RSdO+",
+	"hcalZUJ0ALpsIjLh7KagF+oJn4FSNRMq1mQgJ3vaDxrX0WXmvhUxGdB0DlIDeUGOmBakN0Q7r8zKImbo",
+	"tBs04MJVkVos3MmROFazOX5irrgShe2vQGE51HKRDXGGb2wonhYJue8QPXp+diY0oeSDRnwk1+wSOLXB",
+	"XDZXCCJu8JxmgGbrAFrESLyMt8pJOfhpXToneLQTOnCYzQi9BKa2G9NelY8O2N/kz2wLL0uGvBBjRv0A",
+	"wMPD/UdLt1cNC19MG8/p3Vfw6m0Y3IV/2DDyxRMCOI/hvdtyqPlqXz3Dl2/DjdlkOfZ8ybnBl1/Qu7el",
+	"GPXFH75Ps9xC1GqYi94HXnpCGttaPBi+weVtyIj5qUgqQOyvwgnMloSC4/kxyMVVjuQBgZVBiGJFEDo2",
+	"GwaJVOfBp9pIlc3Scsxbize92X55kqSXeuh4Zv06MBfS0BLy8qNmPqjRlZM8fC671zDClF+Z+gZ7rSfM",
+	"CCHFdEiJLsiwMsXSRTecneVoX5UyfYbi0QhQPUeFzU8bwoyVTw1LLGpr3l2QXVG/+HqCVznT5abhtivr",
+	"Pqtt25PJl+kecVMKmoFIaXG+duKhYqmOcmwrH9V80nBOyHgUMiFRXOPgqTaRSZgHgo/IBAVSk6uX5VS7",
+	"S1L/KIYCQyxUSoN2KW1tlMmpVDyni2bKZzNTAIBGbePLH/BXWrwt29X8YpbQW7eO51y/Rnqy9SJv61SQ",
+	"KvFmjEamRXeDN/SSF73F3rYi4f18OgWVv56/AuCDN1gm4vkIUp5seBIG74MQrrF2RJdFpbJoaHWYZUKj",
+	"pTvNDKo0CnzdBvIvH+nSWA05OGHQ/LxCxPBS465NPQueJCtAG97+mWuCdnmdq6oKtRXY67JitKmQrguN",
+	"UikpCg2AywSPwe68omB7jbZkt+46dD6FzQcSMHw9E4hYmLODojtQQCkdrhK19IRFU6e0gCmmWdFxpQVw",
+	"mz9oY1mMxVgqBKruWrwhJmqQI4EMNK2MLHpgdLmms08qlln9llt7WF84rHgb9+StGq32cUzDwlszkaEt",
+	"3VfCKjdStU5KLf/ERBc4E5l5k22BxUhAee3tLgNt18jteG6eMNAo0UNCEzCh4lkqVY55NCKWuacQelfF",
+	"Z7whXf26hSfI8kFXz2WFkWemcliVGkfofTJ+SeJBFndd9tawnFSx6ExglajI8ZyVLD9QsOy9OIO7pG7y",
+	"WUe5XuUO31Tvvue7/z5VZ0SmxXPo8naluTAJfsWEYe2w3I9w4ZULvYMZEIaxt2MTMaxA+7iKRluh+b5t",
+	"+a23spWQsvQSPKnGBEb3MB6HDCuk4Uv6CA+H5lPh8zSaiXETAz9PEhpyK7q59e4f5HJ0/6B/1p41kgmk",
+	"tmLBShzwG2VLHnrX4U6bGQnfAx4K4PsYUWVUPGm2HNpbbIFNcPuORsG1+FarHWA108bn5WT3wriMxNTO",
+	"vxwlfEZWdtIoLtoUagxQRD5Ap/1cXNMj/BGFKIxbwh+dqIXhFp4fjEZglzKfWHmTbUFUOljSrRn3CY5h",
+	"TA4DlSqTir/dZccYGDrhF8J9TkndMmPppTqif+rl8qM0KsbW4sVtd9lTfDpQpTUbeXk013k6Nc78EJ4g",
+	"6kIyOcMuTucyyTsS/JNZDg5dQdIEvIqmG/MxHUXkpj9UxFlgl132DBzJAKV8IgaqjBGSbyfcDMC28rQc",
+	"659mLE93qZQE7nebjRLBM2LNPocYM47MwQxFmeRLzQjNzrBNWO+D6frzma5Xvda8SirtifUmWJmopFEh",
+	"2NiutYpIXpPCYbf3LIV/cZP90hvx6957TXdZg9nOBawV+KucLx88VTibE1Ei9MoV5xHopvedO1HN5qhR",
+	"qjzuuvWi19/r/NzfPkIT4TT9Q7KtVEH0FZ9NxFRs4y0njwbzXm9/BGDAfwl7rbhLAAc+F9fOgCi1f9fh",
+	"790BxhYYKxaWMLFJL6OJGJ3TFxigdASFQvZYLegMJb0IBjMrUNd0w2LoUaU4iKuDVan4sRLTL/hLIyCp",
+	"mACBsgSE0IY050KxGU9EngsGgNMFtKtAUkC/CQOnjxm4y56CZ6Xk4qVtD5TU1TmXQ4vILSLv/aXUAgQO",
+	"mB4vSxF79l5AJMV2oVnE0QXetGbhBtLGEUEx8mkG3wRhwI3P6iwTAl7LBSbhniZz+NWVIZvNs1liTsk5",
+	"vs6vgxCG/1RCon1/OdbQBb55EIXlaS6EIhjLJPH2af7MhM2VzMQ4E3oSfFrHt/8eZUHAIZVyQM8+jthl",
+	"UPI9nedM5iG0qUt2zVxGPRUajWgyT4TRVHF+sGtpZuLrrcTTNQtY5ve/beAhVil66WqhVjdx/P4Ne7T/",
+	"uNNntl4q24quriKIQjaxC0C2IFiio2EmshHXgmXiDO100dVV53//b3h9xrUWMZAWAKJcicoWYJ3xPBcZ",
+	"zPtfH3nn759u9m63Oh+fdv4T/rX9f/9HE7eHhOW7BA01OaEazc1/YVma5qXot42Cg2oTNnF32NUdwoRW",
+	"1tAra7Mfti1p84COLwffxYBttnYlthJUXWJJXYGm+m+mNGnt3oDH5PrBUy3VWcgkhFbBDYZz4bGmoZtE",
+	"zxpaqOCUK/NEEzfvr5AIa9tc0527NHqBQG3sAcujFKyNwElajRvwxdDGK9kGnpNooycAZ7ggc40wD+EP",
+	"FLRIzccEEnsDzzIJZiwaI8RHGnO4vH/C71sver3HnZ/3nrBMYBVcTVprdDNXschClkHnu9uI6SQFQWfM",
+	"XnR6vb3ixp8KrnRhHTR3TZdFHz9FoDdjOgBRxuVEjiaUMmzz+j09l8yJnEH6VyI6IsEWii5XngLvB+qp",
+	"uva9QcYH6eYfcchRNgr7EyxiOCInFU90ylyWUMWoSWEfTOZd9hR0f52zPTZX8s85mk/0QG0tkkhKcvFH",
+	"+QnuARDgUIypWARspJ8x3YFqhCp8TRixt8YqFUg/TyjJW2skXMj/qlkACHKgTVfk7Mgme0RTqaBk35Rf",
+	"ReRXs50tI7DeEOrNABNu3i8yJfC7LvSuFFjKi7NYjCRImrTBgdp63uk9Aup8qlg6E4qhDAcqQHKNcuwp",
+	"5GhvI5lQ5hpQD06oXRXJUzFOM8F63f1ur9mqUjGeuO6cNwXWTKNO/6bH+33/tvF2x4ae/uf9Q2rsWZu6",
+	"GHAwiG/6Yb93Oxh04d97LUNLVRl6736GrnA9mIc2EhYgaeR8RazpHWgLL2ddRISUqSe64VNQO0Nml3Ib",
+	"UTkfoojoZioV1in13+iyiD4z1Ankt4tUN1A8E2w6z+coCIqrUTLXYFVp5QvIYKbySsTbTwwhYyoQJU2O",
+	"hIiJnp+4NSlM0+Y5g9OeF+TaHSjDbD1LIGUNtZ8FZo/CCgRMe26Q7D2Idtl7ksfdsfyLOY9B2EBb65Pp",
+	"wynCU7Tk5FCCT72O64tn7PHB4Y/MpBUxSm9qjEWIG9Sf91ial005CHGikwke4wN4u+tpjE3VFqv1CpsK",
+	"TfpVOWpp1k15sm15ydUyQuUKFQ25X021ElozN5tyAuuVb1rKxbSl9LsSWJ8ajeiUhtYghPo1vGrx9HSf",
+	"scgOHlnM6y7DPC9hHAb/q2P0mM5xHHnlAmrT2Ry3zfx71dLMx0zGQuVyfG3FHrO+kInuWZdtmh3XDVYU",
+	"vl2BcNqWScpuOlSVBmJ3CA+gvknvhJ4n+eb5Qe8EEjXp+nozLVRWIoyX+6+dXNjv9Xq9ptiGr20+CHFX",
+	"CyCGG/g24FWzvy9cOBqRvzlzQ/i5obIGal0Ww4ZgAh2utJUWRmZWGgak+5nNAHiqi8cRm1fcWA1h5fBS",
+	"+0E9urShcMXKPrPb5YGd0UHvcUQaOTe1GEyRky6LKnPX4nmjyiUedcuwyIXa0KB2t7zRBRgyfLrG8l37",
+	"nxUI3mvz02YtIuV8udGoGKroQLRg9dg6YOOcMytdramARe7IWn9ZpUolLNwFavzFi+OFH7ZDFhnDq/nc",
+	"Ra4Rg1rA2tbmXWuZhitAvm0Ae7kn4mcTEj5jEKHdQcluWgsl5NZ7j55AE0WY4WpL/j5yWaKW7PvjuClq",
+	"Y4xc4A/aIvMlzam3n7DTFLwombAmxKKqkH2JlNbKFf3NRV98MfNxk6O9HcNtfM127VwjwNUGeKxB2Esi",
+	"NbwGiU0mbxveDm/YADCpCz5iMqS9TICQbZIlsRgBCKnQtn0oltwM8xzjRj9kyWbc2GSu1A4iakiQ3FQJ",
+	"k6Ig7M0SXfzukk0J98NStbBa/QyKUiuquSKUS4VCXd3XbtCaiuKn1rc0sLxp6y3SWFmiodXlYkqtuYNv",
+	"23ti3tSNTy0Woua+md5W9h8dll3XLVTZXDSj/mO1Aeea8VsVmqmM1gqRJniHdfppRW4LoMKFIpsLvWqw",
+	"hGBwSkR918C5gJo//MMEFsE/yQ0UkgWY3EcQFVvK9DGJQcCGaDByroGkey5mecFgIK7CRpTQTVWjhZNp",
+	"fPreFTeoHzdbBG3YblmBIpUXUlw2/jhLdS4ymw1X3FSZXEU2ap/UC/JYXFuBmijfLCXh6tVmxi/sMxVI",
+	"mJFLO/Rg0UQbZVg38LYSU6szIRJu9Mr3XAW3y+w8/pGwU7Vt46QiONhugfnFENy/jRbEoodYfedFI9gm",
+	"0brF2FfVkb2fTKvIpfGGdnz7hR20ad9+B9pVIx9LHWlv7iWEtMmCcuKKEtqebU1mlAbDbUNv2VqGIsgC",
+	"BU9pqIpo6jwzUw+xuTjN2spqq9B6j6osTt+kz/prKGOxRAehJdxmWDaeHr/R9B20M+80fUndzLb7bT2m",
+	"Ky3+hatAWl24O7grjfPS9BdYwXpXnPHGbV3PxHMnqtc3+FBtw/Cz+ioXEqm1hjYyMj0EWx0VvawD9Fxc",
+	"Nx7/Vr6wepQ5DO001hJq/VUVI7p9t5HOCwvPiiK72Q5dKZsmacoR6GJVY7OyNp4s3XiFrwviUhUcb/nN",
+	"YF4I3efIdd9mwoqaZVDP0tkca3gOV0s1QfINmVSjZB6j589cYuYHCqClkPiiDD2SwZrFEBtX1rTVD6gF",
+	"3MkE3VzP8kO1fCXbyk0GgMhsAkBjplO/d/DT4Y+Pll2jOG37lr54BcHb1qXcIUb9objeqkn+d8vJb8Hc",
+	"v1Xluofac/dQe66FkKxpcUM28GAIXGwIvLutrwVvX6U+YGNVv08L1/hQzu9rlPNrQEhRQayuzrmya6ua",
+	"JCYC0gtaElKsZXAsE9FE9YeHK5XNw9pqnsxu6rk15rhV64xVvDImin2Xz+TuRX+32K/evZHx7a77PmoM",
+	"sdtsUNh+83iXMiYD2BJZ2cAgrCCIFlTdtR3WIacJE58Wk4Z3WCsWDdnkWqq1inC14bFHU8no1laOvmqd",
+	"kC0Fe12tvNraGiglaw7aNHhc0ynnsNDmnat3WbiHoCHbp8LjT1WUGJ5SxsnzNAcRGYxzJmQzcv0tmqnR",
+	"tby4WYobChS2H3xqLYjXYnoye/q0SkxTY3B+t6ElxT3CvNZv4mZBd78ftGsuF5kPohVS5apzrASM/h6r",
+	"hkgDLGBsaZoClD95m8kLngv27pf3J+zp22NTwoU9c2G77OlsxrZioeWZ6sTpSO8+fXvcncbb6EnLBDWE",
+	"YXyeT2zJmVe/vQ2ZTpnMKSNC51jQjnE2M9MpkYPA0x2ogdrZeZaqCxKl9M7OQHXYz2ksTf8cbAS3FfkN",
+	"RKBxSLTN5ioRGuaG7joMRRyTtg7fRVrxczEccQ1uwePn9PTDh+PnOmS5nAqd8+mMnkJw/f7+/mP24eRZ",
+	"F+ZvT7pA+8aefarZVjQI+nuPH3d7vUEQbePXtiu/bdJn0vwykc8zxaKDXo+VQuohK+Xt05Nnf6U0NvAQ",
+	"5JInjNyboLJCEA4FQdj2nck1sE9MF2Gc2UvSGFpY9PbDSVQk/HGm56cdS4+4RiqjbNakWbTX60e0uVJL",
+	"OsrYi16mBHoXX87IrIS/z+bZmXC72+sdRDjDL1iQ0aaIwWo5i3795SQygUeUemJnMrXG4KXpPMfJSGu3",
+	"K0yVCNmIZxkShmIRdMtz64EJd3YqU/pvN0XJ7+xAXa0cMtSnMo4TcckzYQnXtDnKxIxyxlLFBB9NGLAB",
+	"XN62IV6ofD+VOpcjiI6w2R3dnR3s50cEBgc3rtc+cuzgyMZHRYNg3Hk9CKKQPNbRIEjM3xhIFw0CSX8P",
+	"lK0JGQ2CkXlHGx0Nnml81mVv7IIhhzc7FzHbMWxGs6JpzA7jSl/CCg72fmKNmQ5eBA7Bj0k9UH4/PyiQ",
+	"tBOZgpqNvIhtIY1FFeYWbdPYBHdM9ugaEtWU25pPMiFY9M9//Dc1BY28UphcxQNVimfdJZqMU8Rhzs+F",
+	"t1WDN+zirnd2HAfA9JqorVNRZE2bmjJpIlAa/cJs5raw1iSsVmWBs7NTtHXd2fH7vg5UdNA7YC59BoPl",
+	"qJapSk2rNrdVs/KXoDproDDbJVMKfeRMMHtosDSGMUckyBEAMbY9NSVD4iNiNJC/m0JKq3dDRDbflgbf",
+	"7rJX8ySXwKFMUUASto+MJMdmyVzblYBTHyil68qeHpWaAQ0UtmYCn5k+gsjRqcwj1v/nP/6/vV6PbRnF",
+	"iB32IK6UMsYj9s//9/9nJmnTtVgs31VP3x57xvGjoNft97s9VDhmQvGZDI4CSPzcNxFgeKMvFM7hhTPR",
+	"FE5peSx8YHNgCbDAdZW49CpVs+PnyFwMgyUeJTUb8dFEEPdOM2F6aDs2cxwHR8GvIn/qxsEGTmFgh8Dl",
+	"7/V6lY5biJ3dP2YCS1yv1m3KaxB1a2sq7s7UXUe4FKezDYdY3GDQ1ugjdoSAeAbA7IAzIEuTtqnM+7vH",
+	"U7hrThOBX9mPcNaDXq/tawf43Z+5M6rgJwfLP3GdsW/D4HCVOY5N/heyKwSqtnVCg+fppaIGvk1QyTnE",
+	"AX4kJASfKMWHEvZ0q+xbvLJ7HAe38NVyZbj1fLxMIYQqZ1rGwEJ6bHbVZVgTc4SJiGe2Iqld/BLSP3Ez",
+	"fn76byS93FvAA9VNBDaBLEHlvqnOC5GYpbqJB8/AE0QFeWBFAuuRkKvIdO/uuuwVL72Bn1LJOlcT0/Jt",
+	"mTOem47Tae5f48UlbqN4nPx80HvMWpJaozpR+x3CApcI+rPxQrb0TWzslC90tdexaV/7CiLLdFNPh5Ua",
+	"4fbX6VLY1PDstqzPYoZV7dD219yuK3TVvB77qouTWXkH7oPaqae9xeXzDpL9smOO72CRr5HLxFn0vntv",
+	"c07wePknXnPmD35L5TA46O8v/7zaAx++29tb/l2t7+t9MCKjw9ocJY/5WKbx6bbOSXZdUUdTn6JiQ5Gx",
+	"NoUcTgXb2eFJsrNjK2yOJjKJXSV6iEqu85WtUlrmdmiNIiAM4tRYCEXkzCa5WyaCqsBj5iW8R132OvU1",
+	"F/aeOJpVrEi7xIbl8+lMxCQXl3lNOdv4TtwGNlTiNZg/+nEVfrIXhKuxnU9NHAsgula/6qYE65U40kFD",
+	"6QUajYj2S9zQKx3kN7Cm9zn/Xg+vgarp/105Vtzcr6seaRBHCXGJyEUTCmsGD7blbC3b9QuazFvugl5T",
+	"hBnjFGigXU5eUI3OCS+mNfsXorP+Ksiv9HVGovlpBWLzTEjv7KG7D8IBeBV5qWC+QFFvfppnQpTh2EQ9",
+	"odVUamqGJ44t1Cy+QSEFi8nZ5W8kp3w32sevIl9842+kcMBHcGTvzjn80L07co6Nr2nnTK8qBS9kMtXr",
+	"SPZNgYgr3aPfyaExGWTfyeHZmGF/aeng694Q75D+19YL0KY1TS9MKNgmPKTRQLGMhdSViCNmSm+mF8JW",
+	"jizsEQWzR3dhs/nDaBwDZW0g7qZ0Tif42qgNDKwF6oxJlafwkkjGlEkJOxEq5lVTR7nEF5a4qxtJBsqz",
+	"iKxoKmlQYIq6yF+Jn+bpu6ric2cVpV7s+V+JrU5Rpv1OmOoq2hZtF5BW5qsP/HhtiR3LDruWOKvpeRjZ",
+	"tLGWJxdrece2GMSDjvdt6XimeFCLSmcSjguFrlLvHzOUgBjAxxtR6g5f1Exyu9H5ZKjjjnx4muZphpfm",
+	"UlYME74qXoe4O0wSX+27CymgJQPkQq/BzXGTLbzc1Er5N9Aqld1rncS+hEpp2RSDCuhgW8b4htC2MTPZ",
+	"QaHrlxE9KUWGLQgHe4qxJPDU1UtPlTtfRee4S9PMg9OcbCtC0sOaG1SgwFbYqDVne8Koznx/m/q9/YGC",
+	"Ib3SFqNZ7q02UE29gkupXaaFSFHG3rYQgex5duKViEeTuK3hEVMS2ZaEZ0kKwnCeurEhjgsDhl0PmTP4",
+	"MUvnZxOv+aULN2oSUYskua8korr8h0JCtU+Kssum1jLWUA76+4e9HhU4xsrHQX+vRw9IisXwvLftw9qS",
+	"0kF/zw1Umep2bUODn2b4WeThO/Dhe2Gm1t7wPTDVB+l2pauDKHfB7dEox+56RNsovxjAsp7rSYRdwiHa",
+	"75rJseu7zi65ZgrCxpjmF1SXq1GIMQnSd5dlcB1Lj4+Z7hd8GQAGi1v1qzVOW/FF44Gzkfcjt/t/fUEm",
+	"9/btGs4XALD0aZ9sLt/M17B22RDlvI4U682mjAJD4dgnAfu0+CGj0PaD6o6PeEJvWrvSXs8cFWxvgw2w",
+	"zbhd9vMcQv3tkYHeLEVPwoidzqlpQ8k6tviaLw7T17jtVZoLXbqWqYBB8D/Ya/gJwoR/zQSH1INkGrJM",
+	"XMKsTCp28Lfu+vb/Sm2Fz3IzfyX+gNN+L9zh4UZeiQe+5xcUk78S81t4Pe+ahIIv5BLwmeTOjmGTOzse",
+	"g3xWCi43z4vEHeSIoDs6Iz+pTMQiJWQQQLoByg88L77nms2yuWqLIPKLfP/mivt8DdZ30S/xPRfl318r",
+	"PKipaPm/ElcD2vjOJJ8H3raibxNpF/QBMqdXZKgNWJz5UreqIq/FJaUxZjoP2VzNOMTqgxq7ZWW0vV6/",
+	"wXwKRVPKXEN/ufCa8sRU8W7d81X+uPGoWRaK9RO/Fy3hpTTGtZL4wy4KJN2TkrAa5e3emH/dttLgO3OF",
+	"Nd1epP1itz+qpuldZ6hRmFxRqUvf/aC9O7fZ+F+78r7P68DiNy0D7t9CGU6VqNI326KekFgSb/veiD1c",
+	"+palo7ZzIaeudfVmHk5mj0lesTUu8n0em3yxe3OAPhhlH/y5VakFIkIKm+W9piiuaYjyzootj6Cu6fbA",
+	"EChYCnBK03bU1Exg78HVtrNDT3d2WDS1idC7ULqmQ24skyMeYUmfgaJC9Ft+rZsQU+Z2377+dRcK4TAb",
+	"QwVVCCyf0kqOx9hR+f1vv9q0YutT28Zscpv8Hd2wQTDPkkFwxAaBbbr3z3/89yBgt2DEauUIDYree5Hf",
+	"F0PYVL8zlXecgod/u30hcrpQY76bZme7+e5s9/Kw19ud8jyTV90/ZmfrGLcaOnvAxw2IXT2FtKFG0mdR",
+	"LE2Nq5WDAh5Y5efXKPuHy7/7UHQmfSViyanq4vdrajPuhoKrA7cDyIAc/uHdy+0GLt8s/FCDkS9kaDOX",
+	"AAXFaq9rPPYRB/EQIx/w95PfcHuQRTyWCTZiFVgDWHuFOsg5N9ciM7WPsSgJvK+N446qAD1hUSamtBDq",
+	"vSV00aXE2mww8sMWOIpMTw34IBGjnOr52PYUaCxU5agI+hxXwJPEzMzGIh9NbOkZaOqDaxlnQk8iWHkp",
+	"osKFZnTd7LXlSEi7AT5latsk8lxcSi2KxZgpzUWou+xpkmB3Fe2AyLjyLl9HRhC0Qh1CcBpalB+VodJs",
+	"aosdsJmciUQqgz5XpgaHM42iaNSBwiZUprIIrASGJ7x22e/woeuJZj6klh5kk3XXpTOpwtO5snEmOKEN",
+	"tLbIBK7XHainyhVvst2ULicyMVKRysWZGVpqZnsRwyECTHkhLZngiEUXTn3Y22eVFsbQCH2g8JemVsZQ",
+	"GUrPBKa0JtcY/kIcyVIKIhOH7KSXSsQGE1jCiktlKmB3sKrDLEsvhOIKe5Vz2Af+wQxlCWwRJ2I6FZrx",
+	"MaB0jMm0PBEq5nDUVD7RTwaK50zLK/N36MqIo86qc5kkJTjQ+DHFG1HEcYF+ab8Qf855ohEh0m5TKz7T",
+	"E4il/wAHVsTSVhGCA9xxRI00Qzm2llzjLntLZAl0R008oBw70wJ4Ui4S03TInh9GxKyc57GGq3HCz4DC",
+	"Z5rxeZ5OeS5HA2X2R7gQOe2gBEpxNZOZMPG0ZMyZCpbNE9EYo/QS50WBwCztK4l4o0mqhXplg+OcqEeF",
+	"jQPDHgOvV9Gj3v4tNlFIkqYv8DkJWQiz5lHppzXEwwJgnzkkaa3ozs8gyGFMXwMjw4PkOCBDtGxeCeHB",
+	"kfC1JTf4aoU9Et2XqkOUZL4XwFbTzN7yNvLpB9MpcFpwFyv4wUFulfu+YMZVEWHbnjTlpywlUrfVf0mw",
+	"GW6pcENrThN7WhsVZrMpEBizWsqOgidDWx4CQtcvU/xKl0Ju6UBut6VMfcVo1DxFj4nPhl233hWqQPT3",
+	"gjUzqf7l40ZJvPkutO5V0qnMbfaQTHX31BjLRUz/tgXBp65F2F3qaN1bAS0aaGUWGgHHi0jWJ2geGe3b",
+	"5jCUOgO7hi/dSjlLqYuooC2/dQnw0cg12IgYH43EDHXt07lM8o5UpC5WGoxin2Ky3tb60NhcC6kp+6Ew",
+	"LsDvZpHYwMBmXHQHCnXQdCrzXMSm9On1DGpIW6UV1mgWIDXo7TE4RM06FvftTmfUVcHr891weVCI0Uui",
+	"p80vAQw5TKr3QKXNj0ymmIxxaUT+cu+XwC8st3YBM9sUIfjdraTUQiWgJrBFJe6pka/XrHvmd9j5qlXP",
+	"1oxxaItqeKh49u1XPKtwe9Ogscbt717rDIfBiMIvVOKsvYLZS9NpdnOWJJVJW/c50gZ8ZeWyZ/3Vyp71",
+	"+4C7dcubITweipt9H8XN3DlqqErSeno3TXhPFie8m6v9IeH9mytqhvKr9R+gCN+W/W5p5i7Z780xb07w",
+	"u5PCfGmT0FcRWjbIWF8Ukmkux3+HOmgtcsCXSVi3bIZiY3w964hVctJlvroihgfAON9MxN5AmbaBR6ZF",
+	"hIilSy/39K4ie4vdqy73ZKA2UuYG6hkY1EH1NQosdsFJpO1JOuH2nO/sIKTIo+glxsOVkSQFQ4CmJa5x",
+	"vIKJ0/QJfCSzptJO2+FA2e6pVpm0br5YjsciYzNjgwShjez/bGcHO7E0FQXY2WkqC7ANsMSvjHESX0Mi",
+	"2GY80Snzd2dAWd1afWPbprcHmka5dQN7GrBnJGBpIYTiwrGYlf+kWYmGxiURqYIRaNIyN8SnBOTbJBIO",
+	"C9OTdJ7E7JJnigLhAVo4jQEZbjITWkASYal1IB4DIzFvkRN9oAp/nWkSpMnHB004JKTqafLrN9dEsDty",
+	"Z680oXf6cEFeBTFcsQECOFzJhJMIbgqNOQ8QEm+bLcGZD2xvIvixNivMBz/Yuc20XebOhP8GJjinf0i0",
+	"EVl4DZQhG396bKLBGXZMMr5hbAXMGfw+z7yEaRgPJ/BrUmy11KPAji3eqLYcBB700v5T5bMSOwEwj/as",
+	"0XsQujZ3uMJGTkwfWKf4GKvHiNPVMpPqhWt16V6qNMH8GGQiEVyL4bXgWCt1rnI5BW+FmufCSLGI/1Lz",
+	"2gVDUuG0MIBg7FemEat7t2IPOsuwq6FvxKEmMGuntK5ttOl920Yb36f7Pcg/D9b+tYpLrGzwoTwC2wiy",
+	"UTd4T0Ewp9ckI0Wu09JRSZQq5KftkOVSdE4zwc9ZJLFyz58R5JZjUBCISzbgLATeSKFzuJ6QxTITozzN",
+	"rHm9kMbspRuaSkfwD0PCUWiFhLAqpLlYORKiUG6h3n8mLAavdhLhZEYynaR2ctD/faDUfHoqMqbmU5FB",
+	"FYHkOmQI5NEkS1WapGf2aS6u8t1EqnM24lp0pNJCaUlRUyEzLYYZtiUmmeCJ7+igqD+zqIRryL21kg+s",
+	"EQFnW25KuGax1CaGfZM4VC3HBIOwLZUyW2eHjVJlU4PDllhGFwxHBZSwXbKTT58awBIqKQgwoj9Ma0JT",
+	"wck8w91EJPU64Oj5qWmOmGYOKhh2JfNrWpb9Hva56/7gVxAin2ZMgraqwehIyNlFfGR4/Vrs0kcwyyid",
+	"nkoljDM8+rPRZoj92vEY1O7cShtUov1SSagy+T9hU34NBlKfDH2HExJhEAYSxvtzLrLrwvcAwwQ+c680",
+	"dl7Sn7m62mcVQjQnj4DzpHL40BEHYilF7mgvqNOeyqht3X+2LXqVVuS1bqhO6UDY5alZcJcZZqlNpF+a",
+	"EdZZgTJavJUWaZBFAPep9x4Bf7KY3LcikBqAtoEbRNv2ROG2liwV31kI7qWrO3YHKEmhieMpXLN4TA23",
+	"SzN2/P4N8Tn/yOsla5tK1bayRwdrLWw+m93rwvjVmgtbImpjU8VVkvjeYCPC+8h7W1VEBD72lp+tG0ti",
+	"PqmJik+x4yL59sWUkbAhhf7+spfpmkSjekv4Q3ifYWULosYoUuzEKzDk4hWqNQy3MsHjDtzNIVYdInEI",
+	"vPjKlfDY7jIqSQiXpzWTFR1fwZdPGraLh5cZBAf7TVEx0BpDMrAEUqnWIltearFobLrzyn1pyGu7W7KH",
+	"mUy56IZqAoZOPrmF/qjU5xffRitRdDOVKmRTflV+ERk/6uDr1KgcKGuNwrE/Q5lKWIZdkXV8Gm0f4PCi",
+	"miti5F4T5x2x2BMw6JYgOZuC6IskEF+MZsg6TEYGipYmCNfae1wORp4OFKWFMM6o7XSRG2LfpqUckahK",
+	"VllyJLskCXHFR9BTmhcpHV1GgaAuKSATTJ4pU2+TFbGLEG1+PC5i1212w1iqGI24eIOHxWSY0IHR/Bn1",
+	"Vi6sTux47JIjuPa7XRvzBygu89y3+4VU8Mv8vjQvgi1IiwDIq9Qt0iyvPUbG1Qbe1DLjYr+LcHVz1gJs",
+	"YRmfDssJkJeXl1143B2l010kl9087/X393uP93eDsGydOeo/fvy4bqI56u8/CgPav6TmriM4t8hbj09Q",
+	"YJbxcJbwHBIgkZ++zeRUsN9kLFLs0OX/9lrk40TCdVx6C21KDdVCm0uFFt18T7BwE+RzBmFgit5WIABW",
+	"WJGdZqlGOCAUtUkCXT9+Z+3g0f43H+H/PYXwrG04+g6CAe4p0t6G+6xSWrRq/vFCf+4tpX5hvJATxqwk",
+	"0RgWBPYHzF4741mM+YQQW1Qo258tcsgaA+4Q1X6ZbtT8sL9a88N+b6MoINzXQxTQtx4FtFxVaT7LXzA7",
+	"xrnzoxUbET1d2HqoiBoHO2NDBPi9NQf6iq61PL17ROHa2S7/ir4rSnD5LjxXdw06fnB8rRkQ52W5rBI7",
+	"mYmRUHlnsRPsqS+08FGWalK2L9PsXM/4SIRU2JAGS66LToGojW/Z+AM0M7i6PfyCKFk7w8V8th26MCWZ",
+	"MQjHA474Os2Zq6OIUU1jIWJaw1/TqWCnSTo6b/NsvMNVreTfeG3srOMinpCYbZuBNUFDqH+mHTvo72H3",
+	"CDmdT4OjQ/ID0B+FCR0rGWBnsC9nIPXBsY4A5X/VwpWaSKDwzvlI3VB0uh9raPMavXNCZqbyQTHP2o5I",
+	"zddUeD5QNO+yX8Bq5LxLpj4ohi3xZDbhpwLLtHcb6kzBxC3k2+aNKl9yd/JOfb+uAILcms6A0kcL3AEW",
+	"kd8KZdO6zXGz5tGlNJ3nIHR6VF2LcH5v3/mCaDMzroM090kja7IbDcl7HlsPqbvAGJ6dOwhT9xKiXCxH",
+	"F1AvEGgekaNmreBjbbWVl+DxxAjbqXGUDE2w8BCvsohKweoiPvTK3NTgkKT6F9j9YToVscQKLuDeQC1l",
+	"mAkgBVBEYn6tXeTj/vaRTX/9S2G9DpnLi0rH45BM5FgQqQ/X7v6jQzDI56bSEYtToXHm2TwDV0/OUjUS",
+	"GMvLYi6Ta/ZHeopvwXqsYXiYcHU252ciQrEjSxPjYkpHPBGUDzq2ZYMKV4Dp/2or4LhAgNZ4Re+QfCM9",
+	"rJvRGxzt98LAkdmQPgvezDP2LE3AMULmyTCoYLQ0dhO2YeS14wot2L4J/ewzsB0rX3in+Ytqaw/a0xph",
+	"g6syX+/+BMfirsc22qMIrd8SGc1c1+6fHzRrYFqmyJrnADWZHjjMubgOPYsv1DZ1yvMgMA7MkA0C8oZq",
+	"ePbxE7uNgGtK7dzfBW8FJy6bigzqctk8CONg9OqsYZ1UHNGWOIPl/KBZxtW5VGfk2qeFuXJoUN4QBgFu",
+	"W0CMmZBlir4zMXmwEqsR2kJ0jYrdyTQ+fe9BfyXpGCXcRQLyogMPM1IRytuwefiVhe/95cL3PUjKBmUl",
+	"9u2IJDgiErEEEhx9RPI2om3bR7Sp4pubIM0kKOfJsNEtmV6IDOLVUXwGoM5zpOTRucggm8JWBsyzeT4B",
+	"/YcoZri8mu3+wd7u+KfHH/afPs/6qfy5rx//eh6/ffPL7H99OD/8K5a4bfGV+uXSwqDwAN+u41WoEmDD",
+	"NfCOKyx4V7xF0RaqlI1DwHQ1xCDuD1zqqRrLs/nmnoav6I0zYDHRHiBi/WZVpoW1rih1c0Ea71uRTbki",
+	"/Z3esZVF8VN2CpPYVsUSqicmQodFyT+uUYQEDiz4yLxf944dx2I6S+GcHRXtBGkGjBLlSl+KDBqpHTSx",
+	"J+zkd2LSUJe7lPBNnETe06X2Cy24IRmW/m5Nhn2jBBMQ34ASP5Z4xJhwFGQI4CF4LFyTk+ZOJnbv64nD",
+	"37AxATe0pi3B/2aBKYHICoC+eWDhPcUJllZSp5nqQd29weMzXJJ6/9ycUzyE89M8E8IlbuP5rJ6/Gkm9",
+	"Ba0PwfmzKX6z/FDhN/F3E6j5lhTbEhubFcyu8QSvd7oQdNVOM1U8bt7ErRi+zZlaRnKpf6WtttRlv7uY",
+	"Rd/naR2pRS3hFMnHih4QBC9U/sT1u6G/TdFZypPNBuosVRTIB1krZUcqfTCUaogfRGyLAh3RtyDV2ZBe",
+	"iLZpiW3rw0jJDr1rSj1z4/odqML3e8Qi7/OuVy9mXOm4T9kJtSoypc9NwUD6mOpvt7emqxyjzb2579K0",
+	"Vq/KLqni2qW8xbW7zuFSPevAvVoD3LIBomuUWwzpAyOtJ85Pu9bOSINqlBjphW8ruqToAvj1rAT31w7O",
+	"57HLbjkh2t2iSQJxXegc3dmpH9oQqlVTiRKvDxzxvRGmymNedGzVHyEaa4ycwBq+oJwj1hNxRLN0Qy7j",
+	"GkzutW+zlrE45RmCroRHUemcAGe13cuB8iq+sRGUC0A5L/pCiF3PxHOXaAnwMJyEZxm/boJl8bZuFNpM",
+	"mQL7DgLbJIx7QMENfrot7uamIO2Twjqy+q2wTvwwTHDv8cMrkmoF8P/yxfwo2qpWOnYz/ttcWm8013k6",
+	"ZcaoVqW16gncvTkX1xVNoanmlqHCz1lziyaK7wTLEkhowDJI0JSJTqbTa2ycVYlm9M5kg+ES3MmFYfFc",
+	"XC80Lc54DgwzOAr+6yPv/P0T/KfXeTz8dNML9/u3/xE02hedH7HJq3UPaLh/NlIs7d69RvfFRmiJd6v9",
+	"fw+H1JVD2OSQ7o5dLZKvRptL7qkXJmv526LPyvq+4l1H8Ln/a+62TGZP47igMZtJvhaRtWZfbEBqTXQ0",
+	"byAjE27u4KS/OUKqrfD+8hbuB/FmvBLq9dq4v8H//dvKcsF9nPrPeDPg8mi1b6lnbrNEb6SPhSIEQgal",
+	"eSDnGZuls3mCdngqlNIoSTRqOGYpdSh+K7CQqbI9hquiZjpXOTmDaddk3kNCASdOBVqXWHmOWlx9Jkmr",
+	"IUayYRRL1mtzq2US2bd57VXW9xVls9Zr785iWYX7KXQnrnLzTQRP8snfWw1Je70e2a2xQ9xIaI3dCmZ1",
+	"c9CziRid/xWHW356serQLOGyZgxKzz0DKPxVNvhUybIxuKm00ppd4kIo+HGWpaf+OSRIGLBkgsfXK0El",
+	"5jk/5VqQdZ2PJug1x2JJz5+ePB0+P36HdQYuM5lTmrtItGCHvf0WEL4TPJawwrtAEdfvA5IerAnLd/SR",
+	"87uvNLUFiD+7A9K86pVffTHP7RhphgVE+VnDcN4ZMFBcgGf4AGOXiE1RUMcu8iHzchXvjngAv1l5Cs22",
+	"0nmOvRQjI1RQ6W7Ddc289do6v5cifXFoG9PFtlKFIRjYvDrEJvhw5P1xtYv0WzAyFQ2zxjffJNctxx81",
+	"DXNSsWdi+mOLEdUfDu2vtdHIXEFxDzJzaTYx5QRDkJZ3U9G7DaO8JCv2CmNY2251hGNKGXLRGC6UtviU",
+	"jKb1T9/Y/iulgiF2ABuX5nc59TttYoSc1yjUBxkEnTQv1TaxrLTlxcl5nvPRZCpUbnzW3ham6OOvDelq",
+	"Ntucp3TsItus/9uUpGMmTtcb1XzURCtY+sR0XjX5WODP9JPLS8QLLzaMY8RQS2Ch8TXS0sRUh4zHcSa0",
+	"sWB5XpMSBWLB+k+3/2cA",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

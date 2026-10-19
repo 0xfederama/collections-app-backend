@@ -31,7 +31,7 @@ type Record struct {
 	ItemID         uuid.UUID
 	ItemVersion    int
 	TMDBID         int
-	Kind           string
+	Type           string
 	ImportedFields map[string]any
 	ImportedTitle  *string
 	// OriginalTitle is the user title from before TMDB normalized it and is the
@@ -52,7 +52,7 @@ type ApplyParams struct {
 	ListID          uuid.UUID // create only
 	ItemID          uuid.UUID // existing-item modes only
 	ExpectedVersion int       // existing-item modes only
-	Kind            string
+	Type            string
 	CreateInput     *items.CreateInput // create only; explicit user values win
 
 	TMDBID        int
@@ -78,7 +78,7 @@ type ApplyParams struct {
 // concurrent user edit. A prepared poster is attached only when the locked
 // item has no image; otherwise the existing image is preserved.
 type Store interface {
-	ListKind(ctx context.Context, listID uuid.UUID) (string, error)
+	ListType(ctx context.Context, listID uuid.UUID) (string, error)
 	Read(ctx context.Context, itemID uuid.UUID) (Record, bool, error)
 	Apply(ctx context.Context, p ApplyParams) (items.Item, error)
 }

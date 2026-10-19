@@ -23,7 +23,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
-	"github.com/0xfederama/collections-app-backend/internal/items/kinds"
+	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 )
 
@@ -52,16 +52,24 @@ func NewStore(db DB, fileStore storage.FileStore, clk clock.Clock, itemSvc *item
 	return &DBStore{db: db, store: fileStore, clock: clk, items: itemSvc, log: log, workspaceID: workspaceID}
 }
 
-// ListKind returns the kind of an active list.
-func (s *DBStore) ListKind(ctx context.Context, listID uuid.UUID) (string, error) {
-	kind, err := sqlc.New(s.db).GetLookupListKind(ctx, sqlc.GetLookupListKindParams{ID: listID, WorkspaceID: s.workspaceID})
+// ListType returns the type of an active list, "" for a list with no type.
+func (s *DBStore) ListType(ctx context.Context, listID uuid.UUID) (string, error) {
+	typ, err := sqlc.New(s.db).GetLookupListType(ctx, sqlc.GetLookupListTypeParams{ID: listID, WorkspaceID: s.workspaceID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", apperr.NotFound("list")
 	}
 	if err != nil {
-		return "", fmt.Errorf("get lookup list kind: %w", err)
+		return "", fmt.Errorf("get lookup list type: %w", err)
 	}
-	return kind, nil
+	return typeKey(typ), nil
+}
+
+// typeKey is the list type key, "" when the list has no type (never movie or tv_show).
+func typeKey(typ *string) string {
+	if typ == nil {
+		return ""
+	}
+	return *typ
 }
 
 // Read returns the current provenance record, including the item's current
@@ -79,7 +87,7 @@ func (s *DBStore) Read(ctx context.Context, itemID uuid.UUID) (Record, bool, err
 		return Record{}, false, fmt.Errorf("decode TMDB import fields: %w", err)
 	}
 	return Record{
-		ItemID: r.ItemID, ItemVersion: int(r.ItemVersion), TMDBID: int(r.TmdbID), Kind: r.Kind,
+		ItemID: r.ItemID, ItemVersion: int(r.ItemVersion), TMDBID: int(r.TmdbID), Type: r.Type,
 		ImportedFields: fields, ImportedTitle: r.ImportedTitle, OriginalTitle: r.OriginalTitle,
 		AttachmentID: nullUUIDPtr(r.AttachmentID), PosterPath: valueOrEmpty(r.PosterPath),
 		PosterFetchedAt: r.PosterFetchedAt, FetchedAt: r.FetchedAt,
@@ -133,8 +141,8 @@ func (s *DBStore) Apply(ctx context.Context, p ApplyParams) (items.Item, error) 
 }
 
 func validateApply(p ApplyParams) error {
-	if p.Kind != kinds.Movie && p.Kind != kinds.TVShow {
-		return apperr.Validation(apperr.FieldError{Field: "kind", Message: "lookup is available only for movie and tv_show"})
+	if p.Type != types.Movie && p.Type != types.TVShow {
+		return apperr.Validation(apperr.FieldError{Field: "type", Message: "lookup is available only for movie and tv_show"})
 	}
 	if p.TMDBID <= 0 {
 		return apperr.Validation(apperr.FieldError{Field: "tmdb_id", Message: "must be greater than zero"})
@@ -157,18 +165,18 @@ func validateApply(p ApplyParams) error {
 }
 
 func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParams, poster *preparedPoster) (uuid.UUID, bool, error) {
-	kind, err := q.GetLookupListKind(ctx, sqlc.GetLookupListKindParams{ID: p.ListID, WorkspaceID: s.workspaceID})
+	typ, err := q.GetLookupListType(ctx, sqlc.GetLookupListTypeParams{ID: p.ListID, WorkspaceID: s.workspaceID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, false, apperr.NotFound("list")
 	}
 	if err != nil {
 		return uuid.Nil, false, fmt.Errorf("get lookup list: %w", err)
 	}
-	if kind != p.Kind {
-		return uuid.Nil, false, apperr.KindMismatch()
+	if typeKey(typ) != p.Type {
+		return uuid.Nil, false, apperr.TypeMismatch()
 	}
 	if p.CreateInput.Price != nil {
-		return uuid.Nil, false, apperr.Validation(apperr.FieldError{Field: "price", Message: "items of this kind have no price"})
+		return uuid.Nil, false, apperr.Validation(apperr.FieldError{Field: "price", Message: "items of this type have no price"})
 	}
 	original, err := cleanLookupTitle(p.OriginalTitle)
 	if p.OriginalTitle == "" {
@@ -188,7 +196,7 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 		setPath(metadata, path, value)
 	}
 	metadata["tmdb_id"] = p.TMDBID
-	metadata, err = s.items.ValidateMetadata(ctx, q, kind, metadata)
+	metadata, err = s.items.ValidateMetadata(ctx, q, typ, metadata)
 	if err != nil {
 		return uuid.Nil, false, err
 	}
@@ -242,8 +250,8 @@ func (s *DBStore) applyExisting(ctx context.Context, q *sqlc.Queries, p ApplyPar
 	if int(cur.Version) != p.ExpectedVersion {
 		return false, nil, apperr.VersionConflict(int(cur.Version))
 	}
-	if cur.Kind != p.Kind {
-		return false, nil, apperr.KindMismatch()
+	if typeKey(cur.Type) != p.Type {
+		return false, nil, apperr.TypeMismatch()
 	}
 
 	old, hasOld, err := readImportTx(ctx, q, p.ItemID, s.workspaceID)
@@ -261,7 +269,7 @@ func (s *DBStore) applyExisting(ctx context.Context, q *sqlc.Queries, p ApplyPar
 		merged = cloneLookupMap(metadata)
 		snapshots = cloneLookupMap(old.ImportedFields)
 	}
-	merged, err = s.items.ValidateMetadata(ctx, q, cur.Kind, merged)
+	merged, err = s.items.ValidateMetadata(ctx, q, cur.Type, merged)
 	if err != nil {
 		return false, nil, err
 	}
@@ -366,7 +374,7 @@ func (s *DBStore) saveProvenance(ctx context.Context, q *sqlc.Queries, itemID uu
 		posterFetchedAt = nil
 	}
 	if err := q.UpsertTMDBImport(ctx, sqlc.UpsertTMDBImportParams{
-		WorkspaceID: s.workspaceID, ItemID: itemID, TmdbID: int32(p.TMDBID), Kind: p.Kind, //nolint:gosec // validated positive TMDB id
+		WorkspaceID: s.workspaceID, ItemID: itemID, TmdbID: int32(p.TMDBID), Type: p.Type, //nolint:gosec // validated positive TMDB id
 		ImportedFields: fieldsJSON, ImportedTitle: importedTitle, OriginalTitle: originalTitle,
 		AttachmentID: attachmentID, PosterPath: posterPath, PosterFetchedAt: posterFetchedAt,
 		PosterRefreshAfter: posterRefresh, PosterExpiresAt: posterExpiry,
@@ -389,7 +397,7 @@ func readImportTx(ctx context.Context, q *sqlc.Queries, itemID, workspaceID uuid
 	if err := json.Unmarshal(r.ImportedFields, &fields); err != nil {
 		return Record{}, false, fmt.Errorf("decode TMDB import fields: %w", err)
 	}
-	return Record{ItemID: r.ItemID, ItemVersion: int(r.ItemVersion), TMDBID: int(r.TmdbID), Kind: r.Kind,
+	return Record{ItemID: r.ItemID, ItemVersion: int(r.ItemVersion), TMDBID: int(r.TmdbID), Type: r.Type,
 		ImportedFields: fields, ImportedTitle: r.ImportedTitle, OriginalTitle: r.OriginalTitle,
 		AttachmentID: nullUUIDPtr(r.AttachmentID), PosterPath: valueOrEmpty(r.PosterPath),
 		PosterFetchedAt: r.PosterFetchedAt, FetchedAt: r.FetchedAt}, true, nil

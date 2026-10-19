@@ -14,30 +14,30 @@ import (
 // searchRows is one page of GET /search.
 type searchRows struct {
 	Data []struct {
-		Item     obj    `json:"item"`
-		KindName string `json:"kind_name"`
-		Path     []obj  `json:"path"`
+		Item     obj   `json:"item"`
+		TypeName any   `json:"type_name"`
+		Path     []obj `json:"path"`
 	}
 	Page obj
 }
 
-func TestF014B5_CustomKindListsAndSearchNames(t *testing.T) {
+func TestF014B5_CustomTypeListsAndSearchNames(t *testing.T) {
 	e := newTreeEnv(t)
-	created := e.call("POST", "/api/v1/kinds", `{"name":"Board game"}`, "")
+	created := e.call("POST", "/api/v1/types", `{"name":"Board game"}`, "")
 	wantStatus(t, created, 201)
-	kind := decode(t, created)
-	key := kind["key"].(string)
-	list := e.call("POST", "/api/v1/lists", fmt.Sprintf(`{"name":"Shelf","kind":%q}`, key), "")
+	typ := decode(t, created)
+	key := typ["key"].(string)
+	list := e.call("POST", "/api/v1/lists", fmt.Sprintf(`{"name":"Shelf","type":%q}`, key), "")
 	wantStatus(t, list, 201)
 	lid := decode(t, list)["id"].(string)
 	e.newItem(lid, `{"title":"Catan"}`)
 
 	got := e.search(q("catan"))
-	if len(got.Data) != 1 || got.Data[0].Item["kind"] != key || got.Data[0].KindName != "Board game" {
-		t.Fatalf("custom-kind search result = %+v", got.Data)
+	if len(got.Data) != 1 || got.Data[0].Item["type"] != key || got.Data[0].TypeName != "Board game" {
+		t.Fatalf("custom-type search result = %+v", got.Data)
 	}
-	if definition := e.kind(key); definition["name"] != "Board game" {
-		t.Fatalf("custom kind missing from definitions picker data: %v", definition)
+	if definition := e.typ(key); definition["name"] != "Board game" {
+		t.Fatalf("custom type missing from definitions picker data: %v", definition)
 	}
 	recent := e.call("GET", "/api/v1/recent-items", "", "")
 	wantStatus(t, recent, 200)
@@ -45,8 +45,8 @@ func TestF014B5_CustomKindListsAndSearchNames(t *testing.T) {
 	if err := json.Unmarshal(recent.Body.Bytes(), &recentResults); err != nil {
 		t.Fatal(err)
 	}
-	if len(recentResults.Data) != 1 || recentResults.Data[0].KindName != "Board game" {
-		t.Fatalf("custom-kind recent result = %+v", recentResults.Data)
+	if len(recentResults.Data) != 1 || recentResults.Data[0].TypeName != "Board game" {
+		t.Fatalf("custom-type recent result = %+v", recentResults.Data)
 	}
 }
 
@@ -83,7 +83,7 @@ func TestAT12_SearchSubstringAndPath(t *testing.T) {
 	e := newTreeEnv(t)
 	media := e.folder("Media", nil)
 	movies := e.folder("Movies", media["id"])
-	watchlist := e.listOfKind("Watchlist", movies["id"], "movie")
+	watchlist := e.listOfType("Watchlist", movies["id"], "movie")
 	rootList := e.list("Inbox", nil)
 
 	e.newItem(watchlist["id"].(string), matrix)
@@ -115,18 +115,18 @@ func TestAT12_SearchSubstringAndPath(t *testing.T) {
 		t.Fatalf("nested path = %v, want %v", hit.Path, wantPath)
 	}
 	// Summary shape: same fields as a list row, incl. metadata.
-	for _, k := range []string{"id", "list_id", "title", "kind", "image", "price", "website", "metadata", "content_version", "sort_order", "version", "created_at", "updated_at"} {
+	for _, k := range []string{"id", "list_id", "title", "type", "image", "price", "website", "metadata", "content_version", "sort_order", "version", "created_at", "updated_at"} {
 		if _, ok := hit.Item[k]; !ok {
 			t.Errorf("item summary lacks %q", k)
 		}
 	}
-	if hit.Item["kind"] != "movie" || got.Data[0].KindName != "Movie" || hit.Item["website"] != "https://www.warnerbros.com/movies/matrix" || hit.Item["image"] != nil {
+	if hit.Item["type"] != "movie" || got.Data[0].TypeName != "Movie" || hit.Item["website"] != "https://www.warnerbros.com/movies/matrix" || hit.Item["image"] != nil {
 		t.Errorf("unexpected summary: %v", hit.Item)
 	}
 
 	rootHit := e.search(q("matte")).Data[0]
-	if rootHit.Item["kind"] != "generic" {
-		t.Errorf("TestF007 kind of an item in a generic list = %v", rootHit.Item["kind"])
+	if rootHit.Item["type"] != nil {
+		t.Errorf("TestF007 type of an item in a list with no type = %v", rootHit.Item["type"])
 	}
 	if want := []obj{{"type": "list", "id": rootList["id"], "name": "Inbox", "icon": nil, "icon_color": nil}}; !reflect.DeepEqual(rootHit.Path, want) {
 		t.Fatalf("root list path = %v, want %v", rootHit.Path, want)
@@ -170,7 +170,7 @@ func TestAT12_SearchExcludesTrash(t *testing.T) {
 	trashedFolder := e.trashFolder("GoneFolder", nil)
 	listInFolder := uuid.New()
 	batch := e.trashBatch("list", listInFolder)
-	e.exec(`INSERT INTO lists (id, workspace_id, folder_id, name, kind, sort_order, deleted_at, trash_batch_id) VALUES ($1, $2, $3, 'In gone folder', 'generic', 0, now(), $4)`,
+	e.exec(`INSERT INTO lists (id, workspace_id, folder_id, name, type, sort_order, deleted_at, trash_batch_id) VALUES ($1, $2, $3, 'In gone folder', NULL, 0, now(), $4)`,
 		listInFolder, e.ws, trashedFolder, batch)
 	e.trashedItem(listInFolder.String(), "Needle in trashed folder")
 

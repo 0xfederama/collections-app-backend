@@ -37,7 +37,7 @@ func folderBody(f tree.Folder) oapi.Folder {
 
 func listBody(l tree.List) oapi.List {
 	out := oapi.List{
-		Id: l.ID, FolderId: nullableUUID(l.FolderID), Name: l.Name, Kind: l.Kind, Description: nullableString(l.Description),
+		Id: l.ID, FolderId: nullableUUID(l.FolderID), Name: l.Name, Type: nullableString(l.Type), Description: nullableString(l.Description),
 		DisplayMode: oapi.DisplayMode(l.DisplayMode), SortMode: l.SortMode,
 		Icon: nullableString(l.Icon), IconColor: nullableIconColor(l.IconColor),
 		SortOrder: l.SortOrder, ItemCount: l.ItemCount, Version: l.Version, CreatedAt: l.CreatedAt, UpdatedAt: l.UpdatedAt,

@@ -31,7 +31,7 @@ func (s *Server) ListItems(ctx context.Context, r oapi.ListItemsRequestObject) (
 	}
 	page, err := s.deps.Items.List(ctx, r.Id, p)
 	if errors.Is(err, items.ErrInvalidSort) {
-		pr := invalidParameter("sort must be manual, title, updated, price (when allowed), or a field key of this list's kind.")
+		pr := invalidParameter("sort must be manual, title, updated, price (when allowed), or a field key of this list's type.")
 		return oapi.ListItems400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: oapi.BadRequestApplicationProblemPlusJSONResponse{
 				Type: pr.Type, Title: pr.Title, Status: pr.Status, Code: oapi.ProblemCode(pr.Code), Detail: &pr.Detail,
@@ -228,9 +228,8 @@ func itemBody(it items.Item) (oapi.Item, error) {
 	if metadata == nil {
 		metadata = map[string]interface{}{}
 	}
-	kind := it.Kind
 	out := oapi.Item{
-		Id: it.ID, ListId: it.ListID, Title: it.Title, Kind: &kind, Metadata: metadata,
+		Id: it.ID, ListId: it.ListID, Title: it.Title, Type: nullableString(it.Type), Metadata: metadata,
 		Image: image, Price: priceBody(it.Price), Website: nullableString(it.Website),
 		ContentVersion: it.ContentVersion, SortOrder: it.SortOrder, Version: it.Version,
 		CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt,
@@ -247,7 +246,7 @@ func itemBody(it items.Item) (oapi.Item, error) {
 
 func itemSummaryBody(it items.Item) oapi.ItemSummary {
 	out := oapi.ItemSummary{
-		Id: it.ID, ListId: it.ListID, Title: it.Title, Kind: it.Kind,
+		Id: it.ID, ListId: it.ListID, Title: it.Title, Type: nullableString(it.Type),
 		Price: priceBody(it.Price), Website: nullableString(it.Website), ContentVersion: it.ContentVersion,
 		SortOrder: it.SortOrder, Version: it.Version, CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt,
 		Image: nullable.NewNullNullable[oapi.ImageSummary](),

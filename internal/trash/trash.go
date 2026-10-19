@@ -493,12 +493,12 @@ func (s *Service) folderTarget(ctx context.Context, q *sqlc.Queries, original *u
 // blockedBy builds the parent_in_trash conflict for an original parent that is
 // not active. A parent that no longer exists cannot be named (the foreign keys
 // make that unreachable: purging a parent purges its trashed children too).
-func (s *Service) blockedBy(ctx context.Context, q *sqlc.Queries, kind string, id uuid.UUID) error {
+func (s *Service) blockedBy(ctx context.Context, q *sqlc.Queries, typ string, id uuid.UUID) error {
 	var (
 		name string
 		err  error
 	)
-	if kind == TypeFolder {
+	if typ == TypeFolder {
 		var row sqlc.GetAnyFolderStateRow
 		row, err = q.GetAnyFolderState(ctx, sqlc.GetAnyFolderStateParams{ID: id, WorkspaceID: s.workspaceID})
 		name = row.Name
@@ -513,7 +513,7 @@ func (s *Service) blockedBy(ctx context.Context, q *sqlc.Queries, kind string, i
 	if err != nil {
 		return fmt.Errorf("blocking parent: %w", err)
 	}
-	return apperr.ParentInTrash(apperr.BlockingParent{Type: kind, ID: id.String(), Name: name})
+	return apperr.ParentInTrash(apperr.BlockingParent{Type: typ, ID: id.String(), Name: name})
 }
 
 // destinationErrors checks that dest names the key its root type needs.

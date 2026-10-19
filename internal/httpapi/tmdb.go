@@ -33,7 +33,7 @@ func (s *Server) ListTmdbSuggestions(ctx context.Context, r oapi.ListTmdbSuggest
 	if err != nil {
 		return nil, err
 	}
-	matches, err := s.deps.TMDB.Search(ctx, string(r.Params.Kind), r.Params.Q, settings.MetadataLanguage)
+	matches, err := s.deps.TMDB.Search(ctx, string(r.Params.Type), r.Params.Q, settings.MetadataLanguage)
 	if errors.Is(err, tmdb.ErrDisabled) {
 		return empty, nil
 	}

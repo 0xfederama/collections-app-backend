@@ -15,15 +15,15 @@ import (
 
 // ---- helpers ----
 
-// del sends DELETE with the resource's current ETag (kind: folders, lists, items).
-func (e *imageEnv) del(kind, prefix string, o obj) *httptest.ResponseRecorder {
+// del sends DELETE with the resource's current ETag (type: folders, lists, items).
+func (e *imageEnv) del(typ, prefix string, o obj) *httptest.ResponseRecorder {
 	e.t.Helper()
-	return e.call("DELETE", "/api/v1/"+kind+"/"+o["id"].(string), "", etagOf(prefix, o))
+	return e.call("DELETE", "/api/v1/"+typ+"/"+o["id"].(string), "", etagOf(prefix, o))
 }
 
-func (e *imageEnv) mustDel(kind, prefix string, o obj) {
+func (e *imageEnv) mustDel(typ, prefix string, o obj) {
 	e.t.Helper()
-	wantStatus(e.t, e.del(kind, prefix, o), 204)
+	wantStatus(e.t, e.del(typ, prefix, o), 204)
 }
 
 // trashPage returns GET /trash (data and page).
@@ -83,9 +83,9 @@ func (e *imageEnv) count(sql string, args ...any) int {
 	return n
 }
 
-func (e *imageEnv) wantGone(kind string, o obj) {
+func (e *imageEnv) wantGone(typ string, o obj) {
 	e.t.Helper()
-	wantProblem(e.t, e.call("GET", "/api/v1/"+kind+"/"+o["id"].(string), "", ""), 404, "not_found")
+	wantProblem(e.t, e.call("GET", "/api/v1/"+typ+"/"+o["id"].(string), "", ""), 404, "not_found")
 }
 
 func counts(en obj) [3]int {
@@ -117,9 +117,9 @@ func TestAT11_DeleteFolderHidesSubtreeAndRestoreKeepsOlderBatches(t *testing.T) 
 	e.clk.Advance(time.Minute) // the trash list is ordered by deleted_at
 	e.mustDel("folders", "f", f)
 
-	for kind, objs := range map[string][]obj{"folders": {f, g}, "lists": {l1, l2}, "items": {i1, i2, i3}} {
+	for typ, objs := range map[string][]obj{"folders": {f, g}, "lists": {l1, l2}, "items": {i1, i2, i3}} {
 		for _, o := range objs {
-			e.wantGone(kind, o)
+			e.wantGone(typ, o)
 		}
 	}
 	if names := names(e.tree("folders")); len(names) != 1 || names[0] != "Other" {
@@ -401,26 +401,26 @@ func TestDeleteNeedsMatchingIfMatchAndAnActiveResource(t *testing.T) {
 
 	batches := 0 // each subtest trashes one resource
 	for _, tc := range []struct {
-		kind, prefix string
-		o            obj
+		typ, prefix string
+		o           obj
 	}{{"folders", "f", f}, {"lists", "l", l}, {"items", "i", it}} {
-		t.Run(tc.kind, func(t *testing.T) {
-			stale := e.call("DELETE", "/api/v1/"+tc.kind+"/"+tc.o["id"].(string), "", fmt.Sprintf(`"%s-%d"`, tc.prefix, 99))
+		t.Run(tc.typ, func(t *testing.T) {
+			stale := e.call("DELETE", "/api/v1/"+tc.typ+"/"+tc.o["id"].(string), "", fmt.Sprintf(`"%s-%d"`, tc.prefix, 99))
 			p := wantProblem(t, stale, 412, "version_conflict")
 			if p.CurrentVersion == nil || *p.CurrentVersion != 1 {
 				t.Fatalf("current_version = %v", p.CurrentVersion)
 			}
-			wantProblem(t, e.call("DELETE", "/api/v1/"+tc.kind+"/"+tc.o["id"].(string), "", ""), 428, "precondition_required")
+			wantProblem(t, e.call("DELETE", "/api/v1/"+tc.typ+"/"+tc.o["id"].(string), "", ""), 428, "precondition_required")
 			// A failed delete changes nothing.
-			e.fetch(tc.kind, tc.o["id"].(string))
+			e.fetch(tc.typ, tc.o["id"].(string))
 			if n := e.count(`SELECT count(*) FROM trash_batches`); n != batches {
 				t.Fatalf("batches = %d, want %d", n, batches)
 			}
 			batches++
-			wantStatus(t, e.del(tc.kind, tc.prefix, tc.o), 204)
+			wantStatus(t, e.del(tc.typ, tc.prefix, tc.o), 204)
 			// Already trashed or never there: 404 even with a stale ETag.
-			wantProblem(t, e.del(tc.kind, tc.prefix, tc.o), 404, "not_found")
-			wantProblem(t, e.call("DELETE", "/api/v1/"+tc.kind+"/"+uuid.NewString(), "", `"`+tc.prefix+`-1"`), 404, "not_found")
+			wantProblem(t, e.del(tc.typ, tc.prefix, tc.o), 404, "not_found")
+			wantProblem(t, e.call("DELETE", "/api/v1/"+tc.typ+"/"+uuid.NewString(), "", `"`+tc.prefix+`-1"`), 404, "not_found")
 		})
 	}
 }

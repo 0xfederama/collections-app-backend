@@ -80,24 +80,24 @@ FOLDER_ID="$(field .id)"
 FOLDER_ETAG="$(etag)"
 
 step "create motorcycle list"
-json 201 POST /api/v1/lists -d "{\"name\":\"$RUN bikes\",\"kind\":\"motorcycle\",\"folder_id\":\"$FOLDER_ID\"}"
+json 201 POST /api/v1/lists -d "{\"name\":\"$RUN bikes\",\"type\":\"motorcycle\",\"folder_id\":\"$FOLDER_ID\"}"
 LIST_ID="$(field .id)"
-expect "list kind" motorcycle "$(field .kind)"
+expect "list type" motorcycle "$(field .type)"
 
 step "create item with metadata and a single price"
 json 201 POST "/api/v1/lists/$LIST_ID/items" \
   -d "{\"title\":\"$RUN big\",\"price\":{\"amount\":\"1299.00\",\"currency\":\"EUR\"},\"metadata\":{\"model_year\":2020,\"displacement_cc\":900}}"
 ITEM_ID="$(field .id)"
 ITEM_ETAG="$(etag)"
-expect "item kind" motorcycle "$(field .kind)"
+expect "item type" motorcycle "$(field .type)"
 expect "price min" "1299.00" "$(field .price.min)"
 expect "price max" "1299.00" "$(field .price.max)"
 expect "displacement_cc" 900 "$(field .metadata.displacement_cc)"
 
-step "create second item and sort by kind_key"
+step "create second item and sort by displacement_cc"
 json 201 POST "/api/v1/lists/$LIST_ID/items" -d "{\"title\":\"$RUN small\",\"metadata\":{\"displacement_cc\":125}}"
 SMALL_ID="$(field .id)"
-call 200 GET "/api/v1/lists/$LIST_ID/items?sort=kind_key"
+call 200 GET "/api/v1/lists/$LIST_ID/items?sort=displacement_cc"
 expect "order by displacement_cc (small first)" "$SMALL_ID $ITEM_ID" "$(jq -r '[.data[].id] | join(" ")' "$T/body")"
 
 step "upload image to the item"
@@ -112,12 +112,19 @@ ctype="$(grep -i '^content-type:' "$T/hdr" | tr -d '\r' | sed 's/^[^:]*: *//')"
 case "$ctype" in image/*) ;; *) fail "an image/* content type" "$ctype" ;; esac
 
 step "create movie list"
-json 201 POST /api/v1/lists -d "{\"name\":\"$RUN movies\",\"kind\":\"movie\",\"folder_id\":\"$FOLDER_ID\"}"
+json 201 POST /api/v1/lists -d "{\"name\":\"$RUN movies\",\"type\":\"movie\",\"folder_id\":\"$FOLDER_ID\"}"
 MOVIE_LIST_ID="$(field .id)"
 
-step "move item to a list of another kind"
+step "move item to a list of another type"
 json 409 POST "/api/v1/items/$ITEM_ID/move" -H "If-Match: $ITEM_ETAG" -d "{\"list_id\":\"$MOVIE_LIST_ID\"}"
-expect "problem code" kind_mismatch "$(field .code)"
+expect "problem code" type_mismatch "$(field .code)"
+
+step "create a list and an item with no type"
+json 201 POST /api/v1/lists -d "{\"name\":\"$RUN plain\",\"folder_id\":\"$FOLDER_ID\"}"
+expect "no-type list type" null "$(jq -c '.type' "$T/body")"
+PLAIN_LIST_ID="$(field .id)"
+json 201 POST "/api/v1/lists/$PLAIN_LIST_ID/items" -d '{"title":"plain thing"}'
+expect "no-type item type" null "$(jq -c '.type' "$T/body")"
 
 step "search finds the item"
 call 200 GET "/api/v1/search?q=$RUN%20big"
@@ -135,7 +142,7 @@ json 200 POST "/api/v1/trash/$BATCH_ID/restore"
 expect "restored root" "$FOLDER_ID" "$(field .root_id)"
 call 200 GET /api/v1/tree
 expect "folder back in /tree" 1 "$(jq --arg id "$FOLDER_ID" '[.folders[] | select(.id == $id)] | length' "$T/body")"
-expect "lists back in /tree" 2 "$(jq --arg id "$FOLDER_ID" '[.lists[] | select(.folder_id == $id)] | length' "$T/body")"
+expect "lists back in /tree" 3 "$(jq --arg id "$FOLDER_ID" '[.lists[] | select(.folder_id == $id)] | length' "$T/body")"
 
 step "trash the folder again and purge it"
 call 200 GET "/api/v1/folders/$FOLDER_ID"

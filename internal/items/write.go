@@ -16,7 +16,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/database"
 	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
-	"github.com/0xfederama/collections-app-backend/internal/items/kinds"
+	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
 
@@ -26,7 +26,7 @@ const (
 	maxURLLen   = 2048
 )
 
-// CreateInput is a new item. Its kind is the kind of the list; nil Metadata is {}.
+// CreateInput is a new item. Its type is the type of the list; nil Metadata is {}.
 type CreateInput struct {
 	Title    string
 	Price    *Price
@@ -52,7 +52,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 	if in.Price != nil {
 		errs = append(errs, validatePrice(in.Price)...)
 	}
-	// Field rules first (422), then the list and its kind (404), then the kind's metadata rules.
+	// Field rules first (422), then the list and its type (404), then the type's metadata rules.
 	if err := validate(errs); err != nil {
 		return Item{}, err
 	}
@@ -67,11 +67,11 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 			return notFoundOr(err, "list")
 		}
 		if in.Price != nil {
-			if err := priceKindError(list.Kind); err != nil {
+			if err := priceTypeError(list.Type); err != nil {
 				return err
 			}
 		}
-		meta, err := s.ValidateMetadata(ctx, q, list.Kind, in.Metadata)
+		meta, err := s.ValidateMetadata(ctx, q, list.Type, in.Metadata)
 		if err != nil {
 			return err
 		}
@@ -102,7 +102,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 
 // Update applies a partial update. version is the caller's If-Match version.
 // Errors in order: field rules (422), NotFound, VersionConflict, then the
-// metadata rules of the list's kind. A patch that changes nothing does not bump the version (D-059).
+// metadata rules of the list's type. A patch that changes nothing does not bump the version (D-059).
 func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch) (Item, error) {
 	var errs []apperr.FieldError
 	if p.Title != nil {
@@ -135,11 +135,11 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 			return notFoundOr(err, "list")
 		}
 		if p.Price.Set && p.Price.Value != nil {
-			if err := priceKindError(list.Kind); err != nil {
+			if err := priceTypeError(list.Type); err != nil {
 				return err
 			}
 		}
-		arg, changed, err := s.mergePatch(ctx, q, cur, list.Kind, p)
+		arg, changed, err := s.mergePatch(ctx, q, cur, list.Type, p)
 		if err != nil {
 			return err
 		}
@@ -158,20 +158,20 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 	return s.get(ctx, id, false)
 }
 
-// priceKindError rejects a price on an item of a kind that has none: generic,
-// movie and tv_show (F009-B1, subsuming F008-B1; 422). Clearing a price (null)
-// never gets here.
-func priceKindError(kind string) error {
-	if kinds.HasPrice(kind) {
+// priceTypeError rejects a price on an item of a type that has none: movie,
+// tv_show and a list with no type (F009-B1, subsuming F008-B1; 422). Clearing a
+// price (null) never gets here.
+func priceTypeError(typ *string) error {
+	if typ != nil && types.HasPrice(*typ) {
 		return nil
 	}
-	return apperr.Validation(apperr.FieldError{Field: "price", Message: "items of this kind have no price"})
+	return apperr.Validation(apperr.FieldError{Field: "price", Message: "items of this type have no price"})
 }
 
 // mergePatch applies a validated patch to the locked row. It returns the full
-// replacement values and whether anything differs from the stored row. kind is
-// the kind of the item's list, which the metadata is validated against.
-func (s *Service) mergePatch(ctx context.Context, q *sqlc.Queries, cur sqlc.Item, kind string, p Patch) (sqlc.UpdateItemParams, bool, error) {
+// replacement values and whether anything differs from the stored row. type is
+// the type of the item's list, which the metadata is validated against.
+func (s *Service) mergePatch(ctx context.Context, q *sqlc.Queries, cur sqlc.Item, typ *string, p Patch) (sqlc.UpdateItemParams, bool, error) {
 	arg := sqlc.UpdateItemParams{
 		Title:    cur.Title,
 		PriceMin: cur.PriceMin, PriceMax: cur.PriceMax, Currency: cur.Currency,
@@ -189,7 +189,7 @@ func (s *Service) mergePatch(ctx context.Context, q *sqlc.Queries, cur sqlc.Item
 		changed = true
 	}
 	if p.Metadata != nil {
-		clean, err := s.ValidateMetadata(ctx, q, kind, p.Metadata)
+		clean, err := s.ValidateMetadata(ctx, q, typ, p.Metadata)
 		if err != nil {
 			return arg, false, err
 		}
@@ -205,8 +205,8 @@ func (s *Service) mergePatch(ctx context.Context, q *sqlc.Queries, cur sqlc.Item
 }
 
 // Move appends an item to the end of another active list. Errors in order:
-// NotFound, VersionConflict, DestinationUnavailable, KindMismatch (the
-// destination list has another kind than the item's current list, F-007).
+// NotFound, VersionConflict, DestinationUnavailable, TypeMismatch (the
+// destination list has another type than the item's current list, F-007).
 func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, dest uuid.UUID) (Item, error) {
 	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
 		if err := s.lockTree(ctx, q); err != nil {
@@ -230,8 +230,8 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, dest uuid
 		if err != nil {
 			return notFoundOr(err, "list")
 		}
-		if destList.Kind != srcList.Kind {
-			return apperr.KindMismatch()
+		if !sameType(destList.Type, srcList.Type) {
+			return apperr.TypeMismatch()
 		}
 		next, err := q.NextItemSortOrder(ctx, sqlc.NextItemSortOrderParams{ListID: dest, WorkspaceID: s.workspaceID})
 		if err != nil {
@@ -276,26 +276,38 @@ func (s *Service) Reorder(ctx context.Context, listID uuid.UUID, ids []uuid.UUID
 // ValidateMetadata loads this workspace's field definitions inside the active
 // transaction and validates metadata against them. It is also used by the TMDB
 // store, whose import write shares the transaction with its provenance row.
-func (s *Service) ValidateMetadata(ctx context.Context, q *sqlc.Queries, kind string, in map[string]any) (map[string]any, error) {
+// A nil type (a list with no type) has no fields, so only an empty object is valid.
+func (s *Service) ValidateMetadata(ctx context.Context, q *sqlc.Queries, typ *string, in map[string]any) (map[string]any, error) {
 	if in == nil {
 		in = map[string]any{}
 	}
-	definition, err := q.GetKindDefinitionByKey(ctx, sqlc.GetKindDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: kind})
+	if typ == nil {
+		return types.Validate(nil, in)
+	}
+	definition, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: *typ})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, apperr.Validation(apperr.FieldError{Field: "kind", Message: "is not a known item kind"})
+		return nil, apperr.Validation(apperr.FieldError{Field: "type", Message: "is not a known item type"})
 	}
 	if err != nil {
-		return nil, fmt.Errorf("get kind definition: %w", err)
+		return nil, fmt.Errorf("get type definition: %w", err)
 	}
-	fields, err := q.ListKindFields(ctx, sqlc.ListKindFieldsParams{WorkspaceID: s.workspaceID, KindID: definition.ID})
+	fields, err := q.ListTypeFields(ctx, sqlc.ListTypeFieldsParams{WorkspaceID: s.workspaceID, TypeID: definition.ID})
 	if err != nil {
-		return nil, fmt.Errorf("list kind fields: %w", err)
+		return nil, fmt.Errorf("list type fields: %w", err)
 	}
-	definitions := make([]kinds.Field, len(fields))
+	definitions := make([]types.Field, len(fields))
 	for i, field := range fields {
-		definitions[i] = kinds.Field{Key: field.Key, Type: field.FieldType, Special: field.IsLocked}
+		definitions[i] = types.Field{Key: field.Key, Type: field.FieldType, Special: field.IsLocked}
 	}
-	return kinds.Validate(definitions, in)
+	return types.Validate(definitions, in)
+}
+
+// sameType compares two list types; nil (no type) equals only nil.
+func sameType(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 func validate(errs []apperr.FieldError) error {

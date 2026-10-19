@@ -13,15 +13,15 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
 )
 
-// CreateListInput is a new list. Kind is required. Empty DisplayMode / SortMode take the defaults.
+// CreateListInput is a new list. A nil Type is a list with no type. Empty DisplayMode / SortMode take the defaults.
 type CreateListInput struct {
 	Name        string
-	Kind        string
+	Type        *string
 	FolderID    *uuid.UUID
 	Description *string
 	DisplayMode string
 	SortMode    string
-	// PinnedFields nil = the kind default.
+	// PinnedFields nil = the type default.
 	PinnedFields *PinnedFields
 	// Icon and IconColor nil = the default icon (F012-B1).
 	Icon      *string
@@ -31,11 +31,11 @@ type CreateListInput struct {
 // ListPatch is a partial list update; absent fields stay as they are.
 type ListPatch struct {
 	Name        *string
-	Kind        *string
+	Type        Optional[string] // a nil Value is no type
 	Description Optional[string]
 	DisplayMode *string
 	SortMode    *string
-	// PinnedFields: Set with a nil Value resets to the kind default.
+	// PinnedFields: Set with a nil Value resets to the type default.
 	PinnedFields Optional[PinnedFields]
 	// Icon and IconColor (F012-B1): a nil Value clears them. A changed icon that is not built-in clears the colour.
 	Icon      Optional[string]
@@ -53,7 +53,7 @@ func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, err
 	}
 	in.Description = nilIfEmpty(in.Description)
 	name, errs := validateListFields(&in.Name, &in.DisplayMode, &in.SortMode)
-	errs = append(errs, kindErrors(&in.Kind)...)
+	errs = append(errs, typeErrors(in.Type)...)
 	errs = append(errs, iconErrors(in.Icon, in.IconColor)...)
 	if err := validate(errs); err != nil {
 		return List{}, err
@@ -63,9 +63,9 @@ func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, err
 		if err := s.lockTree(ctx, q); err != nil {
 			return err
 		}
-		def, fields, err := s.kindFields(ctx, q, in.Kind)
+		def, fields, err := s.typeFields(ctx, q, in.Type)
 		if err != nil {
-			return unknownListKind()
+			return unknownListType()
 		}
 		if in.SortMode == "" {
 			in.SortMode = DefaultSortMode
@@ -73,7 +73,7 @@ func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, err
 				in.SortMode = *def.DefaultSortField
 			}
 		}
-		if err := validateDefinitionSort(in.Kind, in.SortMode, def.AllowsPrice, fields, "sort_mode"); err != nil {
+		if err := validateDefinitionSort(in.Type, in.SortMode, def.AllowsPrice, fields, "sort_mode"); err != nil {
 			return err
 		}
 		if in.PinnedFields != nil {
@@ -94,7 +94,7 @@ func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, err
 			return fmt.Errorf("next list sort order: %w", err)
 		}
 		row, err := q.InsertList(ctx, sqlc.InsertListParams{
-			WorkspaceID: s.workspaceID, FolderID: nullUUID(in.FolderID), Name: name, Kind: in.Kind, Description: in.Description,
+			WorkspaceID: s.workspaceID, FolderID: nullUUID(in.FolderID), Name: name, Type: in.Type, Description: in.Description,
 			DisplayMode: in.DisplayMode, SortMode: in.SortMode, PinnedFields: pinnedJSON, Icon: in.Icon, IconColor: in.IconColor, SortOrder: next, Now: s.now(),
 		})
 		if err != nil {
@@ -139,11 +139,11 @@ func (s *Service) getList(ctx context.Context, id uuid.UUID, withPath bool) (Lis
 // UpdateList applies a partial update. An empty patch changes nothing and does
 // not bump the version. version is the caller's If-Match version.
 //
-// A kind that differs from the stored one (F-007) takes the tree lock first
+// A type that differs from the stored one (F-007) takes the tree lock first
 // (same order as every structural write: tree lock, then the row lock), then
 // updates the list and clears the metadata of all its items, trashed ones
-// included, in the same transaction. A kind equal to the stored one is a no-op.
-// the resulting sort and pins are validated against that kind's field definitions.
+// included, in the same transaction. A type equal to the stored one is a no-op.
+// the resulting sort and pins are validated against that type's field definitions.
 func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p ListPatch) (List, error) {
 	var errs []apperr.FieldError
 	if p.Name != nil {
@@ -160,14 +160,14 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		p.Description.Value = nilIfEmpty(p.Description.Value)
 	}
 	errs = append(errs, enumErrors(p.DisplayMode, p.SortMode)...)
-	if p.Kind != nil {
-		errs = append(errs, kindErrors(p.Kind)...)
+	if p.Type.Set {
+		errs = append(errs, typeErrors(p.Type.Value)...)
 	}
 	if err := validate(errs); err != nil {
 		return List{}, err
 	}
 	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
-		if p.Kind != nil {
+		if p.Type.Set {
 			if err := s.lockTree(ctx, q); err != nil {
 				return err
 			}
@@ -179,22 +179,23 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		if int(cur.Version) != version {
 			return apperr.VersionConflict(int(cur.Version))
 		}
-		newKind := cur.Kind
-		if p.Kind != nil {
-			newKind = *p.Kind
+		typeChanged := p.Type.Set && !equalPtr(p.Type.Value, cur.Type)
+		newType := cur.Type
+		if p.Type.Set {
+			newType = p.Type.Value
 		}
-		def, fields, err := s.kindFields(ctx, q, newKind)
+		def, fields, err := s.typeFields(ctx, q, newType)
 		if err != nil {
-			return unknownListKind()
+			return unknownListType()
 		}
 		newSort := cur.SortMode
 		if p.SortMode != nil {
 			newSort = *p.SortMode
-		} else if p.Kind != nil && newKind != cur.Kind && def.DefaultSortField != nil {
+		} else if typeChanged && def.DefaultSortField != nil {
 			newSort = *def.DefaultSortField
 		}
-		if err := validateDefinitionSort(newKind, newSort, def.AllowsPrice, fields, "sort_mode"); err != nil {
-			if p.Kind != nil && newKind != cur.Kind && p.SortMode == nil {
+		if err := validateDefinitionSort(newType, newSort, def.AllowsPrice, fields, "sort_mode"); err != nil {
+			if typeChanged && p.SortMode == nil {
 				newSort = DefaultSortMode
 			} else {
 				return err
@@ -221,7 +222,6 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 			newIconColor = nil
 		}
 		iconChanged := !equalPtr(newIcon, cur.Icon) || !equalPtr(newIconColor, cur.IconColor)
-		kindChanged := p.Kind != nil && *p.Kind != cur.Kind
 		// A field sent with its stored value changes nothing: no write, no version bump.
 		fieldsSet := (p.Name != nil && *p.Name != cur.Name) ||
 			(p.Description.Set && !equalPtr(p.Description.Value, cur.Description)) ||
@@ -237,9 +237,9 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 					return perr
 				}
 			}
-			// After a kind change the stored value is NULL (UpdateListKind), whatever was there.
+			// After a type change the stored value is NULL (UpdateListType), whatever was there.
 			base := curPinned
-			if kindChanged {
+			if typeChanged {
 				base = nil
 			}
 			if !equalPinned(base, newPinned) {
@@ -247,17 +247,17 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 			}
 		}
 		fieldsSet = fieldsSet || iconChanged
-		if !kindChanged && !fieldsSet {
+		if !typeChanged && !fieldsSet {
 			return nil
 		}
 		resetSort := false
-		if kindChanged {
+		if typeChanged {
 			if p.SortMode == nil && cur.SortMode != newSort {
 				resetSort = true
 				fieldsSet = true
 			}
-			if _, err := q.UpdateListKind(ctx, sqlc.UpdateListKindParams{Kind: *p.Kind, Now: s.now(), ID: id, WorkspaceID: s.workspaceID}); err != nil {
-				return fmt.Errorf("update list kind: %w", err)
+			if _, err := q.UpdateListType(ctx, sqlc.UpdateListTypeParams{Type: p.Type.Value, Now: s.now(), ID: id, WorkspaceID: s.workspaceID}); err != nil {
+				return fmt.Errorf("update list type: %w", err)
 			}
 			if _, err := q.ClearListItemsMetadata(ctx, sqlc.ClearListItemsMetadataParams{Now: s.now(), ListID: id, WorkspaceID: s.workspaceID}); err != nil {
 				return fmt.Errorf("clear items metadata: %w", err)
@@ -269,7 +269,7 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 			}
 		}
 		if p.SortMode != nil {
-			if err := validateDefinitionSort(newKind, *p.SortMode, def.AllowsPrice, fields, "sort_mode"); err != nil {
+			if err := validateDefinitionSort(newType, *p.SortMode, def.AllowsPrice, fields, "sort_mode"); err != nil {
 				return err
 			}
 		}
@@ -282,8 +282,8 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 			Now: s.now(), ID: id, WorkspaceID: s.workspaceID,
 		}
 		keep := curPinned
-		if kindChanged {
-			keep = nil // reset by UpdateListKind in this transaction
+		if typeChanged {
+			keep = nil // reset by UpdateListType in this transaction
 		}
 		if p.PinnedFields.Set {
 			keep = newPinned
@@ -316,17 +316,21 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 	return s.getList(ctx, id, false)
 }
 
-// validatePinned checks the ordered keys against the kind and returns them normalized (never nil).
-func (s *Service) kindFields(ctx context.Context, q *sqlc.Queries, kind string) (sqlc.KindDefinition, []sqlc.KindField, error) {
-	def, err := q.GetKindDefinitionByKey(ctx, sqlc.GetKindDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: kind})
-	if err != nil {
-		return sqlc.KindDefinition{}, nil, err
+// validatePinned checks the ordered keys against the type and returns them normalized (never nil).
+func (s *Service) typeFields(ctx context.Context, q *sqlc.Queries, typ *string) (sqlc.TypeDefinition, []sqlc.TypeField, error) {
+	if typ == nil {
+		// A list with no type has no definition: no fields, no price, no default sort field.
+		return sqlc.TypeDefinition{}, nil, nil
 	}
-	fields, err := q.ListKindFields(ctx, sqlc.ListKindFieldsParams{WorkspaceID: s.workspaceID, KindID: def.ID})
+	def, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: *typ})
+	if err != nil {
+		return sqlc.TypeDefinition{}, nil, err
+	}
+	fields, err := q.ListTypeFields(ctx, sqlc.ListTypeFieldsParams{WorkspaceID: s.workspaceID, TypeID: def.ID})
 	return def, fields, err
 }
 
-func validateDefinitionSort(kind, sortMode string, allowsPrice bool, fields []sqlc.KindField, field string) error {
+func validateDefinitionSort(typ *string, sortMode string, allowsPrice bool, fields []sqlc.TypeField, field string) error {
 	if sortMode == "manual" || sortMode == "title" || sortMode == "updated" || (sortMode == "price" && allowsPrice) {
 		return nil
 	}
@@ -335,10 +339,13 @@ func validateDefinitionSort(kind, sortMode string, allowsPrice bool, fields []sq
 			return nil
 		}
 	}
-	return apperr.Validation(apperr.FieldError{Field: field, Message: fmt.Sprintf("must be a built-in sort mode or a field of kind %s", kind)})
+	if typ == nil {
+		return apperr.Validation(apperr.FieldError{Field: field, Message: "must be a built-in sort mode (a list with no type has no fields)"})
+	}
+	return apperr.Validation(apperr.FieldError{Field: field, Message: fmt.Sprintf("must be a built-in sort mode or a field of type %s", *typ)})
 }
 
-func validateDefinitionPins(allowsPrice bool, fields []sqlc.KindField, in *PinnedFields) (*PinnedFields, error) {
+func validateDefinitionPins(allowsPrice bool, fields []sqlc.TypeField, in *PinnedFields) (*PinnedFields, error) {
 	if len(*in) > 2 {
 		return nil, apperr.Validation(apperr.FieldError{Field: "pinned_fields", Message: "must have at most 2 entries"})
 	}
@@ -349,7 +356,7 @@ func validateDefinitionPins(allowsPrice bool, fields []sqlc.KindField, in *Pinne
 			valid = valid || f.Key == key
 		}
 		if !valid {
-			return nil, apperr.Validation(apperr.FieldError{Field: fmt.Sprintf("pinned_fields[%d]", i), Message: "must name a field of this kind"})
+			return nil, apperr.Validation(apperr.FieldError{Field: fmt.Sprintf("pinned_fields[%d]", i), Message: "must name a field of this type"})
 		}
 		if seen[key] {
 			return nil, apperr.Validation(apperr.FieldError{Field: fmt.Sprintf("pinned_fields[%d]", i), Message: "must be unique"})
@@ -440,17 +447,18 @@ func validateListFields(name *string, displayMode, sortMode *string) (string, []
 	return clean, errs
 }
 
-// kindErrors checks that the kind key is present; existence is checked against
-// this workspace's definitions inside the write transaction.
-func kindErrors(kind *string) []apperr.FieldError {
-	if kind == nil || strings.TrimSpace(*kind) == "" {
-		return []apperr.FieldError{{Field: "kind", Message: "is required"}}
+// typeErrors checks that a given type key is not blank (nil is a list with no
+// type); existence is checked against this workspace's definitions inside the
+// write transaction.
+func typeErrors(typ *string) []apperr.FieldError {
+	if typ != nil && strings.TrimSpace(*typ) == "" {
+		return []apperr.FieldError{{Field: "type", Message: "must not be empty (send null for no type)"}}
 	}
 	return nil
 }
 
-func unknownListKind() error {
-	return apperr.Validation(apperr.FieldError{Field: "kind", Message: "must name a kind defined in this workspace"})
+func unknownListType() error {
+	return apperr.Validation(apperr.FieldError{Field: "type", Message: "must name a type defined in this workspace"})
 }
 
 // validateDescription applies the Markdown description rules, like the item

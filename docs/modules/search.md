@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Finds active items by title and returns their folder/list path and list kind name. Also lists most recently updated items. Read-only; no HTTP, returns typed errors.
+Finds active items by title and returns their folder/list path and list type name. Also lists most recently updated items. Read-only; no HTTP, returns typed errors.
 
 ## Key files
 
@@ -15,7 +15,7 @@ Finds active items by title and returns their folder/list path and list kind nam
 
 - `New(db sqlc.DBTX, workspaceID uuid.UUID) *Service`
 - `(*Service).Search(ctx, Params{Q, Limit, Offset}) (Page, error)`: limit default 50, max 200
-- `Page{Results []Result, Limit, Offset, Total}`; `Result{Item, KindName, Path}`
+- `Page{Results []Result, Limit, Offset, Total}`; `Result{Item, TypeName, Path}` (`TypeName` is nil for a list with no type)
 - `(*Service).Recent(ctx, limit) ([]Result, error)`: limit default 12, max 50, newest `updated_at` first, then id
 - `GET /api/v1/recent-items?limit=`: 200 `{ data: [SearchResult] }`, no `page`; 400 `invalid_parameter` for a limit outside 1–50 (the guard answers)
 - `ErrInvalidQuery`: `q` is empty after trimming or over 200 characters
@@ -26,7 +26,7 @@ Finds active items by title and returns their folder/list path and list kind nam
 - Matches titles only. `%`, `_` and `\` are escaped in Go with `items.EscapeLike`.
 - Order: exact title match (case-insensitive) first, then `lower(title)`, then id.
 - Only active items. Batch cascade (D-004) trashes children with their list or folder, so there is no ancestor check and no join with lists.
-- Paths and list kind names come from all active folders and lists loaded once per request. Root folder is first; list is last.
+- Paths and list type names come from all active folders and lists loaded once per request. Root folder is first; list is last.
 - A row whose list vanished between reads is skipped, so a page can hold fewer rows than `limit`. `Total` still counts it.
 - `Total` comes from a separate count, so it stays right past the last page.
 - The request guard rejects an empty or too long raw `q`; whitespace-only `q` is caught by the service.

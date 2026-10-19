@@ -27,7 +27,7 @@ const (
 var (
 	sqlWorkspaces = `INSERT INTO workspaces (id, name) VALUES ('` + wsA + `', 'A'), ('` + wsB + `', 'B')`
 	sqlFolderB    = `INSERT INTO folders (id, workspace_id, name, sort_order) VALUES ('` + folderB + `', '` + wsB + `', 'F', 0)`
-	sqlListA      = `INSERT INTO lists (id, workspace_id, name, kind, sort_order) VALUES ('` + listA + `', '` + wsA + `', 'L', 'generic', 0)`
+	sqlListA      = `INSERT INTO lists (id, workspace_id, name, type, sort_order) VALUES ('` + listA + `', '` + wsA + `', 'L', 'generic', 0)`
 	sqlBatchA     = `INSERT INTO trash_batches (id, workspace_id, root_type, root_id, root_name, former_path)
 	                   VALUES ('` + batchA + `', '` + wsA + `', 'item', '` + itemA + `', 'I', '[]')`
 	sqlAttA = attachmentSQL(attA, "a")
@@ -73,7 +73,7 @@ func schemaCases() []schemaCase {
 		{
 			name: "list references folder of another workspace",
 			stmts: []string{sqlWorkspaces, sqlFolderB,
-				`INSERT INTO lists (workspace_id, folder_id, name, kind, sort_order) VALUES ('` + wsA + `', '` + folderB + `', 'L', 'generic', 0)`},
+				`INSERT INTO lists (workspace_id, folder_id, name, type, sort_order) VALUES ('` + wsA + `', '` + folderB + `', 'L', 'generic', 0)`},
 			wantCode: "23503", wantConstr: "lists_folder_fkey",
 		},
 		{
@@ -123,41 +123,40 @@ func schemaCases() []schemaCase {
 			wantCode: "23514", wantConstr: "items_metadata_check",
 		},
 		{
-			name: "F007 list kind is not lowercase snake case",
+			name: "F007 list type is not lowercase snake case",
 			stmts: []string{sqlWorkspaces,
-				`INSERT INTO lists (workspace_id, name, kind, sort_order) VALUES ('` + wsA + `', 'L', 'Movie', 0)`},
-			wantCode: "23514", wantConstr: "lists_kind_check",
+				`INSERT INTO lists (workspace_id, name, type, sort_order) VALUES ('` + wsA + `', 'L', 'Movie', 0)`},
+			wantCode: "23514", wantConstr: "lists_type_check",
 		},
 		{
-			name: "F007 list kind is required",
+			name: "F018 list type is optional (no type)",
 			stmts: []string{sqlWorkspaces,
 				`INSERT INTO lists (workspace_id, name, sort_order) VALUES ('` + wsA + `', 'L', 0)`},
-			wantCode: "23502", wantConstr: "",
 		},
 		{
 			name: "F014-B4 list sort_mode field key is valid",
 			stmts: []string{sqlWorkspaces,
-				`INSERT INTO lists (workspace_id, name, kind, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'release_year', 0)`},
+				`INSERT INTO lists (workspace_id, name, type, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'release_year', 0)`},
 		},
 		{
 			name: "F002 list sort_mode price is valid",
 			stmts: []string{sqlWorkspaces,
-				`INSERT INTO lists (workspace_id, name, kind, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'price', 0)`},
+				`INSERT INTO lists (workspace_id, name, type, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'price', 0)`},
 		},
 		{
 			name: "F014-B4 list sort_mode is unconstrained storage for definition keys",
 			stmts: []string{sqlWorkspaces,
-				`INSERT INTO lists (workspace_id, name, kind, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'random', 0)`},
+				`INSERT INTO lists (workspace_id, name, type, sort_mode, sort_order) VALUES ('` + wsA + `', 'L', 'movie', 'random', 0)`},
 		},
 		{
 			name: "F007 list description up to 64 KiB is valid",
 			stmts: []string{sqlWorkspaces,
-				`INSERT INTO lists (workspace_id, name, kind, description, sort_order) VALUES ('` + wsA + `', 'L', 'generic', repeat('x', 65536), 0)`},
+				`INSERT INTO lists (workspace_id, name, type, description, sort_order) VALUES ('` + wsA + `', 'L', 'generic', repeat('x', 65536), 0)`},
 		},
 		{
 			name: "F007 list description over 64 KiB",
 			stmts: []string{sqlWorkspaces,
-				`INSERT INTO lists (workspace_id, name, kind, description, sort_order) VALUES ('` + wsA + `', 'L', 'generic', repeat('x', 65537), 0)`},
+				`INSERT INTO lists (workspace_id, name, type, description, sort_order) VALUES ('` + wsA + `', 'L', 'generic', repeat('x', 65537), 0)`},
 			wantCode: "23514", wantConstr: "lists_description_check",
 		},
 		{
@@ -166,8 +165,8 @@ func schemaCases() []schemaCase {
 			wantCode: "23514", wantConstr: "items_website_url_check",
 		},
 		{
-			name:     "F007 items no longer have a kind column",
-			stmts:    with(itemParents, itemSQL(itemA, "kind", "'movie'")),
+			name:     "F007 items no longer have a type column",
+			stmts:    with(itemParents, itemSQL(itemA, "type", "'movie'")),
 			wantCode: "42703", wantConstr: "",
 		},
 		{
@@ -346,7 +345,7 @@ func TestSchema_D051_WorkspaceDeleteCascades(t *testing.T) {
 		          ('` + batch2 + `', '` + ws + `', 'item', '` + iTrashed2 + `', 'I3', '[]')`,
 		// active branch
 		`INSERT INTO folders (id, workspace_id, name, sort_order) VALUES ('` + fActive + `', '` + ws + `', 'F', 0)`,
-		`INSERT INTO lists (id, workspace_id, folder_id, name, kind, sort_order) VALUES ('` + lActive + `', '` + ws + `', '` + fActive + `', 'L', 'generic', 0)`,
+		`INSERT INTO lists (id, workspace_id, folder_id, name, type, sort_order) VALUES ('` + lActive + `', '` + ws + `', '` + fActive + `', 'L', 'generic', 0)`,
 		attachmentSQL("00000000-0000-0000-0000-000000000501", "x"),
 		`INSERT INTO items (id, workspace_id, list_id, title, sort_order, image_attachment_id)
 		   VALUES ('` + iActive + `', '` + ws + `', '` + lActive + `', 'I', 0, '00000000-0000-0000-0000-000000000501')`,
@@ -354,7 +353,7 @@ func TestSchema_D051_WorkspaceDeleteCascades(t *testing.T) {
 		// trashed folder > trashed list > trashed item, all in batch1
 		`INSERT INTO folders (id, workspace_id, name, sort_order, deleted_at, trash_batch_id)
 		   VALUES ('` + fTrashed + `', '` + ws + `', 'FT', 1, now(), '` + batch1 + `')`,
-		`INSERT INTO lists (id, workspace_id, folder_id, name, kind, sort_order, deleted_at, trash_batch_id)
+		`INSERT INTO lists (id, workspace_id, folder_id, name, type, sort_order, deleted_at, trash_batch_id)
 		   VALUES ('` + lTrashed + `', '` + ws + `', '` + fTrashed + `', 'LT', 'generic', 0, now(), '` + batch1 + `')`,
 		`INSERT INTO items (id, workspace_id, list_id, title, sort_order, deleted_at, trash_batch_id)
 		   VALUES ('` + iTrashed + `', '` + ws + `', '` + lTrashed + `', 'IT', 0, now(), '` + batch1 + `')`,

@@ -701,11 +701,11 @@ func TestRunSweeperStopsWhenContextIsCancelled(t *testing.T) {
 func pngHeader(w, h uint32) []byte {
 	var buf bytes.Buffer
 	_, _ = io.WriteString(&buf, "\x89PNG\r\n\x1a\n")
-	chunk := func(kind string, data []byte) {
+	chunk := func(typ string, data []byte) {
 		_ = binary.Write(&buf, binary.BigEndian, uint32(len(data)))
-		_, _ = buf.WriteString(kind)
+		_, _ = buf.WriteString(typ)
 		_, _ = buf.Write(data)
-		_ = binary.Write(&buf, binary.BigEndian, crc32.ChecksumIEEE(append([]byte(kind), data...)))
+		_ = binary.Write(&buf, binary.BigEndian, crc32.ChecksumIEEE(append([]byte(typ), data...)))
 	}
 	ihdr := binary.BigEndian.AppendUint32(binary.BigEndian.AppendUint32(nil, w), h)
 	chunk("IHDR", append(ihdr, 8, 2, 0, 0, 0))

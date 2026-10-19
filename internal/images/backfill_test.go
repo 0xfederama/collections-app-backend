@@ -77,7 +77,7 @@ func TestF005B1_BackfillStripsStoredOriginals(t *testing.T) {
 		name, mediaType, ext string
 		data                 []byte
 		clean                []byte // expected stored bytes after the run; nil = untouched
-		kind                 string // stripped, clean, stale, skipped, missing
+		typ                  string // stripped, clean, stale, skipped, missing
 	}
 	specs := []spec{
 		{"dirty jpeg", "image/jpeg", "jpg", dirtyJPEG(base, 6), nil, "stripped"},
@@ -100,10 +100,10 @@ func TestF005B1_BackfillStripsStoredOriginals(t *testing.T) {
 		key := "images/" + id.String()[:2] + "/" + id.String()[2:4] + "/" + id.String() + "." + sp.ext
 		sum := sha(sp.data)
 		size := int64(len(sp.data))
-		if sp.kind == "stale" {
+		if sp.typ == "stale" {
 			sum, size = sha([]byte("old")), 3
 		}
-		if sp.kind == "missing" {
+		if sp.typ == "missing" {
 			size = 1
 		} else if _, err := store.Put(key, bytes.NewReader(sp.data)); err != nil {
 			t.Fatal(err)
@@ -138,7 +138,7 @@ func TestF005B1_BackfillStripsStoredOriginals(t *testing.T) {
 		if width != 1 {
 			t.Errorf("%s: width changed", sp.name)
 		}
-		switch sp.kind {
+		switch sp.typ {
 		case "missing":
 			if size != 1 {
 				t.Errorf("%s: row must stay", sp.name)
@@ -159,7 +159,7 @@ func TestF005B1_BackfillStripsStoredOriginals(t *testing.T) {
 			t.Errorf("%s: stored file is not the expected stripped file", sp.name)
 		}
 		for _, marker := range [][]byte{[]byte("Exif"), []byte("EXIF"), []byte("XMP "), []byte("tEXt"), []byte("GPS"), latitudeMarker} {
-			if sp.kind == "stripped" && sp.name != "dirty jpeg" && bytes.Contains(got, marker) {
+			if sp.typ == "stripped" && sp.name != "dirty jpeg" && bytes.Contains(got, marker) {
 				t.Errorf("%s: still contains %q", sp.name, marker)
 			}
 		}

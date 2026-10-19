@@ -30,7 +30,7 @@ const (
 // schemaTables are the tables created by 000001 (DATA_MODEL §2), in FK order.
 var schemaTables = []string{
 	"workspaces", "workspace_settings", "trash_batches", "folders", "lists",
-	"attachments", "items", "item_content_versions", "tmdb_imports", "kind_definitions", "kind_fields",
+	"attachments", "items", "item_content_versions", "tmdb_imports", "type_definitions", "type_fields",
 }
 
 var (
@@ -199,13 +199,13 @@ func seedAllTables(ctx context.Context, tx pgx.Tx) error {
 	stmts := []string{
 		`INSERT INTO workspaces (id, name) VALUES ('00000000-0000-0000-0000-000000000001', 'W')`,
 		`INSERT INTO workspace_settings (workspace_id) VALUES ('00000000-0000-0000-0000-000000000001')`,
-		`INSERT INTO kind_definitions (id, workspace_id, key, name) VALUES
+		`INSERT INTO type_definitions (id, workspace_id, key, name) VALUES
 		   ('00000000-0000-0000-0000-000000000008', '00000000-0000-0000-0000-000000000001', 'custom', 'Custom')`,
-		`INSERT INTO kind_fields (workspace_id, kind_id, key, label, field_type, position) VALUES
+		`INSERT INTO type_fields (workspace_id, type_id, key, label, field_type, position) VALUES
 		   ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000008', 'rating', 'Rating', 'number', 0)`,
 		`INSERT INTO folders (id, workspace_id, name, sort_order)
 		   VALUES ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'F', 0)`,
-		`INSERT INTO lists (id, workspace_id, folder_id, name, kind, sort_order)
+		`INSERT INTO lists (id, workspace_id, folder_id, name, type, sort_order)
 		   VALUES ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001',
 		           '00000000-0000-0000-0000-000000000002', 'L', 'movie', 0)`,
 		`INSERT INTO attachments (id, workspace_id, storage_key, thumbnail_storage_key, media_type, size_bytes, width, height, sha256)
@@ -216,14 +216,14 @@ func seedAllTables(ctx context.Context, tx pgx.Tx) error {
 		           '00000000-0000-0000-0000-000000000003', 'I', '00000000-0000-0000-0000-000000000004', 0)`,
 		`INSERT INTO item_content_versions (item_id, version, body, size_bytes, sha256)
 		   VALUES ('00000000-0000-0000-0000-000000000005', 1, 'hi', 2, '\x00')`,
-		`INSERT INTO tmdb_imports (workspace_id, item_id, tmdb_id, kind, imported_fields, original_title,
+		`INSERT INTO tmdb_imports (workspace_id, item_id, tmdb_id, type, imported_fields, original_title,
 		                           fetched_at, refresh_after, expires_at)
 		   VALUES ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000005', 603,
 		           'movie', '{"release_year":1999}', 'I', now(), now() + interval '5 months', now() + interval '6 months')`,
 		`INSERT INTO trash_batches (id, workspace_id, root_type, root_id, root_name, former_path)
 		   VALUES ('00000000-0000-0000-0000-000000000006', '00000000-0000-0000-0000-000000000001',
 		           'list', '00000000-0000-0000-0000-000000000007', 'Trashed', '[]')`,
-		`INSERT INTO lists (id, workspace_id, name, kind, sort_order, deleted_at, trash_batch_id)
+		`INSERT INTO lists (id, workspace_id, name, type, sort_order, deleted_at, trash_batch_id)
 		   VALUES ('00000000-0000-0000-0000-000000000007', '00000000-0000-0000-0000-000000000001', 'Trashed', 'generic', 1,
 		           now(), '00000000-0000-0000-0000-000000000006')`,
 	}

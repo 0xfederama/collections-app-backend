@@ -6,10 +6,10 @@
 - [config](modules/config.md): env var parsing and startup validation
 - [content](modules/content.md): item Markdown content, versions, restore and retention
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
-- [definitions](modules/definitions.md): workspace kind and field definitions
+- [definitions](modules/definitions.md): workspace type and field definitions
 - [httpapi](modules/httpapi.md): HTTP router, probes, settings, tree/folder/list/item/content handlers
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping (`strip-images` backfill), validation, thumbnails, serving, orphan sweeper
-- [items](modules/items.md): items CRUD, move and reorder, per-kind metadata validation (`items/kinds`)
+- [items](modules/items.md): items CRUD, move and reorder, per-type metadata validation (`items/types`)
 - [lookup](modules/lookup.md): TMDB lookup merge rules and imported-field provenance/retention
 - [search](modules/search.md): item title search with folder and list paths (`GET /api/v1/search`) and recent items (`GET /api/v1/recent-items`)
 - [smoke](modules/smoke.md): HTTP smoke test over a running stack (`scripts/smoke.sh`, `make smoke`)

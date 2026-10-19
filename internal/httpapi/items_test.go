@@ -75,17 +75,17 @@ func idsJSON(ids ...string) string {
 	return string(b)
 }
 
-// matrix is the body of a movie item: create it in a list of kind movie. Movie
+// matrix is the body of a movie item: create it in a list of type movie. Movie
 // items have no price (F009-B1); price behavior is tested on a motorcycle/car/camera list.
 const matrix = `{"title":"The Matrix","website":"https://www.warnerbros.com/movies/matrix",
 	"metadata":{"release_year":1999,"runtime_minutes":136,"imdb_url":"https://www.imdb.com/title/tt0133093/","streaming":{"country":"IT","platforms":["Netflix","Prime Video"]}}}`
 
 func TestF014B2_ItemMetadataUsesWorkspaceFieldDefinitions(t *testing.T) {
 	e := newTreeEnv(t)
-	e.exec(`INSERT INTO kind_fields (workspace_id, kind_id, key, label, field_type, position)
-		SELECT $1, id, 'rating', 'Rating', 'number', 100 FROM kind_definitions
+	e.exec(`INSERT INTO type_fields (workspace_id, type_id, key, label, field_type, position)
+		SELECT $1, id, 'rating', 'Rating', 'number', 100 FROM type_definitions
 		WHERE workspace_id = $1 AND key = 'movie'`, e.ws)
-	list := e.listOfKind("Films", nil, "movie")
+	list := e.listOfType("Films", nil, "movie")
 	item := e.newItem(list["id"].(string), `{"title":"A film","metadata":{"rating":4.5}}`)
 	if got := item["metadata"].(map[string]any)["rating"]; got != float64(4.5) {
 		t.Fatalf("rating = %v, want 4.5", got)
@@ -95,12 +95,12 @@ func TestF014B2_ItemMetadataUsesWorkspaceFieldDefinitions(t *testing.T) {
 
 func TestAT05_CreateItem(t *testing.T) {
 	e := newTreeEnv(t)
-	list := e.listOfKind("Watchlist", nil, "movie")
+	list := e.listOfType("Watchlist", nil, "movie")
 	lid := list["id"].(string)
 
 	t.Run("defaults", func(t *testing.T) {
 		it := e.titled(lid, "  Plain  ")
-		want := obj{"title": "Plain", "kind": "movie", "image": nil, "price": nil, "website": nil,
+		want := obj{"title": "Plain", "type": "movie", "image": nil, "price": nil, "website": nil,
 			"content_version": float64(0), "sort_order": float64(0), "version": float64(1), "list_id": lid, "metadata": map[string]any{}}
 		for k, v := range want {
 			if !reflect.DeepEqual(it[k], v) {
@@ -119,7 +119,7 @@ func TestAT05_CreateItem(t *testing.T) {
 
 	t.Run("movie round trip", func(t *testing.T) {
 		it := e.newItem(lid, matrix)
-		if it["kind"] != "movie" || it["sort_order"] != float64(1) {
+		if it["type"] != "movie" || it["sort_order"] != float64(1) {
 			t.Fatalf("created: %v", it)
 		}
 		if it["price"] != nil {
@@ -171,10 +171,10 @@ func TestAT05_CreateItem(t *testing.T) {
 
 func TestAT05_ItemFieldRules(t *testing.T) {
 	e := newTreeEnv(t)
-	lid := e.listOfKind("L", nil, "movie")["id"].(string)
-	tv := e.listOfKind("TV", nil, "tv_show")["id"].(string)
-	car := e.listOfKind("Cars", nil, "car")["id"].(string)
-	bike := e.listOfKind("Bikes", nil, "motorcycle")["id"].(string)
+	lid := e.listOfType("L", nil, "movie")["id"].(string)
+	tv := e.listOfType("TV", nil, "tv_show")["id"].(string)
+	car := e.listOfType("Cars", nil, "car")["id"].(string)
+	bike := e.listOfType("Bikes", nil, "motorcycle")["id"].(string)
 	gen := e.list("Generic", nil)["id"].(string)
 	long := func(n int) string { return strings.Repeat("a", n) }
 	tests := []struct {
@@ -214,11 +214,11 @@ func TestAT05_ItemFieldRules(t *testing.T) {
 		{"unknown metadata key", lid, `{"title":"t","metadata":{"unknown_movie_field":"x"}}`, 400, "unknown_field", "metadata.unknown_movie_field"},
 		{"unknown nested streaming key", lid, `{"title":"t","metadata":{"streaming":{"country":"IT","x":1}}}`, 400, "unknown_field", "metadata.streaming.x"},
 		{"unknown top-level key", lid, `{"title":"t","colour":"red"}`, 400, "unknown_field", "colour"},
-		{"TestF007 kind is no longer sent", lid, `{"title":"t","kind":"movie"}`, 400, "unknown_field", "kind"},
+		{"TestF007 type is no longer sent", lid, `{"title":"t","type":"movie"}`, 400, "unknown_field", "type"},
 		{"TestF007 summary is gone", lid, `{"title":"t","summary":"x"}`, 400, "unknown_field", "summary"},
 		{"TestF007 status is gone", lid, `{"title":"t","status":"x"}`, 400, "unknown_field", "status"},
 		{"TestF007 official_website_url is renamed", lid, `{"title":"t","official_website_url":"https://example.com"}`, 400, "unknown_field", "official_website_url"},
-		{"TestF007 metadata is checked against the list kind", lid, `{"title":"t","metadata":{"make":"VW"}}`, 400, "unknown_field", "metadata.make"},
+		{"TestF007 metadata is checked against the list type", lid, `{"title":"t","metadata":{"make":"VW"}}`, 400, "unknown_field", "metadata.make"},
 		{"TestF007 dropped car key", car, `{"title":"t","metadata":{"electric_range_km":400}}`, 400, "unknown_field", "metadata.electric_range_km"},
 	}
 	for _, tt := range tests {
@@ -264,7 +264,7 @@ func TestAT05_ItemFieldRules(t *testing.T) {
 
 func TestF007_PriceAmountIsASinglePrice(t *testing.T) {
 	e := newTreeEnv(t)
-	lid := e.listOfKind("L", nil, "motorcycle")["id"].(string)
+	lid := e.listOfType("L", nil, "motorcycle")["id"].(string)
 
 	it := e.newItem(lid, `{"title":"single","price":{"amount":"1200.00","currency":"EUR"}}`)
 	p := it["price"].(map[string]any)
@@ -303,7 +303,7 @@ func TestF007_PriceAmountIsASinglePrice(t *testing.T) {
 
 func TestPriceRoundTripIsExact(t *testing.T) {
 	e := newTreeEnv(t)
-	lid := e.listOfKind("L", nil, "motorcycle")["id"].(string)
+	lid := e.listOfType("L", nil, "motorcycle")["id"].(string)
 	for _, price := range []string{"1299.00", "0.10", "0.01", "12.30", "9999999999.99", "100.00", "0.00"} {
 		it := e.newItem(lid, fmt.Sprintf(`{"title":"p","price":{"min":%q,"max":%q,"currency":"EUR"}}`, price, price))
 		got := e.fetchItem(it["id"])["price"].(map[string]any)
@@ -327,8 +327,8 @@ func (e *treeEnv) queryRow(sql string, args []any, dest ...any) {
 
 func TestAT05_UpdateItem(t *testing.T) {
 	e := newTreeEnv(t)
-	lid := e.listOfKind("L", nil, "movie")["id"].(string)
-	bike := e.listOfKind("Bikes", nil, "motorcycle")["id"].(string)
+	lid := e.listOfType("L", nil, "movie")["id"].(string)
+	bike := e.listOfType("Bikes", nil, "motorcycle")["id"].(string)
 
 	t.Run("only supplied fields change and the version bumps", func(t *testing.T) {
 		it := e.newItem(lid, matrix)
@@ -370,30 +370,30 @@ func TestAT05_UpdateItem(t *testing.T) {
 		}
 	})
 
-	t.Run("TestF007 kind is read-only: a kind in the patch is an unknown field", func(t *testing.T) {
+	t.Run("TestF007 type is read-only: a type in the patch is an unknown field", func(t *testing.T) {
 		it := e.newItem(lid, matrix)
-		wantProblem(t, e.patchItem(it, `{"kind":"car"}`), 400, "unknown_field")
+		wantProblem(t, e.patchItem(it, `{"type":"car"}`), 400, "unknown_field")
 		for _, gone := range []string{`{"summary":"x"}`, `{"status":"x"}`, `{"official_website_url":"https://example.com"}`} {
 			wantProblem(t, e.patchItem(it, gone), 400, "unknown_field")
 		}
-		if after := e.fetchItem(it["id"]); after["kind"] != "movie" || after["version"] != float64(1) {
+		if after := e.fetchItem(it["id"]); after["type"] != "movie" || after["version"] != float64(1) {
 			t.Fatalf("rejected patch changed the item: %v", after)
 		}
 	})
 
-	t.Run("TestF007 metadata is validated against the list kind", func(t *testing.T) {
+	t.Run("TestF007 metadata is validated against the list type", func(t *testing.T) {
 		it := e.newItem(lid, matrix)
 		p := wantProblem(t, e.patchItem(it, `{"metadata":{"make":"VW"}}`), 400, "unknown_field")
 		if !strings.Contains(p.Detail, "metadata.make") {
 			t.Errorf("detail = %q", p.Detail)
 		}
 		got := decode(t, e.patchItem(it, `{"metadata":{"release_year":2001}}`))
-		if got["kind"] != "movie" || got["metadata"].(map[string]any)["release_year"] != float64(2001) {
+		if got["type"] != "movie" || got["metadata"].(map[string]any)["release_year"] != float64(2001) {
 			t.Fatalf("got %v", got)
 		}
 	})
 
-	t.Run("metadata alone is validated against the current kind and replaces it", func(t *testing.T) {
+	t.Run("metadata alone is validated against the current type and replaces it", func(t *testing.T) {
 		it := e.newItem(lid, matrix)
 		got := decode(t, e.patchItem(it, `{"metadata":{"runtime_minutes":90}}`))
 		if !reflect.DeepEqual(got["metadata"], map[string]any{"runtime_minutes": float64(90)}) {
@@ -599,7 +599,7 @@ func TestListItems(t *testing.T) {
 		if m, ok := first["metadata"].(map[string]any); !ok || len(m) != 0 {
 			t.Errorf("ItemSummary metadata = %v, want {}", first["metadata"])
 		}
-		if first["id"] != banana["id"] || first["version"] != float64(2) || first["website"] != "https://touched.example" || first["kind"] != "generic" || first["image"] != nil || first["price"] != nil {
+		if first["id"] != banana["id"] || first["version"] != float64(2) || first["website"] != "https://touched.example" || first["type"] != nil || first["image"] != nil || first["price"] != nil {
 			t.Fatalf("row = %v", first)
 		}
 		_ = apple
@@ -726,7 +726,7 @@ func urlQueryEscape(s string) string {
 
 func TestF013B4_ListItemsDirectorSortAndFilter(t *testing.T) {
 	e := newTreeEnv(t)
-	movies := e.listOfKind("Films", nil, "movie")
+	movies := e.listOfType("Films", nil, "movie")
 	lid := movies["id"].(string)
 	mk := func(title string, director any) obj {
 		body := obj{"title": title, "lookup": false}
@@ -756,7 +756,7 @@ func TestF013B4_ListItemsDirectorSortAndFilter(t *testing.T) {
 		t.Fatalf("director filter = %v total=%v, want Alpha and Zulu total=2", got, page["total"])
 	}
 
-	tv := e.listOfKind("Shows", nil, "tv_show")
+	tv := e.listOfType("Shows", nil, "tv_show")
 	e.newItem(tv["id"].(string), `{"title":"Show","lookup":false}`)
 	wantProblem(t, e.call("GET", "/api/v1/lists/"+tv["id"].(string)+"/items?sort=director", "", ""), 400, "invalid_parameter")
 }
@@ -930,11 +930,11 @@ func TestItemsConcurrentCreatesGetDistinctOrder(t *testing.T) {
 	}
 }
 
-func TestF007_MoveItemAcrossKinds(t *testing.T) {
+func TestF007_MoveItemAcrossTypes(t *testing.T) {
 	e := newTreeEnv(t)
-	films := e.listOfKind("Films", nil, "movie")["id"].(string)
-	moreFilms := e.listOfKind("More films", nil, "movie")["id"].(string)
-	shows := e.listOfKind("Shows", nil, "tv_show")["id"].(string)
+	films := e.listOfType("Films", nil, "movie")["id"].(string)
+	moreFilms := e.listOfType("More films", nil, "movie")["id"].(string)
+	shows := e.listOfType("Shows", nil, "tv_show")["id"].(string)
 	plain := e.list("Plain", nil)["id"].(string)
 	it := e.newItem(films, matrix)
 	move := func(it obj, list string) *httptest.ResponseRecorder {
@@ -942,8 +942,8 @@ func TestF007_MoveItemAcrossKinds(t *testing.T) {
 	}
 
 	for _, dest := range []string{shows, plain} {
-		p := wantProblem(t, move(it, dest), 409, "kind_mismatch")
-		if p.Type != "https://collection-app.invalid/problems/kind-mismatch" {
+		p := wantProblem(t, move(it, dest), 409, "type_mismatch")
+		if p.Type != "https://collection-app.invalid/problems/type-mismatch" {
 			t.Errorf("type = %q", p.Type)
 		}
 		got := e.fetchItem(it["id"])
@@ -954,17 +954,17 @@ func TestF007_MoveItemAcrossKinds(t *testing.T) {
 
 	rec := move(it, moreFilms)
 	wantStatus(t, rec, 200)
-	if moved := decode(t, rec); moved["list_id"] != moreFilms || moved["kind"] != "movie" || moved["metadata"].(map[string]any)["release_year"] != float64(1999) {
+	if moved := decode(t, rec); moved["list_id"] != moreFilms || moved["type"] != "movie" || moved["metadata"].(map[string]any)["release_year"] != float64(1999) {
 		t.Fatalf("moved: %v", moved)
 	}
 
-	// A destination that is missing is still destination_unavailable, not a kind mismatch.
+	// A destination that is missing is still destination_unavailable, not a type mismatch.
 	wantProblem(t, move(e.fetchItem(it["id"]), uuid.NewString()), 409, "destination_unavailable")
 }
 
 func TestF014B4_ListItemsSortsByDefinitionAndFilters(t *testing.T) {
 	e := newTreeEnv(t)
-	l := e.listOfKind("Films", nil, "movie")
+	l := e.listOfType("Films", nil, "movie")
 	lid := l["id"].(string)
 	mk := func(title string, year any) obj {
 		body := obj{"title": title}
@@ -1034,10 +1034,10 @@ func TestF014B4_ListItemsSortsByDefinitionAndFilters(t *testing.T) {
 		}
 	})
 
-	t.Run("generic list answers 400 invalid_parameter", func(t *testing.T) {
+	t.Run("no-type list answers 400 invalid_parameter", func(t *testing.T) {
 		g := e.list("Plain", nil)
 		e.titled(g["id"].(string), "x")
-		wantProblem(t, e.call("GET", "/api/v1/lists/"+g["id"].(string)+"/items?sort=kind_key", "", ""), 400, "invalid_parameter")
+		wantProblem(t, e.call("GET", "/api/v1/lists/"+g["id"].(string)+"/items?sort=type_key", "", ""), 400, "invalid_parameter")
 	})
 
 	t.Run("unknown definition field answers 400 invalid_parameter", func(t *testing.T) {
@@ -1047,10 +1047,10 @@ func TestF014B4_ListItemsSortsByDefinitionAndFilters(t *testing.T) {
 
 func TestF014B4_CustomFieldSortAndCombinedFilter(t *testing.T) {
 	e := newTreeEnv(t)
-	e.exec(`INSERT INTO kind_fields (workspace_id, kind_id, key, label, field_type, position)
-		SELECT $1, id, 'rating', 'Rating', 'number', 100 FROM kind_definitions
+	e.exec(`INSERT INTO type_fields (workspace_id, type_id, key, label, field_type, position)
+		SELECT $1, id, 'rating', 'Rating', 'number', 100 FROM type_definitions
 		WHERE workspace_id = $1 AND key = 'movie'`, e.ws)
-	l := e.listOfKind("Ratings", nil, "movie")
+	l := e.listOfType("Ratings", nil, "movie")
 	lid := l["id"].(string)
 	cur := e.fetch("lists", lid)
 	gotList := decode(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":["rating"]}`, etagOf("l", cur)))
@@ -1081,7 +1081,7 @@ func TestF014B4_CustomFieldSortAndCombinedFilter(t *testing.T) {
 
 func TestF002B4_ListItemsSortByPrice(t *testing.T) {
 	e := newTreeEnv(t)
-	l := e.listOfKind("Wishlist", nil, "motorcycle")
+	l := e.listOfType("Wishlist", nil, "motorcycle")
 	lid := l["id"].(string)
 	mk := func(title string, min, max any) obj {
 		body := obj{"title": title}
@@ -1140,14 +1140,14 @@ func TestF002B4_ListItemsSortByPrice(t *testing.T) {
 	})
 
 	t.Run("?sort=price works on a list stored as manual, and create accepts it", func(t *testing.T) {
-		other := e.listOfKind("Other", nil, "motorcycle")
+		other := e.listOfType("Other", nil, "motorcycle")
 		oid := other["id"].(string)
 		e.titled(oid, "x")
 		rows, _ := e.page(oid, "?sort=price")
 		if len(rows) != 1 {
 			t.Fatalf("got %d rows", len(rows))
 		}
-		rec := e.call("POST", "/api/v1/lists", `{"name":"P","kind":"motorcycle","sort_mode":"price"}`, "")
+		rec := e.call("POST", "/api/v1/lists", `{"name":"P","type":"motorcycle","sort_mode":"price"}`, "")
 		wantStatus(t, rec, 201)
 		if decode(t, rec)["sort_mode"] != "price" {
 			t.Fatalf("created sort_mode: %s", rec.Body)

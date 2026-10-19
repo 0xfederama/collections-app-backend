@@ -1,4 +1,4 @@
-package kinds_test
+package types_test
 
 import (
 	"errors"
@@ -9,12 +9,12 @@ import (
 	"testing"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
-	"github.com/0xfederama/collections-app-backend/internal/items/kinds"
+	"github.com/0xfederama/collections-app-backend/internal/items/types"
 )
 
 func TestF009B2_ValidatePinned(t *testing.T) {
 	for _, tt := range []struct {
-		kind string
+		typ  string
 		keys []string
 		want []string
 	}{
@@ -23,29 +23,29 @@ func TestF009B2_ValidatePinned(t *testing.T) {
 		{"movie", []string{"price"}, []string{"pinned_fields[0]"}},
 		{"motorcycle", []string{"price", "power_hp"}, nil},
 	} {
-		got, err := kinds.ValidatePinned(tt.kind, tt.keys)
+		got, err := types.ValidatePinned(tt.typ, tt.keys)
 		if tt.want == nil {
 			if err != nil || !slices.Equal(got, tt.keys) {
-				t.Errorf("ValidatePinned(%q, %v) = %v, %v", tt.kind, tt.keys, got, err)
+				t.Errorf("ValidatePinned(%q, %v) = %v, %v", tt.typ, tt.keys, got, err)
 			}
 			continue
 		}
 		var invalid *apperr.ValidationError
 		if !errors.As(err, &invalid) || len(invalid.Errors) != len(tt.want) {
-			t.Errorf("ValidatePinned(%q, %v) error = %v", tt.kind, tt.keys, err)
+			t.Errorf("ValidatePinned(%q, %v) error = %v", tt.typ, tt.keys, err)
 		}
 	}
 }
 
 func TestF014B2_ValidateDefinitionFields(t *testing.T) {
-	fields := []kinds.Field{
+	fields := []types.Field{
 		{Key: "notes", Type: "text"},
 		{Key: "rating", Type: "number"},
 		{Key: "published", Type: "date"},
 		{Key: "owned", Type: "boolean"},
 		{Key: "website", Type: "link"},
 	}
-	got, err := kinds.Validate(fields, map[string]any{
+	got, err := types.Validate(fields, map[string]any{
 		"notes": "  A fine game  ", "rating": 4.5, "published": "2026-10-18",
 		"owned": true, "website": " https://example.com/game ",
 	})
@@ -59,7 +59,7 @@ func TestF014B2_ValidateDefinitionFields(t *testing.T) {
 }
 
 func TestF014B2_ValidateDefinitionFieldErrors(t *testing.T) {
-	fields := []kinds.Field{{Key: "text", Type: "text"}, {Key: "number", Type: "number"}, {Key: "date", Type: "date"}, {Key: "boolean", Type: "boolean"}, {Key: "link", Type: "link"}}
+	fields := []types.Field{{Key: "text", Type: "text"}, {Key: "number", Type: "number"}, {Key: "date", Type: "date"}, {Key: "boolean", Type: "boolean"}, {Key: "link", Type: "link"}}
 	for _, tt := range []struct {
 		name string
 		in   map[string]any
@@ -73,7 +73,7 @@ func TestF014B2_ValidateDefinitionFieldErrors(t *testing.T) {
 		{"bad link", map[string]any{"link": "ftp://example.com"}, "metadata.link"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := kinds.Validate(fields, tt.in)
+			_, err := types.Validate(fields, tt.in)
 			var validation *apperr.ValidationError
 			if !errors.As(err, &validation) || len(validation.Errors) != 1 || validation.Errors[0].Field != tt.path {
 				t.Fatalf("Validate() error = %v, want %s", err, tt.path)
@@ -83,15 +83,15 @@ func TestF014B2_ValidateDefinitionFieldErrors(t *testing.T) {
 }
 
 func TestF014B2_ValidateRejectsUnknownDefinitionField(t *testing.T) {
-	_, err := kinds.Validate([]kinds.Field{{Key: "rating", Type: "number"}}, map[string]any{"unknown": 1, "rating": "bad"})
+	_, err := types.Validate([]types.Field{{Key: "rating", Type: "number"}}, map[string]any{"unknown": 1, "rating": "bad"})
 	if err == nil || !strings.Contains(err.Error(), "metadata.unknown") {
 		t.Fatalf("Validate() error = %v, want unknown metadata field", err)
 	}
 }
 
 func TestF014B2_ValidateKeepsStreamingAndTMDBRules(t *testing.T) {
-	fields := []kinds.Field{{Key: "streaming", Type: "streaming", Special: true}, {Key: "tmdb_id", Type: "number", Special: true}, {Key: "lookup_disabled", Type: "boolean", Special: true}, {Key: "imdb_url", Type: "link", Special: true}}
-	got, err := kinds.Validate(fields, map[string]any{
+	fields := []types.Field{{Key: "streaming", Type: "streaming", Special: true}, {Key: "tmdb_id", Type: "number", Special: true}, {Key: "lookup_disabled", Type: "boolean", Special: true}, {Key: "imdb_url", Type: "link", Special: true}}
+	got, err := types.Validate(fields, map[string]any{
 		"streaming":       map[string]any{"country": "IT", "platforms": []any{"Netflix"}, "paid_platforms": []any{"netflix"}},
 		"tmdb_id":         603,
 		"lookup_disabled": false,
@@ -109,7 +109,7 @@ func TestF014B2_ValidateKeepsStreamingAndTMDBRules(t *testing.T) {
 		{"lookup_disabled": "false"},
 		{"imdb_url": "https://example.com/title/tt0133093/"},
 	} {
-		if _, err := kinds.Validate(fields, in); err == nil {
+		if _, err := types.Validate(fields, in); err == nil {
 			t.Fatalf("Validate(%#v) succeeded", in)
 		}
 	}

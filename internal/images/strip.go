@@ -151,19 +151,19 @@ func stripPNG(b []byte) ([]byte, error) {
 		if n > 1<<31-1 || end > int64(len(b)) {
 			return nil, malformed("bad png chunk length")
 		}
-		kind := string(b[i+4 : i+8])
-		for _, c := range []byte(kind) {
+		typ := string(b[i+4 : i+8])
+		for _, c := range []byte(typ) {
 			if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') {
 				return nil, malformed("bad png chunk type")
 			}
 		}
-		switch kind {
+		switch typ {
 		case "eXIf", "tEXt", "zTXt", "iTXt", "tIME":
 		default:
 			out = append(out, b[i:end]...)
 		}
 		i = int(end)
-		if kind == "IEND" {
+		if typ == "IEND" {
 			return append(out, b[i:]...), nil
 		}
 	}

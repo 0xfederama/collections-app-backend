@@ -67,13 +67,13 @@ func newLookupEnv(t *testing.T, now time.Time) *lookupEnv {
 	if _, err := db.Exec(t.Context(), `INSERT INTO workspaces (id, name) VALUES ($1, 'W')`, ws); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(t.Context(), `SELECT seed_builtin_kind_definitions($1)`, ws); err != nil {
+	if _, err := db.Exec(t.Context(), `SELECT seed_builtin_type_definitions($1)`, ws); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(t.Context(), `INSERT INTO workspace_settings (workspace_id) VALUES ($1)`, ws); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(t.Context(), `INSERT INTO lists (id, workspace_id, name, kind, sort_order) VALUES ($1, $2, 'Movies', 'movie', 0)`, list, ws); err != nil {
+	if _, err := db.Exec(t.Context(), `INSERT INTO lists (id, workspace_id, name, type, sort_order) VALUES ($1, $2, 'Movies', 'movie', 0)`, list, ws); err != nil {
 		t.Fatal(err)
 	}
 	local, err := storage.NewLocal(t.TempDir())
@@ -114,7 +114,7 @@ func TestF013B3_ApplyCreateTracksOnlyImportedLeaves(t *testing.T) {
 	now := time.Date(2026, time.January, 31, 12, 0, 0, 0, time.UTC)
 	e := newLookupEnv(t, now)
 	it, err := e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeCreate, ListID: e.list, Kind: "movie", TMDBID: 603,
+		Mode: ModeCreate, ListID: e.list, Type: "movie", TMDBID: 603,
 		Title: "The Matrix", OriginalTitle: "matrix",
 		CreateInput: &items.CreateInput{Title: "matrix", Metadata: map[string]any{"director": "My director"}},
 		Fields: map[string]any{
@@ -163,7 +163,7 @@ func TestF013B3_StaleApplyLeavesNoRowsOrFiles(t *testing.T) {
 	e := newLookupEnv(t, time.Now().UTC())
 	it := e.create("Matrix", nil)
 	_, err := e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version + 1, Kind: "movie",
+		Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version + 1, Type: "movie",
 		TMDBID: 603, Title: "The Matrix", OriginalTitle: it.Title,
 		Fields: map[string]any{"release_year": 1999}, Poster: processedPoster("stale"), PosterPath: "/stale.jpg",
 	})
@@ -192,7 +192,7 @@ func TestF013B3_OwnedRefreshPreservesUserEditedLeaf(t *testing.T) {
 	e := newLookupEnv(t, now)
 	it := e.create("Matrix", nil)
 	it, err := e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version, Kind: "movie", TMDBID: 603,
+		Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version, Type: "movie", TMDBID: 603,
 		Title: "The Matrix", OriginalTitle: it.Title, Fields: map[string]any{"release_year": 1999, "runtime_minutes": 136},
 	})
 	if err != nil {
@@ -206,7 +206,7 @@ func TestF013B3_OwnedRefreshPreservesUserEditedLeaf(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeOwned, ItemID: it.ID, ExpectedVersion: it.Version, Kind: "movie", TMDBID: 603,
+		Mode: ModeOwned, ItemID: it.ID, ExpectedVersion: it.Version, Type: "movie", TMDBID: 603,
 		Title: "The Matrix", OriginalTitle: "Matrix",
 		Fields:        map[string]any{"release_year": 2000, "runtime_minutes": 137, "director": "The Wachowskis"},
 		RefreshFields: true,
@@ -230,7 +230,7 @@ func TestF013B3_PosterOnlyRefreshDoesNotRenewMetadata(t *testing.T) {
 	e := newLookupEnv(t, start)
 	it := e.create("Matrix", nil)
 	it, err := e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version, Kind: "movie", TMDBID: 603,
+		Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version, Type: "movie", TMDBID: 603,
 		Title: "The Matrix", OriginalTitle: it.Title, Fields: map[string]any{"release_year": 1999},
 		Poster: processedPoster("old"), PosterPath: "/old.jpg", RefreshFields: true, RefreshPoster: true,
 	})
@@ -239,7 +239,7 @@ func TestF013B3_PosterOnlyRefreshDoesNotRenewMetadata(t *testing.T) {
 	}
 	e.clock.Set(time.Date(2026, time.June, 30, 9, 0, 0, 0, time.UTC))
 	_, err = e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeOwned, ItemID: it.ID, ExpectedVersion: it.Version, Kind: "movie", TMDBID: 603,
+		Mode: ModeOwned, ItemID: it.ID, ExpectedVersion: it.Version, Type: "movie", TMDBID: 603,
 		Title: "Changed upstream", OriginalTitle: "Matrix", Fields: map[string]any{"release_year": 2000},
 		Poster: processedPoster("fresh"), PosterPath: "/fresh.jpg", RefreshFields: false, RefreshPoster: true,
 	})
@@ -267,7 +267,7 @@ func TestF013B3_MaintenanceFailureBeforeExpiryThenPurgesAtBoundary(t *testing.T)
 	e := newLookupEnv(t, start)
 	it := e.create("matrix", nil)
 	it, err := e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version, Kind: "movie", TMDBID: 603,
+		Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version, Type: "movie", TMDBID: 603,
 		Title: "The Matrix", OriginalTitle: it.Title, Fields: map[string]any{"release_year": 1999},
 	})
 	if err != nil {
@@ -313,7 +313,7 @@ func TestF013B3_ExpiryPreservesManualPhotoAndCoversTrashedItems(t *testing.T) {
 	e := newLookupEnv(t, start)
 	it := e.create("matrix", nil)
 	it, err := e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version, Kind: "movie", TMDBID: 603,
+		Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version, Type: "movie", TMDBID: 603,
 		Title: "The Matrix", OriginalTitle: it.Title, Fields: map[string]any{"release_year": 1999},
 		Poster: processedPoster("owned"), PosterPath: "/owned.jpg", RefreshPoster: true,
 	})
@@ -365,7 +365,7 @@ func TestF013B3_MetadataExpiryPreservesYoungerPoster(t *testing.T) {
 	e := newLookupEnv(t, start)
 	it := e.create("matrix", nil)
 	it, err := e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version, Kind: "movie", TMDBID: 603,
+		Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version, Type: "movie", TMDBID: 603,
 		Title: "The Matrix", OriginalTitle: it.Title, Fields: map[string]any{"release_year": 1999},
 	})
 	if err != nil {
@@ -373,7 +373,7 @@ func TestF013B3_MetadataExpiryPreservesYoungerPoster(t *testing.T) {
 	}
 	e.clock.Set(time.Date(2026, time.February, 28, 8, 0, 0, 0, time.UTC))
 	it, err = e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeOwned, ItemID: it.ID, ExpectedVersion: it.Version, Kind: "movie", TMDBID: 603,
+		Mode: ModeOwned, ItemID: it.ID, ExpectedVersion: it.Version, Type: "movie", TMDBID: 603,
 		Title: "The Matrix", OriginalTitle: "matrix", Fields: map[string]any{"release_year": 2000},
 		Poster: processedPoster("younger"), PosterPath: "/younger.jpg", RefreshPoster: true,
 	})

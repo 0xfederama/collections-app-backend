@@ -16,7 +16,7 @@ The whole API in `api/openapi.yaml` is implemented (spec `0.3.0`, tag `api-v0.3.
 | Area | State |
 |---|---|
 | Health | `GET /healthz` liveness (`200 ok`), `GET /readyz` readiness (`200 ready` only if the DB answers and `DATA_DIR` is writable, else a terse `503`, no paths or SQL) |
-| Data | Settings, tree, folders, lists, items (six kinds), Markdown content with versions, one image per item, search, recent items, trash with restore and purge |
+| Data | Settings, tree, folders, lists, items (six types), Markdown content with versions, one image per item, search, recent items, trash with restore and purge |
 | Cross-cutting | Request IDs, access log, panic recovery, security headers, request guard (`If-Match`, body limits, unknown fields), problem+json errors |
 | Operations | Config validated at startup, `log/slog`, migrations, backup/restore/verify scripts |
 
@@ -30,7 +30,7 @@ internal/config        env parsing and validation
 internal/database      pgx pool, InTx; sqlc/ is GENERATED (never edit)
 internal/apperr        typed domain errors (no HTTP)
 internal/tree          folders and lists
-internal/items         items; items/kinds validates per-kind metadata
+internal/items         items; items/types validates per-type metadata
 internal/content       Markdown content and versions
 internal/images        upload validation, thumbnails, serving, orphan sweeper
 internal/storage       FileStore (local files)

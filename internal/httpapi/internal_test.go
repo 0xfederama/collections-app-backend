@@ -267,3 +267,52 @@ func TestMultipartBodyIsCappedWhileStreaming(t *testing.T) {
 type zeros struct{}
 
 func (zeros) Read(b []byte) (int, error) { clear(b); return len(b), nil }
+
+func TestF016_ClientAbortIsNot500(t *testing.T) {
+	canceledCtx := func(t *testing.T) context.Context {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		return ctx
+	}
+	for _, tc := range []struct {
+		name       string
+		ctx        func(t *testing.T) context.Context
+		err        error
+		wantStatus int
+		wantError  bool // "unhandled error" at ERROR
+	}{
+		{"canceled request", canceledCtx, context.Canceled, 499, false},
+		{"canceled and wrapped", canceledCtx, fmt.Errorf("query: %w", context.Canceled), 499, false},
+		{"canceled error but live request", func(t *testing.T) context.Context { return t.Context() }, context.Canceled, 500, true},
+		{"deadline exceeded stays a 500", canceledCtx, context.DeadlineExceeded, 500, true},
+		{"other error on a canceled request", canceledCtx, errors.New("boom"), 500, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var logs bytes.Buffer
+			d := Deps{Logger: slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))}
+			s := failingServer{err: tc.err}
+			s.Server = newServer(d)
+			h, err := newHandler(s, d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec := httptest.NewRecorder()
+			h = wrap(h, d.Logger)
+			h.ServeHTTP(rec, httptest.NewRequestWithContext(tc.ctx(t), http.MethodGet, "/api/v1/tree", nil))
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d", rec.Code, tc.wantStatus)
+			}
+			out := logs.String()
+			if got := strings.Contains(out, "unhandled error"); got != tc.wantError {
+				t.Errorf("unhandled error logged = %v, want %v: %s", got, tc.wantError, out)
+			}
+			wantAccess := fmt.Sprintf(`"msg":"request","method":"GET","route":"/api/v1/tree","status":%d`, tc.wantStatus)
+			if !strings.Contains(out, wantAccess) {
+				t.Errorf("access log lacks status %d: %s", tc.wantStatus, out)
+			}
+			if tc.wantStatus == 499 && strings.Contains(out, `"level":"ERROR"`) || tc.wantStatus == 499 && strings.Contains(out, `"level":"INFO"`) {
+				t.Errorf("a client abort must log at DEBUG only: %s", out)
+			}
+		})
+	}
+}

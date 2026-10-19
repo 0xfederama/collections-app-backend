@@ -67,6 +67,8 @@ type bookEnvOptions struct {
 	mock     bool // the TMDB_MOCK_FIXTURE flag
 	noBooks  bool // no Books provider wired at all
 	upstream http.HandlerFunc
+	cover    http.HandlerFunc // overrides the cover answer
+	timeout  time.Duration    // per-request timeout of the client
 }
 
 func newBookEnv(t *testing.T, o bookEnvOptions) *bookEnv {
@@ -97,6 +99,10 @@ func newBookEnv(t *testing.T, o bookEnvOptions) *bookEnv {
 			}
 		case strings.HasPrefix(r.URL.Path, "/b/id/"):
 			e.covers.Add(1)
+			if o.cover != nil {
+				o.cover(w, r)
+				return
+			}
 			_, _ = w.Write(coverPNG())
 		default:
 			http.NotFound(w, r)
@@ -105,7 +111,7 @@ func newBookEnv(t *testing.T, o bookEnvOptions) *bookEnv {
 	t.Cleanup(upstream.Close)
 	client := openlibrary.NewWithOptions(openlibrary.Options{
 		APIBaseURL: upstream.URL, CoverBaseURL: upstream.URL, HTTPClient: upstream.Client(),
-		RequestInterval: time.Millisecond, Disabled: o.disabled, MockFixture: o.mock,
+		RequestInterval: time.Millisecond, Timeout: o.timeout, Disabled: o.disabled, MockFixture: o.mock,
 	})
 	books := lookup.NewOpenLibraryProvider(client)
 
@@ -477,5 +483,69 @@ func TestF016B3_DisabledWithFixtureServesOnlyTheFixture(t *testing.T) {
 	}
 	if e.searches.Load() != 0 || e.covers.Load() != 0 {
 		t.Errorf("network used: searches=%d covers=%d", e.searches.Load(), e.covers.Load())
+	}
+}
+
+func (e *bookEnv) itemCount() int {
+	e.t.Helper()
+	var n int
+	e.queryRow(`SELECT count(*) FROM items`, nil, &n)
+	return n
+}
+
+func TestF016_BookCoverFailureKeepsTheMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		cover http.HandlerFunc
+		body  string
+	}{
+		{"cover 500 and lookup omitted", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(500) }, `{"title":"the hobbit"}`},
+		{"cover 500 and lookup true", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(500) }, `{"title":"the hobbit","lookup":true}`},
+		{"bad cover bytes and lookup omitted", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("not an image")) }, `{"title":"the hobbit"}`},
+		{"bad cover bytes and lookup true", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("not an image")) }, `{"title":"the hobbit","lookup":true}`},
+		{"cover 302 to a foreign host and a source id", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "https://example.invalid/cover.jpg", http.StatusFound)
+		}, `{"title":"x","source_id":"OL27482W"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newBookEnv(t, bookEnvOptions{cover: tc.cover})
+			it := e.newItem(e.bookList(), tc.body)
+			meta := metaOf(it)
+			if it["title"] != "The Hobbit" || it["image"] != nil || meta["author"] != "J.R.R. Tolkien" || meta["pages"] != float64(310) || meta["openlibrary_id"] != "OL27482W" {
+				t.Fatalf("item = %v", it)
+			}
+		})
+	}
+}
+
+func TestF016_BookSearchFailure(t *testing.T) {
+	slow := func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(time.Second):
+		}
+	}
+	for name, up := range map[string]http.HandlerFunc{
+		"search errors":    func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(500) },
+		"search times out": slow,
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newBookEnv(t, bookEnvOptions{upstream: up, timeout: 40 * time.Millisecond})
+			lid := e.bookList()
+			// lookup omitted: the item is created unchanged.
+			it := e.newItem(lid, `{"title":"the hobbit"}`)
+			if it["title"] != "the hobbit" || metaOf(it)["author"] != nil || metaOf(it)["pages"] != nil || it["image"] != nil {
+				t.Fatalf("item = %v", it)
+			}
+			if e.itemCount() != 1 {
+				t.Fatalf("items = %d", e.itemCount())
+			}
+			// lookup:true: 503 and nothing is created.
+			rec := e.call(http.MethodPost, "/api/v1/lists/"+lid+"/items", `{"title":"the hobbit 2","lookup":true}`, "")
+			wantProblem(t, rec, http.StatusServiceUnavailable, "upstream_unavailable")
+			if e.itemCount() != 1 {
+				t.Errorf("items = %d after a failed explicit lookup, want 1", e.itemCount())
+			}
+		})
 	}
 }

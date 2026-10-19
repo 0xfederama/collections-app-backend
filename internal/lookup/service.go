@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strconv"
 
@@ -305,19 +306,32 @@ func (s *Service) resolve(ctx context.Context, provider Provider, typ, title str
 	return &candidate{details: details}, nil
 }
 
+// poster downloads and processes the provider's image. For Open Library a cover
+// failure is not fatal: the metadata is applied without an image (a Warn is
+// logged). The request being cancelled or past its deadline, and a disabled
+// provider, still fail. TMDB keeps failing the whole lookup (D-089).
 func (s *Service) poster(ctx context.Context, provider Provider, path string) (*images.Processed, error) {
 	if path == "" {
 		return nil, nil
 	}
+	tolerant := provider.Name() == ProviderOpenLibrary
 	raw, err := provider.DownloadImage(ctx, path)
 	if errors.Is(err, ErrNoImage) {
 		return nil, nil
 	}
 	if err != nil {
+		if tolerant && ctx.Err() == nil && !errors.Is(err, ErrDisabled) {
+			slog.WarnContext(ctx, "book cover download failed; importing without an image", "err", err)
+			return nil, nil
+		}
 		return nil, ProviderError(err)
 	}
 	processed, err := images.Process(bytes.NewReader(raw))
 	if err != nil {
+		if tolerant {
+			slog.WarnContext(ctx, "book cover is not a usable image; importing without one", "err", err)
+			return nil, nil
+		}
 		return nil, apperr.UpstreamUnavailable()
 	}
 	return processed, nil

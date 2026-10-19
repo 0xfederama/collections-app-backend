@@ -7,6 +7,7 @@ import (
 	"image"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -466,5 +467,144 @@ func TestPickISBN(t *testing.T) {
 		if got := pickISBN(tc.in); got != tc.want {
 			t.Errorf("pickISBN(%v) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestF016_CoverRedirects(t *testing.T) {
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("foreign")) }))
+	t.Cleanup(other.Close)
+	for _, tc := range []struct {
+		name    string
+		handler func(w http.ResponseWriter, r *http.Request)
+		want    string
+		wantErr bool
+	}{
+		{"chain of 3 hops on an allowed host", func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/b/id/1-L.jpg":
+				http.Redirect(w, r, "/h1", http.StatusFound)
+			case "/h1":
+				http.Redirect(w, r, "/h2", http.StatusFound)
+			case "/h2":
+				http.Redirect(w, r, "/h3", http.StatusFound)
+			default:
+				_, _ = w.Write([]byte("image-bytes"))
+			}
+		}, "image-bytes", false},
+		{"4 hops are refused", func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/b/id/1-L.jpg":
+				http.Redirect(w, r, "/h1", http.StatusFound)
+			case "/h1":
+				http.Redirect(w, r, "/h2", http.StatusFound)
+			case "/h2":
+				http.Redirect(w, r, "/h3", http.StatusFound)
+			case "/h3":
+				http.Redirect(w, r, "/h4", http.StatusFound)
+			default:
+				_, _ = w.Write([]byte("image-bytes"))
+			}
+		}, "", true},
+		{"foreign host is refused", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, other.URL, http.StatusFound) }, "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _ := fakeServer(t, tc.handler)
+			b, err := testClient(s, Options{}).DownloadCover(t.Context(), 1)
+			if (err != nil) != tc.wantErr || string(b) != tc.want {
+				t.Fatalf("cover = %q err = %v", b, err)
+			}
+		})
+	}
+}
+
+func TestF016_AllowedCoverRedirect(t *testing.T) {
+	c := NewWithOptions(Options{})
+	for raw, want := range map[string]bool{
+		"https://archive.org/download/x.zip/1-L.jpg":           true,
+		"https://ia800000.us.archive.org/view_archive.php?a=b": true,
+		"https://covers.openlibrary.org/b/id/1-L.jpg":          true,
+		"https://openlibrary.org/x":                            true,
+		"http://archive.org/x":                                 false,
+		"https://evilarchive.org/x":                            false,
+		"https://archive.org.evil.test/x":                      false,
+		"https://user@archive.org/x":                           false,
+		"https://169.254.169.254/latest":                       false,
+		"https://example.com/x":                                false,
+	} {
+		u, _ := url.Parse(raw)
+		if got := c.allowedCoverRedirect(u); got != want {
+			t.Errorf("allowedCoverRedirect(%s) = %v, want %v", raw, got, want)
+		}
+	}
+}
+
+func TestF016_CoverStatusMapping(t *testing.T) {
+	s, _ := fakeServer(t, func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
+	if _, err := testClient(s, Options{}).DownloadCover(t.Context(), 3); !errors.Is(err, ErrNoCover) {
+		t.Fatalf("error = %v, want ErrNoCover", err)
+	}
+}
+
+func TestF016_RetryOnTransientFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		statuses []int // per request; the last one repeats
+		wantReqs int32
+		wantErr  bool
+	}{
+		{"503 then success", []int{503, 200}, 2, false},
+		{"persistent 503 retries once only", []int{503}, 2, true},
+		{"404 is not retried", []int{404}, 1, true},
+		{"429 is not retried", []int{429}, 1, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var n atomic.Int32
+			s, count := fakeServer(t, func(w http.ResponseWriter, _ *http.Request) {
+				i := int(n.Add(1)) - 1
+				if i >= len(tc.statuses) {
+					i = len(tc.statuses) - 1
+				}
+				if tc.statuses[i] != 200 {
+					w.WriteHeader(tc.statuses[i])
+					return
+				}
+				_, _ = w.Write(fixture(t, "search_english.json"))
+			})
+			_, err := testClient(s, Options{}).Search(t.Context(), "x", "")
+			if (err != nil) != tc.wantErr || count.Load() != tc.wantReqs {
+				t.Fatalf("err = %v, requests = %d, want %d", err, count.Load(), tc.wantReqs)
+			}
+		})
+	}
+}
+
+func TestF016_NoRetryAfterCallerCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	s, count := fakeServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		cancel()
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	if _, err := testClient(s, Options{}).Search(ctx, "x", ""); err == nil {
+		t.Fatal("expected an error")
+	}
+	if count.Load() != 1 {
+		t.Errorf("requests = %d, want 1", count.Load())
+	}
+}
+
+func TestF016_WorkServedFromSearchCache(t *testing.T) {
+	s, count := fakeServer(t, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(fixture(t, "search_english.json")) })
+	c := testClient(s, Options{})
+	results, err := c.Search(t.Context(), "the hobbit", "en-US")
+	if err != nil || len(results) == 0 {
+		t.Fatalf("search = %v err = %v", results, err)
+	}
+	m, err := c.Work(t.Context(), results[0].WorkID, "en-US")
+	if err != nil || m.WorkID != results[0].WorkID || m.Title != results[0].Title || m.CoverID != results[0].CoverID || count.Load() != 1 {
+		t.Fatalf("work = %+v err = %v requests = %d", m, err, count.Load())
+	}
+	// Another language, or an unseen work, still asks upstream.
+	if _, err := c.Work(t.Context(), results[0].WorkID, "it-IT"); err != nil || count.Load() != 2 {
+		t.Errorf("requests = %d, want 2", count.Load())
 	}
 }

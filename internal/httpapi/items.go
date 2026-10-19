@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/oapi-codegen/nullable"
@@ -97,7 +98,12 @@ func (s *Server) LookupItemMetadata(ctx context.Context, r oapi.LookupItemMetada
 	if r.Body.Mode != nil {
 		mode = lookup.Mode(*r.Body.Mode)
 	}
-	it, err := s.deps.Lookup.Apply(ctx, r.Id, IfMatchVersion(ctx), mode, r.Body.TmdbId)
+	var selected *string
+	if r.Body.TmdbId != nil {
+		id := strconv.Itoa(*r.Body.TmdbId)
+		selected = &id
+	}
+	it, err := s.deps.Lookup.Apply(ctx, r.Id, IfMatchVersion(ctx), mode, selected)
 	if err != nil {
 		return nil, err
 	}

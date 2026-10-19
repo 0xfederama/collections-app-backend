@@ -21,6 +21,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
@@ -82,7 +83,8 @@ func run() error {
 	tmdbClient := tmdb.NewWithOptions(cfg.TMDBAPIKey, tmdb.Options{MockFixture: cfg.TMDBMockFixture})
 	settingsSvc := workspace.NewService(pool)
 	lookupStore := lookup.NewStore(pool, store, clock.System{}, itemSvc, logger, workspaceID)
-	lookupSvc := lookup.New(tmdbClient, lookupStore, itemSvc, settingsSvc, clock.System{}, workspaceID)
+	tmdbProvider := lookup.NewTMDBProvider(tmdbClient)
+	lookupSvc := lookup.New(lookup.Providers{types.Movie: tmdbProvider, types.TVShow: tmdbProvider}, lookupStore, itemSvc, settingsSvc, clock.System{}, workspaceID)
 	if _, err := lookupStore.Maintain(ctx, lookupSvc.RefreshOwned); err != nil {
 		logger.Warn("TMDB retention maintenance failed at startup", "err", err)
 	}
@@ -96,9 +98,9 @@ func run() error {
 		WorkspaceID:     workspaceID,
 		Settings:        settingsSvc,
 		Definitions:     definitions.New(pool, workspaceID),
-		TMDB:            tmdbClient,
+		TMDB:            tmdbProvider,
 		Lookup:          lookupSvc,
-		LookupAvailable: tmdbClient.Enabled(),
+		LookupAvailable: tmdbProvider.Enabled(),
 		Tree:            tree.New(pool, clock.System{}, workspaceID),
 		Items:           itemSvc,
 		Content:         content.New(pool, clock.System{}, workspaceID),

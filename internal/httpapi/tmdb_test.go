@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
+	"github.com/0xfederama/collections-app-backend/internal/lookup"
 	"github.com/0xfederama/collections-app-backend/internal/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/tmdb"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
@@ -23,13 +24,13 @@ func tmdbRouter(t *testing.T, client *tmdb.Client) http.Handler {
 	}
 	return newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: workspaceID,
-		Settings: workspace.NewService(pool), TMDB: client, LookupAvailable: client.Enabled(),
+		Settings: workspace.NewService(pool), TMDB: lookup.NewTMDBProvider(client), LookupAvailable: client.Enabled(),
 	})
 }
 
 func TestF013B2_SuggestionsDisabledWithoutKey(t *testing.T) {
 	h := newRouter(t, httpapi.Deps{
-		DB: fakePinger{}, DataDir: t.TempDir(), Logger: quietLogger(), TMDB: tmdb.New(""),
+		DB: fakePinger{}, DataDir: t.TempDir(), Logger: quietLogger(), TMDB: lookup.NewTMDBProvider(tmdb.New("")),
 	})
 	rec := do(t, h, req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?type=movie&q=Alien"})
 	wantStatus(t, rec, http.StatusOK)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -31,13 +32,15 @@ type MaintenanceResult struct {
 	Failed    int
 }
 
-// Maintain first removes every expired owned value, then attempts one bounded
+// Maintain applies the TMDB retention (D-089); no other provider has one (D-095),
+// and its queries only see provider 'tmdb' rows. It first removes every expired owned value, then attempts one bounded
 // batch of due refreshes. Expiry never waits behind provider calls.
 func (s *DBStore) Maintain(ctx context.Context, refresh RefreshFunc) (MaintenanceResult, error) {
 	var result MaintenanceResult
 	for {
+		now := s.clock.Now()
 		ids, err := sqlc.New(s.db).ListExpiredTMDBImportIDs(ctx, sqlc.ListExpiredTMDBImportIDsParams{
-			WorkspaceID: s.workspaceID, Now: s.clock.Now(), BatchLimit: expiryBatchSize,
+			WorkspaceID: s.workspaceID, Now: &now, BatchLimit: expiryBatchSize,
 		})
 		if err != nil {
 			return result, fmt.Errorf("list expired TMDB imports: %w", err)
@@ -56,8 +59,9 @@ func (s *DBStore) Maintain(ctx context.Context, refresh RefreshFunc) (Maintenanc
 		}
 	}
 
+	now := s.clock.Now()
 	due, err := sqlc.New(s.db).ListDueTMDBImports(ctx, sqlc.ListDueTMDBImportsParams{
-		WorkspaceID: s.workspaceID, Now: s.clock.Now(), BatchLimit: refreshBatchSize,
+		WorkspaceID: s.workspaceID, Now: &now, BatchLimit: refreshBatchSize,
 	})
 	if err != nil {
 		return result, fmt.Errorf("list due TMDB imports: %w", err)
@@ -126,7 +130,7 @@ func eligibleForRefresh(row sqlc.ListDueTMDBImportsRow) bool {
 		return false
 	}
 	id, ok := metadata["tmdb_id"].(float64)
-	return ok && id == float64(row.TmdbID)
+	return ok && strconv.FormatFloat(id, 'f', -1, 64) == row.SourceID
 }
 
 func (s *DBStore) expireOne(ctx context.Context, itemID uuid.UUID) (bool, error) {
@@ -144,9 +148,12 @@ func (s *DBStore) expireOne(ctx context.Context, itemID uuid.UUID) (bool, error)
 		if err != nil {
 			return fmt.Errorf("lock expired TMDB import: %w", err)
 		}
-		record, err := q.GetTMDBImport(ctx, sqlc.GetTMDBImportParams{ItemID: itemID, WorkspaceID: s.workspaceID})
+		record, err := q.GetLookupImport(ctx, sqlc.GetLookupImportParams{ItemID: itemID, WorkspaceID: s.workspaceID})
 		if err != nil {
 			return fmt.Errorf("get expired TMDB import: %w", err)
+		}
+		if record.ExpiresAt == nil {
+			return nil // no retention deadline: not a TMDB import
 		}
 		metadataExpired := !record.ExpiresAt.After(now)
 		posterExpired := record.PosterExpiresAt != nil && !record.PosterExpiresAt.After(now)
@@ -199,7 +206,7 @@ func (s *DBStore) expireOne(ctx context.Context, itemID uuid.UUID) (bool, error)
 			oldFiles = []string{old.StorageKey, old.ThumbnailStorageKey}
 		}
 		if metadataExpired && (posterExpired || record.PosterExpiresAt == nil) {
-			if _, err := q.DeleteTMDBImport(ctx, sqlc.DeleteTMDBImportParams{ItemID: itemID, WorkspaceID: s.workspaceID}); err != nil {
+			if _, err := q.DeleteLookupImport(ctx, sqlc.DeleteLookupImportParams{ItemID: itemID, WorkspaceID: s.workspaceID}); err != nil {
 				return fmt.Errorf("delete expired TMDB provenance: %w", err)
 			}
 		} else if metadataExpired {

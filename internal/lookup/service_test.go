@@ -11,30 +11,42 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/items"
-	"github.com/0xfederama/collections-app-backend/internal/tmdb"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
+// fakeClient is a fake Provider. name defaults to the TMDB provider.
 type fakeClient struct {
+	name           string
 	enabled        bool
-	matches        []tmdb.Match
-	details        tmdb.Details
+	matches        []Suggestion
+	details        Details
 	err            error
 	downloads      int
 	searchType     string
 	searchQuery    string
 	searchLanguage string
+	detailsID      string
 }
 
+func (f *fakeClient) Name() string {
+	if f.name == "" {
+		return ProviderTMDB
+	}
+	return f.name
+}
 func (f *fakeClient) Enabled() bool { return f.enabled }
-func (f *fakeClient) Search(_ context.Context, typ, query, language string) ([]tmdb.Match, error) {
+func (f *fakeClient) ValidateSourceID(id string) error {
+	return ValidSourceID(f.Name(), id)
+}
+func (f *fakeClient) Search(_ context.Context, typ, query, language string) ([]Suggestion, error) {
 	f.searchType, f.searchQuery, f.searchLanguage = typ, query, language
 	return f.matches, f.err
 }
-func (f *fakeClient) Details(context.Context, string, int, string, string) (tmdb.Details, error) {
+func (f *fakeClient) Details(_ context.Context, _, id, _, _ string) (Details, error) {
+	f.detailsID = id
 	return f.details, f.err
 }
-func (f *fakeClient) DownloadPoster(context.Context, string) ([]byte, error) {
+func (f *fakeClient) DownloadImage(context.Context, string) ([]byte, error) {
 	f.downloads++
 	return nil, f.err
 }
@@ -85,8 +97,12 @@ type testClock struct{ now time.Time }
 func (c testClock) Now() time.Time { return c.now }
 
 func newService(client *fakeClient, store *fakeStore, itemSvc *fakeItems) *Service {
-	return New(client, store, itemSvc, fakeSettings{workspace.Settings{
-		MetadataLanguage: "it-IT", StreamingCountryCode: "IT",
+	return newServiceWith(Providers{"movie": client, "tv_show": client}, store, itemSvc)
+}
+
+func newServiceWith(providers Providers, store *fakeStore, itemSvc *fakeItems) *Service {
+	return New(providers, store, itemSvc, fakeSettings{workspace.Settings{
+		MetadataLanguage: "it-IT", StreamingCountryCode: "IT", PreferredStores: []string{"kobo"},
 	}}, testClock{now: time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)}, uuid.New())
 }
 
@@ -140,7 +156,7 @@ func TestCreateOptOutStoresLookupDisabled(t *testing.T) {
 func TestCreateMetadataOptOutSuppressesDefaultLookup(t *testing.T) {
 	store := &fakeStore{typ: "movie"}
 	itemSvc := &fakeItems{}
-	client := &fakeClient{enabled: true, matches: []tmdb.Match{{ID: 7}}}
+	client := &fakeClient{enabled: true, matches: []Suggestion{{SourceID: "7"}}}
 	_, err := newService(client, store, itemSvc).Create(t.Context(), uuid.New(), items.CreateInput{
 		Title: "Movie", Metadata: map[string]any{"lookup_disabled": true},
 	}, CreateOptions{})
@@ -161,8 +177,8 @@ func TestCreateSelectedIDWithoutDetailsReturnsUpstreamUnavailable(t *testing.T) 
 }
 
 func TestCreateUsesFirstLocalizedMatchAndAtomicApply(t *testing.T) {
-	client := &fakeClient{enabled: true, matches: []tmdb.Match{{ID: 7}}, details: tmdb.Details{
-		ID: 7, Title: "Titolo locale", Metadata: map[string]any{"release_year": 1999},
+	client := &fakeClient{enabled: true, matches: []Suggestion{{SourceID: "7"}}, details: Details{
+		SourceID: "7", Title: "Titolo locale", Fields: map[string]any{"release_year": 1999},
 	}}
 	store := &fakeStore{typ: "movie", result: items.Item{Title: "Titolo locale"}}
 	itemSvc := &fakeItems{}
@@ -175,7 +191,7 @@ func TestCreateUsesFirstLocalizedMatchAndAtomicApply(t *testing.T) {
 		t.Fatalf("search = %q %q %q", client.searchType, client.searchQuery, client.searchLanguage)
 	}
 	p := store.applied
-	if p.Mode != ModeCreate || p.TMDBID != 7 || p.Title != "Titolo locale" || p.OriginalTitle != in.Title || p.CreateInput.Metadata["director"] != "User" {
+	if p.Mode != ModeCreate || p.Provider != ProviderTMDB || p.SourceID != "7" || p.Title != "Titolo locale" || p.OriginalTitle != in.Title || p.CreateInput.Metadata["director"] != "User" {
 		t.Fatalf("apply = %+v", p)
 	}
 }
@@ -206,10 +222,10 @@ func TestApplyPreservesExistingImageAndUsesStoredTMDBID(t *testing.T) {
 		Image:    &items.Image{Source: items.ImageSourceURL, URL: "https://user.example/image.jpg"},
 		Metadata: json.RawMessage(`{"tmdb_id":42}`),
 	}}
-	client := &fakeClient{enabled: true, details: tmdb.Details{ID: 42, Title: "Localized", PosterPath: "/poster.jpg"}}
+	client := &fakeClient{enabled: true, details: Details{SourceID: "42", Title: "Localized", ImagePath: "/poster.jpg"}}
 	store := &fakeStore{result: itemSvc.item}
 	_, err := newService(client, store, itemSvc).Apply(t.Context(), id, 2, ModeRefresh, nil)
-	if err != nil || store.applied == nil || store.applied.TMDBID != 42 || store.applied.RefreshPoster || client.downloads != 0 {
+	if err != nil || store.applied == nil || store.applied.SourceID != "42" || store.applied.RefreshPoster || client.downloads != 0 {
 		t.Fatalf("err=%v apply=%+v downloads=%d", err, store.applied, client.downloads)
 	}
 }

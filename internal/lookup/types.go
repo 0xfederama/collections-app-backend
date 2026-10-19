@@ -1,5 +1,7 @@
-// Package lookup orchestrates TMDB metadata lookup without exposing provider
-// details to the items or HTTP packages.
+// Package lookup orchestrates metadata lookup (TMDB for movies and TV, Open
+// Library for books) without exposing provider details to the items or HTTP
+// packages. A Provider per item type is registered in Providers; provenance of
+// every import is kept in lookup_imports.
 package lookup
 
 import (
@@ -25,12 +27,14 @@ const (
 	ModeOwned Mode = "owned"
 )
 
-// Record is the provenance needed to refresh or expire imported TMDB data
-// without removing values the user has edited since import.
+// Record is the provenance needed to refresh or expire imported data without
+// removing values the user has edited since import.
 type Record struct {
-	ItemID         uuid.UUID
-	ItemVersion    int
-	TMDBID         int
+	ItemID      uuid.UUID
+	ItemVersion int
+	// Provider and SourceID identify the match (the TMDB id or an Open Library work id).
+	Provider       string
+	SourceID       string
 	Type           string
 	ImportedFields map[string]any
 	ImportedTitle  *string
@@ -55,12 +59,18 @@ type ApplyParams struct {
 	Type            string
 	CreateInput     *items.CreateInput // create only; explicit user values win
 
-	TMDBID        int
+	// Provider and SourceID identify the match. The provider decides the id's
+	// metadata key and its retention (only TMDB has one, D-089/D-095).
+	Provider      string
+	SourceID      string
 	Title         string
 	OriginalTitle string
 	// Fields is the provider metadata object. Store persists its leaf values as
 	// dotted-path snapshots so nested user edits can be detected independently.
-	Fields     map[string]any
+	Fields map[string]any
+	// FillOnly values are set only by create and fill, where the item has no value
+	// yet, and are not tracked as imported (see Details.FillOnly).
+	FillOnly   map[string]any
 	PosterPath string
 	Poster     *images.Processed
 	// RefreshFields is relevant to owned maintenance. False means a poster-only

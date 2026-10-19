@@ -12,7 +12,7 @@ Parses and validates the API's environment configuration once at startup. Every 
 ## Interfaces
 
 - `Load(getenv func(string) string) (Config, error)`: pass `os.Getenv` in production
-- `Config`: `AppEnv`, `HTTPAddr`, `DatabaseURL`, `DBMaxConns`, `DataDir`, `WorkspaceName`, optional `TMDBAPIKey`, `TMDBMockFixture`, `LogLevel`, `LogFormat`
+- `Config`: `AppEnv`, `HTTPAddr`, `DatabaseURL`, `DBMaxConns`, `DataDir`, `WorkspaceName`, optional `TMDBAPIKey`, `TMDBMockFixture`, optional `OpenLibraryContact`, `LogLevel`, `LogFormat`
 - `APP_ENV`: `development` (default) or `production`, case-sensitive
 - `HTTP_ADDR`: `host:port` listen address, default `:8080`
 - `DATABASE_URL`: required; `postgres://` or `postgresql://` with a host
@@ -31,4 +31,4 @@ Parses and validates the API's environment configuration once at startup. Every 
 - Only `DATABASE_URL` is kept out of error text (it carries the password). Other messages echo the raw value, e.g. `LOG_LEVEL` and `DATA_DIR`.
 - `Load` has a side effect: it creates and deletes a `.startup-*` probe file in `DATA_DIR` to test writability.
 - Keep `TMDB_API_KEY` in the server environment (`deploy/server/.env`); never expose it to the browser. Get a key through [TMDB account API settings](https://www.themoviedb.org/settings/api).
-- Book lookup (Open Library) has no config: always on, no key. `TMDB_MOCK_FIXTURE` serves the `[mock] book name` fixture only; every other book query reaches Open Library.
+- `OPENLIBRARY_CONTACT`: optional e-mail for the Open Library User-Agent (faster pacing). Book lookup (Open Library) is always on, no key. `TMDB_MOCK_FIXTURE` serves the `[mock] book name` fixture only; every other book query reaches Open Library.

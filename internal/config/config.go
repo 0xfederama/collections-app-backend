@@ -23,8 +23,10 @@ type Config struct {
 	WorkspaceName   string
 	TMDBAPIKey      string
 	TMDBMockFixture bool
-	LogLevel        slog.Level
-	LogFormat       string
+	// OpenLibraryContact (an e-mail) goes into the Open Library User-Agent. Optional: identified clients get 3 requests/second instead of 1.
+	OpenLibraryContact string
+	LogLevel           slog.Level
+	LogFormat          string
 }
 
 // Load reads configuration through getenv (os.Getenv in production) and returns
@@ -56,6 +58,8 @@ func Load(getenv func(string) string) (Config, error) {
 			c.TMDBMockFixture = fixture
 		}
 	}
+
+	c.OpenLibraryContact = strings.TrimSpace(getenv("OPENLIBRARY_CONTACT"))
 
 	if c.AppEnv != "development" && c.AppEnv != "production" {
 		errs = append(errs, fmt.Errorf("APP_ENV must be development or production, got %q", c.AppEnv))

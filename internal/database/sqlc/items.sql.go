@@ -24,7 +24,7 @@ type ClearListItemsMetadataParams struct {
 	WorkspaceID uuid.UUID
 }
 
-// A kind change empties the kind fields of every item of the list (trashed ones too).
+// A type change empties the type fields of every item of the list (trashed ones too).
 func (q *Queries) ClearListItemsMetadata(ctx context.Context, arg ClearListItemsMetadataParams) (int64, error) {
 	result, err := q.db.Exec(ctx, clearListItemsMetadata, arg.Now, arg.ListID, arg.WorkspaceID)
 	if err != nil {
@@ -44,7 +44,7 @@ type ClearListItemsPriceParams struct {
 	WorkspaceID uuid.UUID
 }
 
-// A kind change to generic removes the price of every item of the list (trashed ones too; generic has no price, F008-B1).
+// A type change to generic removes the price of every item of the list (trashed ones too; generic has no price, F008-B1).
 func (q *Queries) ClearListItemsPrice(ctx context.Context, arg ClearListItemsPriceParams) (int64, error) {
 	result, err := q.db.Exec(ctx, clearListItemsPrice, arg.Now, arg.ListID, arg.WorkspaceID)
 	if err != nil {
@@ -58,7 +58,7 @@ SELECT count(*)::int AS total FROM items i
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.list_id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
   AND (lower(i.title) LIKE '%' || lower($3::text) || '%' ESCAPE '\'
-       OR (l.kind = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower($3::text) || '%' ESCAPE '\'))
+       OR (l.type = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower($3::text) || '%' ESCAPE '\'))
   AND ($4::text = '' OR CASE $5::text
        WHEN 'text' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
        WHEN 'link' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
@@ -112,7 +112,7 @@ type CountListItemsParams struct {
 	WorkspaceID uuid.UUID
 }
 
-// All items of a list, trashed ones included (a kind change clears all of them).
+// All items of a list, trashed ones included (a type change clears all of them).
 func (q *Queries) CountListItems(ctx context.Context, arg CountListItemsParams) (int32, error) {
 	row := q.db.QueryRow(ctx, countListItems, arg.ListID, arg.WorkspaceID)
 	var total int32
@@ -121,7 +121,7 @@ func (q *Queries) CountListItems(ctx context.Context, arg CountListItemsParams) 
 }
 
 const getActiveListForItems = `-- name: GetActiveListForItems :one
-SELECT id, name, folder_id, sort_mode, kind FROM lists
+SELECT id, name, folder_id, sort_mode, type FROM lists
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 `
 
@@ -135,7 +135,7 @@ type GetActiveListForItemsRow struct {
 	Name     string
 	FolderID uuid.NullUUID
 	SortMode string
-	Kind     string
+	Type     string
 }
 
 func (q *Queries) GetActiveListForItems(ctx context.Context, arg GetActiveListForItemsParams) (GetActiveListForItemsRow, error) {
@@ -146,7 +146,7 @@ func (q *Queries) GetActiveListForItems(ctx context.Context, arg GetActiveListFo
 		&i.Name,
 		&i.FolderID,
 		&i.SortMode,
-		&i.Kind,
+		&i.Type,
 	)
 	return i, err
 }
@@ -154,7 +154,7 @@ func (q *Queries) GetActiveListForItems(ctx context.Context, arg GetActiveListFo
 const getItem = `-- name: GetItem :one
 
 SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
-       l.kind              AS kind,
+       l.type              AS type,
        a.width             AS image_width,
        a.height            AS image_height,
        a.original_filename AS image_original_filename,
@@ -188,7 +188,7 @@ type GetItemRow struct {
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
 	TrashBatchID          uuid.NullUUID
-	Kind                  string
+	Type                  string
 	ImageWidth            *int32
 	ImageHeight           *int32
 	ImageOriginalFilename *string
@@ -196,7 +196,7 @@ type GetItemRow struct {
 }
 
 // Item read model: GetItem and ListItems return the same columns, so one mapper
-// (internal/items) serves both. kind is not stored on the item: it comes from its list (F-007). The image columns come from the attachment the
+// (internal/items) serves both. type is not stored on the item: it comes from its list (F-007). The image columns come from the attachment the
 // item points to (NULL for no image or an external URL). content_version is the
 // highest saved Markdown version, 0 when there is none (D-052).
 func (q *Queries) GetItem(ctx context.Context, arg GetItemParams) (GetItemRow, error) {
@@ -220,7 +220,7 @@ func (q *Queries) GetItem(ctx context.Context, arg GetItemParams) (GetItemRow, e
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
-		&i.Kind,
+		&i.Type,
 		&i.ImageWidth,
 		&i.ImageHeight,
 		&i.ImageOriginalFilename,
@@ -332,7 +332,7 @@ func (q *Queries) ListItemIDsOfList(ctx context.Context, arg ListItemIDsOfListPa
 
 const listItems = `-- name: ListItems :many
 SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
-       l.kind              AS kind,
+       l.type              AS type,
        a.width             AS image_width,
        a.height            AS image_height,
        a.original_filename AS image_original_filename,
@@ -342,7 +342,7 @@ LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.w
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.list_id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
   AND (lower(i.title) LIKE '%' || lower($3::text) || '%' ESCAPE '\'
-       OR (l.kind = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower($3::text) || '%' ESCAPE '\'))
+       OR (l.type = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower($3::text) || '%' ESCAPE '\'))
   AND ($4::text = '' OR CASE $5::text
        WHEN 'text' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
        WHEN 'link' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
@@ -404,7 +404,7 @@ type ListItemsRow struct {
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
 	TrashBatchID          uuid.NullUUID
-	Kind                  string
+	Type                  string
 	ImageWidth            *int32
 	ImageHeight           *int32
 	ImageOriginalFilename *string
@@ -455,7 +455,7 @@ func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListIte
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.TrashBatchID,
-			&i.Kind,
+			&i.Type,
 			&i.ImageWidth,
 			&i.ImageHeight,
 			&i.ImageOriginalFilename,

@@ -20,8 +20,8 @@ import (
 // Client is the provider surface used by lookup orchestration.
 type Client interface {
 	Enabled() bool
-	Search(ctx context.Context, kind, query, language string) ([]tmdb.Match, error)
-	Details(ctx context.Context, kind string, id int, language, country string) (tmdb.Details, error)
+	Search(ctx context.Context, typ, query, language string) ([]tmdb.Match, error)
+	Details(ctx context.Context, typ string, id int, language, country string) (tmdb.Details, error)
 	DownloadPoster(ctx context.Context, path string) ([]byte, error)
 }
 
@@ -63,11 +63,11 @@ type CreateOptions struct {
 
 // Create creates an item, enriching movie and TV items when requested.
 func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateInput, opts CreateOptions) (items.Item, error) {
-	kind, err := s.store.ListKind(ctx, listID)
+	typ, err := s.store.ListType(ctx, listID)
 	if err != nil {
 		return items.Item{}, err
 	}
-	if kind != "movie" && kind != "tv_show" {
+	if typ != "movie" && typ != "tv_show" {
 		return s.items.Create(ctx, listID, in)
 	}
 	if opts.Lookup != nil && !*opts.Lookup {
@@ -94,7 +94,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 	if err != nil {
 		return items.Item{}, err
 	}
-	candidate, err := s.resolve(ctx, kind, in.Title, opts.TMDBID, settings)
+	candidate, err := s.resolve(ctx, typ, in.Title, opts.TMDBID, settings)
 	if err != nil {
 		if explicit {
 			return items.Item{}, err
@@ -115,7 +115,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 		return s.items.Create(ctx, listID, in)
 	}
 	return s.store.Apply(ctx, ApplyParams{
-		Mode: ModeCreate, ListID: listID, Kind: kind, CreateInput: &in,
+		Mode: ModeCreate, ListID: listID, Type: typ, CreateInput: &in,
 		TMDBID: candidate.details.ID, Title: candidate.details.Title, OriginalTitle: in.Title,
 		Fields: candidate.details.Metadata, PosterPath: candidate.details.PosterPath, Poster: poster,
 		RefreshFields: true, RefreshPoster: true,
@@ -138,7 +138,7 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 	if it.Version != expectedVersion {
 		return items.Item{}, apperr.VersionConflict(it.Version)
 	}
-	if it.Kind != "movie" && it.Kind != "tv_show" {
+	if it.Type != "movie" && it.Type != "tv_show" {
 		return items.Item{}, apperr.Validation(apperr.FieldError{Field: "item", Message: "TMDB lookup is available only for movie and TV items"})
 	}
 	settings, err := s.settings.Get(ctx, s.workspaceID)
@@ -158,7 +158,7 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 			return items.Item{}, apperr.Validation(apperr.FieldError{Field: "tmdb_id", Message: "is required when the item has no previous TMDB match"})
 		}
 	}
-	candidate, err := s.resolve(ctx, it.Kind, it.Title, lookupID, settings)
+	candidate, err := s.resolve(ctx, it.Type, it.Title, lookupID, settings)
 	if err != nil {
 		return items.Item{}, err
 	}
@@ -179,7 +179,7 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 		}
 	}
 	return s.store.Apply(ctx, ApplyParams{
-		Mode: mode, ItemID: itemID, ExpectedVersion: expectedVersion, Kind: it.Kind,
+		Mode: mode, ItemID: itemID, ExpectedVersion: expectedVersion, Type: it.Type,
 		TMDBID: candidate.details.ID, Title: candidate.details.Title, OriginalTitle: it.Title,
 		Fields: candidate.details.Metadata, PosterPath: candidate.details.PosterPath, Poster: poster,
 		RefreshFields: true, RefreshPoster: refreshPoster,
@@ -207,7 +207,7 @@ func (s *Service) RefreshOwned(ctx context.Context, itemID uuid.UUID, expectedVe
 	if err != nil {
 		return err
 	}
-	candidate, err := s.resolve(ctx, record.Kind, it.Title, &record.TMDBID, settings)
+	candidate, err := s.resolve(ctx, record.Type, it.Title, &record.TMDBID, settings)
 	if err != nil {
 		return err
 	}
@@ -227,7 +227,7 @@ func (s *Service) RefreshOwned(ctx context.Context, itemID uuid.UUID, expectedVe
 		}
 	}
 	_, err = s.store.Apply(ctx, ApplyParams{
-		Mode: ModeOwned, ItemID: itemID, ExpectedVersion: expectedVersion, Kind: record.Kind,
+		Mode: ModeOwned, ItemID: itemID, ExpectedVersion: expectedVersion, Type: record.Type,
 		TMDBID: candidate.details.ID, Title: candidate.details.Title, OriginalTitle: record.OriginalTitle,
 		Fields: candidate.details.Metadata, PosterPath: candidate.details.PosterPath, Poster: poster,
 		RefreshFields: refreshFields, RefreshPoster: refreshPoster,
@@ -237,12 +237,12 @@ func (s *Service) RefreshOwned(ctx context.Context, itemID uuid.UUID, expectedVe
 
 type candidate struct{ details tmdb.Details }
 
-func (s *Service) resolve(ctx context.Context, kind, title string, selectedID *int, settings workspace.Settings) (*candidate, error) {
+func (s *Service) resolve(ctx context.Context, typ, title string, selectedID *int, settings workspace.Settings) (*candidate, error) {
 	id := 0
 	if selectedID != nil {
 		id = *selectedID
 	} else {
-		matches, err := s.client.Search(ctx, kind, title, settings.MetadataLanguage)
+		matches, err := s.client.Search(ctx, typ, title, settings.MetadataLanguage)
 		if err != nil {
 			return nil, providerError(err)
 		}
@@ -257,7 +257,7 @@ func (s *Service) resolve(ctx context.Context, kind, title string, selectedID *i
 	if id <= 0 {
 		return nil, apperr.Validation(apperr.FieldError{Field: "tmdb_id", Message: "must be greater than zero"})
 	}
-	details, err := s.client.Details(ctx, kind, id, settings.MetadataLanguage, settings.StreamingCountryCode)
+	details, err := s.client.Details(ctx, typ, id, settings.MetadataLanguage, settings.StreamingCountryCode)
 	if err != nil {
 		return nil, providerError(err)
 	}

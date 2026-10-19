@@ -90,11 +90,11 @@ func dirtyJPEG(base []byte, orientation uint16) []byte {
 
 func sha(b []byte) [sha256.Size]byte { return sha256.Sum256(b) }
 
-func pngChunk(kind string, data []byte) []byte {
+func pngChunk(typ string, data []byte) []byte {
 	out := binary.BigEndian.AppendUint32(nil, uint32(len(data)))
-	out = append(out, kind...)
+	out = append(out, typ...)
 	out = append(out, data...)
-	return binary.BigEndian.AppendUint32(out, crc32.ChecksumIEEE(append([]byte(kind), data...)))
+	return binary.BigEndian.AppendUint32(out, crc32.ChecksumIEEE(append([]byte(typ), data...)))
 }
 
 func patternPNG(t *testing.T) []byte {

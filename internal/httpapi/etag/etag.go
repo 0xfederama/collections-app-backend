@@ -13,7 +13,7 @@ const (
 	Item     = "i"
 	Content  = "c"
 	Settings = "s"
-	Kind     = "k"
+	Type     = "k"
 	Field    = "kf"
 )
 

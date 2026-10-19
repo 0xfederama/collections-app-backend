@@ -1,7 +1,7 @@
-// Package kinds validates and normalizes item metadata from kind definitions.
+// Package types validates and normalizes item metadata from type definitions.
 // It is pure Go: callers load the workspace-scoped definitions from the
 // database. Every key is optional and a null value means "key omitted".
-package kinds
+package types
 
 import (
 	"encoding/json"
@@ -18,7 +18,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 )
 
-// Kind names (also the `kind` enum of the spec).
+// Type names (also the `type` enum of the spec).
 const (
 	Generic    = "generic"
 	Movie      = "movie"
@@ -51,7 +51,7 @@ type outcome struct {
 // rule validates one value found at the dotted path "metadata.<key>".
 type rule func(path string, v any) outcome
 
-// Field is one persisted kind field definition, reduced to the values needed
+// Field is one persisted type field definition, reduced to the values needed
 // for metadata validation.
 type Field struct {
 	Key     string
@@ -59,13 +59,13 @@ type Field struct {
 	Special bool // locked built-in field with an established wire shape
 }
 
-// Known reports whether kind is one of the six built-in kinds. Definition
-// backed callers must not use it to decide whether a workspace kind exists.
-func Known(kind string) bool {
-	return slices.Contains([]string{Generic, Movie, TVShow, Motorcycle, Car, Camera}, kind)
+// Known reports whether type is one of the six built-in types. Definition
+// backed callers must not use it to decide whether a workspace type exists.
+func Known(typ string) bool {
+	return slices.Contains([]string{Generic, Movie, TVShow, Motorcycle, Car, Camera}, typ)
 }
 
-// Validate checks metadata against the supplied kind fields and returns the
+// Validate checks metadata against the supplied type fields and returns the
 // normalized map to store. Streaming and TMDB bookkeeping retain their
 // established validators by key; all other fields follow their stored type.
 // An undeclared key wins over field errors.
@@ -326,13 +326,13 @@ func platformList(path string, raw any) ([]string, []apperr.FieldError) {
 // primary field, the second the secondary.
 const maxPinned = 2
 
-// PriceKey is the item column that can be pinned next to a kind's metadata fields.
+// PriceKey is the item column that can be pinned next to a type's metadata fields.
 const PriceKey = "price"
 
-// priceKinds are the kinds whose items can carry a price (F009-B1): price lives
+// priceTypes are the types whose items can carry a price (F009-B1): price lives
 // only on motorcycle, car and camera items. Generic, movie and tv_show items
 // have none.
-var priceKinds = map[string]bool{Motorcycle: true, Car: true, Camera: true}
+var priceTypes = map[string]bool{Motorcycle: true, Car: true, Camera: true}
 
 var builtinPinnableKeys = map[string][]string{
 	Generic:    {},
@@ -343,19 +343,19 @@ var builtinPinnableKeys = map[string][]string{
 	Camera:     {"camera_type", "megapixels", "release_year", "sensor_format"},
 }
 
-// HasPrice reports whether items of this kind can carry a price (F009-B1).
-func HasPrice(kind string) bool { return priceKinds[kind] }
+// HasPrice reports whether items of this type can carry a price (F009-B1).
+func HasPrice(typ string) bool { return priceTypes[typ] }
 
-// PinnableKeys returns the field keys a list of this kind can pin, sorted: the
-// kind's metadata keys, plus "price" only on the kinds that have one. This is
+// PinnableKeys returns the field keys a list of this type can pin, sorted: the
+// type's metadata keys, plus "price" only on the types that have one. This is
 // retained temporarily for the pre-F014-B4 list APIs; item validation itself
 // is definition-backed.
-func PinnableKeys(kind string) []string {
-	fields, ok := builtinPinnableKeys[kind]
+func PinnableKeys(typ string) []string {
+	fields, ok := builtinPinnableKeys[typ]
 	if !ok {
 		return nil
 	}
-	if !HasPrice(kind) {
+	if !HasPrice(typ) {
 		return append([]string{}, fields...)
 	}
 	out := append([]string{}, fields...)
@@ -364,17 +364,17 @@ func PinnableKeys(kind string) []string {
 	return out
 }
 
-// ValidatePinned checks the pinned fields of a list of this kind (F009-B2): an
+// ValidatePinned checks the pinned fields of a list of this type (F009-B2): an
 // ordered list of at most 2 unique pinnable keys, the first the primary. Errors
-// are on "pinned_fields[i]". The result is never nil for an unknown kind (which
+// are on "pinned_fields[i]". The result is never nil for an unknown type (which
 // errors) but is the empty list for "pins nothing". A key that is not (or no
-// longer) a field of the kind is rejected: a list of a price-less kind cannot
+// longer) a field of the type is rejected: a list of a price-less type cannot
 // pin "price".
-func ValidatePinned(kind string, keys []string) ([]string, error) {
-	if !Known(kind) {
-		return nil, apperr.Validation(apperr.FieldError{Field: "kind", Message: "is not a known item kind"})
+func ValidatePinned(typ string, keys []string) ([]string, error) {
+	if !Known(typ) {
+		return nil, apperr.Validation(apperr.FieldError{Field: "type", Message: "is not a known item type"})
 	}
-	allowed := PinnableKeys(kind)
+	allowed := PinnableKeys(typ)
 	var errs []apperr.FieldError
 	if len(keys) > maxPinned {
 		errs = append(errs, apperr.FieldError{Field: "pinned_fields", Message: fmt.Sprintf("must have at most %d entries", maxPinned)})
@@ -384,7 +384,7 @@ func ValidatePinned(kind string, keys []string) ([]string, error) {
 		field := fmt.Sprintf("pinned_fields[%d]", i)
 		switch {
 		case len(allowed) == 0:
-			errs = append(errs, apperr.FieldError{Field: field, Message: "lists of this kind have no pinnable fields"})
+			errs = append(errs, apperr.FieldError{Field: field, Message: "lists of this type have no pinnable fields"})
 		case !slices.Contains(allowed, k):
 			errs = append(errs, apperr.FieldError{Field: field, Message: "must be one of " + strings.Join(allowed, ", ")})
 		case seen[k]:

@@ -21,14 +21,14 @@ type fakeClient struct {
 	details        tmdb.Details
 	err            error
 	downloads      int
-	searchKind     string
+	searchType     string
 	searchQuery    string
 	searchLanguage string
 }
 
 func (f *fakeClient) Enabled() bool { return f.enabled }
-func (f *fakeClient) Search(_ context.Context, kind, query, language string) ([]tmdb.Match, error) {
-	f.searchKind, f.searchQuery, f.searchLanguage = kind, query, language
+func (f *fakeClient) Search(_ context.Context, typ, query, language string) ([]tmdb.Match, error) {
+	f.searchType, f.searchQuery, f.searchLanguage = typ, query, language
 	return f.matches, f.err
 }
 func (f *fakeClient) Details(context.Context, string, int, string, string) (tmdb.Details, error) {
@@ -40,7 +40,7 @@ func (f *fakeClient) DownloadPoster(context.Context, string) ([]byte, error) {
 }
 
 type fakeStore struct {
-	kind    string
+	typ     string
 	record  Record
 	found   bool
 	applied *ApplyParams
@@ -48,7 +48,7 @@ type fakeStore struct {
 	err     error
 }
 
-func (f *fakeStore) ListKind(context.Context, uuid.UUID) (string, error) { return f.kind, f.err }
+func (f *fakeStore) ListType(context.Context, uuid.UUID) (string, error) { return f.typ, f.err }
 func (f *fakeStore) Read(context.Context, uuid.UUID) (Record, bool, error) {
 	return f.record, f.found, f.err
 }
@@ -103,7 +103,7 @@ func TestCreateDefaultLookupDegradesButExplicitLookupFails(t *testing.T) {
 		{name: "explicit upstream failure", lookup: boolPtr(true), client: &fakeClient{enabled: true, err: errors.New("down")}, wantCode: "upstream"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			store := &fakeStore{kind: "movie"}
+			store := &fakeStore{typ: "movie"}
 			itemSvc := &fakeItems{item: items.Item{Title: "Typed title"}}
 			_, err := newService(tc.client, store, itemSvc).Create(t.Context(), uuid.New(), items.CreateInput{Title: "Typed title"}, CreateOptions{Lookup: tc.lookup})
 			switch tc.wantCode {
@@ -127,7 +127,7 @@ func TestCreateDefaultLookupDegradesButExplicitLookupFails(t *testing.T) {
 }
 
 func TestCreateOptOutStoresLookupDisabled(t *testing.T) {
-	store := &fakeStore{kind: "tv_show"}
+	store := &fakeStore{typ: "tv_show"}
 	itemSvc := &fakeItems{}
 	_, err := newService(&fakeClient{enabled: true}, store, itemSvc).Create(t.Context(), uuid.New(), items.CreateInput{
 		Title: "Series", Metadata: map[string]any{"seasons": 2},
@@ -138,7 +138,7 @@ func TestCreateOptOutStoresLookupDisabled(t *testing.T) {
 }
 
 func TestCreateMetadataOptOutSuppressesDefaultLookup(t *testing.T) {
-	store := &fakeStore{kind: "movie"}
+	store := &fakeStore{typ: "movie"}
 	itemSvc := &fakeItems{}
 	client := &fakeClient{enabled: true, matches: []tmdb.Match{{ID: 7}}}
 	_, err := newService(client, store, itemSvc).Create(t.Context(), uuid.New(), items.CreateInput{
@@ -153,7 +153,7 @@ func TestCreateSelectedIDWithoutDetailsReturnsUpstreamUnavailable(t *testing.T) 
 	itemSvc := &fakeItems{}
 	client := &fakeClient{enabled: true}
 	selectedID := 7
-	_, err := newService(client, &fakeStore{kind: "movie"}, itemSvc).Create(t.Context(), uuid.New(), items.CreateInput{Title: "Movie"}, CreateOptions{TMDBID: &selectedID})
+	_, err := newService(client, &fakeStore{typ: "movie"}, itemSvc).Create(t.Context(), uuid.New(), items.CreateInput{Title: "Movie"}, CreateOptions{TMDBID: &selectedID})
 	var unavailable *apperr.UpstreamUnavailableError
 	if !errors.As(err, &unavailable) || itemSvc.created != nil {
 		t.Fatalf("err=%v created=%v", err, itemSvc.created)
@@ -164,15 +164,15 @@ func TestCreateUsesFirstLocalizedMatchAndAtomicApply(t *testing.T) {
 	client := &fakeClient{enabled: true, matches: []tmdb.Match{{ID: 7}}, details: tmdb.Details{
 		ID: 7, Title: "Titolo locale", Metadata: map[string]any{"release_year": 1999},
 	}}
-	store := &fakeStore{kind: "movie", result: items.Item{Title: "Titolo locale"}}
+	store := &fakeStore{typ: "movie", result: items.Item{Title: "Titolo locale"}}
 	itemSvc := &fakeItems{}
 	in := items.CreateInput{Title: " titolo cercato ", Metadata: map[string]any{"director": "User"}}
 	got, err := newService(client, store, itemSvc).Create(t.Context(), uuid.New(), in, CreateOptions{})
 	if err != nil || got.Title != "Titolo locale" || store.applied == nil {
 		t.Fatalf("got=%+v err=%v applied=%+v", got, err, store.applied)
 	}
-	if client.searchKind != "movie" || client.searchQuery != in.Title || client.searchLanguage != "it-IT" {
-		t.Fatalf("search = %q %q %q", client.searchKind, client.searchQuery, client.searchLanguage)
+	if client.searchType != "movie" || client.searchQuery != in.Title || client.searchLanguage != "it-IT" {
+		t.Fatalf("search = %q %q %q", client.searchType, client.searchQuery, client.searchLanguage)
 	}
 	p := store.applied
 	if p.Mode != ModeCreate || p.TMDBID != 7 || p.Title != "Titolo locale" || p.OriginalTitle != in.Title || p.CreateInput.Metadata["director"] != "User" {
@@ -182,7 +182,7 @@ func TestCreateUsesFirstLocalizedMatchAndAtomicApply(t *testing.T) {
 
 func TestApplyNoMatchRechecksVersion(t *testing.T) {
 	id := uuid.New()
-	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "Unknown", Kind: "movie", Version: 4}}
+	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "Unknown", Type: "movie", Version: 4}}
 	store := &fakeStore{}
 	got, err := newService(&fakeClient{enabled: true}, store, itemSvc).Apply(t.Context(), id, 4, ModeFill, nil)
 	if err != nil || got.Version != 4 || itemSvc.updateCalls != 1 || store.applied != nil {
@@ -202,7 +202,7 @@ func TestApplyRejectsUnsupportedModeBeforeLookup(t *testing.T) {
 func TestApplyPreservesExistingImageAndUsesStoredTMDBID(t *testing.T) {
 	id := uuid.New()
 	itemSvc := &fakeItems{item: items.Item{
-		ID: id, Title: "Movie", Kind: "movie", Version: 2,
+		ID: id, Title: "Movie", Type: "movie", Version: 2,
 		Image:    &items.Image{Source: items.ImageSourceURL, URL: "https://user.example/image.jpg"},
 		Metadata: json.RawMessage(`{"tmdb_id":42}`),
 	}}
@@ -215,7 +215,7 @@ func TestApplyPreservesExistingImageAndUsesStoredTMDBID(t *testing.T) {
 }
 
 func TestApplyRejectsStaleSnapshotBeforeNetwork(t *testing.T) {
-	itemSvc := &fakeItems{item: items.Item{Kind: "movie", Version: 8}}
+	itemSvc := &fakeItems{item: items.Item{Type: "movie", Version: 8}}
 	client := &fakeClient{enabled: true}
 	_, err := newService(client, &fakeStore{}, itemSvc).Apply(t.Context(), uuid.New(), 7, ModeFill, nil)
 	var stale *apperr.VersionConflictError

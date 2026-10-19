@@ -37,15 +37,15 @@ type definitionDB struct {
 
 func TestF014B3_CustomFieldLifecycle(t *testing.T) {
 	svc, _ := newDefinitionsService(t)
-	kind, err := svc.Create(t.Context(), definitions.CreateKind{Name: "Board game"})
+	typ, err := svc.Create(t.Context(), definitions.CreateType{Name: "Board game"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	rating, err := svc.CreateField(t.Context(), kind.Key, kind.Version, definitions.CreateField{Label: "Rating", Type: "number"})
+	rating, err := svc.CreateField(t.Context(), typ.Key, typ.Version, definitions.CreateField{Label: "Rating", Type: "number"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	age, err := svc.CreateField(t.Context(), kind.Key, kind.Version+1, definitions.CreateField{Label: "Player age", Type: "number"})
+	age, err := svc.CreateField(t.Context(), typ.Key, typ.Version+1, definitions.CreateField{Label: "Player age", Type: "number"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,8 +53,8 @@ func TestF014B3_CustomFieldLifecycle(t *testing.T) {
 		t.Fatalf("created positions = rating %d age %d", rating.Position, age.Position)
 	}
 
-	version, err := svc.ReorderFields(t.Context(), kind.Key, kind.Version+2, []string{age.Key, rating.Key})
-	if err != nil || version != kind.Version+3 {
+	version, err := svc.ReorderFields(t.Context(), typ.Key, typ.Version+2, []string{age.Key, rating.Key})
+	if err != nil || version != typ.Version+3 {
 		t.Fatalf("ReorderFields() = %d, %v", version, err)
 	}
 	fields, err := svc.List(t.Context())
@@ -63,7 +63,7 @@ func TestF014B3_CustomFieldLifecycle(t *testing.T) {
 	}
 	var got []string
 	for _, definition := range fields {
-		if definition.Key == kind.Key {
+		if definition.Key == typ.Key {
 			for _, field := range definition.Fields {
 				got = append(got, field.Key)
 			}
@@ -73,11 +73,11 @@ func TestF014B3_CustomFieldLifecycle(t *testing.T) {
 		t.Errorf("field order = %v", got)
 	}
 
-	renamed, err := svc.RenameField(t.Context(), kind.Key, age.Key, age.Version+1, "Minimum player age")
+	renamed, err := svc.RenameField(t.Context(), typ.Key, age.Key, age.Version+1, "Minimum player age")
 	if err != nil || renamed.Label != "Minimum player age" || renamed.Version != age.Version+2 {
 		t.Fatalf("RenameField() = %#v, %v", renamed, err)
 	}
-	if _, err := svc.RenameField(t.Context(), kind.Key, rating.Key, rating.Version, "Nope"); err == nil {
+	if _, err := svc.RenameField(t.Context(), typ.Key, rating.Key, rating.Version, "Nope"); err == nil {
 		t.Fatal("RenameField with stale ETag succeeded")
 	} else {
 		var conflict *apperr.VersionConflictError
@@ -87,40 +87,40 @@ func TestF014B3_CustomFieldLifecycle(t *testing.T) {
 	}
 }
 
-func TestF014B4_CustomKindDefaultsAllowAtMostTwoPins(t *testing.T) {
+func TestF014B4_CustomTypeDefaultsAllowAtMostTwoPins(t *testing.T) {
 	svc, _ := newDefinitionsService(t)
 	pins := []string{"rating", "status"}
 	sortField := "rating"
-	kind, err := svc.Create(t.Context(), definitions.CreateKind{
+	typ, err := svc.Create(t.Context(), definitions.CreateType{
 		Name: "Board game", DefaultSortField: &sortField, DefaultPinnedFields: &pins,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if kind.DefaultSortField == nil || *kind.DefaultSortField != "rating" || kind.DefaultPinnedFields == nil || !slices.Equal(*kind.DefaultPinnedFields, pins) {
-		t.Fatalf("kind defaults = %#v", kind)
+	if typ.DefaultSortField == nil || *typ.DefaultSortField != "rating" || typ.DefaultPinnedFields == nil || !slices.Equal(*typ.DefaultPinnedFields, pins) {
+		t.Fatalf("type defaults = %#v", typ)
 	}
 	tooMany := []string{"one", "two", "three"}
-	if _, err := svc.Create(t.Context(), definitions.CreateKind{Name: "Too many", DefaultPinnedFields: &tooMany}); err == nil {
+	if _, err := svc.Create(t.Context(), definitions.CreateType{Name: "Too many", DefaultPinnedFields: &tooMany}); err == nil {
 		t.Fatal("Create accepted more than two default pinned fields")
 	}
 }
 
-func TestF014B3_UpdateCustomKindDefaultsAfterFieldsExist(t *testing.T) {
+func TestF014B3_UpdateCustomTypeDefaultsAfterFieldsExist(t *testing.T) {
 	svc, _ := newDefinitionsService(t)
 	icon := "i:dices"
-	kind, err := svc.Create(t.Context(), definitions.CreateKind{Name: "Board game", DefaultIcon: &icon})
+	typ, err := svc.Create(t.Context(), definitions.CreateType{Name: "Board game", DefaultIcon: &icon})
 	if err != nil {
 		t.Fatal(err)
 	}
-	rating, err := svc.CreateField(t.Context(), kind.Key, kind.Version, definitions.CreateField{Label: "Rating", Type: "number"})
+	rating, err := svc.CreateField(t.Context(), typ.Key, typ.Version, definitions.CreateField{Label: "Rating", Type: "number"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	name := "Tabletop game"
 	allowsPrice := true
 	pins := []string{rating.Key, "price"}
-	updated, err := svc.Update(t.Context(), kind.Key, kind.Version+1, definitions.UpdateKind{
+	updated, err := svc.Update(t.Context(), typ.Key, typ.Version+1, definitions.UpdateType{
 		Name: &name, AllowsPrice: &allowsPrice,
 		DefaultSortField:    definitions.NullableString{Set: true, Value: &rating.Key},
 		DefaultPinnedFields: definitions.NullableStrings{Set: true, Value: &pins},
@@ -129,10 +129,10 @@ func TestF014B3_UpdateCustomKindDefaultsAfterFieldsExist(t *testing.T) {
 		t.Fatal(err)
 	}
 	if updated.Name != name || updated.DefaultIcon == nil || *updated.DefaultIcon != icon || !updated.AllowsPrice || updated.DefaultSortField == nil || *updated.DefaultSortField != rating.Key || updated.DefaultPinnedFields == nil || !slices.Equal(*updated.DefaultPinnedFields, pins) {
-		t.Fatalf("updated kind = %#v", updated)
+		t.Fatalf("updated type = %#v", updated)
 	}
 
-	cleared, err := svc.Update(t.Context(), kind.Key, updated.Version, definitions.UpdateKind{
+	cleared, err := svc.Update(t.Context(), typ.Key, updated.Version, definitions.UpdateType{
 		DefaultIcon:         definitions.NullableString{Set: true},
 		DefaultPinnedFields: definitions.NullableStrings{Set: true},
 	})
@@ -140,11 +140,11 @@ func TestF014B3_UpdateCustomKindDefaultsAfterFieldsExist(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cleared.DefaultIcon != nil || cleared.DefaultPinnedFields != nil || cleared.DefaultSortField == nil || *cleared.DefaultSortField != rating.Key {
-		t.Fatalf("cleared kind = %#v", cleared)
+		t.Fatalf("cleared type = %#v", cleared)
 	}
 
 	missing := "missing"
-	if _, err := svc.Update(t.Context(), kind.Key, cleared.Version, definitions.UpdateKind{DefaultSortField: definitions.NullableString{Set: true, Value: &missing}}); err == nil {
+	if _, err := svc.Update(t.Context(), typ.Key, cleared.Version, definitions.UpdateType{DefaultSortField: definitions.NullableString{Set: true, Value: &missing}}); err == nil {
 		t.Fatal("Update accepted a default sort field that does not exist")
 	} else {
 		var validation *apperr.ValidationError
@@ -153,24 +153,24 @@ func TestF014B3_UpdateCustomKindDefaultsAfterFieldsExist(t *testing.T) {
 		}
 	}
 
-	if _, err := svc.Update(t.Context(), "movie", 1, definitions.UpdateKind{Name: &name}); err == nil {
-		t.Fatal("Update allowed a locked built-in kind")
+	if _, err := svc.Update(t.Context(), "movie", 1, definitions.UpdateType{Name: &name}); err == nil {
+		t.Fatal("Update allowed a locked built-in type")
 	}
 }
 
 func TestF014B3_DeleteFieldPreviewsAndAtomicallyStripsValues(t *testing.T) {
 	svc, db := newDefinitionsService(t)
-	kind, err := svc.Create(t.Context(), definitions.CreateKind{Name: "Board game"})
+	typ, err := svc.Create(t.Context(), definitions.CreateType{Name: "Board game"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	field, err := svc.CreateField(t.Context(), kind.Key, kind.Version, definitions.CreateField{Label: "Rating", Type: "number"})
+	field, err := svc.CreateField(t.Context(), typ.Key, typ.Version, definitions.CreateField{Label: "Rating", Type: "number"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	listID := uuid.New()
-	if _, err := db.pool.Exec(t.Context(), `INSERT INTO lists (id, workspace_id, name, kind, sort_mode, pinned_fields, sort_order)
-VALUES ($1, $2, 'Games', $3, 'rating', '["rating"]', 0)`, listID, db.workspaceID, kind.Key); err != nil {
+	if _, err := db.pool.Exec(t.Context(), `INSERT INTO lists (id, workspace_id, name, type, sort_mode, pinned_fields, sort_order)
+VALUES ($1, $2, 'Games', $3, 'rating', '["rating"]', 0)`, listID, db.workspaceID, typ.Key); err != nil {
 		t.Fatal(err)
 	}
 	for i, metadata := range []string{`{"rating": 5, "notes": "keep"}`, `{"rating": 4}`} {
@@ -179,15 +179,15 @@ VALUES ($1, $2, $3, $4, $5::jsonb, $6)`, uuid.New(), db.workspaceID, listID, "Ga
 			t.Fatal(err)
 		}
 	}
-	if _, err := db.pool.Exec(t.Context(), `UPDATE kind_definitions SET default_sort_field = $1, default_pinned_fields = '["rating"]' WHERE workspace_id = $2 AND id = (SELECT id FROM kind_definitions WHERE workspace_id = $2 AND key = $3)`, field.Key, db.workspaceID, kind.Key); err != nil {
+	if _, err := db.pool.Exec(t.Context(), `UPDATE type_definitions SET default_sort_field = $1, default_pinned_fields = '["rating"]' WHERE workspace_id = $2 AND id = (SELECT id FROM type_definitions WHERE workspace_id = $2 AND key = $3)`, field.Key, db.workspaceID, typ.Key); err != nil {
 		t.Fatal(err)
 	}
 
-	count, err := svc.FieldDeletePreview(t.Context(), kind.Key, field.Key)
+	count, err := svc.FieldDeletePreview(t.Context(), typ.Key, field.Key)
 	if err != nil || count != 2 {
 		t.Fatalf("FieldDeletePreview() = %d, %v", count, err)
 	}
-	deleted, err := svc.DeleteField(t.Context(), kind.Key, field.Key, field.Version)
+	deleted, err := svc.DeleteField(t.Context(), typ.Key, field.Key, field.Version)
 	if err != nil || deleted != 2 {
 		t.Fatalf("DeleteField() = %d, %v", deleted, err)
 	}
@@ -200,7 +200,7 @@ VALUES ($1, $2, $3, $4, $5::jsonb, $6)`, uuid.New(), db.workspaceID, listID, "Ga
 	}
 	var listPins, listSort, defaultSort, defaultPins *string
 	if err := db.pool.QueryRow(t.Context(), `SELECT l.pinned_fields::text, l.sort_mode, k.default_sort_field, k.default_pinned_fields::text
-FROM lists l JOIN kind_definitions k ON k.workspace_id = l.workspace_id AND k.key = l.kind
+FROM lists l JOIN type_definitions k ON k.workspace_id = l.workspace_id AND k.key = l.type
 WHERE l.id = $1`, listID).Scan(&listPins, &listSort, &defaultSort, &defaultPins); err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ WHERE l.id = $1`, listID).Scan(&listPins, &listSort, &defaultSort, &defaultPins)
 	}
 }
 
-func TestF014_BuiltinKindsSeedDefaultPinnedFields(t *testing.T) {
+func TestF014_BuiltinTypesSeedDefaultPinnedFields(t *testing.T) {
 	svc, _ := newDefinitionsService(t)
 	want := map[string][]string{
 		"movie":      {"runtime_minutes", "streaming"},
@@ -219,12 +219,12 @@ func TestF014_BuiltinKindsSeedDefaultPinnedFields(t *testing.T) {
 		"camera":     {"camera_type", "price"},
 		"generic":    {},
 	}
-	kinds, err := svc.List(t.Context())
+	types, err := svc.List(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	seen := 0
-	for _, k := range kinds {
+	for _, k := range types {
 		pins, ok := want[k.Key]
 		if !ok || !k.Locked {
 			continue
@@ -243,11 +243,11 @@ func TestF014_BuiltinKindsSeedDefaultPinnedFields(t *testing.T) {
 		}
 		for _, pin := range *k.DefaultPinnedFields {
 			if !fields[pin] {
-				t.Errorf("%s pins %q, not a field of the kind", k.Key, pin)
+				t.Errorf("%s pins %q, not a field of the type", k.Key, pin)
 			}
 		}
 	}
 	if seen != len(want) {
-		t.Fatalf("found %d built-in kinds, want %d", seen, len(want))
+		t.Fatalf("found %d built-in types, want %d", seen, len(want))
 	}
 }

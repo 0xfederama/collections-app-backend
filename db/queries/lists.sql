@@ -27,12 +27,12 @@ WHERE workspace_id = @workspace_id AND deleted_at IS NULL
   AND folder_id IS NOT DISTINCT FROM sqlc.narg(folder_id)::uuid;
 
 -- name: InsertList :one
-INSERT INTO lists (workspace_id, folder_id, name, kind, description, display_mode, sort_mode, pinned_fields, icon, icon_color, sort_order, created_at, updated_at)
-VALUES (@workspace_id, sqlc.narg(folder_id), @name, @kind, sqlc.narg(description), @display_mode, @sort_mode, sqlc.narg(pinned_fields), sqlc.narg(icon), sqlc.narg(icon_color), @sort_order, @now, @now)
+INSERT INTO lists (workspace_id, folder_id, name, type, description, display_mode, sort_mode, pinned_fields, icon, icon_color, sort_order, created_at, updated_at)
+VALUES (@workspace_id, sqlc.narg(folder_id), @name, @type, sqlc.narg(description), @display_mode, @sort_mode, sqlc.narg(pinned_fields), sqlc.narg(icon), sqlc.narg(icon_color), @sort_order, @now, @now)
 RETURNING *;
 
 -- name: UpdateList :one
--- A full replacement of the editable fields (description is Markdown, up to 64 KiB, checked in the service; kind has UpdateListKind): the service merges the PATCH into the locked row first.
+-- A full replacement of the editable fields (description is Markdown, up to 64 KiB, checked in the service; type has UpdateListType): the service merges the PATCH into the locked row first.
 UPDATE lists
 SET name = @name, description = sqlc.narg(description), display_mode = @display_mode, sort_mode = @sort_mode,
     pinned_fields = sqlc.narg(pinned_fields), icon = sqlc.narg(icon), icon_color = sqlc.narg(icon_color),
@@ -40,10 +40,10 @@ SET name = @name, description = sqlc.narg(description), display_mode = @display_
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 RETURNING *;
 
--- name: UpdateListKind :one
--- The service clears the items' kind fields (ClearListItemsMetadata) in the same transaction. Pinned fields reset to the kind default.
+-- name: UpdateListType :one
+-- The service clears the items' type fields (ClearListItemsMetadata) in the same transaction. Pinned fields reset to the type default.
 UPDATE lists
-SET kind = @kind, pinned_fields = NULL, version = version + 1, updated_at = @now
+SET type = @type, pinned_fields = NULL, version = version + 1, updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 RETURNING *;
 

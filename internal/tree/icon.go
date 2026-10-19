@@ -33,7 +33,7 @@ var (
 	}
 )
 
-// isBuiltinIcon reports whether a stored or supplied icon is a built-in icon key (the only kind that takes a colour).
+// isBuiltinIcon reports whether a stored or supplied icon is a built-in icon key (the only type that takes a colour).
 func isBuiltinIcon(icon *string) bool {
 	return icon != nil && strings.HasPrefix(*icon, iconPrefix)
 }
@@ -47,7 +47,7 @@ func validIcon(icon string) bool {
 }
 
 // ValidIcon reports whether icon is a built-in icon key or one emoji. It is
-// shared by list icons and kind default icons.
+// shared by list icons and type default icons.
 func ValidIcon(icon string) bool { return validIcon(icon) }
 
 // iconErrors checks a supplied icon and icon_color against each other (the colour needs a built-in icon).

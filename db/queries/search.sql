@@ -5,7 +5,7 @@
 -- name: SearchItems :many
 -- @like_q is the escaped LIKE fragment (\, %, _ escaped in Go); @q is the raw text, used for the exact-match rank.
 SELECT i.*,
-       l.kind              AS kind,
+       l.type              AS type,
        a.width             AS image_width,
        a.height            AS image_height,
        a.original_filename AS image_original_filename,
@@ -30,9 +30,9 @@ WHERE workspace_id = @workspace_id AND deleted_at IS NULL;
 
 -- name: ListSearchLists :many
 -- Active lists, just enough to name the last path segment (with its icon) and find its folder.
-SELECT l.id, l.name, l.folder_id, l.icon, l.icon_color, kd.name AS kind_name
+SELECT l.id, l.name, l.folder_id, l.icon, l.icon_color, kd.name AS type_name
 FROM lists l
-JOIN kind_definitions kd ON kd.workspace_id = l.workspace_id AND kd.key = l.kind
+JOIN type_definitions kd ON kd.workspace_id = l.workspace_id AND kd.key = l.type
 WHERE l.workspace_id = @workspace_id AND l.deleted_at IS NULL;
 
 -- name: ListRecentItems :many
@@ -40,7 +40,7 @@ WHERE l.workspace_id = @workspace_id AND l.deleted_at IS NULL;
 -- check: an item in a trashed list or folder is trashed itself (batch cascade). Not paginated, so no
 -- index: at MVP scale the sort over active items is a few ms (EXPLAIN in the PR).
 SELECT i.*,
-       l.kind              AS kind,
+       l.type              AS type,
        a.width             AS image_width,
        a.height            AS image_height,
        a.original_filename AS image_original_filename,

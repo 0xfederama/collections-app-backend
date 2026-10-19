@@ -9,7 +9,7 @@ func pinnedOf(o obj) any { return o["pinned_fields"] }
 
 func TestF009B2_PinnedFieldsLifecycle(t *testing.T) {
 	e := newTreeEnv(t)
-	l := e.listOfKind("Films", nil, "movie")
+	l := e.listOfType("Films", nil, "movie")
 	lid := l["id"].(string)
 	if v, ok := l["pinned_fields"]; !ok || v != nil {
 		t.Fatalf("new list: pinned_fields = %v (present %v), want null", v, ok)
@@ -78,23 +78,23 @@ func TestF009B2_PinnedFieldsLifecycle(t *testing.T) {
 
 func TestF009B2_PinnedFieldsOnCreate(t *testing.T) {
 	e := newTreeEnv(t)
-	rec := e.call("POST", "/api/v1/lists", `{"name":"Bikes","kind":"motorcycle","pinned_fields":["model_year","price"]}`, "")
+	rec := e.call("POST", "/api/v1/lists", `{"name":"Bikes","type":"motorcycle","pinned_fields":["model_year","price"]}`, "")
 	wantStatus(t, rec, 201)
 	if got := decode(t, rec); !reflect.DeepEqual(pinnedOf(got), []any{"model_year", "price"}) {
 		t.Fatalf("created: %v", got)
 	}
-	rec = e.call("POST", "/api/v1/lists", `{"name":"Null","kind":"movie","pinned_fields":null}`, "")
+	rec = e.call("POST", "/api/v1/lists", `{"name":"Null","type":"movie","pinned_fields":null}`, "")
 	wantStatus(t, rec, 201)
 	if v, ok := decode(t, rec)["pinned_fields"]; !ok || v != nil {
 		t.Fatalf("null on create: %v", v)
 	}
 	// Invalid on create changes nothing.
-	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"X","kind":"generic","pinned_fields":["release_year"]}`, ""), 422, "validation_failed")
+	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"X","type":"generic","pinned_fields":["release_year"]}`, ""), 422, "validation_failed")
 }
 
 func TestF009B2_PinnedFieldsValidation(t *testing.T) {
 	e := newTreeEnv(t)
-	l := e.listOfKind("Films", nil, "movie")
+	l := e.listOfType("Films", nil, "movie")
 	lid := l["id"].(string)
 	tests := []struct {
 		name, body, field string
@@ -119,49 +119,49 @@ func TestF009B2_PinnedFieldsValidation(t *testing.T) {
 	}
 }
 
-func TestF009B2_ChangeKindResetsPinnedFields(t *testing.T) {
+func TestF009B2_ChangeTypeResetsPinnedFields(t *testing.T) {
 	e := newTreeEnv(t)
-	l := e.listOfKind("Films", nil, "movie")
+	l := e.listOfType("Films", nil, "movie")
 	lid := l["id"].(string)
 	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":["release_year","streaming"]}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
 	l = decode(t, rec)
 
-	// Same kind keeps it.
-	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"movie"}`, etagOf("l", l))
+	// Same type keeps it.
+	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"movie"}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
 	if got := decode(t, rec); got["pinned_fields"] == nil || got["version"] != l["version"] {
-		t.Fatalf("same kind: %v", got)
+		t.Fatalf("same type: %v", got)
 	}
 
-	// New kind alone, and with another field, resets it.
-	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"car","name":"Cars"}`, etagOf("l", l))
+	// New type alone, and with another field, resets it.
+	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"car","name":"Cars"}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
 	got := decode(t, rec)
-	if v, ok := got["pinned_fields"]; !ok || v != nil || got["kind"] != "car" || got["name"] != "Cars" {
-		t.Fatalf("after kind change: %v", got)
+	if v, ok := got["pinned_fields"]; !ok || v != nil || got["type"] != "car" || got["name"] != "Cars" {
+		t.Fatalf("after type change: %v", got)
 	}
 	if cur := e.fetch("lists", lid); cur["pinned_fields"] != nil {
 		t.Fatalf("stored value not reset: %v", cur)
 	}
 
-	// A kind change that also sets pinned fields validates them against the new kind.
-	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"camera","pinned_fields":["make"]}`, etagOf("l", got)), 422, "validation_failed")
-	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"kind":"camera","pinned_fields":["megapixels"]}`, etagOf("l", got))
+	// A type change that also sets pinned fields validates them against the new type.
+	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"camera","pinned_fields":["make"]}`, etagOf("l", got)), 422, "validation_failed")
+	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"camera","pinned_fields":["megapixels"]}`, etagOf("l", got))
 	wantStatus(t, rec, 200)
 	if g := decode(t, rec); !reflect.DeepEqual(pinnedOf(g), []any{"megapixels"}) {
-		t.Fatalf("kind change plus pinned: %v", g)
+		t.Fatalf("type change plus pinned: %v", g)
 	}
 }
 
-func TestF009B2_PinnedKeysPerKind(t *testing.T) {
+func TestF009B2_PinnedKeysPerType(t *testing.T) {
 	e := newTreeEnv(t)
-	// Every key a kind exposes can be pinned on a list of that kind; movie and tv_show have no "price" (F009B1).
+	// Every key a type exposes can be pinned on a list of that type; movie and tv_show have no "price" (F009B1).
 	keys := map[string]string{"movie": `["release_year","streaming"]`,
 		"tv_show":    `["first_air_year","seasons"]`,
 		"motorcycle": `["price","power_hp"]`}
-	for kind, k := range keys {
-		rec := e.call("POST", "/api/v1/lists", `{"name":"`+kind+`","kind":"`+kind+`","pinned_fields":`+k+`}`, "")
+	for typ, k := range keys {
+		rec := e.call("POST", "/api/v1/lists", `{"name":"`+typ+`","type":"`+typ+`","pinned_fields":`+k+`}`, "")
 		wantStatus(t, rec, 201)
 	}
 }

@@ -31,7 +31,7 @@ func TestF013B2_SuggestionsDisabledWithoutKey(t *testing.T) {
 	h := newRouter(t, httpapi.Deps{
 		DB: fakePinger{}, DataDir: t.TempDir(), Logger: quietLogger(), TMDB: tmdb.New(""),
 	})
-	rec := do(t, h, req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?kind=movie&q=Alien"})
+	rec := do(t, h, req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?type=movie&q=Alien"})
 	wantStatus(t, rec, http.StatusOK)
 	got := decode(t, rec)
 	if got["available"] != false || len(got["results"].([]any)) != 0 {
@@ -43,7 +43,7 @@ func TestF013B2_MockFixtureIsAvailableWithoutKeyOnlyForExactQuery(t *testing.T) 
 	client := tmdb.NewWithOptions("", tmdb.Options{MockFixture: true})
 	h := tmdbRouter(t, client)
 
-	fixture := do(t, h, req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?kind=movie&q=" + url.QueryEscape("[mock] movie name")})
+	fixture := do(t, h, req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?type=movie&q=" + url.QueryEscape("[mock] movie name")})
 	wantStatus(t, fixture, http.StatusOK)
 	got := decode(t, fixture)
 	results, ok := got["results"].([]any)
@@ -51,7 +51,7 @@ func TestF013B2_MockFixtureIsAvailableWithoutKeyOnlyForExactQuery(t *testing.T) 
 		t.Fatalf("fixture suggestions = %v", got)
 	}
 
-	other := do(t, h, req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?kind=movie&q=Alien"})
+	other := do(t, h, req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?type=movie&q=Alien"})
 	wantStatus(t, other, http.StatusOK)
 	got = decode(t, other)
 	if got["available"] != false || len(got["results"].([]any)) != 0 {
@@ -73,7 +73,7 @@ func TestF013B2_SuggestionsUseLanguageAndPreserveRanking(t *testing.T) {
 	client := tmdb.NewWithOptions("test-key", tmdb.Options{APIBaseURL: upstream.URL + "/3", ImageBaseURL: upstream.URL, HTTPClient: upstream.Client()})
 	h := tmdbRouter(t, client)
 
-	rec := do(t, h, req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?kind=movie&q=" + url.QueryEscape("odissea")})
+	rec := do(t, h, req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?type=movie&q=" + url.QueryEscape("odissea")})
 	wantStatus(t, rec, http.StatusOK)
 	var got struct {
 		Available bool `json:"available"`
@@ -105,7 +105,7 @@ func TestF013B2_SuggestionsSanitizeUpstreamFailure(t *testing.T) {
 	}))
 	t.Cleanup(upstream.Close)
 	client := tmdb.NewWithOptions("test-key", tmdb.Options{APIBaseURL: upstream.URL + "/3", ImageBaseURL: upstream.URL, HTTPClient: upstream.Client()})
-	rec := do(t, tmdbRouter(t, client), req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?kind=tv_show&q=slow"})
+	rec := do(t, tmdbRouter(t, client), req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?type=tv_show&q=slow"})
 	p := wantProblem(t, rec, http.StatusServiceUnavailable, "upstream_unavailable")
 	if body := rec.Body.String(); strings.Contains(body, "test-key") || strings.Contains(body, "diagnostic") || strings.Contains(p.Detail, "502") {
 		t.Fatalf("problem leaks upstream details: %s", body)
@@ -114,6 +114,6 @@ func TestF013B2_SuggestionsSanitizeUpstreamFailure(t *testing.T) {
 
 func TestF013B2_SuggestionsRejectWhitespaceQuery(t *testing.T) {
 	client := tmdb.NewWithOptions("test-key", tmdb.Options{APIBaseURL: "http://127.0.0.1", ImageBaseURL: "http://127.0.0.1"})
-	rec := do(t, tmdbRouter(t, client), req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?kind=movie&q=%20%20"})
+	rec := do(t, tmdbRouter(t, client), req{method: http.MethodGet, path: "/api/v1/tmdb/suggestions?type=movie&q=%20%20"})
 	wantProblem(t, rec, http.StatusBadRequest, "invalid_parameter")
 }

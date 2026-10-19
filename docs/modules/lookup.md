@@ -15,7 +15,7 @@ Defines the merge and provenance boundary for importing TMDB values into movie a
 ## Interfaces
 
 - `Mode`: `create`, `fill`, `rematch`, `refresh`, and automatic `owned` refresh
-- `Store.ListKind`, `Store.Read`, `Store.Apply`: list validation, provenance read, atomic item/image/provenance apply
+- `Store.ListType`, `Store.Read`, `Store.Apply`: list validation, provenance read, atomic item/image/provenance apply
 - `GET /api/v1/tmdb/suggestions`: search by `movie|tv_show` and query
 - `POST /api/v1/items/{id}/lookup`: explicit fill/rematch/refresh with item `If-Match`
 - Movie/TV item creation may request lookup; a missing server key defaults to creating the typed original item

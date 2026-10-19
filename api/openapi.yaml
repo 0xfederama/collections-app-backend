@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.10.0
+  version: 0.11.0
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -30,8 +30,8 @@ tags:
     description: Liveness and readiness probes (outside `/api/v1`).
   - name: settings
     description: Workspace name and settings (one resource, one ETag).
-  - name: kinds
-    description: Workspace kind and field definitions.
+  - name: types
+    description: Workspace type and field definitions.
   - name: tree
     description: The sidebar tree of active folders and lists.
   - name: folders
@@ -86,82 +86,82 @@ paths:
               schema: { type: string }
               examples:
                 database: { value: database unavailable }
-  /api/v1/kinds:
+  /api/v1/types:
     get:
-      tags: [kinds]
-      operationId: listKinds
-      summary: List kind definitions and fields
+      tags: [types]
+      operationId: listTypes
+      summary: List type definitions and fields
       responses:
         '200':
           description: Definitions
-          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/KindDefinition' } } } }
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TypeDefinition' } } } }
     post:
-      tags: [kinds]
-      operationId: createKind
-      summary: Create a custom kind
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateKindRequest' } } } }
+      tags: [types]
+      operationId: createType
+      summary: Create a custom type
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateTypeRequest' } } } }
       responses:
-        '201': { description: Created, headers: { ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' } }, content: { application/json: { schema: { $ref: '#/components/schemas/KindDefinition' } } } }
+        '201': { description: Created, headers: { ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' } }, content: { application/json: { schema: { $ref: '#/components/schemas/TypeDefinition' } } } }
         '400': { $ref: '#/components/responses/BadRequest' }
         '409': { $ref: '#/components/responses/FolderMoveConflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
-  /api/v1/kinds/{key}:
+  /api/v1/types/{key}:
     parameters: [{ name: key, in: path, required: true, schema: { type: string, pattern: '^[a-z][a-z0-9_]{0,31}$' } }]
     patch:
-      tags: [kinds]
-      operationId: updateKind
-      summary: Update a custom kind
+      tags: [types]
+      operationId: updateType
+      summary: Update a custom type
       parameters: [{ $ref: '#/components/parameters/IfMatch' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateKindRequest' } } } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateTypeRequest' } } } }
       responses:
-        '200': { description: Updated, headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/KindDefinition' } } } }
+        '200': { description: Updated, headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/TypeDefinition' } } } }
         '422': { $ref: '#/components/responses/ValidationFailed' }
     delete:
-      tags: [kinds]
-      operationId: deleteKind
-      summary: Delete a custom kind not used by any list
+      tags: [types]
+      operationId: deleteType
+      summary: Delete a custom type not used by any list
       parameters: [{ $ref: '#/components/parameters/IfMatch' }]
       responses: { '204': { description: Deleted }, '409': { $ref: '#/components/responses/FolderMoveConflict' } }
-  /api/v1/kinds/{key}/fields:
+  /api/v1/types/{key}/fields:
     parameters: [{ name: key, in: path, required: true, schema: { type: string, pattern: '^[a-z][a-z0-9_]{0,31}$' } }]
     post:
-      tags: [kinds]
-      operationId: createKindField
+      tags: [types]
+      operationId: createTypeField
       summary: Add a custom field
       parameters: [{ $ref: '#/components/parameters/IfMatch' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateKindFieldRequest' } } } }
-      responses: { '201': { description: Created, headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/KindField' } } } } }
-  /api/v1/kinds/{key}/fields/order:
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateTypeFieldRequest' } } } }
+      responses: { '201': { description: Created, headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/TypeField' } } } } }
+  /api/v1/types/{key}/fields/order:
     parameters: [{ name: key, in: path, required: true, schema: { type: string } }]
     put:
-      tags: [kinds]
-      operationId: reorderKindFields
+      tags: [types]
+      operationId: reorderTypeFields
       summary: Reorder custom fields
       parameters: [{ $ref: '#/components/parameters/IfMatch' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReorderKindFieldsRequest' } } } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReorderTypeFieldsRequest' } } } }
       responses: { '204': { description: Reordered, headers: { ETag: { $ref: '#/components/headers/ETag' } } } }
-  /api/v1/kinds/{key}/fields/{fieldKey}:
+  /api/v1/types/{key}/fields/{fieldKey}:
     parameters:
       - { name: key, in: path, required: true, schema: { type: string } }
       - { name: fieldKey, in: path, required: true, schema: { type: string } }
     patch:
-      tags: [kinds]
-      operationId: updateKindField
+      tags: [types]
+      operationId: updateTypeField
       summary: Rename a custom field
       parameters: [{ $ref: '#/components/parameters/IfMatch' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateKindFieldRequest' } } } }
-      responses: { '200': { description: Updated, headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/KindField' } } } } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateTypeFieldRequest' } } } }
+      responses: { '200': { description: Updated, headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/TypeField' } } } } }
     get:
-      tags: [kinds]
-      operationId: previewDeleteKindField
+      tags: [types]
+      operationId: previewDeleteTypeField
       summary: Count item values that deleting a custom field would remove
-      responses: { '200': { description: Deletion preview, content: { application/json: { schema: { $ref: '#/components/schemas/KindFieldDeletePreview' } } } } }
+      responses: { '200': { description: Deletion preview, content: { application/json: { schema: { $ref: '#/components/schemas/TypeFieldDeletePreview' } } } } }
     delete:
-      tags: [kinds]
-      operationId: deleteKindField
+      tags: [types]
+      operationId: deleteTypeField
       summary: Delete a custom field and strip populated values
       parameters: [{ $ref: '#/components/parameters/IfMatch' }]
-      responses: { '200': { description: Deleted, content: { application/json: { schema: { $ref: '#/components/schemas/KindFieldDeletePreview' } } } } }
+      responses: { '200': { description: Deleted, content: { application/json: { schema: { $ref: '#/components/schemas/TypeFieldDeletePreview' } } } } }
   /api/v1/settings:
     get:
       tags: [settings]
@@ -224,10 +224,10 @@ paths:
         `{ "available": false, "results": [] }`; this endpoint does not fail merely because lookup is disabled.
         Results retain TMDB's ranking. The returned poster URL is for suggestion display only and is not an item image.
       parameters:
-        - name: kind
+        - name: type
           in: query
           required: true
-          schema: { $ref: '#/components/schemas/TmdbKind' }
+          schema: { $ref: '#/components/schemas/TmdbType' }
         - name: q
           in: query
           required: true
@@ -429,9 +429,9 @@ paths:
       summary: Create a list
       description: |
         Appended to the end of its siblings. `folder_id` absent or `null` creates it at the root. A missing or trashed folder returns
-        `409 destination_unavailable`. `kind` is required: every item of the list has that kind. `description` is Markdown (up to 64 KiB).
-        `sort_mode` accepts a built-in mode or a field key defined by the list's kind. `price` is valid only for kinds that allow a price.
-        When omitted, the kind's default sort field is used if defined. `icon` and `icon_color` are optional (F012-B1).
+        `409 destination_unavailable`. `type` is required: every item of the list has that type. `description` is Markdown (up to 64 KiB).
+        `sort_mode` accepts a built-in mode or a field key defined by the list's type. `price` is valid only for types that allow a price.
+        When omitted, the type's default sort field is used if defined. `icon` and `icon_color` are optional (F012-B1).
       requestBody:
         required: true
         content:
@@ -441,7 +441,7 @@ paths:
               watchlist:
                 value:
                   name: Watchlist
-                  kind: movie
+                  type: movie
                   folder_id: 7c1e5a10-0000-4000-8000-000000000001
                   description: Films to watch
                   display_mode: thumbnail
@@ -515,13 +515,13 @@ paths:
       summary: Update a list
       description: |
         Requires `If-Match` (`"l-N"`). Send `description: null` to clear it. `description` is Markdown (up to 64 KiB) and has no version
-        history: it is edited with the list's `version`. `sort_mode` accepts a built-in mode or a field key defined by the list's kind;
-        `price` is valid only for kinds that allow a price.
+        history: it is edited with the list's `version`. `sort_mode` accepts a built-in mode or a field key defined by the list's type;
+        `price` is valid only for types that allow a price.
 
-        Changing `kind` on a list that has items **clears the `metadata` of all its items** (trashed ones too; their `version` is bumped),
-        because the kind fields differ per kind. A change **to a kind without a price** (`generic`, `movie`, `tv_show`) also clears the `price` of all its items (trashed ones too) and
-        turns a stored sort field unavailable on the new kind into the new kind's default sort field (or `manual` if it has none). Clients should warn first. A kind change also resets `pinned_fields` to `null` (unless
-        the same request sets it, which is then validated against the new kind). Send `pinned_fields: null` to reset it to the kind default;
+        Changing `type` on a list that has items **clears the `metadata` of all its items** (trashed ones too; their `version` is bumped),
+        because the type fields differ per type. A change **to a type without a price** (`generic`, `movie`, `tv_show`) also clears the `price` of all its items (trashed ones too) and
+        turns a stored sort field unavailable on the new type into the new type's default sort field (or `manual` if it has none). Clients should warn first. A type change also resets `pinned_fields` to `null` (unless
+        the same request sets it, which is then validated against the new type). Send `pinned_fields: null` to reset it to the type default;
         absent leaves it unchanged.
 
         `icon` and `icon_color` (F012-B1): send `icon: null` to reset the icon to the default. Changing the icon to an emoji or to `null`
@@ -535,7 +535,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateListRequest' }
             examples:
               viewMode: { value: { display_mode: grid, sort_mode: title } }
-              changeKind: { value: { kind: car } }
+              changeType: { value: { type: car } }
               pinFields: { value: { pinned_fields: [release_year, runtime_minutes] } }
               resetPinnedFields: { value: { pinned_fields: null } }
       responses:
@@ -615,15 +615,15 @@ paths:
       summary: List the items of a list
       description: |
         Sorted by `sort` (default: the list's `sort_mode`), tie-break `id`. `q` filters by title and, on movie lists, director.
-        `sort` accepts `manual`, `title`, `updated`, `price`, or a field key from the list kind. Field values sort by their definition type:
+        `sort` accepts `manual`, `title`, `updated`, `price`, or a field key from the list type. Field values sort by their definition type:
         number numerically, date chronologically, text/link case-insensitively, boolean false first; missing or empty values last.
-        `price` sorts by `price.min` ascending, items without a price last (no currency conversion), and is available only when the kind allows price.
+        `price` sorts by `price.min` ascending, items without a price last (no currency conversion), and is available only when the type allows price.
         A field filter uses `filter_field` with `filter_value` for text/link substring or boolean equality, and `filter_min`/`filter_max`
         for inclusive number/date ranges. Field filtering combines with `q`.
       parameters:
         - name: sort
           in: query
-          description: Defaults to the list's `sort_mode`; may be a field key of the list kind.
+          description: Defaults to the list's `sort_mode`; may be a field key of the list type.
           schema: { type: string, minLength: 1, maxLength: 32 }
         - name: q
           in: query
@@ -631,7 +631,7 @@ paths:
           schema: { type: string, minLength: 1, maxLength: 200 }
         - name: filter_field
           in: query
-          description: Kind field key to filter. Requires value or range parameters matching the field type.
+          description: Type field key to filter. Requires value or range parameters matching the field type.
           schema: { type: string, minLength: 1, maxLength: 32 }
         - name: filter_value
           in: query
@@ -663,12 +663,12 @@ paths:
       operationId: createItem
       summary: Create an item
       description: |
-        Appended to the end of the list. The item's `kind` is the list's kind (read-only, not accepted in the body). Image and Markdown
-        content are set through their own endpoints after creation. `metadata` is validated against the list's kind (see the `*Metadata` schemas).
-        `price` is either `{amount, currency}` (single price) or `{min, max, currency}` (range). A `price` on an item of a kind without a price
+        Appended to the end of the list. The item's `type` is the list's type (read-only, not accepted in the body). Image and Markdown
+        content are set through their own endpoints after creation. `metadata` is validated against the list's type (see the `*Metadata` schemas).
+        `price` is either `{amount, currency}` (single price) or `{min, max, currency}` (range). A `price` on an item of a type without a price
         (`generic`, `movie` or `tv_show`; F009-B1) is rejected with `422 validation_failed` on `price` (`null` is fine).
         For movie and TV lists, `lookup` defaults to `true`: the server searches by title and applies the first result. Send `tmdb_id` to
-        select a known suggestion. Send `lookup: false` to create the item exactly as supplied. Lookup fields are ignored on other kinds.
+        select a known suggestion. Send `lookup: false` to create the item exactly as supplied. Lookup fields are ignored on other types.
         If automatic lookup finds no match, the item is still created unchanged. If lookup was explicitly requested but unavailable, the
         request returns `503 lookup_disabled` or `503 upstream_unavailable` and no item is created.
       requestBody:
@@ -757,8 +757,8 @@ paths:
       operationId: updateItem
       summary: Update an item
       description: |
-        Requires `If-Match` (`"i-N"`). Any of `title, price, website, metadata`; send `null` to clear a nullable field. A non-null `price` on an item of a kind without a price (`generic`, `movie`, `tv_show`; F009-B1) is rejected with `422 validation_failed`. `metadata` is
-        validated against the list's kind and replaces the stored one. The kind cannot be changed here (it belongs to the list).
+        Requires `If-Match` (`"i-N"`). Any of `title, price, website, metadata`; send `null` to clear a nullable field. A non-null `price` on an item of a type without a price (`generic`, `movie`, `tv_show`; F009-B1) is rejected with `422 validation_failed`. `metadata` is
+        validated against the list's type and replaces the stored one. The type cannot be changed here (it belongs to the list).
         Image changes go through the image endpoints.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
@@ -860,7 +860,7 @@ paths:
       summary: Move an item to another list
       description: |
         Requires `If-Match` (`"i-N"`). Appended to the end of the destination list. A missing or trashed list returns
-        `409 destination_unavailable`. A destination list of another kind returns `409 kind_mismatch`.
+        `409 destination_unavailable`. A destination list of another type returns `409 type_mismatch`.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -1370,7 +1370,7 @@ components:
                 detail: The destination folder or list does not exist or is in the trash.
                 code: destination_unavailable
     ItemMoveConflict:
-      description: The destination list is missing or trashed, or has another kind than the item's list
+      description: The destination list is missing or trashed, or has another type than the item's list
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
@@ -1382,13 +1382,13 @@ components:
                 status: 409
                 detail: The destination folder or list does not exist or is in the trash.
                 code: destination_unavailable
-            kind_mismatch:
+            type_mismatch:
               value:
-                type: https://collection-app.invalid/problems/kind-mismatch
-                title: Kind mismatch
+                type: https://collection-app.invalid/problems/type-mismatch
+                title: Type mismatch
                 status: 409
-                detail: The destination list has a different kind than the item.
-                code: kind_mismatch
+                detail: The destination list has a different type than the item.
+                code: type_mismatch
     OrderStale:
       description: '`ids` is not exactly the current set of active siblings'
       content:
@@ -1559,7 +1559,7 @@ components:
         id: 7c1e5a10-0000-4000-8000-000000000011
         folder_id: 7c1e5a10-0000-4000-8000-000000000002
         name: Watchlist
-        kind: movie
+        type: movie
         description: Films to watch
         display_mode: thumbnail
         sort_mode: manual
@@ -1576,7 +1576,7 @@ components:
         id: 7c1e5a10-0000-4000-8000-000000000011
         folder_id: 7c1e5a10-0000-4000-8000-000000000002
         name: Watchlist
-        kind: movie
+        type: movie
         description: Films to watch
         display_mode: thumbnail
         sort_mode: manual
@@ -1619,7 +1619,7 @@ components:
           - id: 7c1e5a10-0000-4000-8000-000000000011
             folder_id: 7c1e5a10-0000-4000-8000-000000000002
             name: Watchlist
-            kind: movie
+            type: movie
             description: Films to watch
             display_mode: thumbnail
             sort_mode: manual
@@ -1634,7 +1634,7 @@ components:
           - id: 7c1e5a10-0000-4000-8000-000000000012
             folder_id: 7c1e5a10-0000-4000-8000-000000000003
             name: Motorbikes
-            kind: motorcycle
+            type: motorcycle
             description: null
             display_mode: grid
             sort_mode: title
@@ -1651,7 +1651,7 @@ components:
         id: 7c1e5a10-0000-4000-8000-000000000101
         list_id: 7c1e5a10-0000-4000-8000-000000000011
         title: The Matrix
-        kind: movie
+        type: movie
         image:
           source: upload
           attachment_id: 7c1e5a10-0000-4000-8000-000000000201
@@ -1677,7 +1677,7 @@ components:
         id: 7c1e5a10-0000-4000-8000-000000000101
         list_id: 7c1e5a10-0000-4000-8000-000000000011
         title: The Matrix
-        kind: movie
+        type: movie
         image: null
         price: null
         website: null
@@ -1700,7 +1700,7 @@ components:
         id: 7c1e5a10-0000-4000-8000-000000000102
         list_id: 7c1e5a10-0000-4000-8000-000000000012
         title: Ducati Monster
-        kind: motorcycle
+        type: motorcycle
         image: { source: url, url: 'https://example.org/images/monster.jpg' }
         price: { min: '12000.00', max: '13500.00', currency: EUR }
         website: https://www.ducati.com/
@@ -1720,7 +1720,7 @@ components:
           - id: 7c1e5a10-0000-4000-8000-000000000101
             list_id: 7c1e5a10-0000-4000-8000-000000000011
             title: The Matrix
-            kind: movie
+            type: movie
             image:
               url: /api/v1/attachments/7c1e5a10-0000-4000-8000-000000000201/file
               thumbnail_url: /api/v1/attachments/7c1e5a10-0000-4000-8000-000000000201/thumbnail
@@ -1738,7 +1738,7 @@ components:
           - id: 7c1e5a10-0000-4000-8000-000000000103
             list_id: 7c1e5a10-0000-4000-8000-000000000011
             title: Blade Runner 2049
-            kind: movie
+            type: movie
             image: { url: 'https://example.org/images/br2049.jpg' }
             price: null
             website: null
@@ -1756,7 +1756,7 @@ components:
               id: 7c1e5a10-0000-4000-8000-000000000101
               list_id: 7c1e5a10-0000-4000-8000-000000000011
               title: The Matrix
-              kind: movie
+              type: movie
               image: null
               price: null
               website: null
@@ -1769,7 +1769,7 @@ components:
               version: 3
               created_at: '2026-10-14T09:31:00Z'
               updated_at: '2026-10-14T10:00:00Z'
-            kind_name: Movie
+            type_name: Movie
             path:
               - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000001, name: Media, icon: null, icon_color: null }
               - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000002, name: Movies, icon: null, icon_color: null }
@@ -1781,7 +1781,7 @@ components:
               id: 7c1e5a10-0000-4000-8000-000000000101
               list_id: 7c1e5a10-0000-4000-8000-000000000011
               title: The Matrix
-              kind: movie
+              type: movie
               image: null
               price: null
               website: null
@@ -1794,7 +1794,7 @@ components:
               version: 3
               created_at: '2026-10-14T09:31:00Z'
               updated_at: '2026-10-14T10:00:00Z'
-            kind_name: Movie
+            type_name: Movie
             path:
               - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000001, name: Media, icon: null, icon_color: null }
               - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000002, name: Movies, icon: null, icon_color: null }
@@ -1862,7 +1862,7 @@ components:
             - cycle_detected
             - parent_in_trash
             - destination_unavailable
-            - kind_mismatch
+            - type_mismatch
             - order_stale
             - version_conflict
             - payload_too_large
@@ -1996,7 +1996,7 @@ components:
       type: string
       format: binary
     # ---- Settings, tree ----
-    KindField:
+    TypeField:
       type: object
       required: [key, label, type, position, is_locked, version]
       properties:
@@ -2006,7 +2006,7 @@ components:
         position: { type: integer, minimum: 0 }
         is_locked: { type: boolean }
         version: { type: integer }
-    KindDefinition:
+    TypeDefinition:
       type: object
       required: [key, name, allows_price, is_locked, version, fields]
       properties:
@@ -2018,8 +2018,8 @@ components:
         default_pinned_fields: { type: array, nullable: true, items: { type: string, maxLength: 32 }, maxItems: 2 }
         is_locked: { type: boolean }
         version: { type: integer }
-        fields: { type: array, items: { $ref: '#/components/schemas/KindField' } }
-    CreateKindRequest:
+        fields: { type: array, items: { $ref: '#/components/schemas/TypeField' } }
+    CreateTypeRequest:
       type: object
       required: [name]
       additionalProperties: false
@@ -2029,7 +2029,7 @@ components:
         allows_price: { type: boolean }
         default_sort_field: { type: string, nullable: true, maxLength: 32 }
         default_pinned_fields: { type: array, nullable: true, items: { type: string, maxLength: 32 }, maxItems: 2 }
-    UpdateKindRequest:
+    UpdateTypeRequest:
       type: object
       additionalProperties: false
       properties:
@@ -2038,24 +2038,24 @@ components:
         allows_price: { type: boolean }
         default_sort_field: { type: string, nullable: true, maxLength: 32 }
         default_pinned_fields: { type: array, nullable: true, items: { type: string, maxLength: 32 }, maxItems: 2 }
-    CreateKindFieldRequest:
+    CreateTypeFieldRequest:
       type: object
       required: [label, type]
       additionalProperties: false
       properties:
         label: { type: string, minLength: 1, maxLength: 100 }
         type: { type: string, enum: [text, number, date, boolean, link] }
-    UpdateKindFieldRequest:
+    UpdateTypeFieldRequest:
       type: object
       required: [label]
       additionalProperties: false
       properties: { label: { type: string, minLength: 1, maxLength: 100 } }
-    ReorderKindFieldsRequest:
+    ReorderTypeFieldsRequest:
       type: object
       required: [keys]
       additionalProperties: false
       properties: { keys: { type: array, items: { type: string }, uniqueItems: true } }
-    KindFieldDeletePreview:
+    TypeFieldDeletePreview:
       type: object
       required: [populated_item_count]
       properties:
@@ -2142,7 +2142,7 @@ components:
     SortMode:
       type: string
       description: |
-        One of `manual`, `title`, `updated`, `price`, or a field key from the list kind. The manual order is kept when the mode changes.
+        One of `manual`, `title`, `updated`, `price`, or a field key from the list type. The manual order is kept when the mode changes.
     PinnedFields:
       type: array
       nullable: true
@@ -2150,9 +2150,9 @@ components:
       items: { type: string, maxLength: 32 }
       description: |
         The fields a list shows in its rows, in order: the first is the primary field, the second the secondary (F009-B2; replaces the
-        `{under, right}` slots of F-002). `null` means the kind default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
-        Any field defined for the kind can be pinned; `price` is also available when the kind allows it. At most 2 unique keys
-        (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `kind` resets it to `null`.
+        `{under, right}` slots of F-002). `null` means the type default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
+        Any field defined for the type can be pinned; `price` is also available when the type allows it. At most 2 unique keys
+        (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `type` resets it to `null`.
       example: [release_year, runtime_minutes]
     ListIcon:
       type: string
@@ -2172,12 +2172,12 @@ components:
         is a built-in icon: `422 validation_failed` on `icon_color` otherwise. It is cleared when the icon changes to an emoji or to `null`.
     List:
       type: object
-      required: [id, folder_id, name, kind, description, display_mode, sort_mode, pinned_fields, icon, icon_color, sort_order, item_count, version, created_at, updated_at]
+      required: [id, folder_id, name, type, description, display_mode, sort_mode, pinned_fields, icon, icon_color, sort_order, item_count, version, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         folder_id: { type: string, format: uuid, nullable: true }
         name: { type: string, minLength: 1, maxLength: 200 }
-        kind: { $ref: '#/components/schemas/ItemKind' }
+        type: { $ref: '#/components/schemas/ItemType' }
         description: { type: string, nullable: true, maxLength: 65536, description: 'Markdown, up to 64 KiB (UTF-8 bytes).' }
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
         sort_mode: { $ref: '#/components/schemas/SortMode' }
@@ -2196,10 +2196,10 @@ components:
     CreateListRequest:
       type: object
       additionalProperties: false
-      required: [name, kind]
+      required: [name, type]
       properties:
         name: { type: string, minLength: 1, maxLength: 200 }
-        kind: { $ref: '#/components/schemas/ItemKind' }
+        type: { $ref: '#/components/schemas/ItemType' }
         folder_id: { type: string, format: uuid, nullable: true }
         description: { type: string, nullable: true, maxLength: 65536, description: 'Markdown, up to 64 KiB (UTF-8 bytes).' }
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
@@ -2212,7 +2212,7 @@ components:
       additionalProperties: false
       properties:
         name: { type: string, minLength: 1, maxLength: 200 }
-        kind: { $ref: '#/components/schemas/ItemKind' }
+        type: { $ref: '#/components/schemas/ItemType' }
         description: { type: string, nullable: true, maxLength: 65536, description: 'Markdown, up to 64 KiB (UTF-8 bytes).' }
         display_mode: { $ref: '#/components/schemas/DisplayMode' }
         sort_mode: { $ref: '#/components/schemas/SortMode' }
@@ -2236,14 +2236,14 @@ components:
           maxItems: 10000
           items: { type: string, format: uuid }
     # ---- Items ----
-    ItemKind:
+    ItemType:
       type: string
       description: |
-        The kind of a list. Items have no kind of their own: theirs is read-only and derived from their list. Changing the kind of a
+        The type of a list. Items have no type of their own: theirs is read-only and derived from their list. Changing the type of a
         list that has items clears the `metadata` of all its items.
     ItemBase:
       type: object
-      description: Fields shared by every item kind. `kind` (read-only, derived from the list) and `metadata` are added by the per-kind schemas.
+      description: Fields shared by every item type. `type` (read-only, derived from the list) and `metadata` are added by the per-type schemas.
       required: [id, list_id, title, image, price, website, content_version, sort_order, version, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
@@ -2265,76 +2265,76 @@ components:
       allOf:
         - $ref: '#/components/schemas/ItemBase'
         - type: object
-          required: [kind, metadata]
+          required: [type, metadata]
           properties:
-            kind: { type: string, enum: [generic], readOnly: true }
+            type: { type: string, enum: [generic], readOnly: true }
             metadata: { $ref: '#/components/schemas/GenericMetadata' }
     MovieItem:
       allOf:
         - $ref: '#/components/schemas/ItemBase'
         - type: object
-          required: [kind, metadata]
+          required: [type, metadata]
           properties:
-            kind: { type: string, enum: [movie], readOnly: true }
+            type: { type: string, enum: [movie], readOnly: true }
             metadata: { $ref: '#/components/schemas/MovieMetadata' }
     TvShowItem:
       allOf:
         - $ref: '#/components/schemas/ItemBase'
         - type: object
-          required: [kind, metadata]
+          required: [type, metadata]
           properties:
-            kind: { type: string, enum: [tv_show], readOnly: true }
+            type: { type: string, enum: [tv_show], readOnly: true }
             metadata: { $ref: '#/components/schemas/TvShowMetadata' }
     MotorcycleItem:
       allOf:
         - $ref: '#/components/schemas/ItemBase'
         - type: object
-          required: [kind, metadata]
+          required: [type, metadata]
           properties:
-            kind: { type: string, enum: [motorcycle], readOnly: true }
+            type: { type: string, enum: [motorcycle], readOnly: true }
             metadata: { $ref: '#/components/schemas/MotorcycleMetadata' }
     CarItem:
       allOf:
         - $ref: '#/components/schemas/ItemBase'
         - type: object
-          required: [kind, metadata]
+          required: [type, metadata]
           properties:
-            kind: { type: string, enum: [car], readOnly: true }
+            type: { type: string, enum: [car], readOnly: true }
             metadata: { $ref: '#/components/schemas/CarMetadata' }
     CameraItem:
       allOf:
         - $ref: '#/components/schemas/ItemBase'
         - type: object
-          required: [kind, metadata]
+          required: [type, metadata]
           properties:
-            kind: { type: string, enum: [camera], readOnly: true }
+            type: { type: string, enum: [camera], readOnly: true }
             metadata: { $ref: '#/components/schemas/CameraMetadata' }
     Item:
-      description: An item. `kind` is read-only and derived from the item's list; `metadata` is validated against that workspace kind's field definitions.
+      description: An item. `type` is read-only and derived from the item's list; `metadata` is validated against that workspace type's field definitions.
       allOf:
         - $ref: '#/components/schemas/ItemBase'
         - type: object
-          required: [kind, metadata]
+          required: [type, metadata]
           properties:
-            kind: { type: string, readOnly: true }
+            type: { type: string, readOnly: true }
             metadata:
               type: object
               additionalProperties: true
     ItemSummary:
       type: object
-      description: "An item row in lists, search and recent items: the same `metadata` object as the full item (`{}` when the kind has none), and the image is reduced."
-      required: [id, list_id, title, kind, image, price, website, metadata, content_version, sort_order, version, created_at, updated_at]
+      description: "An item row in lists, search and recent items: the same `metadata` object as the full item (`{}` when the type has none), and the image is reduced."
+      required: [id, list_id, title, type, image, price, website, metadata, content_version, sort_order, version, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         list_id: { type: string, format: uuid }
         title: { type: string }
-        kind: { $ref: '#/components/schemas/ItemKind' }
+        type: { $ref: '#/components/schemas/ItemType' }
         image: { $ref: '#/components/schemas/ImageSummary' }
         price: { $ref: '#/components/schemas/Price' }
         website: { type: string, nullable: true }
         metadata:
           type: object
-          description: 'Same object as `metadata` on the full item; its shape depends on `kind` (see the `*Metadata` schemas).'
+          description: 'Same object as `metadata` on the full item; its shape depends on `type` (see the `*Metadata` schemas).'
           additionalProperties: true
         content_version: { type: integer }
         sort_order: { type: integer }
@@ -2351,10 +2351,10 @@ components:
         page: { $ref: '#/components/schemas/Page' }
     SearchResult:
       type: object
-      required: [item, path, kind_name]
+      required: [item, path, type_name]
       properties:
         item: { $ref: '#/components/schemas/ItemSummary' }
-        kind_name: { type: string, description: The display name from this workspace's kind definition. }
+        type_name: { type: string, description: The display name from this workspace's type definition. }
         path:
           type: array
           items: { $ref: '#/components/schemas/SearchPathSegment' }
@@ -2382,7 +2382,7 @@ components:
         lookup:
           type: boolean
           default: true
-          description: For movie and TV lists, run TMDB lookup during creation. Ignored on other kinds.
+          description: For movie and TV lists, run TMDB lookup during creation. Ignored on other types.
         tmdb_id:
           type: integer
           minimum: 1
@@ -2391,7 +2391,7 @@ components:
         website: { type: string, nullable: true, maxLength: 2048 }
         metadata:
           type: object
-          description: 'Free-form here because its shape depends on the list''s kind. Validated against that kind: see the `*Metadata` schemas.'
+          description: 'Free-form here because its shape depends on the list''s type. Validated against that type: see the `*Metadata` schemas.'
           additionalProperties: true
     UpdateItemRequest:
       type: object
@@ -2402,7 +2402,7 @@ components:
         website: { type: string, nullable: true, maxLength: 2048 }
         metadata:
           type: object
-          description: 'Free-form here because its shape depends on the list''s kind. Validated against that kind: see the `*Metadata` schemas.'
+          description: 'Free-form here because its shape depends on the list''s type. Validated against that type: see the `*Metadata` schemas.'
           additionalProperties: true
     MoveItemRequest:
       type: object
@@ -2431,7 +2431,7 @@ components:
           type: integer
           minimum: 1
           description: Selects a known TMDB match. Without it, fill/rematch searches by title and refresh uses stored metadata.tmdb_id.
-    TmdbKind:
+    TmdbType:
       type: string
       enum: [movie, tv_show]
     TmdbSuggestion:
@@ -2452,7 +2452,7 @@ components:
         results:
           type: array
           items: { $ref: '#/components/schemas/TmdbSuggestion' }
-    # ---- Kind metadata (F-007: trimmed to the kept fields; sort key marked). All keys optional; text is trimmed, max 100 chars unless noted. ----
+    # ---- Type metadata (F-007: trimmed to the kept fields; sort key marked). All keys optional; text is trimmed, max 100 chars unless noted. ----
     Streaming:
       type: object
       additionalProperties: false

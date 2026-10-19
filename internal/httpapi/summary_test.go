@@ -7,8 +7,8 @@ import (
 
 func TestF002B5_SummaryCarriesMetadata(t *testing.T) {
 	e := newRecentEnv(t)
-	movies := e.listOfKind("Movies", nil, "movie")
-	generic := e.listOfKind("Misc", nil, "generic")
+	movies := e.listOfType("Movies", nil, "movie")
+	generic := e.listOfType("Misc", nil, "generic")
 	mid, gid := movies["id"].(string), generic["id"].(string)
 
 	e.newItem(mid, `{"title":"Matrix","metadata":{"release_year":1999,"runtime_minutes":136,"streaming":{"country":"IT","platforms":["Netflix","Prime Video"],"paid_platforms":["Prime Video"]}}}`)

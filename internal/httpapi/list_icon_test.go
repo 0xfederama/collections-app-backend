@@ -18,15 +18,15 @@ func TestF012_ListIconCreate(t *testing.T) {
 	tests := []struct {
 		name, body, wantIcon, wantColor string
 	}{
-		{"no icon", `{"name":"A","kind":"generic"}`, "", ""},
-		{"null icon", `{"name":"A","kind":"generic","icon":null,"icon_color":null}`, "", ""},
-		{"emoji", `{"name":"A","kind":"movie","icon":"🎬"}`, "🎬", ""},
-		{"emoji sequence", `{"name":"A","kind":"generic","icon":"👨‍👩‍👧"}`, "👨‍👩‍👧", ""},
-		{"keycap", `{"name":"A","kind":"generic","icon":"1️⃣"}`, "1️⃣", ""},
-		{"flag", `{"name":"A","kind":"generic","icon":"🇮🇹"}`, "🇮🇹", ""},
-		{"built-in without colour", `{"name":"A","kind":"movie","icon":"i:film"}`, "i:film", ""},
-		{"built-in with colour", `{"name":"A","kind":"movie","icon":"i:film","icon_color":"indigo"}`, "i:film", "indigo"},
-		{"longest built-in name", `{"name":"A","kind":"generic","icon":"i:` + strings.Repeat("a", 40) + `"}`, "i:" + strings.Repeat("a", 40), ""},
+		{"no icon", `{"name":"A","type":"generic"}`, "", ""},
+		{"null icon", `{"name":"A","type":"generic","icon":null,"icon_color":null}`, "", ""},
+		{"emoji", `{"name":"A","type":"movie","icon":"🎬"}`, "🎬", ""},
+		{"emoji sequence", `{"name":"A","type":"generic","icon":"👨‍👩‍👧"}`, "👨‍👩‍👧", ""},
+		{"keycap", `{"name":"A","type":"generic","icon":"1️⃣"}`, "1️⃣", ""},
+		{"flag", `{"name":"A","type":"generic","icon":"🇮🇹"}`, "🇮🇹", ""},
+		{"built-in without colour", `{"name":"A","type":"movie","icon":"i:film"}`, "i:film", ""},
+		{"built-in with colour", `{"name":"A","type":"movie","icon":"i:film","icon_color":"indigo"}`, "i:film", "indigo"},
+		{"longest built-in name", `{"name":"A","type":"generic","icon":"i:` + strings.Repeat("a", 40) + `"}`, "i:" + strings.Repeat("a", 40), ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -52,21 +52,21 @@ func TestF012_ListIconCreateInvalid(t *testing.T) {
 	tests := []struct {
 		name, body, field string
 	}{
-		{"empty icon", `{"name":"A","kind":"generic","icon":""}`, "icon"},
-		{"plain word", `{"name":"A","kind":"generic","icon":"film"}`, "icon"},
-		{"digits", `{"name":"A","kind":"generic","icon":"12"}`, "icon"},
-		{"two emoji", `{"name":"A","kind":"generic","icon":"🎬🎬"}`, "icon"},
-		{"emoji with text", `{"name":"A","kind":"generic","icon":"🎬 film"}`, "icon"},
-		{"trailing space", `{"name":"A","kind":"generic","icon":"🎬 "}`, "icon"},
-		{"control character", `{"name":"A","kind":"generic","icon":"🎬\u0007"}`, "icon"},
-		{"uppercase built-in", `{"name":"A","kind":"movie","icon":"i:Film"}`, "icon"},
-		{"empty built-in name", `{"name":"A","kind":"movie","icon":"i:"}`, "icon"},
-		{"built-in name with space", `{"name":"A","kind":"movie","icon":"i:film camera"}`, "icon"},
-		{"built-in name too long", `{"name":"A","kind":"movie","icon":"i:` + strings.Repeat("a", 41) + `"}`, "icon"},
-		{"emoji with colour", `{"name":"A","kind":"movie","icon":"🎬","icon_color":"red"}`, "icon_color"},
-		{"colour without icon", `{"name":"A","kind":"movie","icon_color":"red"}`, "icon_color"},
-		{"unknown colour", `{"name":"A","kind":"movie","icon":"i:film","icon_color":"magenta"}`, "icon_color"},
-		{"empty colour", `{"name":"A","kind":"movie","icon":"i:film","icon_color":""}`, "icon_color"},
+		{"empty icon", `{"name":"A","type":"generic","icon":""}`, "icon"},
+		{"plain word", `{"name":"A","type":"generic","icon":"film"}`, "icon"},
+		{"digits", `{"name":"A","type":"generic","icon":"12"}`, "icon"},
+		{"two emoji", `{"name":"A","type":"generic","icon":"🎬🎬"}`, "icon"},
+		{"emoji with text", `{"name":"A","type":"generic","icon":"🎬 film"}`, "icon"},
+		{"trailing space", `{"name":"A","type":"generic","icon":"🎬 "}`, "icon"},
+		{"control character", `{"name":"A","type":"generic","icon":"🎬\u0007"}`, "icon"},
+		{"uppercase built-in", `{"name":"A","type":"movie","icon":"i:Film"}`, "icon"},
+		{"empty built-in name", `{"name":"A","type":"movie","icon":"i:"}`, "icon"},
+		{"built-in name with space", `{"name":"A","type":"movie","icon":"i:film camera"}`, "icon"},
+		{"built-in name too long", `{"name":"A","type":"movie","icon":"i:` + strings.Repeat("a", 41) + `"}`, "icon"},
+		{"emoji with colour", `{"name":"A","type":"movie","icon":"🎬","icon_color":"red"}`, "icon_color"},
+		{"colour without icon", `{"name":"A","type":"movie","icon_color":"red"}`, "icon_color"},
+		{"unknown colour", `{"name":"A","type":"movie","icon":"i:film","icon_color":"magenta"}`, "icon_color"},
+		{"empty colour", `{"name":"A","type":"movie","icon":"i:film","icon_color":""}`, "icon_color"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -84,7 +84,7 @@ func TestF012_ListIconCreateInvalid(t *testing.T) {
 
 func TestF012_ListIconPatch(t *testing.T) {
 	e := newTreeEnv(t)
-	l := e.listOfKind("Films", nil, "movie")
+	l := e.listOfType("Films", nil, "movie")
 	lid := l["id"].(string)
 
 	step := func(name, body, ifMatch string, wantVersion float64, wantIcon, wantColor any) obj {
@@ -155,7 +155,7 @@ func TestF012_ListIconPatch(t *testing.T) {
 func TestF012_ListIconInTreeListAndSearch(t *testing.T) {
 	e := newTreeEnv(t)
 	media := e.folder("Media", nil)
-	watchlist := e.listOfKind("Watchlist", media["id"], "movie")
+	watchlist := e.listOfType("Watchlist", media["id"], "movie")
 	wid := watchlist["id"].(string)
 	rec := e.call("PATCH", "/api/v1/lists/"+wid, `{"icon":"i:film","icon_color":"indigo"}`, etagOf("l", watchlist))
 	wantStatus(t, rec, 200)

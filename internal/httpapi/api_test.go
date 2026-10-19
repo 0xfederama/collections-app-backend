@@ -109,10 +109,10 @@ func TestAT10_IfMatchRequired(t *testing.T) {
 		{"DeleteItemImage", "DELETE", "/api/v1/items/" + id1 + "/image", "", "i"},
 		{"LookupItemMetadata", "POST", "/api/v1/items/" + id1 + "/lookup", `{"mode":"fill"}`, "i"},
 		{"UpdateSettings", "PATCH", "/api/v1/settings", `{"workspace_name":"n"}`, "s"},
-		{"CreateKindField", "POST", "/api/v1/kinds/movie/fields", `{"label":"Rating","type":"number"}`, "k"},
-		{"ReorderKindFields", "PUT", "/api/v1/kinds/movie/fields/order", `{"keys":[]}`, "k"},
-		{"UpdateKindField", "PATCH", "/api/v1/kinds/movie/fields/rating", `{"label":"Rating"}`, "kf"},
-		{"DeleteKindField", "DELETE", "/api/v1/kinds/movie/fields/rating", "", "kf"},
+		{"CreateTypeField", "POST", "/api/v1/types/movie/fields", `{"label":"Rating","type":"number"}`, "k"},
+		{"ReorderTypeFields", "PUT", "/api/v1/types/movie/fields/order", `{"keys":[]}`, "k"},
+		{"UpdateTypeField", "PATCH", "/api/v1/types/movie/fields/rating", `{"label":"Rating"}`, "kf"},
+		{"DeleteTypeField", "DELETE", "/api/v1/types/movie/fields/rating", "", "kf"},
 	}
 	for _, op := range ops {
 		ct := ""
@@ -161,7 +161,7 @@ func TestIfMatchNotRequired(t *testing.T) {
 	// Creates, …/order and the tree have real handlers (see tree_test.go): none of them must answer 428.
 	for _, r := range []req{
 		{method: "POST", path: "/api/v1/folders", body: `{"name":"n"}`, contentType: jsonCT},
-		{method: "POST", path: "/api/v1/lists", body: `{"name":"n","kind":"generic"}`, contentType: jsonCT},
+		{method: "POST", path: "/api/v1/lists", body: `{"name":"n","type":"generic"}`, contentType: jsonCT},
 		{method: "PUT", path: "/api/v1/folders/order", body: `{"parent_folder_id":null,"ids":[]}`, contentType: jsonCT},
 		{method: "PUT", path: "/api/v1/lists/order", body: `{"folder_id":null,"ids":[]}`, contentType: jsonCT},
 		{method: "GET", path: "/api/v1/tree"},
@@ -230,7 +230,7 @@ func TestGuardLetsValidRequestsThrough(t *testing.T) {
 		{method: "GET", path: items + "?limit=200&offset=0&sort=title&q=dune"},
 		{method: "GET", path: "/api/v1/trash?limit=1"},
 		{method: "GET", path: "/api/v1/recent-items?limit=50"},
-		// metadata is free-form to the guard; per-kind validation is the items service's job
+		// metadata is free-form to the guard; per-type validation is the items service's job
 		{method: "POST", path: items, body: `{"title":"t","metadata":{},"price":{"currency":"EUR","min":"1.00","max":null}}`, contentType: jsonCT},
 		{method: "POST", path: items, body: `{"title":"n"}`, contentType: "application/json; charset=utf-8"},
 	} {

@@ -1,4 +1,4 @@
-// Package definitions manages workspace kind and field definitions.
+// Package definitions manages workspace type and field definitions.
 package definitions
 
 import (
@@ -36,7 +36,7 @@ type Field struct {
 	Position, Version int
 	Locked            bool
 }
-type Kind struct {
+type Type struct {
 	Key, Name           string
 	AllowsPrice, Locked bool
 	Version             int
@@ -45,7 +45,7 @@ type Kind struct {
 	DefaultPinnedFields *[]string
 	Fields              []Field
 }
-type CreateKind struct {
+type CreateType struct {
 	Name                string
 	DefaultIcon         *string
 	AllowsPrice         bool
@@ -65,7 +65,7 @@ type NullableStrings struct {
 	Value *[]string
 }
 
-type UpdateKind struct {
+type UpdateType struct {
 	Name                *string
 	DefaultIcon         NullableString
 	AllowsPrice         *bool
@@ -76,19 +76,19 @@ type CreateField struct{ Label, Type string }
 
 const maxFieldLabelLen = 100
 
-func (s *Service) List(ctx context.Context) ([]Kind, error) {
+func (s *Service) List(ctx context.Context) ([]Type, error) {
 	q := sqlc.New(s.db)
-	rows, err := q.ListKindDefinitions(ctx, s.workspaceID)
+	rows, err := q.ListTypeDefinitions(ctx, s.workspaceID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Kind, 0, len(rows))
+	out := make([]Type, 0, len(rows))
 	for _, r := range rows {
-		fs, err := q.ListKindFields(ctx, sqlc.ListKindFieldsParams{WorkspaceID: s.workspaceID, KindID: r.ID})
+		fs, err := q.ListTypeFields(ctx, sqlc.ListTypeFieldsParams{WorkspaceID: s.workspaceID, TypeID: r.ID})
 		if err != nil {
 			return nil, err
 		}
-		k := kindRow(r)
+		k := typeRow(r)
 		for _, f := range fs {
 			k.Fields = append(k.Fields, fieldRow(f))
 		}
@@ -96,46 +96,46 @@ func (s *Service) List(ctx context.Context) ([]Kind, error) {
 	}
 	return out, nil
 }
-func (s *Service) Create(ctx context.Context, in CreateKind) (Kind, error) {
-	name, err := cleanKindName(in.Name)
+func (s *Service) Create(ctx context.Context, in CreateType) (Type, error) {
+	name, err := cleanTypeName(in.Name)
 	if err != nil {
-		return Kind{}, err
+		return Type{}, err
 	}
 	if in.DefaultIcon != nil && !tree.ValidIcon(*in.DefaultIcon) {
-		return Kind{}, apperr.Validation(apperr.FieldError{Field: "default_icon", Message: "must be one emoji or i: followed by a lowercase name of 1 to 40 letters, digits or hyphens"})
+		return Type{}, apperr.Validation(apperr.FieldError{Field: "default_icon", Message: "must be one emoji or i: followed by a lowercase name of 1 to 40 letters, digits or hyphens"})
 	}
 	key := keyFor(name)
 	if in.DefaultSortField != nil && (!validFieldKey(*in.DefaultSortField) || (*in.DefaultSortField == "price" && !in.AllowsPrice)) {
-		return Kind{}, apperr.Validation(apperr.FieldError{Field: "default_sort_field", Message: "must be a field key"})
+		return Type{}, apperr.Validation(apperr.FieldError{Field: "default_sort_field", Message: "must be a field key"})
 	}
 	var pinnedJSON []byte
 	if in.DefaultPinnedFields != nil {
 		if len(*in.DefaultPinnedFields) > 2 {
-			return Kind{}, apperr.Validation(apperr.FieldError{Field: "default_pinned_fields", Message: "must have at most 2 entries"})
+			return Type{}, apperr.Validation(apperr.FieldError{Field: "default_pinned_fields", Message: "must have at most 2 entries"})
 		}
 		seen := map[string]bool{}
 		for i, pin := range *in.DefaultPinnedFields {
 			if (!validFieldKey(pin) || (pin == "price" && !in.AllowsPrice)) || seen[pin] {
-				return Kind{}, apperr.Validation(apperr.FieldError{Field: fmt.Sprintf("default_pinned_fields[%d]", i), Message: "must be a unique field key"})
+				return Type{}, apperr.Validation(apperr.FieldError{Field: fmt.Sprintf("default_pinned_fields[%d]", i), Message: "must be a unique field key"})
 			}
 			seen[pin] = true
 		}
 		var err error
 		pinnedJSON, err = json.Marshal(*in.DefaultPinnedFields)
 		if err != nil {
-			return Kind{}, fmt.Errorf("marshal default pinned fields: %w", err)
+			return Type{}, fmt.Errorf("marshal default pinned fields: %w", err)
 		}
 	}
-	var row sqlc.KindDefinition
+	var row sqlc.TypeDefinition
 	err = database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
 		var err error
-		row, err = q.InsertKindDefinition(ctx, sqlc.InsertKindDefinitionParams{WorkspaceID: s.workspaceID, Key: key, Name: name, DefaultIcon: in.DefaultIcon, AllowsPrice: in.AllowsPrice, DefaultSortField: in.DefaultSortField, DefaultPinnedFields: pinnedJSON, Now: time.Now().UTC()})
+		row, err = q.InsertTypeDefinition(ctx, sqlc.InsertTypeDefinitionParams{WorkspaceID: s.workspaceID, Key: key, Name: name, DefaultIcon: in.DefaultIcon, AllowsPrice: in.AllowsPrice, DefaultSortField: in.DefaultSortField, DefaultPinnedFields: pinnedJSON, Now: time.Now().UTC()})
 		return err
 	})
 	if err != nil {
-		return Kind{}, err
+		return Type{}, err
 	}
-	return kindRow(row), nil
+	return typeRow(row), nil
 }
 
 func validFieldKey(key string) bool {
@@ -151,7 +151,7 @@ func validFieldKey(key string) bool {
 	return true
 }
 
-func cleanKindName(name string) (string, error) {
+func cleanTypeName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if n := utf8.RuneCountInString(name); n < 1 || n > 100 {
 		return "", apperr.Validation(apperr.FieldError{Field: "name", Message: "must be 1 to 100 characters"})
@@ -170,7 +170,7 @@ func defaultPins(raw []byte) (*[]string, error) {
 	return &pins, nil
 }
 
-func validateDefaults(allowsPrice bool, fields []sqlc.KindField, sort *string, pins *[]string) error {
+func validateDefaults(allowsPrice bool, fields []sqlc.TypeField, sort *string, pins *[]string) error {
 	allowed := make(map[string]struct{}, len(fields)+1)
 	for _, field := range fields {
 		allowed[field.Key] = struct{}{}
@@ -180,7 +180,7 @@ func validateDefaults(allowsPrice bool, fields []sqlc.KindField, sort *string, p
 	}
 	var errs []apperr.FieldError
 	if sort != nil && (!validFieldKey(*sort) || !allowedField(allowed, *sort)) {
-		errs = append(errs, apperr.FieldError{Field: "default_sort_field", Message: "must be a field key of this kind"})
+		errs = append(errs, apperr.FieldError{Field: "default_sort_field", Message: "must be a field key of this type"})
 	}
 	if pins != nil {
 		if len(*pins) > 2 {
@@ -189,7 +189,7 @@ func validateDefaults(allowsPrice bool, fields []sqlc.KindField, sort *string, p
 			seen := make(map[string]struct{}, len(*pins))
 			for i, pin := range *pins {
 				if !validFieldKey(pin) || !allowedField(allowed, pin) {
-					errs = append(errs, apperr.FieldError{Field: fmt.Sprintf("default_pinned_fields[%d]", i), Message: "must be a field key of this kind"})
+					errs = append(errs, apperr.FieldError{Field: fmt.Sprintf("default_pinned_fields[%d]", i), Message: "must be a field key of this type"})
 					continue
 				}
 				if _, exists := seen[pin]; exists {
@@ -223,15 +223,15 @@ func equalStringSlices(a, b *[]string) bool {
 	}
 	return slices.Equal(*a, *b)
 }
-func (s *Service) Update(ctx context.Context, key string, v int, in UpdateKind) (Kind, error) {
-	var out sqlc.KindDefinition
-	return s.mutateKind(ctx, key, v, func(q *sqlc.Queries, cur sqlc.KindDefinition) error {
+func (s *Service) Update(ctx context.Context, key string, v int, in UpdateType) (Type, error) {
+	var out sqlc.TypeDefinition
+	return s.mutateType(ctx, key, v, func(q *sqlc.Queries, cur sqlc.TypeDefinition) error {
 		if cur.IsLocked {
-			return apperr.Validation(apperr.FieldError{Field: "kind", Message: "is locked"})
+			return apperr.Validation(apperr.FieldError{Field: "type", Message: "is locked"})
 		}
 		nextName := cur.Name
 		if in.Name != nil {
-			name, err := cleanKindName(*in.Name)
+			name, err := cleanTypeName(*in.Name)
 			if err != nil {
 				return err
 			}
@@ -260,7 +260,7 @@ func (s *Service) Update(ctx context.Context, key string, v int, in UpdateKind) 
 		if in.DefaultPinnedFields.Set {
 			nextPins = in.DefaultPinnedFields.Value
 		}
-		fields, err := q.ListKindFields(ctx, sqlc.ListKindFieldsParams{WorkspaceID: s.workspaceID, KindID: cur.ID})
+		fields, err := q.ListTypeFields(ctx, sqlc.ListTypeFieldsParams{WorkspaceID: s.workspaceID, TypeID: cur.ID})
 		if err != nil {
 			return err
 		}
@@ -278,7 +278,7 @@ func (s *Service) Update(ctx context.Context, key string, v int, in UpdateKind) 
 				return fmt.Errorf("marshal default pinned fields: %w", err)
 			}
 		}
-		out, err = q.UpdateKindDefinition(ctx, sqlc.UpdateKindDefinitionParams{
+		out, err = q.UpdateTypeDefinition(ctx, sqlc.UpdateTypeDefinitionParams{
 			ID: cur.ID, WorkspaceID: s.workspaceID, Name: nextName, SetName: in.Name != nil,
 			DefaultIcon: nextIcon, SetDefaultIcon: in.DefaultIcon.Set,
 			AllowsPrice: nextAllowsPrice, SetAllowsPrice: in.AllowsPrice != nil,
@@ -289,13 +289,13 @@ func (s *Service) Update(ctx context.Context, key string, v int, in UpdateKind) 
 		return err
 	}, &out)
 }
-func (s *Service) mutateKind(ctx context.Context, key string, v int, fn func(*sqlc.Queries, sqlc.KindDefinition) error, out *sqlc.KindDefinition) (Kind, error) {
+func (s *Service) mutateType(ctx context.Context, key string, v int, fn func(*sqlc.Queries, sqlc.TypeDefinition) error, out *sqlc.TypeDefinition) (Type, error) {
 	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
-		cur, e := q.GetKindDefinitionByKey(ctx, sqlc.GetKindDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: key})
+		cur, e := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: key})
 		if e != nil {
-			return apperr.NotFound("kind")
+			return apperr.NotFound("type")
 		}
-		cur, e = q.LockKindDefinition(ctx, sqlc.LockKindDefinitionParams{WorkspaceID: s.workspaceID, ID: cur.ID})
+		cur, e = q.LockTypeDefinition(ctx, sqlc.LockTypeDefinitionParams{WorkspaceID: s.workspaceID, ID: cur.ID})
 		if e != nil {
 			return e
 		}
@@ -305,17 +305,17 @@ func (s *Service) mutateKind(ctx context.Context, key string, v int, fn func(*sq
 		return fn(q, cur)
 	})
 	if err != nil {
-		return Kind{}, err
+		return Type{}, err
 	}
-	return kindRow(*out), nil
+	return typeRow(*out), nil
 }
 func (s *Service) Delete(ctx context.Context, key string, v int) error {
 	return database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
-		cur, e := q.GetKindDefinitionByKey(ctx, sqlc.GetKindDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: key})
+		cur, e := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: key})
 		if e != nil {
-			return apperr.NotFound("kind")
+			return apperr.NotFound("type")
 		}
-		cur, e = q.LockKindDefinition(ctx, sqlc.LockKindDefinitionParams{WorkspaceID: s.workspaceID, ID: cur.ID})
+		cur, e = q.LockTypeDefinition(ctx, sqlc.LockTypeDefinitionParams{WorkspaceID: s.workspaceID, ID: cur.ID})
 		if e != nil {
 			return e
 		}
@@ -323,22 +323,22 @@ func (s *Service) Delete(ctx context.Context, key string, v int) error {
 			return apperr.VersionConflict(int(cur.Version))
 		}
 		if cur.IsLocked {
-			return apperr.Validation(apperr.FieldError{Field: "kind", Message: "is locked"})
+			return apperr.Validation(apperr.FieldError{Field: "type", Message: "is locked"})
 		}
-		lists, e := q.ListActiveListsByKind(ctx, sqlc.ListActiveListsByKindParams{WorkspaceID: s.workspaceID, Kind: key})
+		lists, e := q.ListActiveListsByType(ctx, sqlc.ListActiveListsByTypeParams{WorkspaceID: s.workspaceID, Type: key})
 		if e != nil {
 			return e
 		}
 		if len(lists) > 0 {
-			return apperr.Validation(apperr.FieldError{Field: "kind", Message: fmt.Sprintf("is used by %d list(s), including %s", len(lists), lists[0].Name)})
+			return apperr.Validation(apperr.FieldError{Field: "type", Message: fmt.Sprintf("is used by %d list(s), including %s", len(lists), lists[0].Name)})
 		}
-		return q.DeleteKindDefinition(ctx, sqlc.DeleteKindDefinitionParams{ID: cur.ID, WorkspaceID: s.workspaceID})
+		return q.DeleteTypeDefinition(ctx, sqlc.DeleteTypeDefinitionParams{ID: cur.ID, WorkspaceID: s.workspaceID})
 	})
 }
 
-// CreateField appends a custom field to a kind. The kind version serializes
+// CreateField appends a custom field to a type. The type version serializes
 // field-set edits so concurrent creates cannot generate the same key.
-func (s *Service) CreateField(ctx context.Context, kindKey string, v int, in CreateField) (Field, error) {
+func (s *Service) CreateField(ctx context.Context, typeKey string, v int, in CreateField) (Field, error) {
 	label, err := cleanFieldLabel(in.Label)
 	if err != nil {
 		return Field{}, err
@@ -357,26 +357,26 @@ func (s *Service) CreateField(ctx context.Context, kindKey string, v int, in Cre
 		key = strings.TrimRight(key[:32], "_")
 	}
 
-	var out sqlc.KindField
+	var out sqlc.TypeField
 	err = database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
-		kind, e := s.lockKind(ctx, q, kindKey, v)
+		typ, e := s.lockType(ctx, q, typeKey, v)
 		if e != nil {
 			return e
 		}
-		if _, e = q.GetKindFieldByKey(ctx, sqlc.GetKindFieldByKeyParams{WorkspaceID: s.workspaceID, KindID: kind.ID, Key: key}); e == nil {
+		if _, e = q.GetTypeFieldByKey(ctx, sqlc.GetTypeFieldByKeyParams{WorkspaceID: s.workspaceID, TypeID: typ.ID, Key: key}); e == nil {
 			return apperr.Validation(apperr.FieldError{Field: "label", Message: "generates an existing field key"})
 		} else if !errors.Is(e, pgx.ErrNoRows) {
 			return e
 		}
-		position, e := q.NextKindFieldPosition(ctx, sqlc.NextKindFieldPositionParams{WorkspaceID: s.workspaceID, KindID: kind.ID})
+		position, e := q.NextTypeFieldPosition(ctx, sqlc.NextTypeFieldPositionParams{WorkspaceID: s.workspaceID, TypeID: typ.ID})
 		if e != nil {
 			return e
 		}
-		out, e = q.InsertKindField(ctx, sqlc.InsertKindFieldParams{WorkspaceID: s.workspaceID, KindID: kind.ID, Key: key, Label: label, FieldType: in.Type, Position: position, Now: time.Now().UTC()})
+		out, e = q.InsertTypeField(ctx, sqlc.InsertTypeFieldParams{WorkspaceID: s.workspaceID, TypeID: typ.ID, Key: key, Label: label, FieldType: in.Type, Position: position, Now: time.Now().UTC()})
 		if e != nil {
 			return e
 		}
-		return q.TouchKindDefinition(ctx, sqlc.TouchKindDefinitionParams{ID: kind.ID, WorkspaceID: s.workspaceID, Now: time.Now().UTC()})
+		return q.TouchTypeDefinition(ctx, sqlc.TouchTypeDefinitionParams{ID: typ.ID, WorkspaceID: s.workspaceID, Now: time.Now().UTC()})
 	})
 	if err != nil {
 		return Field{}, err
@@ -384,25 +384,25 @@ func (s *Service) CreateField(ctx context.Context, kindKey string, v int, in Cre
 	return fieldRow(out), nil
 }
 
-func (s *Service) RenameField(ctx context.Context, kindKey, fieldKey string, v int, label string) (Field, error) {
+func (s *Service) RenameField(ctx context.Context, typeKey, fieldKey string, v int, label string) (Field, error) {
 	label, err := cleanFieldLabel(label)
 	if err != nil {
 		return Field{}, err
 	}
-	var out sqlc.KindField
+	var out sqlc.TypeField
 	err = database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
-		kind, e := s.lockKindUnversioned(ctx, q, kindKey)
+		typ, e := s.lockTypeUnversioned(ctx, q, typeKey)
 		if e != nil {
 			return e
 		}
-		field, e := s.lockField(ctx, q, kind, fieldKey, v)
+		field, e := s.lockField(ctx, q, typ, fieldKey, v)
 		if e != nil {
 			return e
 		}
 		if field.IsLocked {
 			return apperr.Validation(apperr.FieldError{Field: "field", Message: "is locked"})
 		}
-		out, e = q.UpdateKindFieldLabel(ctx, sqlc.UpdateKindFieldLabelParams{ID: field.ID, WorkspaceID: s.workspaceID, Label: label, Now: time.Now().UTC()})
+		out, e = q.UpdateTypeFieldLabel(ctx, sqlc.UpdateTypeFieldLabelParams{ID: field.ID, WorkspaceID: s.workspaceID, Label: label, Now: time.Now().UTC()})
 		return e
 	})
 	if err != nil {
@@ -413,13 +413,13 @@ func (s *Service) RenameField(ctx context.Context, kindKey, fieldKey string, v i
 
 // ReorderFields rewrites the order of custom fields only. Locked fields stay
 // in their seed positions; keys must be exactly the current custom field set.
-func (s *Service) ReorderFields(ctx context.Context, kindKey string, v int, keys []string) (int, error) {
+func (s *Service) ReorderFields(ctx context.Context, typeKey string, v int, keys []string) (int, error) {
 	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
-		kind, err := s.lockKind(ctx, q, kindKey, v)
+		typ, err := s.lockType(ctx, q, typeKey, v)
 		if err != nil {
 			return err
 		}
-		fields, err := q.ListKindFields(ctx, sqlc.ListKindFieldsParams{WorkspaceID: s.workspaceID, KindID: kind.ID})
+		fields, err := q.ListTypeFields(ctx, sqlc.ListTypeFieldsParams{WorkspaceID: s.workspaceID, TypeID: typ.ID})
 		if err != nil {
 			return err
 		}
@@ -433,13 +433,13 @@ func (s *Service) ReorderFields(ctx context.Context, kindKey string, v int, keys
 			return apperr.OrderStale()
 		}
 		now := time.Now().UTC()
-		if err := q.PrepareReorderKindFields(ctx, sqlc.PrepareReorderKindFieldsParams{WorkspaceID: s.workspaceID, KindID: kind.ID, Keys: keys, Now: now}); err != nil {
+		if err := q.PrepareReorderTypeFields(ctx, sqlc.PrepareReorderTypeFieldsParams{WorkspaceID: s.workspaceID, TypeID: typ.ID, Keys: keys, Now: now}); err != nil {
 			return err
 		}
-		if err := q.ReorderKindFields(ctx, sqlc.ReorderKindFieldsParams{WorkspaceID: s.workspaceID, KindID: kind.ID, Keys: keys, Now: now}); err != nil {
+		if err := q.ReorderTypeFields(ctx, sqlc.ReorderTypeFieldsParams{WorkspaceID: s.workspaceID, TypeID: typ.ID, Keys: keys, Now: now}); err != nil {
 			return err
 		}
-		return q.TouchKindDefinition(ctx, sqlc.TouchKindDefinitionParams{ID: kind.ID, WorkspaceID: s.workspaceID, Now: now})
+		return q.TouchTypeDefinition(ctx, sqlc.TouchTypeDefinitionParams{ID: typ.ID, WorkspaceID: s.workspaceID, Now: now})
 	})
 	if err != nil {
 		return 0, err
@@ -449,91 +449,91 @@ func (s *Service) ReorderFields(ctx context.Context, kindKey string, v int, keys
 
 // FieldDeletePreview reports the exact number of item values that DeleteField
 // will remove, including trashed items.
-func (s *Service) FieldDeletePreview(ctx context.Context, kindKey, fieldKey string) (int, error) {
+func (s *Service) FieldDeletePreview(ctx context.Context, typeKey, fieldKey string) (int, error) {
 	q := sqlc.New(s.db)
-	kind, err := q.GetKindDefinitionByKey(ctx, sqlc.GetKindDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: kindKey})
+	typ, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: typeKey})
 	if err != nil {
-		return 0, apperr.NotFound("kind")
+		return 0, apperr.NotFound("type")
 	}
-	field, err := q.GetKindFieldByKey(ctx, sqlc.GetKindFieldByKeyParams{WorkspaceID: s.workspaceID, KindID: kind.ID, Key: fieldKey})
+	field, err := q.GetTypeFieldByKey(ctx, sqlc.GetTypeFieldByKeyParams{WorkspaceID: s.workspaceID, TypeID: typ.ID, Key: fieldKey})
 	if err != nil {
-		return 0, apperr.NotFound("kind field")
+		return 0, apperr.NotFound("type field")
 	}
 	if field.IsLocked {
 		return 0, apperr.Validation(apperr.FieldError{Field: "field", Message: "is locked"})
 	}
-	count, err := q.CountKindFieldValues(ctx, sqlc.CountKindFieldValuesParams{WorkspaceID: s.workspaceID, Kind: kind.Key, Key: field.Key})
+	count, err := q.CountTypeFieldValues(ctx, sqlc.CountTypeFieldValuesParams{WorkspaceID: s.workspaceID, Type: typ.Key, Key: field.Key})
 	return int(count), err
 }
 
-func (s *Service) DeleteField(ctx context.Context, kindKey, fieldKey string, v int) (int, error) {
+func (s *Service) DeleteField(ctx context.Context, typeKey, fieldKey string, v int) (int, error) {
 	var count int32
 	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
-		kind, e := s.lockKindUnversioned(ctx, q, kindKey)
+		typ, e := s.lockTypeUnversioned(ctx, q, typeKey)
 		if e != nil {
 			return e
 		}
-		field, e := s.lockField(ctx, q, kind, fieldKey, v)
+		field, e := s.lockField(ctx, q, typ, fieldKey, v)
 		if e != nil {
 			return e
 		}
 		if field.IsLocked {
 			return apperr.Validation(apperr.FieldError{Field: "field", Message: "is locked"})
 		}
-		count, e = q.CountKindFieldValues(ctx, sqlc.CountKindFieldValuesParams{WorkspaceID: s.workspaceID, Kind: kind.Key, Key: field.Key})
+		count, e = q.CountTypeFieldValues(ctx, sqlc.CountTypeFieldValuesParams{WorkspaceID: s.workspaceID, Type: typ.Key, Key: field.Key})
 		if e != nil {
 			return e
 		}
 		now := time.Now().UTC()
 		key := field.Key
-		if e = q.ResetKindFieldDefaults(ctx, sqlc.ResetKindFieldDefaultsParams{ID: kind.ID, WorkspaceID: s.workspaceID, Key: &key, Now: now}); e != nil {
+		if e = q.ResetTypeFieldDefaults(ctx, sqlc.ResetTypeFieldDefaultsParams{ID: typ.ID, WorkspaceID: s.workspaceID, Key: &key, Now: now}); e != nil {
 			return e
 		}
-		if e = q.ResetListKindFieldPins(ctx, sqlc.ResetListKindFieldPinsParams{WorkspaceID: s.workspaceID, Kind: kind.Key, Key: field.Key, Now: now}); e != nil {
+		if e = q.ResetListTypeFieldPins(ctx, sqlc.ResetListTypeFieldPinsParams{WorkspaceID: s.workspaceID, Type: typ.Key, Key: field.Key, Now: now}); e != nil {
 			return e
 		}
-		if e = q.ResetListKindFieldSort(ctx, sqlc.ResetListKindFieldSortParams{WorkspaceID: s.workspaceID, Kind: kind.Key, Key: field.Key, Now: now}); e != nil {
+		if e = q.ResetListTypeFieldSort(ctx, sqlc.ResetListTypeFieldSortParams{WorkspaceID: s.workspaceID, Type: typ.Key, Key: field.Key, Now: now}); e != nil {
 			return e
 		}
-		if e = q.StripKindFieldValues(ctx, sqlc.StripKindFieldValuesParams{WorkspaceID: s.workspaceID, Kind: kind.Key, Key: field.Key, Now: now}); e != nil {
+		if e = q.StripTypeFieldValues(ctx, sqlc.StripTypeFieldValuesParams{WorkspaceID: s.workspaceID, Type: typ.Key, Key: field.Key, Now: now}); e != nil {
 			return e
 		}
-		return q.DeleteKindField(ctx, sqlc.DeleteKindFieldParams{ID: field.ID, WorkspaceID: s.workspaceID})
+		return q.DeleteTypeField(ctx, sqlc.DeleteTypeFieldParams{ID: field.ID, WorkspaceID: s.workspaceID})
 	})
 	return int(count), err
 }
 
-func (s *Service) lockKind(ctx context.Context, q *sqlc.Queries, key string, version int) (sqlc.KindDefinition, error) {
-	kind, err := s.lockKindUnversioned(ctx, q, key)
+func (s *Service) lockType(ctx context.Context, q *sqlc.Queries, key string, version int) (sqlc.TypeDefinition, error) {
+	typ, err := s.lockTypeUnversioned(ctx, q, key)
 	if err != nil {
-		return sqlc.KindDefinition{}, err
+		return sqlc.TypeDefinition{}, err
 	}
-	if int(kind.Version) != version {
-		return sqlc.KindDefinition{}, apperr.VersionConflict(int(kind.Version))
+	if int(typ.Version) != version {
+		return sqlc.TypeDefinition{}, apperr.VersionConflict(int(typ.Version))
 	}
-	return kind, nil
+	return typ, nil
 }
 
-func (s *Service) lockKindUnversioned(ctx context.Context, q *sqlc.Queries, key string) (sqlc.KindDefinition, error) {
-	kind, err := q.GetKindDefinitionByKey(ctx, sqlc.GetKindDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: key})
+func (s *Service) lockTypeUnversioned(ctx context.Context, q *sqlc.Queries, key string) (sqlc.TypeDefinition, error) {
+	typ, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: key})
 	if err != nil {
-		return sqlc.KindDefinition{}, apperr.NotFound("kind")
+		return sqlc.TypeDefinition{}, apperr.NotFound("type")
 	}
-	kind, err = q.LockKindDefinition(ctx, sqlc.LockKindDefinitionParams{ID: kind.ID, WorkspaceID: s.workspaceID})
-	return kind, err
+	typ, err = q.LockTypeDefinition(ctx, sqlc.LockTypeDefinitionParams{ID: typ.ID, WorkspaceID: s.workspaceID})
+	return typ, err
 }
 
-func (s *Service) lockField(ctx context.Context, q *sqlc.Queries, kind sqlc.KindDefinition, key string, version int) (sqlc.KindField, error) {
-	field, err := q.GetKindFieldByKey(ctx, sqlc.GetKindFieldByKeyParams{WorkspaceID: s.workspaceID, KindID: kind.ID, Key: key})
+func (s *Service) lockField(ctx context.Context, q *sqlc.Queries, typ sqlc.TypeDefinition, key string, version int) (sqlc.TypeField, error) {
+	field, err := q.GetTypeFieldByKey(ctx, sqlc.GetTypeFieldByKeyParams{WorkspaceID: s.workspaceID, TypeID: typ.ID, Key: key})
 	if err != nil {
-		return sqlc.KindField{}, apperr.NotFound("kind field")
+		return sqlc.TypeField{}, apperr.NotFound("type field")
 	}
-	field, err = q.LockKindField(ctx, sqlc.LockKindFieldParams{ID: field.ID, WorkspaceID: s.workspaceID})
+	field, err = q.LockTypeField(ctx, sqlc.LockTypeFieldParams{ID: field.ID, WorkspaceID: s.workspaceID})
 	if err != nil {
-		return sqlc.KindField{}, err
+		return sqlc.TypeField{}, err
 	}
 	if int(field.Version) != version {
-		return sqlc.KindField{}, apperr.VersionConflict(int(field.Version))
+		return sqlc.TypeField{}, apperr.VersionConflict(int(field.Version))
 	}
 	return field, nil
 }
@@ -566,8 +566,8 @@ func sameStringSet(a, b []string) bool {
 	}
 	return len(seen) == 0
 }
-func kindRow(r sqlc.KindDefinition) Kind {
-	k := Kind{Key: r.Key, Name: r.Name, AllowsPrice: r.AllowsPrice, Locked: r.IsLocked, Version: int(r.Version), DefaultIcon: r.DefaultIcon, DefaultSortField: r.DefaultSortField}
+func typeRow(r sqlc.TypeDefinition) Type {
+	k := Type{Key: r.Key, Name: r.Name, AllowsPrice: r.AllowsPrice, Locked: r.IsLocked, Version: int(r.Version), DefaultIcon: r.DefaultIcon, DefaultSortField: r.DefaultSortField}
 	if len(r.DefaultPinnedFields) > 0 && string(r.DefaultPinnedFields) != "null" {
 		var pins []string
 		if json.Unmarshal(r.DefaultPinnedFields, &pins) == nil {
@@ -576,7 +576,7 @@ func kindRow(r sqlc.KindDefinition) Kind {
 	}
 	return k
 }
-func fieldRow(r sqlc.KindField) Field {
+func fieldRow(r sqlc.TypeField) Field {
 	return Field{Key: r.Key, Label: r.Label, Type: r.FieldType, Position: int(r.Position), Locked: r.IsLocked, Version: int(r.Version)}
 }
 func keyFor(s string) string {

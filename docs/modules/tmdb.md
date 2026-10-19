@@ -15,8 +15,8 @@ Provides an optional bounded server-side client for TMDB movie and TV search, de
 
 - `New(apiKey string) *Client`: uses fixed production API and image origins
 - `(*Client).Enabled() bool`: whether a server key is configured
-- `(*Client).Search(ctx, kind, query, language) ([]Match, error)`: movie or TV suggestions
-- `(*Client).Details(ctx, kind, id, language, country) (Details, error)`: localized metadata and provider data
+- `(*Client).Search(ctx, type, query, language) ([]Match, error)`: movie or TV suggestions
+- `(*Client).Details(ctx, type, id, language, country) (Details, error)`: localized metadata and provider data
 - `(*Client).DownloadPoster(ctx, posterPath) ([]byte, error)`: fetches a bounded poster image
 - `GET /api/v1/tmdb/suggestions`: returns provider-ranked suggestions or a disabled empty result
 

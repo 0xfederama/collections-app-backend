@@ -1,11 +1,11 @@
 -- Item read model: GetItem and ListItems return the same columns, so one mapper
--- (internal/items) serves both. kind is not stored on the item: it comes from its list (F-007). The image columns come from the attachment the
+-- (internal/items) serves both. type is not stored on the item: it comes from its list (F-007). The image columns come from the attachment the
 -- item points to (NULL for no image or an external URL). content_version is the
 -- highest saved Markdown version, 0 when there is none (D-052).
 
 -- name: GetItem :one
 SELECT i.*,
-       l.kind              AS kind,
+       l.type              AS type,
        a.width             AS image_width,
        a.height            AS image_height,
        a.original_filename AS image_original_filename,
@@ -23,7 +23,7 @@ FOR UPDATE;
 -- name: ListItems :many
 -- @sort is manual, title, updated, price or a metadata field key. Field sorting is driven by its definition type.
 SELECT i.*,
-       l.kind              AS kind,
+       l.type              AS type,
        a.width             AS image_width,
        a.height            AS image_height,
        a.original_filename AS image_original_filename,
@@ -33,7 +33,7 @@ LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.w
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.list_id = @list_id AND i.workspace_id = @workspace_id AND i.deleted_at IS NULL
   AND (lower(i.title) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'
-       OR (l.kind = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'))
+       OR (l.type = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'))
   AND (@filter_key::text = '' OR CASE @filter_type::text
        WHEN 'text' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
        WHEN 'link' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
@@ -63,7 +63,7 @@ SELECT count(*)::int AS total FROM items i
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.list_id = @list_id AND i.workspace_id = @workspace_id AND i.deleted_at IS NULL
   AND (lower(i.title) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'
-       OR (l.kind = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'))
+       OR (l.type = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'))
   AND (@filter_key::text = '' OR CASE @filter_type::text
        WHEN 'text' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
        WHEN 'link' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
@@ -76,7 +76,7 @@ WHERE i.list_id = @list_id AND i.workspace_id = @workspace_id AND i.deleted_at I
        ELSE false END);
 
 -- name: GetActiveListForItems :one
-SELECT id, name, folder_id, sort_mode, kind FROM lists
+SELECT id, name, folder_id, sort_mode, type FROM lists
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;
 
 -- name: NextItemSortOrder :one
@@ -121,7 +121,7 @@ FROM unnest(@ids::uuid[]) WITH ORDINALITY AS o(id, ord)
 WHERE i.id = o.id AND i.workspace_id = @workspace_id AND i.list_id = @list_id AND i.deleted_at IS NULL;
 
 -- name: CountListItems :one
--- All items of a list, trashed ones included (a kind change clears all of them).
+-- All items of a list, trashed ones included (a type change clears all of them).
 SELECT count(*)::int AS total FROM items
 WHERE list_id = @list_id AND workspace_id = @workspace_id;
 
@@ -131,11 +131,11 @@ WHERE list_id = @list_id AND workspace_id = @workspace_id
 ORDER BY sort_order, id;
 
 -- name: ClearListItemsPrice :execrows
--- A kind change to generic removes the price of every item of the list (trashed ones too; generic has no price, F008-B1).
+-- A type change to generic removes the price of every item of the list (trashed ones too; generic has no price, F008-B1).
 UPDATE items SET price_min = NULL, price_max = NULL, currency = NULL, version = version + 1, updated_at = @now
 WHERE list_id = @list_id AND workspace_id = @workspace_id AND (price_min IS NOT NULL OR price_max IS NOT NULL);
 
 -- name: ClearListItemsMetadata :execrows
--- A kind change empties the kind fields of every item of the list (trashed ones too).
+-- A type change empties the type fields of every item of the list (trashed ones too).
 UPDATE items SET metadata = '{}', version = version + 1, updated_at = @now
 WHERE list_id = @list_id AND workspace_id = @workspace_id AND metadata <> '{}';

@@ -136,20 +136,20 @@ func TestBootstrap_DefaultsAndInvalidName(t *testing.T) {
 	}
 }
 
-func TestBootstrap_SeedsBuiltinKindDefinitions(t *testing.T) {
+func TestBootstrap_SeedsBuiltinTypeDefinitions(t *testing.T) {
 	pool := newPool(t)
 	workspaceID, err := workspace.Bootstrap(t.Context(), pool, "Ours")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var kinds, fields int
-	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM kind_definitions WHERE workspace_id = $1 AND is_locked`, workspaceID).Scan(&kinds); err != nil {
+	var types, fields int
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM type_definitions WHERE workspace_id = $1 AND is_locked`, workspaceID).Scan(&types); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM kind_fields WHERE workspace_id = $1 AND is_locked`, workspaceID).Scan(&fields); err != nil {
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM type_fields WHERE workspace_id = $1 AND is_locked`, workspaceID).Scan(&fields); err != nil {
 		t.Fatal(err)
 	}
-	if kinds != 6 || fields != 29 {
-		t.Errorf("seeded definitions = %d kinds, %d fields; want 6 kinds, 29 fields", kinds, fields)
+	if types != 6 || fields != 29 {
+		t.Errorf("seeded definitions = %d types, %d fields; want 6 types, 29 fields", types, fields)
 	}
 }

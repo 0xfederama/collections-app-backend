@@ -48,12 +48,12 @@ var ifMatchPrefix = map[string]string{
 	"UpdateItemContent":     etag.Content,
 	"RestoreContentVersion": etag.Content,
 	"UpdateSettings":        etag.Settings,
-	"UpdateKind":            etag.Kind,
-	"DeleteKind":            etag.Kind,
-	"CreateKindField":       etag.Kind,
-	"ReorderKindFields":     etag.Kind,
-	"UpdateKindField":       etag.Field,
-	"DeleteKindField":       etag.Field,
+	"UpdateType":            etag.Type,
+	"DeleteType":            etag.Type,
+	"CreateTypeField":       etag.Type,
+	"ReorderTypeFields":     etag.Type,
+	"UpdateTypeField":       etag.Field,
+	"DeleteTypeField":       etag.Field,
 }
 
 // operation is what the guard needs to know about one spec operation.
@@ -206,7 +206,7 @@ func (o *operation) checkBody(w http.ResponseWriter, r *http.Request) (*http.Req
 // findUnknownField walks a decoded JSON value against its schema and reports
 // the first property the schema does not declare (sorted order, so the answer
 // is deterministic). Objects without declared properties are free-form
-// (`metadata`, validated per kind later) and are not inspected.
+// (`metadata`, validated per type later) and are not inspected.
 func findUnknownField(s *openapi3.Schema, v any, path string) (string, bool) {
 	if s == nil {
 		return "", false

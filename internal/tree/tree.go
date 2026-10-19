@@ -76,12 +76,12 @@ type List struct {
 	ID       uuid.UUID
 	FolderID *uuid.UUID
 	Name     string
-	// Kind is the one kind of every item in the list (F-007).
-	Kind        string
+	// Type is the one type of every item in the list (F-007).
+	Type        string
 	Description *string
 	DisplayMode string
 	SortMode    string
-	// PinnedFields is nil for the kind default (F009-B2).
+	// PinnedFields is nil for the type default (F009-B2).
 	PinnedFields *PinnedFields
 	// Icon and IconColor are nil for the default icon (F012-B1).
 	Icon      *string
@@ -103,7 +103,7 @@ func (p PinnedFields) equal(o PinnedFields) bool {
 	return slices.Equal(p, o)
 }
 
-// pinnedFromJSON reads the stored column. NULL and anything unreadable are nil (the kind default).
+// pinnedFromJSON reads the stored column. NULL and anything unreadable are nil (the type default).
 func pinnedFromJSON(b []byte) *PinnedFields {
 	if b == nil {
 		return nil
@@ -228,7 +228,7 @@ func folderFromRow(f sqlc.Folder) Folder {
 
 func listFromRow(l sqlc.GetListRow) List {
 	return List{
-		ID: l.ID, FolderID: ptrUUID(l.FolderID), Name: l.Name, Kind: l.Kind, Description: l.Description,
+		ID: l.ID, FolderID: ptrUUID(l.FolderID), Name: l.Name, Type: l.Type, Description: l.Description,
 		DisplayMode: l.DisplayMode, SortMode: l.SortMode, PinnedFields: pinnedFromJSON(l.PinnedFields), Icon: l.Icon, IconColor: l.IconColor,
 		SortOrder: int(l.SortOrder), ItemCount: int(l.ItemCount),
 		Version: int(l.Version), CreatedAt: l.CreatedAt, UpdatedAt: l.UpdatedAt,

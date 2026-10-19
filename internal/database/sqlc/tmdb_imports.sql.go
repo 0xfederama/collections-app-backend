@@ -48,27 +48,27 @@ func (q *Queries) DeleteTMDBImport(ctx context.Context, arg DeleteTMDBImportPara
 	return result.RowsAffected(), nil
 }
 
-const getLookupListKind = `-- name: GetLookupListKind :one
+const getLookupListType = `-- name: GetLookupListType :one
 
-SELECT kind FROM lists
+SELECT type FROM lists
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 `
 
-type GetLookupListKindParams struct {
+type GetLookupListTypeParams struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
 }
 
 // F013-B3 TMDB import provenance. Every query is scoped to one workspace.
-func (q *Queries) GetLookupListKind(ctx context.Context, arg GetLookupListKindParams) (string, error) {
-	row := q.db.QueryRow(ctx, getLookupListKind, arg.ID, arg.WorkspaceID)
-	var kind string
-	err := row.Scan(&kind)
-	return kind, err
+func (q *Queries) GetLookupListType(ctx context.Context, arg GetLookupListTypeParams) (string, error) {
+	row := q.db.QueryRow(ctx, getLookupListType, arg.ID, arg.WorkspaceID)
+	var type_ string
+	err := row.Scan(&type_)
+	return type_, err
 }
 
 const getTMDBImport = `-- name: GetTMDBImport :one
-SELECT t.workspace_id, t.item_id, t.tmdb_id, t.kind, t.imported_fields, t.imported_title, t.original_title, t.attachment_id, t.poster_path, t.poster_fetched_at, t.poster_refresh_after, t.poster_expires_at, t.fetched_at, t.refresh_after, t.expires_at, i.version AS item_version
+SELECT t.workspace_id, t.item_id, t.tmdb_id, t.type, t.imported_fields, t.imported_title, t.original_title, t.attachment_id, t.poster_path, t.poster_fetched_at, t.poster_refresh_after, t.poster_expires_at, t.fetched_at, t.refresh_after, t.expires_at, i.version AS item_version
 FROM tmdb_imports t
 JOIN items i ON i.id = t.item_id AND i.workspace_id = t.workspace_id
 WHERE t.item_id = $1 AND t.workspace_id = $2
@@ -83,7 +83,7 @@ type GetTMDBImportRow struct {
 	WorkspaceID        uuid.UUID
 	ItemID             uuid.UUID
 	TmdbID             int32
-	Kind               string
+	Type               string
 	ImportedFields     []byte
 	ImportedTitle      *string
 	OriginalTitle      string
@@ -105,7 +105,7 @@ func (q *Queries) GetTMDBImport(ctx context.Context, arg GetTMDBImportParams) (G
 		&i.WorkspaceID,
 		&i.ItemID,
 		&i.TmdbID,
-		&i.Kind,
+		&i.Type,
 		&i.ImportedFields,
 		&i.ImportedTitle,
 		&i.OriginalTitle,
@@ -158,7 +158,7 @@ func (q *Queries) InsertLookupItem(ctx context.Context, arg InsertLookupItemPara
 }
 
 const listDueTMDBImports = `-- name: ListDueTMDBImports :many
-SELECT t.workspace_id, t.item_id, t.tmdb_id, t.kind, t.imported_fields, t.imported_title, t.original_title, t.attachment_id, t.poster_path, t.poster_fetched_at, t.poster_refresh_after, t.poster_expires_at, t.fetched_at, t.refresh_after, t.expires_at, i.version AS item_version, i.metadata, i.deleted_at, l.kind AS current_kind
+SELECT t.workspace_id, t.item_id, t.tmdb_id, t.type, t.imported_fields, t.imported_title, t.original_title, t.attachment_id, t.poster_path, t.poster_fetched_at, t.poster_refresh_after, t.poster_expires_at, t.fetched_at, t.refresh_after, t.expires_at, i.version AS item_version, i.metadata, i.deleted_at, l.type AS current_type
 FROM tmdb_imports t
 JOIN items i ON i.id = t.item_id AND i.workspace_id = t.workspace_id
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
@@ -178,7 +178,7 @@ type ListDueTMDBImportsRow struct {
 	WorkspaceID        uuid.UUID
 	ItemID             uuid.UUID
 	TmdbID             int32
-	Kind               string
+	Type               string
 	ImportedFields     []byte
 	ImportedTitle      *string
 	OriginalTitle      string
@@ -193,7 +193,7 @@ type ListDueTMDBImportsRow struct {
 	ItemVersion        int32
 	Metadata           []byte
 	DeletedAt          *time.Time
-	CurrentKind        string
+	CurrentType        string
 }
 
 func (q *Queries) ListDueTMDBImports(ctx context.Context, arg ListDueTMDBImportsParams) ([]ListDueTMDBImportsRow, error) {
@@ -209,7 +209,7 @@ func (q *Queries) ListDueTMDBImports(ctx context.Context, arg ListDueTMDBImports
 			&i.WorkspaceID,
 			&i.ItemID,
 			&i.TmdbID,
-			&i.Kind,
+			&i.Type,
 			&i.ImportedFields,
 			&i.ImportedTitle,
 			&i.OriginalTitle,
@@ -224,7 +224,7 @@ func (q *Queries) ListDueTMDBImports(ctx context.Context, arg ListDueTMDBImports
 			&i.ItemVersion,
 			&i.Metadata,
 			&i.DeletedAt,
-			&i.CurrentKind,
+			&i.CurrentType,
 		); err != nil {
 			return nil, err
 		}
@@ -271,7 +271,7 @@ func (q *Queries) ListExpiredTMDBImportIDs(ctx context.Context, arg ListExpiredT
 }
 
 const lockLookupItem = `-- name: LockLookupItem :one
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id, l.kind
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id, l.type
 FROM items i
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
@@ -301,7 +301,7 @@ type LockLookupItemRow struct {
 	UpdatedAt         time.Time
 	DeletedAt         *time.Time
 	TrashBatchID      uuid.NullUUID
-	Kind              string
+	Type              string
 }
 
 func (q *Queries) LockLookupItem(ctx context.Context, arg LockLookupItemParams) (LockLookupItemRow, error) {
@@ -325,13 +325,13 @@ func (q *Queries) LockLookupItem(ctx context.Context, arg LockLookupItemParams) 
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
-		&i.Kind,
+		&i.Type,
 	)
 	return i, err
 }
 
 const lockTMDBImportItem = `-- name: LockTMDBImportItem :one
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id, l.kind, t.tmdb_id, t.imported_fields, t.imported_title, t.original_title,
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id, l.type, t.tmdb_id, t.imported_fields, t.imported_title, t.original_title,
        t.attachment_id AS imported_attachment_id
 FROM items i
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
@@ -363,7 +363,7 @@ type LockTMDBImportItemRow struct {
 	UpdatedAt            time.Time
 	DeletedAt            *time.Time
 	TrashBatchID         uuid.NullUUID
-	Kind                 string
+	Type                 string
 	TmdbID               int32
 	ImportedFields       []byte
 	ImportedTitle        *string
@@ -392,7 +392,7 @@ func (q *Queries) LockTMDBImportItem(ctx context.Context, arg LockTMDBImportItem
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
-		&i.Kind,
+		&i.Type,
 		&i.TmdbID,
 		&i.ImportedFields,
 		&i.ImportedTitle,
@@ -458,7 +458,7 @@ func (q *Queries) UpdateLookupItem(ctx context.Context, arg UpdateLookupItemPara
 
 const upsertTMDBImport = `-- name: UpsertTMDBImport :exec
 INSERT INTO tmdb_imports (
-  workspace_id, item_id, tmdb_id, kind, imported_fields, imported_title, original_title,
+  workspace_id, item_id, tmdb_id, type, imported_fields, imported_title, original_title,
   attachment_id, poster_path, poster_fetched_at, poster_refresh_after, poster_expires_at, fetched_at, refresh_after, expires_at
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7,
@@ -467,7 +467,7 @@ INSERT INTO tmdb_imports (
 )
 ON CONFLICT (item_id) DO UPDATE SET
   tmdb_id = EXCLUDED.tmdb_id,
-  kind = EXCLUDED.kind,
+  type = EXCLUDED.type,
   imported_fields = EXCLUDED.imported_fields,
   imported_title = EXCLUDED.imported_title,
   original_title = EXCLUDED.original_title,
@@ -486,7 +486,7 @@ type UpsertTMDBImportParams struct {
 	WorkspaceID        uuid.UUID
 	ItemID             uuid.UUID
 	TmdbID             int32
-	Kind               string
+	Type               string
 	ImportedFields     []byte
 	ImportedTitle      *string
 	OriginalTitle      string
@@ -505,7 +505,7 @@ func (q *Queries) UpsertTMDBImport(ctx context.Context, arg UpsertTMDBImportPara
 		arg.WorkspaceID,
 		arg.ItemID,
 		arg.TmdbID,
-		arg.Kind,
+		arg.Type,
 		arg.ImportedFields,
 		arg.ImportedTitle,
 		arg.OriginalTitle,

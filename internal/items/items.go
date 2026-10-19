@@ -67,8 +67,8 @@ type Item struct {
 	ID     uuid.UUID
 	ListID uuid.UUID
 	Title  string
-	// Kind is read-only: it is the kind of the item's list (F-007).
-	Kind    string
+	// Type is read-only: it is the type of the item's list (F-007).
+	Type    string
 	Image   *Image
 	Price   *Price
 	Website *string
@@ -110,7 +110,7 @@ type PathSegment struct {
 	IconColor *string
 }
 
-// ErrInvalidSort means a sort mode is neither a built-in mode nor a defined field of the list kind.
+// ErrInvalidSort means a sort mode is neither a built-in mode nor a defined field of the list type.
 var ErrInvalidSort = errors.New("items: sort is not available on this list")
 var ErrInvalidFilter = errors.New("items: field filter is not valid for this list")
 
@@ -194,18 +194,18 @@ func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (Ite
 	}
 	like := escapeLike(p.Q)
 	sortKey, sortType := "", ""
-	kindDefinition, err := q.GetKindDefinitionByKey(ctx, sqlc.GetKindDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: list.Kind})
+	typeDefinition, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: list.Type})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ItemPage{}, ErrInvalidSort
 	}
 	if err != nil {
-		return ItemPage{}, fmt.Errorf("load list kind definition: %w", err)
+		return ItemPage{}, fmt.Errorf("load list type definition: %w", err)
 	}
-	if p.Sort == "price" && !kindDefinition.AllowsPrice {
+	if p.Sort == "price" && !typeDefinition.AllowsPrice {
 		return ItemPage{}, ErrInvalidSort
 	}
 	if p.Sort != "manual" && p.Sort != "title" && p.Sort != "updated" && p.Sort != "price" {
-		sortType, err = s.fieldType(ctx, q, list.Kind, p.Sort)
+		sortType, err = s.fieldType(ctx, q, list.Type, p.Sort)
 		if errors.Is(err, ErrInvalidSort) {
 			return ItemPage{}, ErrInvalidSort
 		}
@@ -216,7 +216,7 @@ func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (Ite
 	}
 	filterType := ""
 	if p.FilterField != "" {
-		filterType, err = s.fieldType(ctx, q, list.Kind, p.FilterField)
+		filterType, err = s.fieldType(ctx, q, list.Type, p.FilterField)
 		if errors.Is(err, ErrInvalidSort) {
 			return ItemPage{}, ErrInvalidFilter
 		}
@@ -259,18 +259,18 @@ func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (Ite
 	return page, nil
 }
 
-func (s *Service) fieldType(ctx context.Context, q *sqlc.Queries, kind, key string) (string, error) {
+func (s *Service) fieldType(ctx context.Context, q *sqlc.Queries, typ, key string) (string, error) {
 	if key == "" || key == "manual" || key == "title" || key == "updated" || key == "price" {
 		return "", ErrInvalidSort
 	}
-	def, err := q.GetKindDefinitionByKey(ctx, sqlc.GetKindDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: kind})
+	def, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: typ})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrInvalidSort
 	}
 	if err != nil {
 		return "", err
 	}
-	fields, err := q.ListKindFields(ctx, sqlc.ListKindFieldsParams{WorkspaceID: s.workspaceID, KindID: def.ID})
+	fields, err := q.ListTypeFields(ctx, sqlc.ListTypeFieldsParams{WorkspaceID: s.workspaceID, TypeID: def.ID})
 	if err != nil {
 		return "", err
 	}
@@ -354,7 +354,7 @@ func EscapeLike(q string) string { return escapeLike(q) }
 // itemFromRow is the one mapper from the read-model row to an Item.
 func itemFromRow(r sqlc.ListItemsRow) Item {
 	it := Item{
-		ID: r.ID, ListID: r.ListID, Title: r.Title, Kind: r.Kind,
+		ID: r.ID, ListID: r.ListID, Title: r.Title, Type: r.Type,
 		Price: priceFromRow(r.PriceMin, r.PriceMax, r.Currency), Website: r.WebsiteUrl,
 		Metadata: json.RawMessage(r.Metadata), ContentVersion: int(r.ContentVersion), SortOrder: int(r.SortOrder),
 		Version: int(r.Version), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,

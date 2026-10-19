@@ -33,7 +33,7 @@ func (q *Queries) CountSearchItems(ctx context.Context, arg CountSearchItemsPara
 
 const listRecentItems = `-- name: ListRecentItems :many
 SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
-       l.kind              AS kind,
+       l.type              AS type,
        a.width             AS image_width,
        a.height            AS image_height,
        a.original_filename AS image_original_filename,
@@ -69,7 +69,7 @@ type ListRecentItemsRow struct {
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
 	TrashBatchID          uuid.NullUUID
-	Kind                  string
+	Type                  string
 	ImageWidth            *int32
 	ImageHeight           *int32
 	ImageOriginalFilename *string
@@ -106,7 +106,7 @@ func (q *Queries) ListRecentItems(ctx context.Context, arg ListRecentItemsParams
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.TrashBatchID,
-			&i.Kind,
+			&i.Type,
 			&i.ImageWidth,
 			&i.ImageHeight,
 			&i.ImageOriginalFilename,
@@ -155,9 +155,9 @@ func (q *Queries) ListSearchFolders(ctx context.Context, workspaceID uuid.UUID) 
 }
 
 const listSearchLists = `-- name: ListSearchLists :many
-SELECT l.id, l.name, l.folder_id, l.icon, l.icon_color, kd.name AS kind_name
+SELECT l.id, l.name, l.folder_id, l.icon, l.icon_color, kd.name AS type_name
 FROM lists l
-JOIN kind_definitions kd ON kd.workspace_id = l.workspace_id AND kd.key = l.kind
+JOIN type_definitions kd ON kd.workspace_id = l.workspace_id AND kd.key = l.type
 WHERE l.workspace_id = $1 AND l.deleted_at IS NULL
 `
 
@@ -167,7 +167,7 @@ type ListSearchListsRow struct {
 	FolderID  uuid.NullUUID
 	Icon      *string
 	IconColor *string
-	KindName  string
+	TypeName  string
 }
 
 // Active lists, just enough to name the last path segment (with its icon) and find its folder.
@@ -186,7 +186,7 @@ func (q *Queries) ListSearchLists(ctx context.Context, workspaceID uuid.UUID) ([
 			&i.FolderID,
 			&i.Icon,
 			&i.IconColor,
-			&i.KindName,
+			&i.TypeName,
 		); err != nil {
 			return nil, err
 		}
@@ -201,7 +201,7 @@ func (q *Queries) ListSearchLists(ctx context.Context, workspaceID uuid.UUID) ([
 const searchItems = `-- name: SearchItems :many
 
 SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
-       l.kind              AS kind,
+       l.type              AS type,
        a.width             AS image_width,
        a.height            AS image_height,
        a.original_filename AS image_original_filename,
@@ -241,7 +241,7 @@ type SearchItemsRow struct {
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
 	TrashBatchID          uuid.NullUUID
-	Kind                  string
+	Type                  string
 	ImageWidth            *int32
 	ImageHeight           *int32
 	ImageOriginalFilename *string
@@ -285,7 +285,7 @@ func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]Sea
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.TrashBatchID,
-			&i.Kind,
+			&i.Type,
 			&i.ImageWidth,
 			&i.ImageHeight,
 			&i.ImageOriginalFilename,

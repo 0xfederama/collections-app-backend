@@ -72,11 +72,11 @@ func withOrientation(jpg []byte, o uint16, bigEndian bool) []byte {
 // hugePNG is a header-only PNG claiming w x h pixels: DecodeConfig accepts it
 // without any pixel data, which is exactly the decompression-bomb shape.
 func hugePNG(w, h uint32) []byte {
-	chunk := func(kind string, data []byte) []byte {
+	chunk := func(typ string, data []byte) []byte {
 		out := binary.BigEndian.AppendUint32(nil, uint32(len(data)))
-		out = append(out, kind...)
+		out = append(out, typ...)
 		out = append(out, data...)
-		return binary.BigEndian.AppendUint32(out, crc32.ChecksumIEEE(append([]byte(kind), data...)))
+		return binary.BigEndian.AppendUint32(out, crc32.ChecksumIEEE(append([]byte(typ), data...)))
 	}
 	ihdr := binary.BigEndian.AppendUint32(nil, w)
 	ihdr = binary.BigEndian.AppendUint32(ihdr, h)

@@ -22,6 +22,10 @@ func TestF009B2_ValidatePinned(t *testing.T) {
 		{"movie", []string{"tmdb_id"}, []string{"pinned_fields[0]"}},
 		{"movie", []string{"price"}, []string{"pinned_fields[0]"}},
 		{"motorcycle", []string{"price", "power_hp"}, nil},
+		{"movie", []string{"release_year", "runtime_minutes", "streaming"}, nil},
+		{"motorcycle", []string{"price", "power_hp", "model_year"}, nil},
+		{"movie", []string{"release_year", "runtime_minutes", "streaming", "imdb_url"}, []string{"pinned_fields"}},
+		{"movie", []string{"release_year", "runtime_minutes", "release_year"}, []string{"pinned_fields[2]"}},
 	} {
 		got, err := types.ValidatePinned(tt.typ, tt.keys)
 		if tt.want == nil {

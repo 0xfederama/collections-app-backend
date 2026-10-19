@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.11.0
+  version: 0.12.0
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -2015,7 +2015,7 @@ components:
         default_icon: { type: string, nullable: true }
         allows_price: { type: boolean }
         default_sort_field: { type: string, nullable: true, maxLength: 32 }
-        default_pinned_fields: { type: array, nullable: true, items: { type: string, maxLength: 32 }, maxItems: 2 }
+        default_pinned_fields: { type: array, nullable: true, items: { type: string, maxLength: 32 }, maxItems: 3 }
         is_locked: { type: boolean }
         version: { type: integer }
         fields: { type: array, items: { $ref: '#/components/schemas/TypeField' } }
@@ -2028,7 +2028,7 @@ components:
         default_icon: { type: string, nullable: true }
         allows_price: { type: boolean }
         default_sort_field: { type: string, nullable: true, maxLength: 32 }
-        default_pinned_fields: { type: array, nullable: true, items: { type: string, maxLength: 32 }, maxItems: 2 }
+        default_pinned_fields: { type: array, nullable: true, items: { type: string, maxLength: 32 }, maxItems: 3 }
     UpdateTypeRequest:
       type: object
       additionalProperties: false
@@ -2037,7 +2037,7 @@ components:
         default_icon: { type: string, nullable: true }
         allows_price: { type: boolean }
         default_sort_field: { type: string, nullable: true, maxLength: 32 }
-        default_pinned_fields: { type: array, nullable: true, items: { type: string, maxLength: 32 }, maxItems: 2 }
+        default_pinned_fields: { type: array, nullable: true, items: { type: string, maxLength: 32 }, maxItems: 3 }
     CreateTypeFieldRequest:
       type: object
       required: [label, type]
@@ -2146,13 +2146,14 @@ components:
     PinnedFields:
       type: array
       nullable: true
-      maxItems: 2
+      maxItems: 3
       items: { type: string, maxLength: 32 }
       description: |
-        The fields a list shows in its rows, in order: the first is the primary field, the second the secondary (F009-B2; replaces the
-        `{under, right}` slots of F-002). `null` means the type default. `[]` pins nothing, which is different from `null`, and a single-element list is valid.
-        Any field defined for the type can be pinned; `price` is also available when the type allows it. At most 2 unique keys
-        (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `type` resets it to `null`.
+        The fields a list shows in its rows, in order (F009-B2; replaces the `{under, right}` slots of F-002; up to three since API 0.12.0,
+        F-016). With one key it sits beside the title. With two, the first sits beside the title and the second at the far right. With three,
+        the first two sit beside the title and the third at the far right. `null` means the type default. `[]` pins nothing, which is different
+        from `null`, and a single-element list is valid. Any field defined for the type can be pinned; `price` is also available when the type
+        allows it. At most 3 unique keys (`422 validation_failed` on `pinned_fields[i]`), else `422`. Changing the list's `type` resets it to `null`.
       example: [release_year, runtime_minutes]
     ListIcon:
       type: string

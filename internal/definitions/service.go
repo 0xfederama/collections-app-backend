@@ -110,8 +110,8 @@ func (s *Service) Create(ctx context.Context, in CreateType) (Type, error) {
 	}
 	var pinnedJSON []byte
 	if in.DefaultPinnedFields != nil {
-		if len(*in.DefaultPinnedFields) > 2 {
-			return Type{}, apperr.Validation(apperr.FieldError{Field: "default_pinned_fields", Message: "must have at most 2 entries"})
+		if len(*in.DefaultPinnedFields) > 3 {
+			return Type{}, apperr.Validation(apperr.FieldError{Field: "default_pinned_fields", Message: "must have at most 3 entries"})
 		}
 		seen := map[string]bool{}
 		for i, pin := range *in.DefaultPinnedFields {
@@ -183,8 +183,8 @@ func validateDefaults(allowsPrice bool, fields []sqlc.TypeField, sort *string, p
 		errs = append(errs, apperr.FieldError{Field: "default_sort_field", Message: "must be a field key of this type"})
 	}
 	if pins != nil {
-		if len(*pins) > 2 {
-			errs = append(errs, apperr.FieldError{Field: "default_pinned_fields", Message: "must have at most 2 entries"})
+		if len(*pins) > 3 {
+			errs = append(errs, apperr.FieldError{Field: "default_pinned_fields", Message: "must have at most 3 entries"})
 		} else {
 			seen := make(map[string]struct{}, len(*pins))
 			for i, pin := range *pins {

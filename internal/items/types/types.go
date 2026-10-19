@@ -321,9 +321,9 @@ func platformList(path string, raw any) ([]string, []apperr.FieldError) {
 	return out, nil
 }
 
-// maxPinned is the most field keys a list can pin (F009-B2): the first is the
-// primary field, the second the secondary.
-const maxPinned = 2
+// maxPinned is the most field keys a list can pin (F009-B2, three since F-016):
+// the first is the primary field, the second the secondary, the third the tertiary.
+const maxPinned = 3
 
 // PriceKey is the item column that can be pinned next to a type's metadata fields.
 const PriceKey = "price"
@@ -362,7 +362,7 @@ func PinnableKeys(typ string) []string {
 }
 
 // ValidatePinned checks the pinned fields of a list of this type (F009-B2): an
-// ordered list of at most 2 unique pinnable keys, the first the primary. Errors
+// ordered list of at most 3 unique pinnable keys, the first the primary. Errors
 // are on "pinned_fields[i]". The result is never nil for an unknown type (which
 // errors) but is the empty list for "pins nothing". A key that is not (or no
 // longer) a field of the type is rejected: a list of a price-less type cannot

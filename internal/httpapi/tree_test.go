@@ -100,24 +100,28 @@ func (e *treeEnv) folder(name string, parent any) obj {
 	return f
 }
 
-// list creates a generic list.
+// list creates a list with no type.
 func (e *treeEnv) list(name string, folder any) obj {
 	e.t.Helper()
-	return e.listOfType(name, folder, "generic")
+	return e.listOfType(name, folder, "")
 }
 
-// listOfType creates a list of the given type (required since API 0.3.0).
+// listOfType creates a list of the given type; "" is a list with no type (type null).
 func (e *treeEnv) listOfType(name string, folder any, typ string) obj {
 	e.t.Helper()
-	body, _ := json.Marshal(obj{"name": name, "type": typ, "folder_id": folder})
+	var typeValue any
+	if typ != "" {
+		typeValue = typ
+	}
+	body, _ := json.Marshal(obj{"name": name, "type": typeValue, "folder_id": folder})
 	rec := e.call("POST", "/api/v1/lists", string(body), "")
 	wantStatus(e.t, rec, 201)
 	l := decode(e.t, rec)
 	if rec.Header().Get("Location") != "/api/v1/lists/"+l["id"].(string) || rec.Header().Get("ETag") != fmt.Sprintf(`"l-%v"`, l["version"]) {
 		e.t.Fatalf("bad Location/ETag: %v / %v", rec.Header().Get("Location"), rec.Header().Get("ETag"))
 	}
-	if l["type"] != typ {
-		e.t.Fatalf("type = %v, want %s", l["type"], typ)
+	if l["type"] != typeValue {
+		e.t.Fatalf("type = %v, want %v", l["type"], typeValue)
 	}
 	return l
 }
@@ -174,7 +178,7 @@ func (e *treeEnv) trashList(name string, folder any) string {
 	e.t.Helper()
 	id := uuid.New()
 	batch := e.trashBatch("list", id)
-	e.exec(`INSERT INTO lists (id, workspace_id, folder_id, name, type, sort_order, deleted_at, trash_batch_id) VALUES ($1, $2, $3, $4, 'generic', 0, now(), $5)`,
+	e.exec(`INSERT INTO lists (id, workspace_id, folder_id, name, type, sort_order, deleted_at, trash_batch_id) VALUES ($1, $2, $3, $4, NULL, 0, now(), $5)`,
 		id, e.ws, folder, name, batch)
 	return id.String()
 }
@@ -442,7 +446,7 @@ func TestTrashedAndMissingAreNotFound(t *testing.T) {
 	l := e.list("L", nil)
 	for _, dest := range []string{tf, missing} {
 		wantProblem(t, e.call("POST", "/api/v1/folders", fmt.Sprintf(`{"name":"n","parent_folder_id":%q}`, dest), ""), 409, "destination_unavailable")
-		wantProblem(t, e.call("POST", "/api/v1/lists", fmt.Sprintf(`{"name":"n","type":"generic","folder_id":%q}`, dest), ""), 409, "destination_unavailable")
+		wantProblem(t, e.call("POST", "/api/v1/lists", fmt.Sprintf(`{"name":"n","folder_id":%q}`, dest), ""), 409, "destination_unavailable")
 		wantProblem(t, e.call("POST", "/api/v1/folders/"+live["id"].(string)+"/move", fmt.Sprintf(`{"parent_folder_id":%q}`, dest), etagOf("f", live)), 409, "destination_unavailable")
 		wantProblem(t, e.call("POST", "/api/v1/lists/"+l["id"].(string)+"/move", fmt.Sprintf(`{"folder_id":%q}`, dest), etagOf("l", l)), 409, "destination_unavailable")
 	}
@@ -536,14 +540,14 @@ func TestFieldValidation(t *testing.T) {
 		{"folder blank name", "POST", "/api/v1/folders", `{"name":"   "}`, "", []string{"name"}},
 		{"folder long name", "POST", "/api/v1/folders", `{"name":"` + long + `"}`, "", []string{"name"}},
 		{"folder rename blank", "PATCH", "/api/v1/folders/" + f["id"].(string), `{"name":" "}`, `"f-1"`, []string{"name"}},
-		{"list empty name", "POST", "/api/v1/lists", `{"name":"","type":"generic"}`, "", []string{"name"}},
-		{"list bad display mode", "POST", "/api/v1/lists", `{"name":"n","type":"generic","display_mode":"huge","sort_mode":"random"}`, "", []string{"display_mode"}},
-		{"TestF007 list NUL in description", "POST", "/api/v1/lists", `{"name":"n","type":"generic","description":"a\u0000b"}`, "", []string{"description"}},
+		{"list empty name", "POST", "/api/v1/lists", `{"name":""}`, "", []string{"name"}},
+		{"list bad display mode", "POST", "/api/v1/lists", `{"name":"n","display_mode":"huge","sort_mode":"random"}`, "", []string{"display_mode"}},
+		{"TestF007 list NUL in description", "POST", "/api/v1/lists", `{"name":"n","description":"a\u0000b"}`, "", []string{"description"}},
 		{"list patch name and enum", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"name":"","display_mode":"x"}`, `"l-1"`, []string{"name", "display_mode"}},
 		{"TestF007 list patch NUL in description", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"description":"a\u0000b"}`, `"l-1"`, []string{"description"}},
 		{"TestF007 list unknown type", "POST", "/api/v1/lists", `{"name":"n","type":"book"}`, "", []string{"type"}},
-		{"TestF007 list type_key on generic", "POST", "/api/v1/lists", `{"name":"n","type":"generic","sort_mode":"type_key"}`, "", []string{"sort_mode"}},
-		{"TestF013B4 director sort on generic", "POST", "/api/v1/lists", `{"name":"n","type":"generic","sort_mode":"director"}`, "", []string{"sort_mode"}},
+		{"TestF007 list type_key on generic", "POST", "/api/v1/lists", `{"name":"n","sort_mode":"type_key"}`, "", []string{"sort_mode"}},
+		{"TestF013B4 director sort on generic", "POST", "/api/v1/lists", `{"name":"n","sort_mode":"director"}`, "", []string{"sort_mode"}},
 		{"TestF013B4 director sort on tv", "POST", "/api/v1/lists", `{"name":"n","type":"tv_show","sort_mode":"director"}`, "", []string{"sort_mode"}},
 		{"TestF007 list patch unknown type", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"type":"book"}`, `"l-1"`, []string{"type"}},
 		{"TestF007 list patch type_key on generic", "PATCH", "/api/v1/lists/" + l["id"].(string), `{"sort_mode":"type_key"}`, `"l-1"`, []string{"sort_mode"}},
@@ -599,9 +603,11 @@ func TestTreeShape(t *testing.T) {
 	}
 }
 
-func TestF007_ListTypeIsRequiredAndReturned(t *testing.T) {
+func TestF007_ListTypeIsOptionalAndReturned(t *testing.T) {
 	e := newTreeEnv(t)
-	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"n"}`, ""), 422, "validation_failed")
+	// No type (omitted or null) is a list with type null; a blank key is not.
+	wantStatus(t, e.call("POST", "/api/v1/lists", `{"name":"n"}`, ""), 201)
+	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"n","type":""}`, ""), 422, "validation_failed")
 
 	l := e.listOfType("Bikes", nil, "motorcycle")
 	if l["type"] != "motorcycle" || e.fetch("lists", l["id"].(string))["type"] != "motorcycle" {
@@ -617,7 +623,7 @@ func TestF007_ListTypeIsRequiredAndReturned(t *testing.T) {
 		t.Error("GET /tree must show the list type")
 	}
 	// Every built-in type can be created and uses its definition's default sort field.
-	for _, typ := range []string{"generic", "movie", "tv_show", "motorcycle", "car", "camera"} {
+	for _, typ := range []string{"", "movie", "tv_show", "motorcycle", "car", "camera"} {
 		e.listOfType("K "+typ, nil, typ)
 	}
 	for typ, field := range map[string]string{"movie": "release_year", "tv_show": "first_air_year", "motorcycle": "displacement_cc", "car": "power_hp", "camera": "megapixels"} {
@@ -627,7 +633,7 @@ func TestF007_ListTypeIsRequiredAndReturned(t *testing.T) {
 			t.Errorf("%s: default sort = %v, want %s", typ, decode(t, rec)["sort_mode"], field)
 		}
 	}
-	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"S","type":"generic","sort_mode":"type_key"}`, ""), 422, "validation_failed")
+	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"S","sort_mode":"type_key"}`, ""), 422, "validation_failed")
 }
 
 func TestF007_ChangeListTypeClearsItemMetadata(t *testing.T) {
@@ -708,9 +714,9 @@ func TestF014B4_ListSortModeUsesFieldDefinitions(t *testing.T) {
 		t.Fatalf("after car: %v", l)
 	}
 
-	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"generic"}`, etagOf("l", l))
+	rec = e.call("PATCH", "/api/v1/lists/"+lid, `{"type":null}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
-	if got := decode(t, rec); got["type"] != "generic" || got["sort_mode"] != "manual" {
+	if got := decode(t, rec); got["type"] != nil || got["sort_mode"] != "manual" {
 		t.Fatalf("got %v", got)
 	}
 	// Unknown definition keys remain invalid.
@@ -721,11 +727,11 @@ func TestF014B4_ListSortModeUsesFieldDefinitions(t *testing.T) {
 	}
 }
 
-// descEnv returns a tree service on the env's database and a fresh generic list.
+// descEnv returns a tree service on the env's database and a fresh list with no type.
 func (e *treeEnv) descEnv() (*tree.Service, tree.List) {
 	e.t.Helper()
 	svc := tree.New(e.pool, clock.System{}, e.ws)
-	l, err := svc.CreateList(e.t.Context(), tree.CreateListInput{Name: "L", Type: "generic"})
+	l, err := svc.CreateList(e.t.Context(), tree.CreateListInput{Name: "L"})
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -780,12 +786,12 @@ func TestF007_ListDescriptionLimitIsBytes(t *testing.T) {
 	}
 
 	t.Run("create applies the same limit", func(t *testing.T) {
-		_, err := svc.CreateList(ctx, tree.CreateListInput{Name: "N", Type: "generic", Description: str(strings.Repeat("x", 65537))})
+		_, err := svc.CreateList(ctx, tree.CreateListInput{Name: "N", Description: str(strings.Repeat("x", 65537))})
 		var tooLarge *apperr.PayloadTooLargeError
 		if !errors.As(err, &tooLarge) {
 			t.Fatalf("err = %v, want PayloadTooLarge", err)
 		}
-		if _, err := svc.CreateList(ctx, tree.CreateListInput{Name: "N", Type: "generic", Description: str(strings.Repeat("x", 65536))}); err != nil {
+		if _, err := svc.CreateList(ctx, tree.CreateListInput{Name: "N", Description: str(strings.Repeat("x", 65536))}); err != nil {
 			t.Fatal(err)
 		}
 	})

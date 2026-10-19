@@ -129,10 +129,9 @@ func schemaCases() []schemaCase {
 			wantCode: "23514", wantConstr: "lists_type_check",
 		},
 		{
-			name: "F007 list type is required",
+			name: "F018 list type is optional (no type)",
 			stmts: []string{sqlWorkspaces,
 				`INSERT INTO lists (workspace_id, name, sort_order) VALUES ('` + wsA + `', 'L', 0)`},
-			wantCode: "23502", wantConstr: "",
 		},
 		{
 			name: "F014-B4 list sort_mode field key is valid",

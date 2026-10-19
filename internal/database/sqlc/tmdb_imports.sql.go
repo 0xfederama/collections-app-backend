@@ -60,9 +60,9 @@ type GetLookupListTypeParams struct {
 }
 
 // F013-B3 TMDB import provenance. Every query is scoped to one workspace.
-func (q *Queries) GetLookupListType(ctx context.Context, arg GetLookupListTypeParams) (string, error) {
+func (q *Queries) GetLookupListType(ctx context.Context, arg GetLookupListTypeParams) (*string, error) {
 	row := q.db.QueryRow(ctx, getLookupListType, arg.ID, arg.WorkspaceID)
-	var type_ string
+	var type_ *string
 	err := row.Scan(&type_)
 	return type_, err
 }
@@ -193,7 +193,7 @@ type ListDueTMDBImportsRow struct {
 	ItemVersion        int32
 	Metadata           []byte
 	DeletedAt          *time.Time
-	CurrentType        string
+	CurrentType        *string
 }
 
 func (q *Queries) ListDueTMDBImports(ctx context.Context, arg ListDueTMDBImportsParams) ([]ListDueTMDBImportsRow, error) {
@@ -301,7 +301,7 @@ type LockLookupItemRow struct {
 	UpdatedAt         time.Time
 	DeletedAt         *time.Time
 	TrashBatchID      uuid.NullUUID
-	Type              string
+	Type              *string
 }
 
 func (q *Queries) LockLookupItem(ctx context.Context, arg LockLookupItemParams) (LockLookupItemRow, error) {
@@ -363,7 +363,7 @@ type LockTMDBImportItemRow struct {
 	UpdatedAt            time.Time
 	DeletedAt            *time.Time
 	TrashBatchID         uuid.NullUUID
-	Type                 string
+	Type                 *string
 	TmdbID               int32
 	ImportedFields       []byte
 	ImportedTitle        *string

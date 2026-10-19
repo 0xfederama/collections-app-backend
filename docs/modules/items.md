@@ -21,7 +21,7 @@ Owns items of a list: create, get, page, patch, move and reorder. Metadata, pric
 - `Update(ctx, id, version, Patch) (Item, error)`: `version` is the If-Match value
 - `Move(ctx, id, version, dest) (Item, error)`: appends last in the destination list
 - `Reorder(ctx, listID, ids) error`: `ids` must be the active items of the list
-- `ValidateMetadata(ctx, q, type, metadata) (map[string]any, error)`: definition-backed normalization
+- `ValidateMetadata(ctx, q, type *string, metadata) (map[string]any, error)`: definition-backed normalization
 - `FromSearchRow(sqlc.SearchItemsRow) Item`, `EscapeLike(q) string`: used by `internal/search`
 
 ## Gotchas
@@ -33,3 +33,4 @@ Owns items of a list: create, get, page, patch, move and reorder. Metadata, pric
 - `metadata` replaces the object and drops nulls. Undeclared keys are 400 `unknown_field`; invalid values are 422.
 - Field filters: text/link/streaming use `filter_value`; boolean uses `true`/`false`; number/date use a min/max range.
 - Price accepts amount or min/max, never both, and only when the definition allows it.
+- A list with no type (`Item.Type == nil`, API `type: null`) has no definition: metadata must be `{}`, price is 422, only built-in sorts apply, field sorts/filters are `invalid_parameter`; moves between no-type lists are fine, no-type vs typed is `type_mismatch`.

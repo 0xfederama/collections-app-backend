@@ -15,7 +15,7 @@ Finds active items by title and returns their folder/list path and list type nam
 
 - `New(db sqlc.DBTX, workspaceID uuid.UUID) *Service`
 - `(*Service).Search(ctx, Params{Q, Limit, Offset}) (Page, error)`: limit default 50, max 200
-- `Page{Results []Result, Limit, Offset, Total}`; `Result{Item, TypeName, Path}`
+- `Page{Results []Result, Limit, Offset, Total}`; `Result{Item, TypeName, Path}` (`TypeName` is nil for a list with no type)
 - `(*Service).Recent(ctx, limit) ([]Result, error)`: limit default 12, max 50, newest `updated_at` first, then id
 - `GET /api/v1/recent-items?limit=`: 200 `{ data: [SearchResult] }`, no `page`; 400 `invalid_parameter` for a limit outside 1–50 (the guard answers)
 - `ErrInvalidQuery`: `q` is empty after trimming or over 200 characters

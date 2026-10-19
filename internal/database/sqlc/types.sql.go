@@ -15,7 +15,7 @@ import (
 const countTypeFieldValues = `-- name: CountTypeFieldValues :one
 SELECT count(*)::int FROM items i
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-WHERE i.workspace_id = $1 AND l.type = $2 AND i.metadata ? $3::text
+WHERE i.workspace_id = $1 AND l.type = $2::text AND i.metadata ? $3::text
 `
 
 type CountTypeFieldValuesParams struct {
@@ -208,7 +208,7 @@ func (q *Queries) InsertTypeField(ctx context.Context, arg InsertTypeFieldParams
 }
 
 const listActiveListsByType = `-- name: ListActiveListsByType :many
-SELECT id, name FROM lists WHERE workspace_id = $1 AND type = $2 AND deleted_at IS NULL ORDER BY name, id
+SELECT id, name FROM lists WHERE workspace_id = $1 AND type = $2::text AND deleted_at IS NULL ORDER BY name, id
 `
 
 type ListActiveListsByTypeParams struct {
@@ -462,7 +462,7 @@ func (q *Queries) ReorderTypeFields(ctx context.Context, arg ReorderTypeFieldsPa
 const resetListTypeFieldPins = `-- name: ResetListTypeFieldPins :exec
 UPDATE lists
 SET pinned_fields = NULL, version = version + 1, updated_at = $1
-WHERE workspace_id = $2 AND type = $3 AND pinned_fields ? $4::text
+WHERE workspace_id = $2 AND type = $3::text AND pinned_fields ? $4::text
 `
 
 type ResetListTypeFieldPinsParams struct {
@@ -485,7 +485,7 @@ func (q *Queries) ResetListTypeFieldPins(ctx context.Context, arg ResetListTypeF
 const resetListTypeFieldSort = `-- name: ResetListTypeFieldSort :exec
 UPDATE lists
 SET sort_mode = 'manual', version = version + 1, updated_at = $1
-WHERE workspace_id = $2 AND type = $3 AND sort_mode = $4
+WHERE workspace_id = $2 AND type = $3::text AND sort_mode = $4
 `
 
 type ResetListTypeFieldSortParams struct {
@@ -549,7 +549,7 @@ func (q *Queries) SeedBuiltinTypeDefinitions(ctx context.Context, workspaceID uu
 const stripTypeFieldValues = `-- name: StripTypeFieldValues :exec
 UPDATE items i SET metadata = i.metadata - $1::text, version = i.version + 1, updated_at = $2
 FROM lists l WHERE l.id = i.list_id AND l.workspace_id = i.workspace_id
-  AND i.workspace_id = $3 AND l.type = $4 AND i.metadata ? $1::text
+  AND i.workspace_id = $3 AND l.type = $4::text AND i.metadata ? $1::text
 `
 
 type StripTypeFieldValuesParams struct {

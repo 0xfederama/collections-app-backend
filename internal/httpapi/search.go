@@ -64,5 +64,5 @@ func searchResultBody(res search.Result) oapi.SearchResult {
 			Icon: nullableString(seg.Icon), IconColor: nullableIconColor(seg.IconColor),
 		})
 	}
-	return oapi.SearchResult{Item: itemSummaryBody(res.Item), TypeName: res.TypeName, Path: path}
+	return oapi.SearchResult{Item: itemSummaryBody(res.Item), TypeName: nullableString(res.TypeName), Path: path}
 }

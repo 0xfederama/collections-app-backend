@@ -67,8 +67,8 @@ type Item struct {
 	ID     uuid.UUID
 	ListID uuid.UUID
 	Title  string
-	// Type is read-only: it is the type of the item's list (F-007).
-	Type    string
+	// Type is read-only: it is the type of the item's list (F-007); nil when the list has no type.
+	Type    *string
 	Image   *Image
 	Price   *Price
 	Website *string
@@ -194,12 +194,16 @@ func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (Ite
 	}
 	like := escapeLike(p.Q)
 	sortKey, sortType := "", ""
-	typeDefinition, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: list.Type})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ItemPage{}, ErrInvalidSort
-	}
-	if err != nil {
-		return ItemPage{}, fmt.Errorf("load list type definition: %w", err)
+	// A list with no type has no definition: no price and no fields.
+	var typeDefinition sqlc.TypeDefinition
+	if list.Type != nil {
+		typeDefinition, err = q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: *list.Type})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ItemPage{}, ErrInvalidSort
+		}
+		if err != nil {
+			return ItemPage{}, fmt.Errorf("load list type definition: %w", err)
+		}
 	}
 	if p.Sort == "price" && !typeDefinition.AllowsPrice {
 		return ItemPage{}, ErrInvalidSort
@@ -259,11 +263,11 @@ func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (Ite
 	return page, nil
 }
 
-func (s *Service) fieldType(ctx context.Context, q *sqlc.Queries, typ, key string) (string, error) {
-	if key == "" || key == "manual" || key == "title" || key == "updated" || key == "price" {
+func (s *Service) fieldType(ctx context.Context, q *sqlc.Queries, typ *string, key string) (string, error) {
+	if typ == nil || key == "" || key == "manual" || key == "title" || key == "updated" || key == "price" {
 		return "", ErrInvalidSort
 	}
-	def, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: typ})
+	def, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: *typ})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrInvalidSort
 	}

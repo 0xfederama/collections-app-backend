@@ -228,9 +228,8 @@ func itemBody(it items.Item) (oapi.Item, error) {
 	if metadata == nil {
 		metadata = map[string]interface{}{}
 	}
-	typ := it.Type
 	out := oapi.Item{
-		Id: it.ID, ListId: it.ListID, Title: it.Title, Type: &typ, Metadata: metadata,
+		Id: it.ID, ListId: it.ListID, Title: it.Title, Type: nullableString(it.Type), Metadata: metadata,
 		Image: image, Price: priceBody(it.Price), Website: nullableString(it.Website),
 		ContentVersion: it.ContentVersion, SortOrder: it.SortOrder, Version: it.Version,
 		CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt,
@@ -247,7 +246,7 @@ func itemBody(it items.Item) (oapi.Item, error) {
 
 func itemSummaryBody(it items.Item) oapi.ItemSummary {
 	out := oapi.ItemSummary{
-		Id: it.ID, ListId: it.ListID, Title: it.Title, Type: it.Type,
+		Id: it.ID, ListId: it.ListID, Title: it.Title, Type: nullableString(it.Type),
 		Price: priceBody(it.Price), Website: nullableString(it.Website), ContentVersion: it.ContentVersion,
 		SortOrder: it.SortOrder, Version: it.Version, CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt,
 		Image: nullable.NewNullNullable[oapi.ImageSummary](),

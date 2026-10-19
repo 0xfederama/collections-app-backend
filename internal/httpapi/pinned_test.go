@@ -89,7 +89,7 @@ func TestF009B2_PinnedFieldsOnCreate(t *testing.T) {
 		t.Fatalf("null on create: %v", v)
 	}
 	// Invalid on create changes nothing.
-	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"X","type":"generic","pinned_fields":["release_year"]}`, ""), 422, "validation_failed")
+	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"X","pinned_fields":["release_year"]}`, ""), 422, "validation_failed")
 }
 
 func TestF009B2_PinnedFieldsValidation(t *testing.T) {

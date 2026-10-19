@@ -81,7 +81,7 @@ type List struct {
 	UpdatedAt    time.Time
 	DeletedAt    *time.Time
 	TrashBatchID uuid.NullUUID
-	Type         string
+	Type         *string
 	PinnedFields []byte
 	Icon         *string
 	IconColor    *string

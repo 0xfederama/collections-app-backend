@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Owns workspace folders and lists: create, read, patch, move, reorder and the sidebar tree. A list type must exist in the workspace definitions; it governs defaults, pins, sorting and its items. No HTTP; deletion is in `internal/trash`.
+Owns workspace folders and lists: create, read, patch, move, reorder and the sidebar tree. A list type is optional: `nil` is a list with no type (API `type: null`, no fields, no price, built-in sort modes only, no pins). A given type must exist in the workspace definitions; it governs defaults, pins, sorting and its items. No HTTP; deletion is in `internal/trash`.
 
 ## Key files
 
@@ -18,9 +18,9 @@ Owns workspace folders and lists: create, read, patch, move, reorder and the sid
 - `(*Service).Tree(ctx) (Tree, error)`: all active folders and lists, ordered by `(sort_order, id)`
 - `CreateFolder`, `GetFolder`, `UpdateFolder(ctx, id, version, name *string)`, `MoveFolder(ctx, id, version, parent *uuid.UUID)`: nil parent is root
 - `ReorderFolders(ctx, parent *uuid.UUID, ids []uuid.UUID) error`
-- `CreateList(ctx, CreateListInput) (List, error)`: known workspace type required; definition default sort applies
+- `CreateList(ctx, CreateListInput) (List, error)`: nil `Type` = no type; a given type must be a workspace type; definition default sort applies
 - `GetList(ctx, id) (List, error)`: fills `Path` (ancestors, root first)
-- `UpdateList(ctx, id, version, ListPatch) (List, error)`: a `Type` change clears the items' metadata
+- `UpdateList(ctx, id, version, ListPatch) (List, error)`: `Type` is an `Optional` (Set with nil Value = no type); a change, also to or from no type, clears the items' metadata
 - `MoveList(ctx, id, version, folder *uuid.UUID) (List, error)`, `ReorderLists(ctx, folder *uuid.UUID, ids []uuid.UUID) error`
 - `PinnedFields` (ordered `[]string`): validates against the type fields; nil = definition default
 - `CreateListInput.Icon`/`IconColor`, `ListPatch.Icon`/`IconColor` (`Optional[string]`): nil or null = default icon

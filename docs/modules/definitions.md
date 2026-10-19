@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Manages workspace-scoped type definitions and their fields. Built-in types and fields are seeded locked; custom types and their defaults are editable.
+Manages workspace-scoped type definitions and their fields. Built-in types (movie, tv_show, motorcycle, car, camera; there is no `generic`, a list with no type has `type` null) and fields are seeded locked; custom types and their defaults are editable.
 
 ## Key files
 

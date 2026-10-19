@@ -28,7 +28,7 @@ WHERE workspace_id = @workspace_id AND deleted_at IS NULL
 
 -- name: InsertList :one
 INSERT INTO lists (workspace_id, folder_id, name, type, description, display_mode, sort_mode, pinned_fields, icon, icon_color, sort_order, created_at, updated_at)
-VALUES (@workspace_id, sqlc.narg(folder_id), @name, @type, sqlc.narg(description), @display_mode, @sort_mode, sqlc.narg(pinned_fields), sqlc.narg(icon), sqlc.narg(icon_color), @sort_order, @now, @now)
+VALUES (@workspace_id, sqlc.narg(folder_id), @name, sqlc.narg(type), sqlc.narg(description), @display_mode, @sort_mode, sqlc.narg(pinned_fields), sqlc.narg(icon), sqlc.narg(icon_color), @sort_order, @now, @now)
 RETURNING *;
 
 -- name: UpdateList :one
@@ -43,7 +43,7 @@ RETURNING *;
 -- name: UpdateListType :one
 -- The service clears the items' type fields (ClearListItemsMetadata) in the same transaction. Pinned fields reset to the type default.
 UPDATE lists
-SET type = @type, pinned_fields = NULL, version = version + 1, updated_at = @now
+SET type = sqlc.narg(type), pinned_fields = NULL, version = version + 1, updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 RETURNING *;
 

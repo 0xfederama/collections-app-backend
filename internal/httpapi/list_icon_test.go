@@ -18,15 +18,15 @@ func TestF012_ListIconCreate(t *testing.T) {
 	tests := []struct {
 		name, body, wantIcon, wantColor string
 	}{
-		{"no icon", `{"name":"A","type":"generic"}`, "", ""},
-		{"null icon", `{"name":"A","type":"generic","icon":null,"icon_color":null}`, "", ""},
+		{"no icon", `{"name":"A"}`, "", ""},
+		{"null icon", `{"name":"A","icon":null,"icon_color":null}`, "", ""},
 		{"emoji", `{"name":"A","type":"movie","icon":"🎬"}`, "🎬", ""},
-		{"emoji sequence", `{"name":"A","type":"generic","icon":"👨‍👩‍👧"}`, "👨‍👩‍👧", ""},
-		{"keycap", `{"name":"A","type":"generic","icon":"1️⃣"}`, "1️⃣", ""},
-		{"flag", `{"name":"A","type":"generic","icon":"🇮🇹"}`, "🇮🇹", ""},
+		{"emoji sequence", `{"name":"A","icon":"👨‍👩‍👧"}`, "👨‍👩‍👧", ""},
+		{"keycap", `{"name":"A","icon":"1️⃣"}`, "1️⃣", ""},
+		{"flag", `{"name":"A","icon":"🇮🇹"}`, "🇮🇹", ""},
 		{"built-in without colour", `{"name":"A","type":"movie","icon":"i:film"}`, "i:film", ""},
 		{"built-in with colour", `{"name":"A","type":"movie","icon":"i:film","icon_color":"indigo"}`, "i:film", "indigo"},
-		{"longest built-in name", `{"name":"A","type":"generic","icon":"i:` + strings.Repeat("a", 40) + `"}`, "i:" + strings.Repeat("a", 40), ""},
+		{"longest built-in name", `{"name":"A","icon":"i:` + strings.Repeat("a", 40) + `"}`, "i:" + strings.Repeat("a", 40), ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -52,13 +52,13 @@ func TestF012_ListIconCreateInvalid(t *testing.T) {
 	tests := []struct {
 		name, body, field string
 	}{
-		{"empty icon", `{"name":"A","type":"generic","icon":""}`, "icon"},
-		{"plain word", `{"name":"A","type":"generic","icon":"film"}`, "icon"},
-		{"digits", `{"name":"A","type":"generic","icon":"12"}`, "icon"},
-		{"two emoji", `{"name":"A","type":"generic","icon":"🎬🎬"}`, "icon"},
-		{"emoji with text", `{"name":"A","type":"generic","icon":"🎬 film"}`, "icon"},
-		{"trailing space", `{"name":"A","type":"generic","icon":"🎬 "}`, "icon"},
-		{"control character", `{"name":"A","type":"generic","icon":"🎬\u0007"}`, "icon"},
+		{"empty icon", `{"name":"A","icon":""}`, "icon"},
+		{"plain word", `{"name":"A","icon":"film"}`, "icon"},
+		{"digits", `{"name":"A","icon":"12"}`, "icon"},
+		{"two emoji", `{"name":"A","icon":"🎬🎬"}`, "icon"},
+		{"emoji with text", `{"name":"A","icon":"🎬 film"}`, "icon"},
+		{"trailing space", `{"name":"A","icon":"🎬 "}`, "icon"},
+		{"control character", `{"name":"A","icon":"🎬\u0007"}`, "icon"},
 		{"uppercase built-in", `{"name":"A","type":"movie","icon":"i:Film"}`, "icon"},
 		{"empty built-in name", `{"name":"A","type":"movie","icon":"i:"}`, "icon"},
 		{"built-in name with space", `{"name":"A","type":"movie","icon":"i:film camera"}`, "icon"},

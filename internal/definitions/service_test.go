@@ -217,7 +217,6 @@ func TestF014_BuiltinTypesSeedDefaultPinnedFields(t *testing.T) {
 		"motorcycle": {"displacement_cc", "price"},
 		"car":        {"model_year", "price"},
 		"camera":     {"camera_type", "price"},
-		"generic":    {},
 	}
 	types, err := svc.List(t.Context())
 	if err != nil {

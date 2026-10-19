@@ -44,7 +44,7 @@ type ClearListItemsPriceParams struct {
 	WorkspaceID uuid.UUID
 }
 
-// A type change to generic removes the price of every item of the list (trashed ones too; generic has no price, F008-B1).
+// A type change to a type without a price (or to no type) removes the price of every item of the list (trashed ones too; F008-B1).
 func (q *Queries) ClearListItemsPrice(ctx context.Context, arg ClearListItemsPriceParams) (int64, error) {
 	result, err := q.db.Exec(ctx, clearListItemsPrice, arg.Now, arg.ListID, arg.WorkspaceID)
 	if err != nil {
@@ -135,7 +135,7 @@ type GetActiveListForItemsRow struct {
 	Name     string
 	FolderID uuid.NullUUID
 	SortMode string
-	Type     string
+	Type     *string
 }
 
 func (q *Queries) GetActiveListForItems(ctx context.Context, arg GetActiveListForItemsParams) (GetActiveListForItemsRow, error) {
@@ -188,7 +188,7 @@ type GetItemRow struct {
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
 	TrashBatchID          uuid.NullUUID
-	Type                  string
+	Type                  *string
 	ImageWidth            *int32
 	ImageHeight           *int32
 	ImageOriginalFilename *string
@@ -404,7 +404,7 @@ type ListItemsRow struct {
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
 	TrashBatchID          uuid.NullUUID
-	Type                  string
+	Type                  *string
 	ImageWidth            *int32
 	ImageHeight           *int32
 	ImageOriginalFilename *string

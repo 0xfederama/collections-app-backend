@@ -519,7 +519,7 @@ paths:
         `price` is valid only for types that allow a price.
 
         Changing `type` on a list that has items **clears the `metadata` of all its items** (trashed ones too; their `version` is bumped),
-        because the type fields differ per type. A change **to a type without a price** (`generic`, `movie`, `tv_show`) also clears the `price` of all its items (trashed ones too) and
+        because the type fields differ per type. A change **to a type without a price** (`movie`, `tv_show`) or **to no type** (`null`) also clears the `price` of all its items (trashed ones too) and
         turns a stored sort field unavailable on the new type into the new type's default sort field (or `manual` if it has none). Clients should warn first. A type change also resets `pinned_fields` to `null` (unless
         the same request sets it, which is then validated against the new type). Send `pinned_fields: null` to reset it to the type default;
         absent leaves it unchanged.
@@ -666,7 +666,7 @@ paths:
         Appended to the end of the list. The item's `type` is the list's type (read-only, not accepted in the body). Image and Markdown
         content are set through their own endpoints after creation. `metadata` is validated against the list's type (see the `*Metadata` schemas).
         `price` is either `{amount, currency}` (single price) or `{min, max, currency}` (range). A `price` on an item of a type without a price
-        (`generic`, `movie` or `tv_show`; F009-B1) is rejected with `422 validation_failed` on `price` (`null` is fine).
+        (`movie` or `tv_show`, or a list with no type; F009-B1) is rejected with `422 validation_failed` on `price` (`null` is fine).
         For movie and TV lists, `lookup` defaults to `true`: the server searches by title and applies the first result. Send `tmdb_id` to
         select a known suggestion. Send `lookup: false` to create the item exactly as supplied. Lookup fields are ignored on other types.
         If automatic lookup finds no match, the item is still created unchanged. If lookup was explicitly requested but unavailable, the
@@ -757,7 +757,7 @@ paths:
       operationId: updateItem
       summary: Update an item
       description: |
-        Requires `If-Match` (`"i-N"`). Any of `title, price, website, metadata`; send `null` to clear a nullable field. A non-null `price` on an item of a type without a price (`generic`, `movie`, `tv_show`; F009-B1) is rejected with `422 validation_failed`. `metadata` is
+        Requires `If-Match` (`"i-N"`). Any of `title, price, website, metadata`; send `null` to clear a nullable field. A non-null `price` on an item of a type without a price (`movie`, `tv_show`, or a list with no type; F009-B1) is rejected with `422 validation_failed`. `metadata` is
         validated against the list's type and replaces the stored one. The type cannot be changed here (it belongs to the list).
         Image changes go through the image endpoints.
       parameters:
@@ -860,7 +860,7 @@ paths:
       summary: Move an item to another list
       description: |
         Requires `If-Match` (`"i-N"`). Appended to the end of the destination list. A missing or trashed list returns
-        `409 destination_unavailable`. A destination list of another type returns `409 type_mismatch`.
+        `409 destination_unavailable`. A destination list of another type returns `409 type_mismatch` (two lists with no type match).
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -2196,7 +2196,7 @@ components:
     CreateListRequest:
       type: object
       additionalProperties: false
-      required: [name, type]
+      required: [name]
       properties:
         name: { type: string, minLength: 1, maxLength: 200 }
         type: { $ref: '#/components/schemas/ItemType' }
@@ -2238,9 +2238,12 @@ components:
     # ---- Items ----
     ItemType:
       type: string
+      nullable: true
       description: |
-        The type of a list. Items have no type of their own: theirs is read-only and derived from their list. Changing the type of a
-        list that has items clears the `metadata` of all its items.
+        The type of a list: the key of a type defined in the workspace, or `null` for a list with no type (nothing selected; the default
+        on create). Items have no type of their own: theirs is read-only and derived from their list (`null` for a list with no type). A list
+        with no type has no custom fields, no price, only the built-in sort modes and no pinned fields; its items' `metadata` is `{}`. Changing the
+        type of a list that has items (to another type or to/from `null`) clears the `metadata` of all its items.
     ItemBase:
       type: object
       description: Fields shared by every item type. `type` (read-only, derived from the list) and `metadata` are added by the per-type schemas.
@@ -2261,14 +2264,6 @@ components:
           type: array
           description: Ancestor folders and the list. Present on `getItem` only.
           items: { $ref: '#/components/schemas/PathSegment' }
-    GenericItem:
-      allOf:
-        - $ref: '#/components/schemas/ItemBase'
-        - type: object
-          required: [type, metadata]
-          properties:
-            type: { type: string, enum: [generic], readOnly: true }
-            metadata: { $ref: '#/components/schemas/GenericMetadata' }
     MovieItem:
       allOf:
         - $ref: '#/components/schemas/ItemBase'
@@ -2316,7 +2311,7 @@ components:
         - type: object
           required: [type, metadata]
           properties:
-            type: { type: string, readOnly: true }
+            type: { type: string, nullable: true, readOnly: true, description: '`null` when the list has no type.' }
             metadata:
               type: object
               additionalProperties: true
@@ -2354,7 +2349,7 @@ components:
       required: [item, path, type_name]
       properties:
         item: { $ref: '#/components/schemas/ItemSummary' }
-        type_name: { type: string, description: The display name from this workspace's type definition. }
+        type_name: { type: string, nullable: true, description: "The display name from this workspace's type definition, `null` when the list has no type." }
         path:
           type: array
           items: { $ref: '#/components/schemas/SearchPathSegment' }
@@ -2469,11 +2464,6 @@ components:
           maxItems: 30
           description: Platforms available only through per-title rental or purchase, not subscription, free, or ad-supported offers. Each entry must match (case-insensitively) an entry of `platforms` and is stored with that entry's casing. Unique case-insensitively. Omitted, null or empty means none paid.
           items: { type: string, maxLength: 60 }
-    GenericMetadata:
-      type: object
-      description: Must be `{}`.
-      additionalProperties: false
-      maxProperties: 0
     MovieMetadata:
       type: object
       additionalProperties: false

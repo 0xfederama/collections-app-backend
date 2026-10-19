@@ -90,9 +90,9 @@ folder="$(field .id)"
 json 201 POST /api/v1/folders -d "{\"name\": \"Sci-Fi\", \"parent_folder_id\": \"$folder\"}"
 json 201 POST /api/v1/lists -d "{\"name\": \"Watchlist\", \"type\": \"movie\", \"folder_id\": \"$folder\"}"
 watchlist="$(field .id)"
-json 201 POST /api/v1/lists -d '{"name": "Wishlist", "type": "generic"}'
+json 201 POST /api/v1/lists -d '{"name": "Wishlist"}'
 wishlist="$(field .id)"
-json 201 POST /api/v1/lists -d '{"name": "Old stuff", "type": "generic"}'
+json 201 POST /api/v1/lists -d '{"name": "Old stuff"}'
 old_list="$(field .id)"
 
 new_item "$watchlist" "The Matrix"

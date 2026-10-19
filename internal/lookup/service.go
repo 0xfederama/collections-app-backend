@@ -138,7 +138,8 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 	if it.Version != expectedVersion {
 		return items.Item{}, apperr.VersionConflict(it.Version)
 	}
-	if it.Type != "movie" && it.Type != "tv_show" {
+	itemType := typeKey(it.Type)
+	if itemType != "movie" && itemType != "tv_show" {
 		return items.Item{}, apperr.Validation(apperr.FieldError{Field: "item", Message: "TMDB lookup is available only for movie and TV items"})
 	}
 	settings, err := s.settings.Get(ctx, s.workspaceID)
@@ -158,7 +159,7 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 			return items.Item{}, apperr.Validation(apperr.FieldError{Field: "tmdb_id", Message: "is required when the item has no previous TMDB match"})
 		}
 	}
-	candidate, err := s.resolve(ctx, it.Type, it.Title, lookupID, settings)
+	candidate, err := s.resolve(ctx, itemType, it.Title, lookupID, settings)
 	if err != nil {
 		return items.Item{}, err
 	}
@@ -179,7 +180,7 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 		}
 	}
 	return s.store.Apply(ctx, ApplyParams{
-		Mode: mode, ItemID: itemID, ExpectedVersion: expectedVersion, Type: it.Type,
+		Mode: mode, ItemID: itemID, ExpectedVersion: expectedVersion, Type: itemType,
 		TMDBID: candidate.details.ID, Title: candidate.details.Title, OriginalTitle: it.Title,
 		Fields: candidate.details.Metadata, PosterPath: candidate.details.PosterPath, Poster: poster,
 		RefreshFields: true, RefreshPoster: refreshPoster,

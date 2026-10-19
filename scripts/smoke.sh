@@ -119,6 +119,13 @@ step "move item to a list of another type"
 json 409 POST "/api/v1/items/$ITEM_ID/move" -H "If-Match: $ITEM_ETAG" -d "{\"list_id\":\"$MOVIE_LIST_ID\"}"
 expect "problem code" type_mismatch "$(field .code)"
 
+step "create a list and an item with no type"
+json 201 POST /api/v1/lists -d "{\"name\":\"$RUN plain\",\"folder_id\":\"$FOLDER_ID\"}"
+expect "no-type list type" null "$(jq -c '.type' "$T/body")"
+PLAIN_LIST_ID="$(field .id)"
+json 201 POST "/api/v1/lists/$PLAIN_LIST_ID/items" -d '{"title":"plain thing"}'
+expect "no-type item type" null "$(jq -c '.type' "$T/body")"
+
 step "search finds the item"
 call 200 GET "/api/v1/search?q=$RUN%20big"
 expect "search hits for the item" 1 "$(jq --arg id "$ITEM_ID" '[.data[] | select(.item.id == $id)] | length' "$T/body")"

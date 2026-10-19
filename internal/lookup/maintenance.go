@@ -115,7 +115,7 @@ func (s *DBStore) Run(ctx context.Context, interval time.Duration, refresh Refre
 }
 
 func eligibleForRefresh(row sqlc.ListDueTMDBImportsRow) bool {
-	if row.DeletedAt != nil || row.CurrentType != row.Type {
+	if row.DeletedAt != nil || typeKey(row.CurrentType) != row.Type {
 		return false
 	}
 	metadata := map[string]any{}

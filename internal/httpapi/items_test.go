@@ -599,7 +599,7 @@ func TestListItems(t *testing.T) {
 		if m, ok := first["metadata"].(map[string]any); !ok || len(m) != 0 {
 			t.Errorf("ItemSummary metadata = %v, want {}", first["metadata"])
 		}
-		if first["id"] != banana["id"] || first["version"] != float64(2) || first["website"] != "https://touched.example" || first["type"] != "generic" || first["image"] != nil || first["price"] != nil {
+		if first["id"] != banana["id"] || first["version"] != float64(2) || first["website"] != "https://touched.example" || first["type"] != nil || first["image"] != nil || first["price"] != nil {
 			t.Fatalf("row = %v", first)
 		}
 		_ = apple
@@ -1034,7 +1034,7 @@ func TestF014B4_ListItemsSortsByDefinitionAndFilters(t *testing.T) {
 		}
 	})
 
-	t.Run("generic list answers 400 invalid_parameter", func(t *testing.T) {
+	t.Run("no-type list answers 400 invalid_parameter", func(t *testing.T) {
 		g := e.list("Plain", nil)
 		e.titled(g["id"].(string), "x")
 		wantProblem(t, e.call("GET", "/api/v1/lists/"+g["id"].(string)+"/items?sort=type_key", "", ""), 400, "invalid_parameter")

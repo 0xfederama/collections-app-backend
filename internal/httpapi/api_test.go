@@ -161,7 +161,7 @@ func TestIfMatchNotRequired(t *testing.T) {
 	// Creates, …/order and the tree have real handlers (see tree_test.go): none of them must answer 428.
 	for _, r := range []req{
 		{method: "POST", path: "/api/v1/folders", body: `{"name":"n"}`, contentType: jsonCT},
-		{method: "POST", path: "/api/v1/lists", body: `{"name":"n","type":"generic"}`, contentType: jsonCT},
+		{method: "POST", path: "/api/v1/lists", body: `{"name":"n"}`, contentType: jsonCT},
 		{method: "PUT", path: "/api/v1/folders/order", body: `{"parent_folder_id":null,"ids":[]}`, contentType: jsonCT},
 		{method: "PUT", path: "/api/v1/lists/order", body: `{"folder_id":null,"ids":[]}`, contentType: jsonCT},
 		{method: "GET", path: "/api/v1/tree"},

@@ -52,7 +52,7 @@ func NewStore(db DB, fileStore storage.FileStore, clk clock.Clock, itemSvc *item
 	return &DBStore{db: db, store: fileStore, clock: clk, items: itemSvc, log: log, workspaceID: workspaceID}
 }
 
-// ListType returns the type of an active list.
+// ListType returns the type of an active list, "" for a list with no type.
 func (s *DBStore) ListType(ctx context.Context, listID uuid.UUID) (string, error) {
 	typ, err := sqlc.New(s.db).GetLookupListType(ctx, sqlc.GetLookupListTypeParams{ID: listID, WorkspaceID: s.workspaceID})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -61,7 +61,15 @@ func (s *DBStore) ListType(ctx context.Context, listID uuid.UUID) (string, error
 	if err != nil {
 		return "", fmt.Errorf("get lookup list type: %w", err)
 	}
-	return typ, nil
+	return typeKey(typ), nil
+}
+
+// typeKey is the list type key, "" when the list has no type (never movie or tv_show).
+func typeKey(typ *string) string {
+	if typ == nil {
+		return ""
+	}
+	return *typ
 }
 
 // Read returns the current provenance record, including the item's current
@@ -164,7 +172,7 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 	if err != nil {
 		return uuid.Nil, false, fmt.Errorf("get lookup list: %w", err)
 	}
-	if typ != p.Type {
+	if typeKey(typ) != p.Type {
 		return uuid.Nil, false, apperr.TypeMismatch()
 	}
 	if p.CreateInput.Price != nil {
@@ -242,7 +250,7 @@ func (s *DBStore) applyExisting(ctx context.Context, q *sqlc.Queries, p ApplyPar
 	if int(cur.Version) != p.ExpectedVersion {
 		return false, nil, apperr.VersionConflict(int(cur.Version))
 	}
-	if cur.Type != p.Type {
+	if typeKey(cur.Type) != p.Type {
 		return false, nil, apperr.TypeMismatch()
 	}
 

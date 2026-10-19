@@ -56,7 +56,7 @@ type Params struct {
 // Result is one match: the item and where it lives, root folder first, list last.
 type Result struct {
 	Item     items.Item
-	TypeName string
+	TypeName *string // nil when the list has no type
 	Path     []items.PathSegment
 }
 
@@ -168,7 +168,7 @@ type listNode struct {
 	folder    uuid.NullUUID
 	icon      *string
 	iconColor *string
-	typeName  string
+	typeName  *string
 }
 
 func (s *Service) loadPaths(ctx context.Context, db *sqlc.Queries) (tree, error) {
@@ -190,7 +190,7 @@ func (s *Service) loadPaths(ctx context.Context, db *sqlc.Queries) (tree, error)
 	return t, nil
 }
 
-func (t tree) typeName(listID uuid.UUID) string { return t.lists[listID].typeName }
+func (t tree) typeName(listID uuid.UUID) *string { return t.lists[listID].typeName }
 
 // of returns the path of a list: its folders root first, then the list. ok is
 // false when the list or one of its folders is not active.

@@ -9,11 +9,19 @@ import (
 const priceBody = `{"title":"t","price":{"amount":"12.00","currency":"EUR"}}`
 
 // f009NoPriceTypes are the types whose items have no price (F009-B1, subsuming
-// F008-B1 for generic); f009PriceTypes those that do.
+// F008-B1 for lists with no type, ""); f009PriceTypes those that do.
 var (
-	f009NoPriceTypes = []string{"generic", "movie", "tv_show"}
+	f009NoPriceTypes = []string{"", "movie", "tv_show"}
 	f009PriceTypes   = []string{"motorcycle", "car", "camera"}
 )
+
+// typeJSON is the JSON value of a list type; "" is a list with no type.
+func typeJSON(typ string) string {
+	if typ == "" {
+		return "null"
+	}
+	return `"` + typ + `"`
+}
 
 func TestF009B1_PriceOnlyOnPriceTypes(t *testing.T) {
 	e := newTreeEnv(t)
@@ -71,20 +79,20 @@ func TestF009B1_PriceTypesPinsAndSort(t *testing.T) {
 
 	t.Run("price is not a pinnable key without a price", func(t *testing.T) {
 		for _, typ := range f009NoPriceTypes {
-			p := wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"P","type":"`+typ+`","pinned_fields":["price"]}`, ""), 422, "validation_failed")
+			p := wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"P","type":`+typeJSON(typ)+`,"pinned_fields":["price"]}`, ""), 422, "validation_failed")
 			if len(p.Errors) != 1 || p.Errors[0].Field != "pinned_fields[0]" {
 				t.Errorf("%s: errors = %+v", typ, p.Errors)
 			}
 		}
 		wantStatus(t, e.call("POST", "/api/v1/lists", `{"name":"B","type":"motorcycle","pinned_fields":["price"]}`, ""), 201)
 		// An empty pin list stays fine on a type that has no price.
-		g := e.listOfType("G", nil, "generic")
+		g := e.listOfType("G", nil, "")
 		wantStatus(t, e.call("PATCH", "/api/v1/lists/"+g["id"].(string), `{"pinned_fields":[]}`, etagOf("l", g)), 200)
 	})
 
 	t.Run("sort_mode price is rejected without a price", func(t *testing.T) {
 		for _, typ := range f009NoPriceTypes {
-			p := wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"S","type":"`+typ+`","sort_mode":"price"}`, ""), 422, "validation_failed")
+			p := wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"S","type":`+typeJSON(typ)+`,"sort_mode":"price"}`, ""), 422, "validation_failed")
 			if len(p.Errors) != 1 || p.Errors[0].Field != "sort_mode" {
 				t.Errorf("%s: errors = %+v", typ, p.Errors)
 			}

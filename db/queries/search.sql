@@ -32,7 +32,7 @@ WHERE workspace_id = @workspace_id AND deleted_at IS NULL;
 -- Active lists, just enough to name the last path segment (with its icon) and find its folder.
 SELECT l.id, l.name, l.folder_id, l.icon, l.icon_color, kd.name AS type_name
 FROM lists l
-JOIN type_definitions kd ON kd.workspace_id = l.workspace_id AND kd.key = l.type
+LEFT JOIN type_definitions kd ON kd.workspace_id = l.workspace_id AND kd.key = l.type
 WHERE l.workspace_id = @workspace_id AND l.deleted_at IS NULL;
 
 -- name: ListRecentItems :many

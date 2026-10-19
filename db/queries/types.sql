@@ -53,7 +53,7 @@ WHERE id = @id AND workspace_id = @workspace_id RETURNING *;
 DELETE FROM type_definitions WHERE id = @id AND workspace_id = @workspace_id;
 
 -- name: ListActiveListsByType :many
-SELECT id, name FROM lists WHERE workspace_id = @workspace_id AND type = @type AND deleted_at IS NULL ORDER BY name, id;
+SELECT id, name FROM lists WHERE workspace_id = @workspace_id AND type = sqlc.arg(type)::text AND deleted_at IS NULL ORDER BY name, id;
 
 -- name: InsertTypeField :one
 INSERT INTO type_fields (workspace_id, type_id, key, label, field_type, position, updated_at)
@@ -94,12 +94,12 @@ WHERE f.workspace_id = @workspace_id AND f.type_id = @type_id AND f.key = o.key;
 -- name: StripTypeFieldValues :exec
 UPDATE items i SET metadata = i.metadata - @key::text, version = i.version + 1, updated_at = @now
 FROM lists l WHERE l.id = i.list_id AND l.workspace_id = i.workspace_id
-  AND i.workspace_id = @workspace_id AND l.type = @type AND i.metadata ? @key::text;
+  AND i.workspace_id = @workspace_id AND l.type = sqlc.arg(type)::text AND i.metadata ? @key::text;
 
 -- name: CountTypeFieldValues :one
 SELECT count(*)::int FROM items i
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-WHERE i.workspace_id = @workspace_id AND l.type = @type AND i.metadata ? @key::text;
+WHERE i.workspace_id = @workspace_id AND l.type = sqlc.arg(type)::text AND i.metadata ? @key::text;
 
 -- name: ResetTypeFieldDefaults :exec
 UPDATE type_definitions
@@ -115,12 +115,12 @@ WHERE id = @id AND workspace_id = @workspace_id;
 -- name: ResetListTypeFieldPins :exec
 UPDATE lists
 SET pinned_fields = NULL, version = version + 1, updated_at = @now
-WHERE workspace_id = @workspace_id AND type = @type AND pinned_fields ? @key::text;
+WHERE workspace_id = @workspace_id AND type = sqlc.arg(type)::text AND pinned_fields ? @key::text;
 
 -- name: ResetListTypeFieldSort :exec
 UPDATE lists
 SET sort_mode = 'manual', version = version + 1, updated_at = @now
-WHERE workspace_id = @workspace_id AND type = @type AND sort_mode = @key;
+WHERE workspace_id = @workspace_id AND type = sqlc.arg(type)::text AND sort_mode = @key;
 
 -- name: TouchTypeDefinition :exec
 UPDATE type_definitions SET version = version + 1, updated_at = @now

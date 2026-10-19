@@ -36,4 +36,4 @@
 - `nullable: true` must sit on the schema itself, not next to `allOf`.
 - Type and field versions have independent ETag streams; all mutations except creation require If-Match.
 - Type create and update responses preserve `default_icon`; PATCH fields are optional and nullable defaults may be cleared with JSON `null`.
-- Item metadata is an object validated against its list type's definition; the item `type` is read-only.
+- Item metadata is an object validated against its list type's definition; the item `type` is read-only and `null` (with `{}` metadata) for a list with no type; `List.type` is nullable and optional on create.

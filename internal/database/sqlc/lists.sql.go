@@ -83,7 +83,7 @@ type GetListRow struct {
 	UpdatedAt    time.Time
 	DeletedAt    *time.Time
 	TrashBatchID uuid.NullUUID
-	Type         string
+	Type         *string
 	PinnedFields []byte
 	Icon         *string
 	IconColor    *string
@@ -127,7 +127,7 @@ type InsertListParams struct {
 	WorkspaceID  uuid.UUID
 	FolderID     uuid.NullUUID
 	Name         string
-	Type         string
+	Type         *string
 	Description  *string
 	DisplayMode  string
 	SortMode     string
@@ -231,7 +231,7 @@ type ListActiveListsRow struct {
 	UpdatedAt    time.Time
 	DeletedAt    *time.Time
 	TrashBatchID uuid.NullUUID
-	Type         string
+	Type         *string
 	PinnedFields []byte
 	Icon         *string
 	IconColor    *string
@@ -464,7 +464,7 @@ RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mod
 `
 
 type UpdateListTypeParams struct {
-	Type        string
+	Type        *string
 	Now         time.Time
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID

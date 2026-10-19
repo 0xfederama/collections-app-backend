@@ -20,7 +20,6 @@ import (
 
 // Type names (also the `type` enum of the spec).
 const (
-	Generic    = "generic"
 	Movie      = "movie"
 	TVShow     = "tv_show"
 	Motorcycle = "motorcycle"
@@ -59,10 +58,10 @@ type Field struct {
 	Special bool // locked built-in field with an established wire shape
 }
 
-// Known reports whether type is one of the six built-in types. Definition
+// Known reports whether type is one of the five built-in types. Definition
 // backed callers must not use it to decide whether a workspace type exists.
 func Known(typ string) bool {
-	return slices.Contains([]string{Generic, Movie, TVShow, Motorcycle, Car, Camera}, typ)
+	return slices.Contains([]string{Movie, TVShow, Motorcycle, Car, Camera}, typ)
 }
 
 // Validate checks metadata against the supplied type fields and returns the
@@ -330,12 +329,10 @@ const maxPinned = 2
 const PriceKey = "price"
 
 // priceTypes are the types whose items can carry a price (F009-B1): price lives
-// only on motorcycle, car and camera items. Generic, movie and tv_show items
-// have none.
+// only on motorcycle, car and camera items. Movie and tv_show items have none.
 var priceTypes = map[string]bool{Motorcycle: true, Car: true, Camera: true}
 
 var builtinPinnableKeys = map[string][]string{
-	Generic:    {},
 	Movie:      {"director", "imdb_url", "release_year", "runtime_minutes", "streaming"},
 	TVShow:     {"end_year", "episode_minutes", "episodes_per_season", "first_air_year", "imdb_url", "seasons", "streaming"},
 	Motorcycle: {"displacement_cc", "license_class", "model_year", "power_hp"},

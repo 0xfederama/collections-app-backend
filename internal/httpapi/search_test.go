@@ -14,9 +14,9 @@ import (
 // searchRows is one page of GET /search.
 type searchRows struct {
 	Data []struct {
-		Item     obj    `json:"item"`
-		TypeName string `json:"type_name"`
-		Path     []obj  `json:"path"`
+		Item     obj   `json:"item"`
+		TypeName any   `json:"type_name"`
+		Path     []obj `json:"path"`
 	}
 	Page obj
 }
@@ -125,8 +125,8 @@ func TestAT12_SearchSubstringAndPath(t *testing.T) {
 	}
 
 	rootHit := e.search(q("matte")).Data[0]
-	if rootHit.Item["type"] != "generic" {
-		t.Errorf("TestF007 type of an item in a generic list = %v", rootHit.Item["type"])
+	if rootHit.Item["type"] != nil {
+		t.Errorf("TestF007 type of an item in a list with no type = %v", rootHit.Item["type"])
 	}
 	if want := []obj{{"type": "list", "id": rootList["id"], "name": "Inbox", "icon": nil, "icon_color": nil}}; !reflect.DeepEqual(rootHit.Path, want) {
 		t.Fatalf("root list path = %v, want %v", rootHit.Path, want)
@@ -170,7 +170,7 @@ func TestAT12_SearchExcludesTrash(t *testing.T) {
 	trashedFolder := e.trashFolder("GoneFolder", nil)
 	listInFolder := uuid.New()
 	batch := e.trashBatch("list", listInFolder)
-	e.exec(`INSERT INTO lists (id, workspace_id, folder_id, name, type, sort_order, deleted_at, trash_batch_id) VALUES ($1, $2, $3, 'In gone folder', 'generic', 0, now(), $4)`,
+	e.exec(`INSERT INTO lists (id, workspace_id, folder_id, name, type, sort_order, deleted_at, trash_batch_id) VALUES ($1, $2, $3, 'In gone folder', NULL, 0, now(), $4)`,
 		listInFolder, e.ws, trashedFolder, batch)
 	e.trashedItem(listInFolder.String(), "Needle in trashed folder")
 

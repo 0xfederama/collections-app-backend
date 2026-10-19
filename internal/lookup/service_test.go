@@ -182,7 +182,7 @@ func TestCreateUsesFirstLocalizedMatchAndAtomicApply(t *testing.T) {
 
 func TestApplyNoMatchRechecksVersion(t *testing.T) {
 	id := uuid.New()
-	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "Unknown", Type: "movie", Version: 4}}
+	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "Unknown", Type: ptr("movie"), Version: 4}}
 	store := &fakeStore{}
 	got, err := newService(&fakeClient{enabled: true}, store, itemSvc).Apply(t.Context(), id, 4, ModeFill, nil)
 	if err != nil || got.Version != 4 || itemSvc.updateCalls != 1 || store.applied != nil {
@@ -202,7 +202,7 @@ func TestApplyRejectsUnsupportedModeBeforeLookup(t *testing.T) {
 func TestApplyPreservesExistingImageAndUsesStoredTMDBID(t *testing.T) {
 	id := uuid.New()
 	itemSvc := &fakeItems{item: items.Item{
-		ID: id, Title: "Movie", Type: "movie", Version: 2,
+		ID: id, Title: "Movie", Type: ptr("movie"), Version: 2,
 		Image:    &items.Image{Source: items.ImageSourceURL, URL: "https://user.example/image.jpg"},
 		Metadata: json.RawMessage(`{"tmdb_id":42}`),
 	}}
@@ -215,7 +215,7 @@ func TestApplyPreservesExistingImageAndUsesStoredTMDBID(t *testing.T) {
 }
 
 func TestApplyRejectsStaleSnapshotBeforeNetwork(t *testing.T) {
-	itemSvc := &fakeItems{item: items.Item{Type: "movie", Version: 8}}
+	itemSvc := &fakeItems{item: items.Item{Type: ptr("movie"), Version: 8}}
 	client := &fakeClient{enabled: true}
 	_, err := newService(client, &fakeStore{}, itemSvc).Apply(t.Context(), uuid.New(), 7, ModeFill, nil)
 	var stale *apperr.VersionConflictError
@@ -225,3 +225,5 @@ func TestApplyRejectsStaleSnapshotBeforeNetwork(t *testing.T) {
 }
 
 func boolPtr(v bool) *bool { return &v }
+
+func ptr(s string) *string { return &s }

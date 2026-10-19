@@ -76,8 +76,8 @@ type List struct {
 	ID       uuid.UUID
 	FolderID *uuid.UUID
 	Name     string
-	// Type is the one type of every item in the list (F-007).
-	Type        string
+	// Type is the one type of every item in the list (F-007); nil is a list with no type.
+	Type        *string
 	Description *string
 	DisplayMode string
 	SortMode    string

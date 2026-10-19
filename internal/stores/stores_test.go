@@ -91,14 +91,19 @@ func TestF016B4_Link(t *testing.T) {
 			want: "https://bookshop.org/search?keywords=Dune+%26+Co",
 		},
 		{
-			name: "amazon by isbn", provider: "amazon",
+			name: "amazon without a title falls back to the isbn", provider: "amazon",
 			in:   stores.LinkInput{ISBN: "9780441172719"},
 			want: "https://www.amazon.com/s?k=9780441172719",
 		},
 		{
 			name: "amazon follows the country", provider: "amazon",
-			in:   stores.LinkInput{ISBN: "9780441172719", Country: "IT"},
-			want: "https://www.amazon.it/s?k=9780441172719",
+			in:   stores.LinkInput{Title: "Dune", ISBN: "9780441172719", Country: "IT"},
+			want: "https://www.amazon.it/s?k=Dune",
+		},
+		{
+			name: "amazon searches by title even with an isbn", provider: "amazon",
+			in:   stores.LinkInput{Title: "Il vecchio e il mare", ISBN: "9788804325963"},
+			want: "https://www.amazon.com/s?k=Il+vecchio+e+il+mare",
 		},
 		{
 			name: "amazon unknown country falls back to .com", provider: "amazon",

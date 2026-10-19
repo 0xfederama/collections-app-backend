@@ -82,7 +82,8 @@ func AmazonDomain(country string) string {
 
 // Link returns the public URL of the provider for the book described by in, or
 // "" when the provider is unknown or there is nothing to search for. An ISBN
-// (hyphens and spaces removed) is preferred; the title is the fallback search.
+// (hyphens and spaces removed) is preferred and the title is the fallback search,
+// except for Amazon, which always searches by title (ISBN only without a title).
 // Amazon, Bookshop.org (UK) and Google Play follow the country; Apple Books and Kobo stay global (no stable regional search URL could be verified). Every value is URL-escaped and
 // the scheme is always https.
 func Link(provider string, in LinkInput) string {
@@ -94,6 +95,13 @@ func Link(provider string, in LinkInput) string {
 	}
 	if query == "" {
 		return ""
+	}
+	if provider == "amazon" {
+		// The ISBN found by a lookup is often an edition Amazon does not list, so
+		// Amazon searches by title; the ISBN is only the fallback without a title.
+		if title := strings.TrimSpace(in.Title); title != "" {
+			query = title
+		}
 	}
 	switch provider {
 	case "bookshop":

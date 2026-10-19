@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.15.0
+  version: 0.16.0
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -577,7 +577,7 @@ paths:
         `price` is valid only for types that allow a price.
 
         Changing `type` on a list that has items **clears the `metadata` of all its items** (trashed ones too; their `version` is bumped),
-        because the type fields differ per type. A change **to a type without a price** (`movie`, `tv_show`) or **to no type** (`null`) also clears the `price` of all its items (trashed ones too) and
+        because the type fields differ per type. A change **to a type without a price** (any type whose definition does not allow price, such as `movie`, `tv_show`, `book` or `vehicle`) or **to no type** (`null`) also clears the `price` of all its items (trashed ones too) and
         turns a stored sort field unavailable on the new type into the new type's default sort field (or `manual` if it has none). Clients should warn first. A type change also resets `pinned_fields` to `null` (unless
         the same request sets it, which is then validated against the new type). Send `pinned_fields: null` to reset it to the type default;
         absent leaves it unchanged.
@@ -593,7 +593,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateListRequest' }
             examples:
               viewMode: { value: { display_mode: grid, sort_mode: title } }
-              changeType: { value: { type: car } }
+              changeType: { value: { type: vehicle } }
               pinFields: { value: { pinned_fields: [release_year, runtime_minutes] } }
               resetPinnedFields: { value: { pinned_fields: null } }
       responses:
@@ -724,7 +724,7 @@ paths:
         Appended to the end of the list. The item's `type` is the list's type (read-only, not accepted in the body). Image and Markdown
         content are set through their own endpoints after creation. `metadata` is validated against the list's type (see the `*Metadata` schemas).
         `price` is either `{amount, currency}` (single price) or `{min, max, currency}` (range). A `price` on an item of a type without a price
-        (`movie` or `tv_show`, or a list with no type; F009-B1) is rejected with `422 validation_failed` on `price` (`null` is fine).
+        (a type whose definition does not allow price, such as `movie`, `tv_show`, `book` or `vehicle`, or a list with no type; F009-B1, F-018) is rejected with `422 validation_failed` on `price` (`null` is fine).
         For movie, TV and book lists, `lookup` defaults to `true`: the server searches by title and applies the first result. Send `tmdb_id`
         (movie and TV) or `source_id` (book) to select a known suggestion; the one that does not fit the list's type is ignored. Send
         `lookup: false` to create the item exactly as supplied. Lookup fields are ignored on other types. On a book, a matched work also
@@ -808,7 +808,8 @@ paths:
               schema: { $ref: '#/components/schemas/Item' }
               examples:
                 movie: { $ref: '#/components/examples/ItemMovieWithPath' }
-                motorcycle: { $ref: '#/components/examples/ItemMotorcycle' }
+                vehicle: { $ref: '#/components/examples/ItemVehicle' }
+                wishlist: { $ref: '#/components/examples/ItemWishlist' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -817,7 +818,7 @@ paths:
       operationId: updateItem
       summary: Update an item
       description: |
-        Requires `If-Match` (`"i-N"`). Any of `title, price, website, metadata`; send `null` to clear a nullable field. A non-null `price` on an item of a type without a price (`movie`, `tv_show`, or a list with no type; F009-B1) is rejected with `422 validation_failed`. `metadata` is
+        Requires `If-Match` (`"i-N"`). Any of `title, price, website, metadata`; send `null` to clear a nullable field. A non-null `price` on an item of a type without a price (`movie`, `tv_show`, `book`, `vehicle`, or a list with no type; F009-B1, F-018) is rejected with `422 validation_failed`. `metadata` is
         validated against the list's type and replaces the stored one. The type cannot be changed here (it belongs to the list).
         Image changes go through the image endpoints.
       parameters:
@@ -841,7 +842,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Item' }
               examples:
-                motorcycle: { $ref: '#/components/examples/ItemMotorcycle' }
+                vehicle: { $ref: '#/components/examples/ItemVehicle' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '412': { $ref: '#/components/responses/VersionConflict' }
@@ -942,7 +943,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Item' }
               examples:
-                motorcycle: { $ref: '#/components/examples/ItemMotorcycle' }
+                vehicle: { $ref: '#/components/examples/ItemVehicle' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/ItemMoveConflict' }
@@ -1007,7 +1008,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Item' }
               examples:
-                motorcycle: { $ref: '#/components/examples/ItemMotorcycle' }
+                vehicle: { $ref: '#/components/examples/ItemVehicle' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '412': { $ref: '#/components/responses/VersionConflict' }
@@ -1698,8 +1699,8 @@ components:
             updated_at: '2026-10-14T09:30:00Z'
           - id: 7c1e5a10-0000-4000-8000-000000000012
             folder_id: 7c1e5a10-0000-4000-8000-000000000003
-            name: Motorbikes
-            type: motorcycle
+            name: Vehicles
+            type: vehicle
             description: null
             display_mode: grid
             sort_mode: title
@@ -1760,25 +1761,41 @@ components:
           - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000001, name: Media }
           - { type: folder, id: 7c1e5a10-0000-4000-8000-000000000002, name: Movies }
           - { type: list, id: 7c1e5a10-0000-4000-8000-000000000011, name: Watchlist }
-    ItemMotorcycle:
+    ItemVehicle:
       value:
         id: 7c1e5a10-0000-4000-8000-000000000102
         list_id: 7c1e5a10-0000-4000-8000-000000000012
         title: Ducati Monster
-        type: motorcycle
+        type: vehicle
         image: { source: url, url: 'https://example.org/images/monster.jpg' }
-        price: { min: '12000.00', max: '13500.00', currency: EUR }
+        price: null
         website: https://www.ducati.com/
         metadata:
+          make: Ducati
+          model: Monster
           model_year: 2024
           displacement_cc: 937
           power_hp: 111
-          license_class: A
         content_version: 0
         sort_order: 0
         version: 2
         created_at: '2026-10-14T09:20:00Z'
         updated_at: '2026-10-14T09:40:00Z'
+    ItemWishlist:
+      value:
+        id: 7c1e5a10-0000-4000-8000-000000000105
+        list_id: 7c1e5a10-0000-4000-8000-000000000016
+        title: Espresso machine
+        type: wishlist
+        image: null
+        price: { min: '12000.00', max: '13500.00', currency: EUR }
+        website: https://www.example.org/espresso
+        metadata: {}
+        content_version: 0
+        sort_order: 0
+        version: 1
+        created_at: '2026-10-14T09:25:00Z'
+        updated_at: '2026-10-14T09:25:00Z'
     ItemPage:
       value:
         data:
@@ -2367,30 +2384,22 @@ components:
           properties:
             type: { type: string, enum: [tv_show], readOnly: true }
             metadata: { $ref: '#/components/schemas/TvShowMetadata' }
-    MotorcycleItem:
+    VehicleItem:
       allOf:
         - $ref: '#/components/schemas/ItemBase'
         - type: object
           required: [type, metadata]
           properties:
-            type: { type: string, enum: [motorcycle], readOnly: true }
-            metadata: { $ref: '#/components/schemas/MotorcycleMetadata' }
-    CarItem:
+            type: { type: string, enum: [vehicle], readOnly: true }
+            metadata: { $ref: '#/components/schemas/VehicleMetadata' }
+    WishlistItem:
       allOf:
         - $ref: '#/components/schemas/ItemBase'
         - type: object
           required: [type, metadata]
           properties:
-            type: { type: string, enum: [car], readOnly: true }
-            metadata: { $ref: '#/components/schemas/CarMetadata' }
-    CameraItem:
-      allOf:
-        - $ref: '#/components/schemas/ItemBase'
-        - type: object
-          required: [type, metadata]
-          properties:
-            type: { type: string, enum: [camera], readOnly: true }
-            metadata: { $ref: '#/components/schemas/CameraMetadata' }
+            type: { type: string, enum: [wishlist], readOnly: true }
+            metadata: { $ref: '#/components/schemas/WishlistMetadata' }
     Item:
       description: >-
         An item. `type` is read-only and derived from the item's list; `metadata` is validated against that workspace type's field definitions.
@@ -2620,31 +2629,20 @@ components:
         streaming: { $ref: '#/components/schemas/Streaming' }
         tmdb_id: { type: integer, minimum: 1, description: Stored provider identity used by refresh. }
         lookup_disabled: { type: boolean, description: Per-item opt-out from automatic TMDB lookup. }
-    MotorcycleMetadata:
-      type: object
-      additionalProperties: false
-      properties:
-        model_year: { type: integer, minimum: 1885, maximum: 2100 }
-        displacement_cc: { type: integer, minimum: 1, maximum: 5000 }
-        power_hp: { type: number, minimum: 0, maximum: 1000, description: One decimal. }
-        license_class: { type: string, enum: [AM, A1, A2, A] }
-    CarMetadata:
+    VehicleMetadata:
       type: object
       additionalProperties: false
       properties:
         make: { type: string, maxLength: 100 }
         model: { type: string, maxLength: 100 }
-        model_year: { type: integer, minimum: 1885, maximum: 2100 }
-        fuel_type: { type: string, enum: [petrol, diesel, hybrid, plugin_hybrid, electric, lpg, cng, hydrogen, other] }
-        power_hp: { type: number, minimum: 0, maximum: 2000, description: One decimal. }
-    CameraMetadata:
+        model_year: { type: integer, minimum: 1885, maximum: 2100, description: 'Labelled Year.' }
+        displacement_cc: { type: integer, minimum: 1, maximum: 5000, description: 'Engine size in cc.' }
+        power_hp: { type: number, minimum: 0, maximum: 2000, description: 'Power in hp, one decimal.' }
+    WishlistMetadata:
       type: object
       additionalProperties: false
-      properties:
-        camera_type: { type: string, enum: [mirrorless, dslr, film] }
-        release_year: { type: integer, minimum: 1900, maximum: 2100 }
-        sensor_format: { type: string, enum: [full_frame, aps_c, micro_four_thirds, one_inch, medium_format, film_35mm, other] }
-        megapixels: { type: number, minimum: 0.1, maximum: 500, description: One decimal. }
+      description: No type-specific fields. The price is the item's `price` (a wishlist type allows one).
+      properties: {}
     # ---- Image requests ----
     UploadImageRequest:
       type: object

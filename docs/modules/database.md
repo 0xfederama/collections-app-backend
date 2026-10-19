@@ -14,6 +14,7 @@ Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and 
 - `db/migrations/000014_kind_definitions.{up,down}.sql`: definitions and immutable built-in seed data
 - `db/migrations/000015_field_sort_modes.{up,down}.sql`: replaces stored `kind_key` with each definition default
 - `db/migrations/000017_kind_to_type.{up,down}.sql`: renames the "kind" concept to "type" (tables, columns, constraints, indexes, seed functions, trigger); data-preserving and reversible
+- `db/migrations/000025_type_refactor.{up,down}.sql`: built-in types become movie, tv_show, book, vehicle, wishlist (plural names); motorcycle, car and camera removed; renames custom `vehicle`/`wishlist` keys
 - `db/migrations/000018_remove_generic_type.{up,down}.sql`: removes the built-in `generic` type; `lists.type` becomes nullable (NULL = no type), generic lists become NULL, seed functions drop it; down restores it (lossy only if a custom `generic` type was created meanwhile)
 - `db/queries/types.sql`: definition reads, locks, writes and cleanup queries
 - `db/queries/schema.sql`: smoke query, sqlc input

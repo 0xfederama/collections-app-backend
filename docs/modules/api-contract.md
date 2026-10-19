@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`api/openapi.yaml` is the canonical OpenAPI 3.0.3 contract (version 0.12.0). It defines generated Go models and strict-server stubs, including workspace type-definition management, book suggestions and store providers. Design context: `/Users/federico/Developer/collections-app/design-docs/`.
+`api/openapi.yaml` is the canonical OpenAPI 3.0.3 contract (version 0.16.0). It defines generated Go models and strict-server stubs, including workspace type-definition management, book suggestions and store providers. Design context: `/Users/federico/Developer/collections-app/design-docs/`.
 
 ## Key files
 

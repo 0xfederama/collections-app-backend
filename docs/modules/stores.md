@@ -15,7 +15,8 @@ Owns the fixed list of online stores a `stores` field on books can name, and bui
 
 - `Providers() []Provider`: fixed display order (copy)
 - `Valid(key) bool`, `ValidateKeys(keys) error`: unknown or duplicate keys are rejected
-- `Link(provider, LinkInput) string`: ISBN first, then title; `""` when nothing to search
+- `Link(provider, LinkInput) string`: ISBN first, then title; `""` when nothing to search. `LinkInput.Country` (the workspace `streaming_country_code`) picks regional sites
+- `AmazonDomain(country) string`: one table (same as the web's `AMAZON_DOMAINS`), `amazon.com` for any other country
 - `GET /api/v1/store-providers`: the fixed list, independent of the workspace
 - `preferred_stores` in `GET/PATCH /api/v1/settings`: at most six unique keys
 
@@ -23,6 +24,7 @@ Owns the fixed list of online stores a `stores` field on books can name, and bui
 
 - Fixed keys: `openlibrary`, `bookshop`, `amazon`, `apple_books`, `google_play_books`, `kobo`. Renaming one is a data migration.
 - `store_links` is read-only and computed on read; sending it in `metadata` is `400 unknown_field`.
+- Country-aware: Amazon (table), Bookshop.org (UK site for GB), Google Play (`gl=`); Open Library, Apple Books and Kobo stay global (no verifiable regional search URL). Links are computed on read, so a later country change moves them.
 - Links are always `https`, every value is URL-escaped, and hyphens and spaces are stripped from ISBNs.
 - Open Library links use the work id first, then ISBN, then a title search.
 - The `stores` field is pinnable but never a sort key.

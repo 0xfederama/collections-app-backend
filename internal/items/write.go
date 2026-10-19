@@ -67,7 +67,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 			return notFoundOr(err, "list")
 		}
 		if in.Price != nil {
-			if err := priceTypeError(list.Type); err != nil {
+			if err := s.priceTypeError(ctx, q, list.Type); err != nil {
 				return err
 			}
 		}
@@ -135,7 +135,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 			return notFoundOr(err, "list")
 		}
 		if p.Price.Set && p.Price.Value != nil {
-			if err := priceTypeError(list.Type); err != nil {
+			if err := s.priceTypeError(ctx, q, list.Type); err != nil {
 				return err
 			}
 		}
@@ -158,12 +158,18 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 	return s.get(ctx, id, false)
 }
 
-// priceTypeError rejects a price on an item of a type that has none: movie,
-// tv_show and a list with no type (F009-B1, subsuming F008-B1; 422). Clearing a
-// price (null) never gets here.
-func priceTypeError(typ *string) error {
-	if typ != nil && types.HasPrice(*typ) {
-		return nil
+// priceTypeError rejects a price on an item of a type that does not allow one
+// (the definition's allows_price) and on a list with no type (F009-B1,
+// subsuming F008-B1; 422). Clearing a price (null) never gets here.
+func (s *Service) priceTypeError(ctx context.Context, q *sqlc.Queries, typ *string) error {
+	if typ != nil {
+		def, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: *typ})
+		if err != nil {
+			return fmt.Errorf("load list type definition: %w", err)
+		}
+		if def.AllowsPrice {
+			return nil
+		}
 	}
 	return apperr.Validation(apperr.FieldError{Field: "price", Message: "items of this type have no price"})
 }

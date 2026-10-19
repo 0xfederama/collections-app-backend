@@ -145,3 +145,13 @@ func TestF009B1_TypeChangeToTypeWithoutPriceClearsPrice(t *testing.T) {
 		t.Fatalf("item of another list changed: %v", it)
 	}
 }
+
+// The price rule follows the definition's allows_price, not the built-in keys.
+func TestF014_PriceFollowsAllowsPriceOnCustomTypes(t *testing.T) {
+	e := newTreeEnv(t)
+	e.exec(`INSERT INTO type_definitions (workspace_id, key, name, allows_price) VALUES ($1, 'priced', 'Priced', true), ($1, 'free', 'Free', false)`, e.ws)
+	priced := e.listOfType("Priced", nil, "priced")["id"].(string)
+	free := e.listOfType("Free", nil, "free")["id"].(string)
+	wantStatus(t, e.call("POST", "/api/v1/lists/"+priced+"/items", priceBody, ""), 201)
+	wantProblem(t, e.call("POST", "/api/v1/lists/"+free+"/items", priceBody, ""), 422, "validation_failed")
+}

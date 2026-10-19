@@ -93,3 +93,35 @@ func TestF016B4_StoresFieldIsNotSortableOrFilterable(t *testing.T) {
 	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"By store","type":"book","sort_mode":"stores"}`, ""), 422, "validation_failed")
 	wantProblem(t, e.call("PATCH", "/api/v1/types/book", `{"default_sort_field":"stores"}`, `"k-1"`), 422, "validation_failed")
 }
+
+func TestF016_StoreLinksFollowTheWorkspaceCountry(t *testing.T) {
+	e := newTreeEnv(t)
+	e.exec(`INSERT INTO workspace_settings (workspace_id) SELECT id FROM workspaces ON CONFLICT DO NOTHING`)
+	lid := e.listOfType("Books", nil, "book")["id"].(string)
+	it := e.newItem(lid, `{"title":"Dune","metadata":{"isbn":"9780441172719","stores":["amazon","google_play_books","bookshop"]}}`)
+
+	// New workspaces default to Italy.
+	want := map[string]any{
+		"amazon":            "https://www.amazon.it/s?k=9780441172719",
+		"google_play_books": "https://play.google.com/store/search?q=9780441172719&c=books&gl=IT",
+		"bookshop":          "https://bookshop.org/search?keywords=9780441172719",
+	}
+	if got, _ := storeLinks(it); !reflect.DeepEqual(got, want) {
+		t.Fatalf("default country: store_links = %v, want %v", got, want)
+	}
+
+	// The links are computed on read, so a later change of the country moves them.
+	e.exec(`UPDATE workspace_settings SET streaming_country_code = 'GB'`)
+	want = map[string]any{
+		"amazon":            "https://www.amazon.co.uk/s?k=9780441172719",
+		"google_play_books": "https://play.google.com/store/search?q=9780441172719&c=books&gl=GB",
+		"bookshop":          "https://uk.bookshop.org/search?keywords=9780441172719",
+	}
+	if got, _ := storeLinks(e.fetchItem(it["id"])); !reflect.DeepEqual(got, want) {
+		t.Errorf("after GB: store_links = %v, want %v", got, want)
+	}
+	e.exec(`UPDATE workspace_settings SET streaming_country_code = 'ZZ'`)
+	if got, _ := storeLinks(e.fetchItem(it["id"])); got["amazon"] != "https://www.amazon.com/s?k=9780441172719" {
+		t.Errorf("unknown country: amazon = %v, want amazon.com", got["amazon"])
+	}
+}

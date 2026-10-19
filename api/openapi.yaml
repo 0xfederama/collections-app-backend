@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.12.0
+  version: 0.12.1
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -2402,7 +2402,7 @@ components:
       description: >-
         An item. `type` is read-only and derived from the item's list; `metadata` is validated against that workspace type's field definitions.
         For a type with a `stores` field (F-016, D-096) the response `metadata` also carries a read-only `store_links` object: provider key
-        to URL, one entry per selected store that has a link (built from the item's title, `isbn` and `openlibrary_id`, never stored). Sending
+        to URL, one entry per selected store that has a link (built from the item's title, `isbn` and `openlibrary_id`, never stored). Links follow the workspace country (`streaming_country_code`): Amazon uses the country's storefront (amazon.it for `IT`, amazon.com for countries without one), Bookshop.org uses its UK site for `GB`, Google Play Books adds the country; other stores are global. Because links are computed on read, changing the country changes them. Sending
         `store_links` in `metadata` is rejected as an unknown field (`400 unknown_field`, path `metadata.store_links`).
       allOf:
         - $ref: '#/components/schemas/ItemBase'

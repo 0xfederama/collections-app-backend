@@ -48,6 +48,14 @@ func (s *Service) storeLinks(ctx context.Context, q *sqlc.Queries, it Item) (map
 		}
 	}
 	in := stores.LinkInput{Title: it.Title}
+	// Links follow the workspace country, so a later change of the setting moves them.
+	settings, err := q.GetSettings(ctx, s.workspaceID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("get settings: %w", err)
+	}
+	if err == nil {
+		in.Country = settings.StreamingCountryCode
+	}
 	in.ISBN, _ = meta["isbn"].(string)
 	in.OpenLibraryID, _ = meta["openlibrary_id"].(string)
 

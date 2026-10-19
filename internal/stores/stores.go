@@ -52,20 +52,44 @@ func ValidateKeys(keys []string) error {
 	return nil
 }
 
-// LinkInput is what a link is built from. Empty fields are ignored.
+// LinkInput is what a link is built from. Empty fields are ignored. Country is
+// the workspace's ISO 3166-1 alpha-2 code (the `streaming_country_code` setting)
+// and picks regional storefronts; empty or unknown means the global site.
 type LinkInput struct {
 	ISBN          string
 	Title         string
 	OpenLibraryID string
+	Country       string
+}
+
+// amazonDomains maps a country to its Amazon storefront; any other country uses
+// amazon.com. Keep it identical to AMAZON_DOMAINS in frontend-web
+// (src/features/items/links.ts).
+var amazonDomains = map[string]string{
+	"IT": "amazon.it", "DE": "amazon.de", "FR": "amazon.fr", "ES": "amazon.es",
+	"GB": "amazon.co.uk", "NL": "amazon.nl", "SE": "amazon.se", "PL": "amazon.pl",
+	"BE": "amazon.com.be", "IE": "amazon.ie", "CA": "amazon.ca", "MX": "amazon.com.mx",
+	"BR": "amazon.com.br", "AU": "amazon.com.au", "JP": "amazon.co.jp", "IN": "amazon.in",
+	"TR": "amazon.com.tr", "AE": "amazon.ae", "SA": "amazon.sa", "SG": "amazon.sg",
+	"EG": "amazon.eg",
+}
+
+// AmazonDomain returns the Amazon storefront host for a country code (any case).
+func AmazonDomain(country string) string {
+	if d, ok := amazonDomains[strings.ToUpper(strings.TrimSpace(country))]; ok {
+		return d
+	}
+	return "amazon.com"
 }
 
 // Link returns the public URL of the provider for the book described by in, or
 // "" when the provider is unknown or there is nothing to search for. An ISBN
 // (hyphens and spaces removed) is preferred; the title is the fallback search.
-// Open Library also uses its own work id first. Every value is URL-escaped and
+// Open Library also uses its own work id first. Amazon, Bookshop.org (UK) and Google Play follow the country; Open Library, Apple Books and Kobo stay global (no stable regional search URL could be verified). Every value is URL-escaped and
 // the scheme is always https.
 func Link(provider string, in LinkInput) string {
 	isbn := cleanISBN(in.ISBN)
+	country := strings.ToUpper(strings.TrimSpace(in.Country))
 	query := isbn
 	if query == "" {
 		query = strings.TrimSpace(in.Title)
@@ -87,13 +111,22 @@ func Link(provider string, in LinkInput) string {
 	}
 	switch provider {
 	case "bookshop":
-		return "https://bookshop.org/search?keywords=" + url.QueryEscape(query)
+		// Bookshop.org has a US and a UK site only.
+		host := "bookshop.org"
+		if country == "GB" {
+			host = "uk.bookshop.org"
+		}
+		return "https://" + host + "/search?keywords=" + url.QueryEscape(query)
 	case "amazon":
-		return "https://www.amazon.com/s?k=" + url.QueryEscape(query)
+		return "https://www." + AmazonDomain(country) + "/s?k=" + url.QueryEscape(query)
 	case "apple_books":
 		return "https://books.apple.com/search?term=" + url.QueryEscape(query)
 	case "google_play_books":
-		return "https://play.google.com/store/search?q=" + url.QueryEscape(query) + "&c=books"
+		link := "https://play.google.com/store/search?q=" + url.QueryEscape(query) + "&c=books"
+		if len(country) == 2 {
+			link += "&gl=" + country
+		}
+		return link
 	case "kobo":
 		return "https://www.kobo.com/search?query=" + url.QueryEscape(query)
 	}

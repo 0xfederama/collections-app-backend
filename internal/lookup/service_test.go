@@ -204,7 +204,7 @@ func TestApplyNoMatchRechecksVersion(t *testing.T) {
 	id := uuid.New()
 	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "Unknown", Type: ptr("movie"), Version: 4}}
 	store := &fakeStore{}
-	got, err := newService(&fakeClient{enabled: true}, store, itemSvc).Apply(t.Context(), id, 4, ModeFill, nil)
+	got, err := newService(&fakeClient{enabled: true}, store, itemSvc).Apply(t.Context(), id, 4, ModeFill, Selection{})
 	if err != nil || got.Version != 4 || itemSvc.updateCalls != 1 || store.applied != nil {
 		t.Fatalf("got=%+v err=%v updates=%d applied=%v", got, err, itemSvc.updateCalls, store.applied)
 	}
@@ -212,7 +212,7 @@ func TestApplyNoMatchRechecksVersion(t *testing.T) {
 
 func TestApplyRejectsUnsupportedModeBeforeLookup(t *testing.T) {
 	client := &fakeClient{enabled: true}
-	_, err := newService(client, &fakeStore{}, &fakeItems{}).Apply(t.Context(), uuid.New(), 1, ModeCreate, nil)
+	_, err := newService(client, &fakeStore{}, &fakeItems{}).Apply(t.Context(), uuid.New(), 1, ModeCreate, Selection{})
 	var validation *apperr.ValidationError
 	if !errors.As(err, &validation) || client.searchQuery != "" {
 		t.Fatalf("err=%v search=%q", err, client.searchQuery)
@@ -228,7 +228,7 @@ func TestApplyPreservesExistingImageAndUsesStoredTMDBID(t *testing.T) {
 	}}
 	client := &fakeClient{enabled: true, details: Details{SourceID: "42", Title: "Localized", ImagePath: "/poster.jpg"}}
 	store := &fakeStore{result: itemSvc.item}
-	_, err := newService(client, store, itemSvc).Apply(t.Context(), id, 2, ModeRefresh, nil)
+	_, err := newService(client, store, itemSvc).Apply(t.Context(), id, 2, ModeRefresh, Selection{})
 	if err != nil || store.applied == nil || store.applied.SourceID != "42" || store.applied.RefreshPoster || client.downloads != 0 {
 		t.Fatalf("err=%v apply=%+v downloads=%d", err, store.applied, client.downloads)
 	}
@@ -237,7 +237,7 @@ func TestApplyPreservesExistingImageAndUsesStoredTMDBID(t *testing.T) {
 func TestApplyRejectsStaleSnapshotBeforeNetwork(t *testing.T) {
 	itemSvc := &fakeItems{item: items.Item{Type: ptr("movie"), Version: 8}}
 	client := &fakeClient{enabled: true}
-	_, err := newService(client, &fakeStore{}, itemSvc).Apply(t.Context(), uuid.New(), 7, ModeFill, nil)
+	_, err := newService(client, &fakeStore{}, itemSvc).Apply(t.Context(), uuid.New(), 7, ModeFill, Selection{})
 	var stale *apperr.VersionConflictError
 	if !errors.As(err, &stale) || stale.Current != 8 || client.searchQuery != "" {
 		t.Fatalf("err=%v search=%q", err, client.searchQuery)
@@ -365,7 +365,7 @@ func TestF016B3_ApplyOnBookRefreshUsesStoredOpenLibraryID(t *testing.T) {
 	book := bookClient(true)
 	book.details.SourceID = "OL77W"
 	store := &fakeStore{result: itemSvc.item}
-	_, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 3, ModeRefresh, nil)
+	_, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 3, ModeRefresh, Selection{})
 	if err != nil || store.applied == nil || store.applied.Provider != ProviderOpenLibrary || store.applied.SourceID != "OL77W" || store.applied.RefreshPoster || book.downloads != 0 {
 		t.Fatalf("err=%v apply=%+v downloads=%d", err, store.applied, book.downloads)
 	}
@@ -381,12 +381,12 @@ func TestF016B3_ApplyRefreshFallsBackToProvenanceThenAsksForAnID(t *testing.T) {
 	book.details.SourceID = "OL5W"
 	book.details.ImagePath = ""
 	store := &fakeStore{result: itemSvc.item, found: true, record: Record{Provider: ProviderOpenLibrary, SourceID: "OL5W"}}
-	if _, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 1, ModeRefresh, nil); err != nil || store.applied == nil || store.applied.SourceID != "OL5W" {
+	if _, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 1, ModeRefresh, Selection{}); err != nil || store.applied == nil || store.applied.SourceID != "OL5W" {
 		t.Fatalf("err=%v applied=%+v", err, store.applied)
 	}
 	// A TMDB record on a book item is not a book match.
 	store = &fakeStore{found: true, record: Record{Provider: ProviderTMDB, SourceID: "603"}}
-	_, err := bookService(bookClient(true), &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 1, ModeRefresh, nil)
+	_, err := bookService(bookClient(true), &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 1, ModeRefresh, Selection{})
 	var validation *apperr.ValidationError
 	if !errors.As(err, &validation) || validation.Errors[0].Field != "source_id" || store.applied != nil {
 		t.Fatalf("err = %v applied = %v", err, store.applied)
@@ -401,7 +401,7 @@ func TestF016B3_ApplyFillAndRematchPassFillOnlyAndSelectedID(t *testing.T) {
 		book.details.SourceID = "OL8W"
 		store := &fakeStore{result: itemSvc.item}
 		selected := "OL8W"
-		if _, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 2, mode, &selected); err != nil || store.applied == nil {
+		if _, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 2, mode, Selection{SourceID: &selected}); err != nil || store.applied == nil {
 			t.Fatalf("%s: err=%v", mode, err)
 		}
 		p := store.applied
@@ -416,16 +416,16 @@ func TestF016B3_ApplyDisabledProviderAndUnservedType(t *testing.T) {
 	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "Dune", Type: ptr("book"), Version: 1}}
 	var disabled *apperr.LookupDisabledError
 	// Book lookup off, TMDB on: books are 503 lookup_disabled.
-	if _, err := bookService(bookClient(false), &fakeClient{enabled: true}, &fakeStore{}, itemSvc).Apply(t.Context(), id, 1, ModeFill, nil); !errors.As(err, &disabled) {
+	if _, err := bookService(bookClient(false), &fakeClient{enabled: true}, &fakeStore{}, itemSvc).Apply(t.Context(), id, 1, ModeFill, Selection{}); !errors.As(err, &disabled) {
 		t.Errorf("disabled book provider err = %v", err)
 	}
 	// Everything off: disabled even before the item is read.
-	if _, err := bookService(bookClient(false), &fakeClient{}, &fakeStore{}, &fakeItems{err: errors.New("must not be read")}).Apply(t.Context(), id, 1, ModeFill, nil); !errors.As(err, &disabled) {
+	if _, err := bookService(bookClient(false), &fakeClient{}, &fakeStore{}, &fakeItems{err: errors.New("must not be read")}).Apply(t.Context(), id, 1, ModeFill, Selection{}); !errors.As(err, &disabled) {
 		t.Errorf("all disabled err = %v", err)
 	}
 	// A type no provider serves is a validation error on `item`.
 	itemSvc = &fakeItems{item: items.Item{ID: id, Title: "Bike", Type: ptr("motorcycle"), Version: 1}}
-	_, err := bookService(bookClient(true), &fakeClient{enabled: true}, &fakeStore{}, itemSvc).Apply(t.Context(), id, 1, ModeFill, nil)
+	_, err := bookService(bookClient(true), &fakeClient{enabled: true}, &fakeStore{}, itemSvc).Apply(t.Context(), id, 1, ModeFill, Selection{})
 	var validation *apperr.ValidationError
 	if !errors.As(err, &validation) || validation.Errors[0].Field != "item" {
 		t.Errorf("unserved type err = %v", err)
@@ -438,7 +438,7 @@ func TestF016B3_MissingCoverStillAppliesTheMatch(t *testing.T) {
 	book := bookClient(true)
 	book.downloadErr = ErrNoImage
 	store := &fakeStore{result: itemSvc.item}
-	if _, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 1, ModeFill, nil); err != nil || store.applied == nil || store.applied.Poster != nil || book.downloads != 1 {
+	if _, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 1, ModeFill, Selection{}); err != nil || store.applied == nil || store.applied.Poster != nil || book.downloads != 1 {
 		t.Fatalf("err=%v applied=%+v downloads=%d", err, store.applied, book.downloads)
 	}
 }

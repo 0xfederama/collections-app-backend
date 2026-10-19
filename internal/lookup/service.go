@@ -56,16 +56,24 @@ type CreateOptions struct {
 	SourceID *string
 }
 
-// selected is the source id the caller picked for this provider, if any.
-func (o CreateOptions) selected(provider string) *string {
+// Selection is the match the caller picked from the suggestions: a tmdb_id for
+// movie and TV items, a source_id (Open Library work id) for books. The one that
+// does not fit the item's provider is ignored.
+type Selection struct {
+	TMDBID   *int
+	SourceID *string
+}
+
+// forProvider is the source id picked for this provider, if any.
+func (s Selection) forProvider(provider string) *string {
 	if provider == ProviderTMDB {
-		if o.TMDBID == nil {
+		if s.TMDBID == nil {
 			return nil
 		}
-		id := strconv.Itoa(*o.TMDBID)
+		id := strconv.Itoa(*s.TMDBID)
 		return &id
 	}
-	return o.SourceID
+	return s.SourceID
 }
 
 // Create creates an item, enriching it from the list type's provider when requested.
@@ -84,7 +92,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 		return s.items.Create(ctx, listID, in)
 	}
 
-	selectedID := opts.selected(provider.Name())
+	selectedID := Selection{TMDBID: opts.TMDBID, SourceID: opts.SourceID}.forProvider(provider.Name())
 	explicit := (opts.Lookup != nil && *opts.Lookup) || selectedID != nil
 	if disabled, _ := in.Metadata["lookup_disabled"].(bool); disabled && !explicit {
 		return s.items.Create(ctx, listID, in)
@@ -136,7 +144,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 // Apply enriches an existing item from its list type's provider. Network work
 // happens against an initial snapshot; Store rechecks ExpectedVersion under lock
 // before writing.
-func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion int, mode Mode, selectedID *string) (items.Item, error) {
+func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion int, mode Mode, selection Selection) (items.Item, error) {
 	if mode != ModeFill && mode != ModeRematch && mode != ModeRefresh {
 		return items.Item{}, apperr.Validation(apperr.FieldError{Field: "mode", Message: "must be fill, rematch, or refresh"})
 	}
@@ -163,6 +171,7 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 		return items.Item{}, err
 	}
 
+	selectedID := selection.forProvider(provider.Name())
 	lookupID := selectedID
 	if mode == ModeRefresh && lookupID == nil {
 		name := provider.Name()

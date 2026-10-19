@@ -23,6 +23,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
+	"github.com/0xfederama/collections-app-backend/internal/openlibrary"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 	"github.com/0xfederama/collections-app-backend/internal/tmdb"
@@ -84,29 +85,35 @@ func run() error {
 	settingsSvc := workspace.NewService(pool)
 	lookupStore := lookup.NewStore(pool, store, clock.System{}, itemSvc, logger, workspaceID)
 	tmdbProvider := lookup.NewTMDBProvider(tmdbClient)
-	lookupSvc := lookup.New(lookup.Providers{types.Movie: tmdbProvider, types.TVShow: tmdbProvider}, lookupStore, itemSvc, settingsSvc, clock.System{}, workspaceID)
+	// Books use Open Library: no key, on by default. The test-stack fixture flag also serves its one fixture book (D-096).
+	bookProvider := lookup.NewOpenLibraryProvider(openlibrary.NewWithOptions(openlibrary.Options{
+		Contact: cfg.OpenLibraryContact, Disabled: cfg.OpenLibraryDisabled, MockFixture: cfg.TMDBMockFixture,
+	}))
+	lookupSvc := lookup.New(lookup.Providers{types.Movie: tmdbProvider, types.TVShow: tmdbProvider, types.Book: bookProvider}, lookupStore, itemSvc, settingsSvc, clock.System{}, workspaceID)
 	if _, err := lookupStore.Maintain(ctx, lookupSvc.RefreshOwned); err != nil {
-		logger.Warn("TMDB retention maintenance failed at startup", "err", err)
+		logger.Warn("lookup retention maintenance failed at startup", "err", err)
 	}
 	go lookupStore.Run(ctx, 24*time.Hour, lookupSvc.RefreshOwned) // stops when ctx is cancelled on shutdown
 
 	handler, err := httpapi.NewRouter(httpapi.Deps{
-		DB:              pool,
-		DataDir:         cfg.DataDir,
-		Logger:          logger,
-		Clock:           clock.System{},
-		WorkspaceID:     workspaceID,
-		Settings:        settingsSvc,
-		Definitions:     definitions.New(pool, workspaceID),
-		TMDB:            tmdbProvider,
-		Lookup:          lookupSvc,
-		LookupAvailable: tmdbProvider.Enabled(),
-		Tree:            tree.New(pool, clock.System{}, workspaceID),
-		Items:           itemSvc,
-		Content:         content.New(pool, clock.System{}, workspaceID),
-		Search:          search.New(pool, workspaceID),
-		Images:          imageSvc,
-		Trash:           trashSvc,
+		DB:                  pool,
+		DataDir:             cfg.DataDir,
+		Logger:              logger,
+		Clock:               clock.System{},
+		WorkspaceID:         workspaceID,
+		Settings:            settingsSvc,
+		Definitions:         definitions.New(pool, workspaceID),
+		TMDB:                tmdbProvider,
+		Books:               bookProvider,
+		Lookup:              lookupSvc,
+		LookupAvailable:     tmdbProvider.Enabled(),
+		BookLookupAvailable: bookProvider.Enabled(),
+		Tree:                tree.New(pool, clock.System{}, workspaceID),
+		Items:               itemSvc,
+		Content:             content.New(pool, clock.System{}, workspaceID),
+		Search:              search.New(pool, workspaceID),
+		Images:              imageSvc,
+		Trash:               trashSvc,
 	})
 	if err != nil {
 		return err

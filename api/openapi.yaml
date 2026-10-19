@@ -41,7 +41,9 @@ tags:
   - name: items
     description: Items and their metadata.
   - name: tmdb
-    description: Optional movie and TV metadata lookup through the server-side TMDB integration.
+    description: Optional movie and TV metadata lookup through the server-side TMDB integration, and the item lookup operation shared with books.
+  - name: books
+    description: Book metadata lookup through Open Library (no key needed).
   - name: image
     description: Item images (upload or URL) and attachment files.
   - name: content
@@ -185,7 +187,7 @@ paths:
       description: |
         Requires `If-Match` (`"s-N"`). Lowering `markdown_history_limit` prunes on the next save per item, not immediately.
         `trash_retention_days` (F012-B3): absent = unchanged, `null` = off, otherwise 1 to 365. Setting it does not purge at once; the daily job does.
-        `metadata_language` controls the locale used for TMDB suggestions and imported metadata.
+        `metadata_language` controls the locale used for lookup suggestions and imported metadata (TMDB; Open Library takes its language part as a preference).
         `preferred_stores` (F-016) is the ordered list of stores offered on books: unique keys from `GET /api/v1/store-providers`, at most six.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
@@ -268,6 +270,39 @@ paths:
                     available: true
                     results:
                       - { tmdb_id: 603, title: The Matrix, original_title: The Matrix, year: 1999, poster_url: 'https://image.tmdb.org/t/p/w342/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg', overview: A computer hacker learns the truth. }
+                disabled: { value: { available: false, results: [] } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '503': { $ref: '#/components/responses/LookupUnavailable' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/books/suggestions:
+    get:
+      tags: [books]
+      operationId: searchBookSuggestions
+      summary: Suggest book matches
+      description: |
+        Searches Open Library using the workspace's `metadata_language` as a language preference. A query that is a bare ISBN
+        (10 or 13 digits, hyphens allowed) searches by ISBN. When book lookup is turned off on the server (`book_lookup_available`
+        is `false` in the settings), returns `{ "available": false, "results": [] }`; this endpoint does not fail merely because
+        lookup is disabled. Results retain Open Library's ranking. `source_id` is the Open Library work id used by item create and
+        `POST /items/{id}/lookup`. `pages` is a median over editions, and `cover_url` is for suggestion display only, not an item image.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 300 }
+      responses:
+        '200':
+          description: Ranked suggestions, or an unavailable result when book lookup is off
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BookSuggestions' }
+              examples:
+                matches:
+                  value:
+                    available: true
+                    results:
+                      - { source_id: OL893415W, title: Dune, authors: Frank Herbert, year: 1965, pages: 608, cover_url: 'https://covers.openlibrary.org/b/id/12547191-M.jpg', isbn: '9780441172719' }
+                      - { source_id: OL1234567W, title: Dune Messiah, authors: Frank Herbert, year: null, pages: null, cover_url: null, isbn: null }
                 disabled: { value: { available: false, results: [] } }
         '400': { $ref: '#/components/responses/BadRequest' }
         '503': { $ref: '#/components/responses/LookupUnavailable' }
@@ -691,8 +726,10 @@ paths:
         content are set through their own endpoints after creation. `metadata` is validated against the list's type (see the `*Metadata` schemas).
         `price` is either `{amount, currency}` (single price) or `{min, max, currency}` (range). A `price` on an item of a type without a price
         (`movie` or `tv_show`, or a list with no type; F009-B1) is rejected with `422 validation_failed` on `price` (`null` is fine).
-        For movie and TV lists, `lookup` defaults to `true`: the server searches by title and applies the first result. Send `tmdb_id` to
-        select a known suggestion. Send `lookup: false` to create the item exactly as supplied. Lookup fields are ignored on other types.
+        For movie, TV and book lists, `lookup` defaults to `true`: the server searches by title and applies the first result. Send `tmdb_id`
+        (movie and TV) or `source_id` (book) to select a known suggestion; the one that does not fit the list's type is ignored. Send
+        `lookup: false` to create the item exactly as supplied. Lookup fields are ignored on other types. On a book, a matched work also
+        proposes the Open Library link in `stores` (plus the workspace's preferred stores) when the request leaves `stores` unset.
         If automatic lookup finds no match, the item is still created unchanged. If lookup was explicitly requested but unavailable, the
         request returns `503 lookup_disabled` or `503 upstream_unavailable` and no item is created.
       requestBody:
@@ -833,19 +870,22 @@ paths:
     post:
       tags: [tmdb]
       operationId: lookupItemMetadata
-      summary: Fill or replace an item's TMDB metadata
+      summary: Fill or replace an item's looked-up metadata
       description: |
-        Requires `If-Match` (`"i-N"`) and is available only for movie and TV items. `fill` preserves every non-empty user value and
-        fills empty fields; `rematch` searches from the current title unless `tmdb_id` selects a suggestion, then replaces the title and
-        all fields fetched from TMDB; `refresh` uses the stored `metadata.tmdb_id` unless `tmdb_id` is supplied and likewise replaces fetched
-        fields. All modes preserve an existing item image. A poster is stored through the normal image pipeline only when the item has no image.
-        The default mode is `fill`. When a search has no result, the operation returns the unchanged item and its current ETag.
-        An explicit lookup while the integration is disabled or TMDB cannot be reached returns `503 lookup_disabled` or
+        Requires `If-Match` (`"i-N"`) and is available only for movie, TV and book items (TMDB for movie and TV, Open Library for books).
+        `fill` preserves every non-empty user value and fills empty fields; `rematch` searches from the current title unless `tmdb_id`
+        (movie and TV) or `source_id` (book) selects a suggestion, then replaces the title and all fields fetched from the provider;
+        `refresh` uses the stored `metadata.tmdb_id` or `metadata.openlibrary_id` unless the id is supplied and likewise replaces fetched
+        fields. All modes preserve an existing item image. A poster or cover is stored through the normal image pipeline only when the item
+        has no image. On a book, `fill` also adds the Open Library link to `stores` when `stores` is empty; no mode ever removes or replaces
+        the user's store choices. The default mode is `fill`. When a search has no result, the operation returns the unchanged item and its
+        current ETag. An explicit lookup while the integration is disabled or the provider cannot be reached returns `503 lookup_disabled` or
         `503 upstream_unavailable` respectively.
-        Imported fields and lookup-owned posters retain server-side provenance. Maintenance refreshes owned values after five calendar months;
-        at six months, a value that still cannot be refreshed is removed only when it still equals its imported snapshot. User edits and
-        user-supplied images are preserved. Poster age is tracked separately from metadata age. An item's `lookup_disabled` flag stops automatic
-        refresh and lets its owned values expire under the same rules.
+        Imported fields and lookup-owned posters retain server-side provenance, for every provider, so that fill, rematch and refresh never
+        overwrite user edits. TMDB data has a retention rule: maintenance refreshes owned values after five calendar months; at six months, a
+        value that still cannot be refreshed is removed only when it still equals its imported snapshot. User edits and user-supplied images
+        are preserved. Poster age is tracked separately from metadata age. An item's `lookup_disabled` flag stops automatic refresh and lets
+        its owned values expire under the same rules. Open Library data has no retention duty: it is kept until the user changes it.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -1513,7 +1553,7 @@ components:
                 errors:
                   - { field: price.max, message: must be greater than or equal to price.min }
     LookupUnavailable:
-      description: An explicit TMDB lookup cannot run because lookup is disabled or the upstream service is unavailable
+      description: An explicit lookup cannot run because lookup is disabled or the upstream service (TMDB or Open Library) is unavailable
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
@@ -1523,14 +1563,14 @@ components:
                 type: https://collection-app.invalid/problems/lookup-disabled
                 title: Lookup disabled
                 status: 503
-                detail: TMDB lookup is not configured on this server.
+                detail: Lookup is not configured on this server.
                 code: lookup_disabled
             upstream_unavailable:
               value:
                 type: https://collection-app.invalid/problems/upstream-unavailable
                 title: Lookup unavailable
                 status: 503
-                detail: TMDB is temporarily unavailable. Try again later.
+                detail: The lookup service is temporarily unavailable. Try again later.
                 code: upstream_unavailable
     PreconditionRequired:
       description: '`If-Match` is missing (or `*`)'
@@ -1566,6 +1606,7 @@ components:
         streaming_country_code: IT
         metadata_language: it-IT
         lookup_available: true
+        book_lookup_available: true
         markdown_history_limit: 20
         trash_retention_days: null
         preferred_stores: [openlibrary, kobo]
@@ -2087,12 +2128,13 @@ components:
         populated_item_count: { type: integer, minimum: 0, description: "Number of items, including trashed items, with a value for this field." }
     Settings:
       type: object
-      required: [workspace_name, streaming_country_code, metadata_language, lookup_available, markdown_history_limit, trash_retention_days, preferred_stores, version]
+      required: [workspace_name, streaming_country_code, metadata_language, lookup_available, book_lookup_available, markdown_history_limit, trash_retention_days, preferred_stores, version]
       properties:
         workspace_name: { type: string, minLength: 1, maxLength: 200 }
         streaming_country_code: { type: string, pattern: '^[A-Z]{2}$' }
         metadata_language: { $ref: '#/components/schemas/MetadataLanguage' }
-        lookup_available: { type: boolean, readOnly: true, description: Whether this server has TMDB lookup configured. }
+        lookup_available: { type: boolean, readOnly: true, description: Whether this server has TMDB lookup (movies and TV) configured. }
+        book_lookup_available: { type: boolean, readOnly: true, description: Whether book lookup (Open Library) is turned on. It is by default and needs no key; `OPENLIBRARY_DISABLED=true` turns it off. }
         markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
         trash_retention_days: { type: integer, nullable: true, minimum: 1, maximum: 365 }
         preferred_stores: { $ref: '#/components/schemas/PreferredStores' }
@@ -2433,11 +2475,16 @@ components:
         lookup:
           type: boolean
           default: true
-          description: For movie and TV lists, run TMDB lookup during creation. Ignored on other types.
+          description: For movie, TV and book lists, run lookup during creation. Ignored on other types.
         tmdb_id:
           type: integer
           minimum: 1
           description: Optional selected TMDB suggestion. Used only when lookup runs on a movie or TV item.
+        source_id:
+          type: string
+          pattern: '^OL[0-9]+W$'
+          maxLength: 64
+          description: Optional selected Open Library work id (from `GET /books/suggestions`). Used only when lookup runs on a book item.
         price: { $ref: '#/components/schemas/PriceInput' }
         website: { type: string, nullable: true, maxLength: 2048 }
         metadata:
@@ -2481,7 +2528,12 @@ components:
         tmdb_id:
           type: integer
           minimum: 1
-          description: Selects a known TMDB match. Without it, fill/rematch searches by title and refresh uses stored metadata.tmdb_id.
+          description: Selects a known TMDB match (movie and TV items). Without it, fill/rematch searches by title and refresh uses stored metadata.tmdb_id.
+        source_id:
+          type: string
+          pattern: '^OL[0-9]+W$'
+          maxLength: 64
+          description: Selects a known Open Library work (book items). Without it, fill/rematch searches by title and refresh uses stored metadata.openlibrary_id.
     TmdbType:
       type: string
       enum: [movie, tv_show]
@@ -2503,6 +2555,25 @@ components:
         results:
           type: array
           items: { $ref: '#/components/schemas/TmdbSuggestion' }
+    BookSuggestion:
+      type: object
+      required: [source_id, title, authors, year, pages, cover_url, isbn]
+      properties:
+        source_id: { type: string, pattern: '^OL[0-9]+W$', description: The Open Library work id. }
+        title: { type: string }
+        authors: { type: string, description: "The authors joined with a comma; empty when Open Library lists none." }
+        year: { type: integer, nullable: true, description: First publication year. }
+        pages: { type: integer, nullable: true, description: Median number of pages over the work's editions. }
+        cover_url: { type: string, format: uri, nullable: true }
+        isbn: { type: string, nullable: true, description: "The first 13-digit ISBN of the work's editions, else the first ISBN." }
+    BookSuggestions:
+      type: object
+      required: [available, results]
+      properties:
+        available: { type: boolean }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/BookSuggestion' }
     # ---- Type metadata (F-007: trimmed to the kept fields; sort key marked). All keys optional; text is trimmed, max 100 chars unless noted. ----
     Streaming:
       type: object

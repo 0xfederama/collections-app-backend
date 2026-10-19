@@ -23,8 +23,12 @@ type Config struct {
 	WorkspaceName   string
 	TMDBAPIKey      string
 	TMDBMockFixture bool
-	LogLevel        slog.Level
-	LogFormat       string
+	// OpenLibraryContact goes into the Open Library User-Agent (optional; identified clients get a higher rate limit).
+	OpenLibraryContact string
+	// OpenLibraryDisabled turns book lookup off (it is on by default and needs no key).
+	OpenLibraryDisabled bool
+	LogLevel            slog.Level
+	LogFormat           string
 }
 
 // Load reads configuration through getenv (os.Getenv in production) and returns
@@ -54,6 +58,16 @@ func Load(getenv func(string) string) (Config, error) {
 			errs = append(errs, errors.New("TMDB_MOCK_FIXTURE must be true or false"))
 		} else {
 			c.TMDBMockFixture = fixture
+		}
+	}
+
+	c.OpenLibraryContact = strings.TrimSpace(getenv("OPENLIBRARY_CONTACT"))
+	if raw := strings.TrimSpace(getenv("OPENLIBRARY_DISABLED")); raw != "" {
+		disabled, err := strconv.ParseBool(raw)
+		if err != nil {
+			errs = append(errs, errors.New("OPENLIBRARY_DISABLED must be true or false"))
+		} else {
+			c.OpenLibraryDisabled = disabled
 		}
 	}
 

@@ -42,8 +42,12 @@ type Deps struct {
 	Definitions *definitions.Service
 	// LookupAvailable reports whether the optional server-side TMDB key is configured (F013-B5).
 	LookupAvailable bool
+	// BookLookupAvailable reports whether book lookup (Open Library) is on (F016-B3).
+	BookLookupAvailable bool
 	// TMDB serves optional movie and TV title suggestions (F013-B1..B3).
 	TMDB lookup.Provider
+	// Books serves book title suggestions (Open Library, F016-B3).
+	Books lookup.Provider
 	// Lookup orchestrates item imports and refreshes (F013-B3).
 	Lookup *lookup.Service
 	// Tree serves folders, lists and the sidebar tree (B-06).

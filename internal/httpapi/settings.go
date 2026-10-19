@@ -16,7 +16,7 @@ func (s *Server) GetSettings(ctx context.Context, _ oapi.GetSettingsRequestObjec
 		return nil, err
 	}
 	return oapi.GetSettings200JSONResponse{
-		Body:    settingsBody(cur, s.deps.LookupAvailable),
+		Body:    settingsBody(cur, s.deps.LookupAvailable, s.deps.BookLookupAvailable),
 		Headers: oapi.GetSettings200ResponseHeaders{ETag: etag.Format(etag.Settings, cur.Version)},
 	}, nil
 }
@@ -35,7 +35,7 @@ func (s *Server) UpdateSettings(ctx context.Context, req oapi.UpdateSettingsRequ
 		return nil, err
 	}
 	return oapi.UpdateSettings200JSONResponse{
-		Body:    settingsBody(updated, s.deps.LookupAvailable),
+		Body:    settingsBody(updated, s.deps.LookupAvailable, s.deps.BookLookupAvailable),
 		Headers: oapi.UpdateSettings200ResponseHeaders{ETag: etag.Format(etag.Settings, updated.Version)},
 	}, nil
 }
@@ -65,7 +65,7 @@ func optionalStores(in *oapi.PreferredStores) *[]string {
 	return &out
 }
 
-func settingsBody(s workspace.Settings, lookupAvailable bool) oapi.Settings {
+func settingsBody(s workspace.Settings, lookupAvailable, bookLookupAvailable bool) oapi.Settings {
 	// The retention is always set: an unset Nullable would marshal as 0, not null.
 	retention := nullable.NewNullNullable[int]()
 	if s.TrashRetentionDays != nil {
@@ -76,6 +76,7 @@ func settingsBody(s workspace.Settings, lookupAvailable bool) oapi.Settings {
 		StreamingCountryCode: s.StreamingCountryCode,
 		MetadataLanguage:     s.MetadataLanguage,
 		LookupAvailable:      &lookupAvailable,
+		BookLookupAvailable:  &bookLookupAvailable,
 		MarkdownHistoryLimit: s.MarkdownHistoryLimit,
 		TrashRetentionDays:   retention,
 		PreferredStores:      storeKeys(s.PreferredStores),

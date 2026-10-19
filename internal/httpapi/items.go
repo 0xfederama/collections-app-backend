@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/oapi-codegen/nullable"
@@ -73,7 +72,7 @@ func (s *Server) CreateItem(ctx context.Context, r oapi.CreateItemRequestObject)
 	var it items.Item
 	var err error
 	if s.deps.Lookup != nil {
-		it, err = s.deps.Lookup.Create(ctx, r.Id, in, lookup.CreateOptions{Lookup: b.Lookup, TMDBID: b.TmdbId})
+		it, err = s.deps.Lookup.Create(ctx, r.Id, in, lookup.CreateOptions{Lookup: b.Lookup, TMDBID: b.TmdbId, SourceID: b.SourceId})
 	} else {
 		it, err = s.deps.Items.Create(ctx, r.Id, in)
 	}
@@ -98,12 +97,9 @@ func (s *Server) LookupItemMetadata(ctx context.Context, r oapi.LookupItemMetada
 	if r.Body.Mode != nil {
 		mode = lookup.Mode(*r.Body.Mode)
 	}
-	var selected *string
-	if r.Body.TmdbId != nil {
-		id := strconv.Itoa(*r.Body.TmdbId)
-		selected = &id
-	}
-	it, err := s.deps.Lookup.Apply(ctx, r.Id, IfMatchVersion(ctx), mode, selected)
+	// tmdb_id selects a TMDB match (movie and TV), source_id an Open Library work (book).
+	// The service uses the one that fits the item's type and rejects a malformed id.
+	it, err := s.deps.Lookup.Apply(ctx, r.Id, IfMatchVersion(ctx), mode, lookup.Selection{TMDBID: r.Body.TmdbId, SourceID: r.Body.SourceId})
 	if err != nil {
 		return nil, err
 	}

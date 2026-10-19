@@ -111,21 +111,21 @@ func (e *UnsupportedMediaTypeError) Error() string { return "unsupported media t
 // UnsupportedMediaType reports an upload that is not JPEG, PNG or WebP.
 func UnsupportedMediaType(detail string) error { return &UnsupportedMediaTypeError{Detail: detail} }
 
-// LookupDisabledError means a TMDB-backed write was requested without a
+// LookupDisabledError means a lookup-backed write was requested without a
 // configured server-side credential.
 type LookupDisabledError struct{}
 
-func (e *LookupDisabledError) Error() string { return "TMDB lookup is disabled" }
+func (e *LookupDisabledError) Error() string { return "lookup is disabled" }
 
-// LookupDisabled reports that the optional TMDB integration is not configured.
+// LookupDisabled reports that the optional lookup integration (TMDB, Open Library) is not configured or turned off.
 func LookupDisabled() error { return &LookupDisabledError{} }
 
-// UpstreamUnavailableError means TMDB could not satisfy a lookup request.
+// UpstreamUnavailableError means a lookup provider (TMDB, Open Library) could not satisfy a request.
 // It deliberately carries no underlying client error across the domain
 // boundary, keeping upstream diagnostics and credentials out of API responses.
 type UpstreamUnavailableError struct{}
 
-func (e *UpstreamUnavailableError) Error() string { return "TMDB is unavailable" }
+func (e *UpstreamUnavailableError) Error() string { return "lookup provider is unavailable" }
 
-// UpstreamUnavailable reports a failed request to the optional TMDB service.
+// UpstreamUnavailable reports a failed request to a lookup provider.
 func UpstreamUnavailable() error { return &UpstreamUnavailableError{} }

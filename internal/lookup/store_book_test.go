@@ -35,7 +35,7 @@ func (e *lookupEnv) createBook(list uuid.UUID, title string, metadata map[string
 }
 
 func bookFields() map[string]any {
-	return map[string]any{"author": "Frank Herbert", "pages": 608, "first_publish_year": 1965, "isbn": "9780441172719"}
+	return map[string]any{"author": "Frank Herbert", "pages": 608, "isbn": "9780441172719"}
 }
 
 func TestF016B3_BookCreateKeepsProvenanceWithoutRetention(t *testing.T) {
@@ -47,7 +47,7 @@ func TestF016B3_BookCreateKeepsProvenanceWithoutRetention(t *testing.T) {
 		Mode: ModeCreate, ListID: list, Type: "book", Provider: ProviderOpenLibrary, SourceID: "OL893415W",
 		Title: "Dune", OriginalTitle: "dune",
 		CreateInput: &items.CreateInput{Title: "dune", Price: &items.Price{Amount: &amount, Currency: "EUR"}, Metadata: map[string]any{"pages": 700}},
-		Fields:      bookFields(), FillOnly: map[string]any{"stores": []string{"openlibrary", "kobo"}},
+		Fields:      bookFields(), FillOnly: map[string]any{"stores": []string{"amazon", "kobo"}},
 		PosterPath: "12547191", Poster: processedPoster("cover"), RefreshFields: true, RefreshPoster: true,
 	})
 	if err != nil {
@@ -58,8 +58,8 @@ func TestF016B3_BookCreateKeepsProvenanceWithoutRetention(t *testing.T) {
 	}
 	metadata := decodeMetadata(t, it.Metadata)
 	want := map[string]any{
-		"author": "Frank Herbert", "pages": float64(700), "first_publish_year": float64(1965), "isbn": "9780441172719",
-		"openlibrary_id": "OL893415W", "stores": []any{"openlibrary", "kobo"},
+		"author": "Frank Herbert", "pages": float64(700), "isbn": "9780441172719",
+		"openlibrary_id": "OL893415W", "stores": []any{"amazon", "kobo"},
 	}
 	if !reflect.DeepEqual(metadata, want) {
 		t.Fatalf("metadata = %#v, want %#v", metadata, want)
@@ -69,7 +69,7 @@ func TestF016B3_BookCreateKeepsProvenanceWithoutRetention(t *testing.T) {
 		t.Fatalf("record = %+v ok=%v err=%v", record, ok, err)
 	}
 	// The user's pages and the fill-only stores are not claimed as imported.
-	wantImported := map[string]any{"author": "Frank Herbert", "first_publish_year": float64(1965), "isbn": "9780441172719", "openlibrary_id": "OL893415W"}
+	wantImported := map[string]any{"author": "Frank Herbert", "isbn": "9780441172719", "openlibrary_id": "OL893415W"}
 	if !reflect.DeepEqual(record.ImportedFields, wantImported) {
 		t.Errorf("snapshots = %#v, want %#v", record.ImportedFields, wantImported)
 	}
@@ -89,7 +89,7 @@ func TestF016B3_BookCreateExplicitStoresWinOverTheProviderLink(t *testing.T) {
 	it, err := e.store.Apply(t.Context(), ApplyParams{
 		Mode: ModeCreate, ListID: list, Type: "book", Provider: ProviderOpenLibrary, SourceID: "OL1W",
 		Title: "Dune", OriginalTitle: "dune", CreateInput: &items.CreateInput{Title: "dune", Metadata: map[string]any{"stores": []any{}}},
-		Fields: bookFields(), FillOnly: map[string]any{"stores": []string{"openlibrary"}},
+		Fields: bookFields(), FillOnly: map[string]any{"stores": []string{"amazon"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestF016B3_BookFillSetsOnlyEmptyValuesAndTheStoreLinkOnlyWhenEmpty(t *testi
 		t.Helper()
 		got, err := e.store.Apply(t.Context(), ApplyParams{
 			Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version, Type: "book", Provider: ProviderOpenLibrary, SourceID: "OL1W",
-			Title: "Dune", OriginalTitle: it.Title, Fields: bookFields(), FillOnly: map[string]any{"stores": []string{"openlibrary"}},
+			Title: "Dune", OriginalTitle: it.Title, Fields: bookFields(), FillOnly: map[string]any{"stores": []string{"amazon"}},
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -117,7 +117,7 @@ func TestF016B3_BookFillSetsOnlyEmptyValuesAndTheStoreLinkOnlyWhenEmpty(t *testi
 	it = apply(it)
 	metadata := decodeMetadata(t, it.Metadata)
 	if metadata["author"] != "Mine" || metadata["pages"] != float64(608) || metadata["isbn"] != "9780441172719" ||
-		metadata["openlibrary_id"] != "OL1W" || !reflect.DeepEqual(metadata["stores"], []any{"openlibrary"}) {
+		metadata["openlibrary_id"] != "OL1W" || !reflect.DeepEqual(metadata["stores"], []any{"amazon"}) {
 		t.Fatalf("metadata after fill = %#v", metadata)
 	}
 	if it.Title != "dune" {
@@ -151,7 +151,7 @@ func TestF016B3_BookRematchReplacesFetchedFieldsAndKeepsStoreChoices(t *testing.
 	it := e.createBook(list, "dune", map[string]any{"stores": []any{"kobo"}})
 	it, err := e.store.Apply(t.Context(), ApplyParams{
 		Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version, Type: "book", Provider: ProviderOpenLibrary, SourceID: "OL1W",
-		Title: "Dune", OriginalTitle: it.Title, Fields: bookFields(), FillOnly: map[string]any{"stores": []string{"openlibrary"}},
+		Title: "Dune", OriginalTitle: it.Title, Fields: bookFields(), FillOnly: map[string]any{"stores": []string{"amazon"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -164,14 +164,14 @@ func TestF016B3_BookRematchReplacesFetchedFieldsAndKeepsStoreChoices(t *testing.
 	it, err = e.store.Apply(t.Context(), ApplyParams{
 		Mode: ModeRematch, ItemID: it.ID, ExpectedVersion: it.Version, Type: "book", Provider: ProviderOpenLibrary, SourceID: "OL2W",
 		Title: "Another Dune", OriginalTitle: it.Title,
-		Fields:   map[string]any{"author": "Someone Else", "first_publish_year": 1999}, // no pages, no isbn
-		FillOnly: map[string]any{"stores": []string{"openlibrary"}},
+		Fields:   map[string]any{"author": "Someone Else"}, // no pages, no isbn
+		FillOnly: map[string]any{"stores": []string{"amazon"}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	metadata := decodeMetadata(t, it.Metadata)
-	if metadata["author"] != "Someone Else" || metadata["first_publish_year"] != float64(1999) || metadata["openlibrary_id"] != "OL2W" {
+	if metadata["author"] != "Someone Else" || metadata["openlibrary_id"] != "OL2W" {
 		t.Errorf("metadata after rematch = %#v", metadata)
 	}
 	if _, stale := metadata["pages"]; stale {
@@ -281,14 +281,14 @@ func TestFillOnlyHelper(t *testing.T) {
 		emptyLists bool
 		want       any
 	}{
-		{"absent", map[string]any{}, false, []any{"openlibrary"}},
-		{"null", map[string]any{"stores": nil}, false, []any{"openlibrary"}},
+		{"absent", map[string]any{}, false, []any{"amazon"}},
+		{"null", map[string]any{"stores": nil}, false, []any{"amazon"}},
 		{"empty list kept on create", map[string]any{"stores": []any{}}, false, []any{}},
-		{"empty list filled on fill", map[string]any{"stores": []any{}}, true, []any{"openlibrary"}},
+		{"empty list filled on fill", map[string]any{"stores": []any{}}, true, []any{"amazon"}},
 		{"user choice kept", map[string]any{"stores": []any{"kobo"}}, true, []any{"kobo"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			fillOnly(tc.metadata, map[string]any{"stores": []string{"openlibrary"}}, tc.emptyLists)
+			fillOnly(tc.metadata, map[string]any{"stores": []string{"amazon"}}, tc.emptyLists)
 			if !reflect.DeepEqual(tc.metadata["stores"], tc.want) {
 				t.Errorf("stores = %#v, want %#v", tc.metadata["stores"], tc.want)
 			}

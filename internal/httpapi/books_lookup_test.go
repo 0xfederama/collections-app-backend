@@ -272,7 +272,7 @@ func TestF016B3_FixtureServesOnlyTheExactQueryWithoutNetwork(t *testing.T) {
 
 func TestF016B3_CreateBookWithLookupFillsFieldsCoverAndStores(t *testing.T) {
 	e := newBookEnv(t, bookEnvOptions{})
-	e.exec(`UPDATE workspace_settings SET preferred_stores = '{kobo}' WHERE workspace_id = $1`, e.ws)
+	e.exec(`UPDATE workspace_settings SET preferred_store = 'kobo' WHERE workspace_id = $1`, e.ws)
 	lid := e.bookList()
 
 	it := e.newItem(lid, `{"title":"the hobbit","metadata":{"pages":999}}`)
@@ -280,15 +280,18 @@ func TestF016B3_CreateBookWithLookupFillsFieldsCoverAndStores(t *testing.T) {
 		t.Fatalf("item = %v", it)
 	}
 	meta := metaOf(it)
-	if meta["author"] != "J.R.R. Tolkien" || meta["pages"] != float64(999) || meta["first_publish_year"] != float64(1937) ||
+	if meta["author"] != "J.R.R. Tolkien" || meta["pages"] != float64(999) ||
 		meta["isbn"] != "9780261103283" || meta["openlibrary_id"] != "OL27482W" {
 		t.Errorf("metadata = %v", meta)
 	}
-	// The Open Library link first, then the workspace's preferred stores.
-	if !reflect.DeepEqual(meta["stores"], []any{"openlibrary", "kobo"}) {
+	if _, has := meta["first_publish_year"]; has {
+		t.Errorf("lookup must not fill first_publish_year: %v", meta)
+	}
+	// The workspace's default store, no Open Library link.
+	if !reflect.DeepEqual(meta["stores"], []any{"kobo"}) {
 		t.Errorf("stores = %v", meta["stores"])
 	}
-	if links, _ := meta["store_links"].(map[string]any); links["openlibrary"] == nil {
+	if links, _ := meta["store_links"].(map[string]any); links["kobo"] == nil || links["openlibrary"] != nil {
 		t.Errorf("store_links = %v", meta["store_links"])
 	}
 	if e.covers.Load() != 1 {
@@ -342,7 +345,7 @@ func TestF016B3_CreateBookWithFixtureNeedsNoNetwork(t *testing.T) {
 	lid := e.bookList()
 	it := e.newItem(lid, `{"title":"[mock] book name"}`)
 	meta := metaOf(it)
-	if it["title"] != "Mock Book Title" || meta["author"] != "Mock Author" || meta["pages"] != float64(321) || meta["first_publish_year"] != float64(2002) ||
+	if it["title"] != "Mock Book Title" || meta["author"] != "Mock Author" || meta["pages"] != float64(321) ||
 		meta["isbn"] != "9780000000002" || meta["openlibrary_id"] != "OL900001W" || it["image"] == nil {
 		t.Fatalf("fixture item = %v", it)
 	}
@@ -370,10 +373,11 @@ func TestF016B3_LookupFillKeepsUserValuesAndStores(t *testing.T) {
 		t.Errorf("ETag = %q for version %v", rec.Header().Get("ETag"), got["version"])
 	}
 
-	// With no stores at all, fill adds the Open Library link.
+	// With no stores at all, fill adds the default store.
+	e.exec(`UPDATE workspace_settings SET preferred_store = 'bookshop' WHERE workspace_id = $1`, e.ws)
 	bare := e.newItem(lid, `{"title":"hobbit 2","lookup":false,"metadata":{"stores":[]}}`)
 	filled := decode(t, e.lookupItem(bare, `{"source_id":"OL27482W"}`))
-	if !reflect.DeepEqual(metaOf(filled)["stores"], []any{"openlibrary"}) {
+	if !reflect.DeepEqual(metaOf(filled)["stores"], []any{"bookshop"}) {
 		t.Errorf("stores after fill on an empty list = %v", metaOf(filled)["stores"])
 	}
 }

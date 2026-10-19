@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -21,14 +20,14 @@ import (
 // Settings is the workspace name plus the workspace_settings row. Version is
 // workspace_settings.version, the single ETag stream "s-N" (API.md §3).
 // TrashRetentionDays nil means off: the trash is never purged automatically (F012-B3).
-// PreferredStores are provider keys in the order the user chose (F-016); never nil from the database.
+// PreferredStore is the one default store key (F-016, 0.13.0); never empty.
 type Settings struct {
 	WorkspaceName        string
 	StreamingCountryCode string
 	MetadataLanguage     string
 	MarkdownHistoryLimit int
 	TrashRetentionDays   *int
-	PreferredStores      []string
+	PreferredStore       string
 	Version              int
 }
 
@@ -40,7 +39,7 @@ type SettingsPatch struct {
 	MetadataLanguage     *string
 	MarkdownHistoryLimit *int
 	TrashRetentionDays   Optional[int]
-	PreferredStores      *[]string
+	PreferredStore       *string
 }
 
 // Optional is a PATCH field that can be cleared: Set tells absent from present,
@@ -112,7 +111,7 @@ func (s *Service) Update(ctx context.Context, workspaceID uuid.UUID, ifMatch int
 			MetadataLanguage:     next.MetadataLanguage,
 			MarkdownHistoryLimit: int32(next.MarkdownHistoryLimit),
 			TrashRetentionDays:   retentionToDB(next.TrashRetentionDays),
-			PreferredStores:      next.PreferredStores,
+			PreferredStore:       next.PreferredStore,
 		})
 		if err != nil {
 			return fmt.Errorf("update settings: %w", err)
@@ -149,10 +148,8 @@ func (p SettingsPatch) validate() (SettingsPatch, error) {
 	if p.TrashRetentionDays.Value != nil && (*p.TrashRetentionDays.Value < 1 || *p.TrashRetentionDays.Value > 365) {
 		errs = append(errs, apperr.FieldError{Field: "trash_retention_days", Message: "must be between 1 and 365, or null to turn it off"})
 	}
-	if p.PreferredStores != nil {
-		if err := stores.ValidateKeys(*p.PreferredStores); err != nil {
-			errs = append(errs, apperr.FieldError{Field: "preferred_stores", Message: err.Error()})
-		}
+	if p.PreferredStore != nil && !stores.Valid(*p.PreferredStore) {
+		errs = append(errs, apperr.FieldError{Field: "preferred_store", Message: fmt.Sprintf("unknown store %q", *p.PreferredStore)})
 	}
 	if len(errs) > 0 {
 		return p, apperr.Validation(errs...)
@@ -199,8 +196,8 @@ func (p SettingsPatch) applyTo(s Settings) Settings {
 	if p.TrashRetentionDays.Set {
 		s.TrashRetentionDays = p.TrashRetentionDays.Value
 	}
-	if p.PreferredStores != nil {
-		s.PreferredStores = *p.PreferredStores
+	if p.PreferredStore != nil {
+		s.PreferredStore = *p.PreferredStore
 	}
 	return s
 }
@@ -210,7 +207,7 @@ func (p SettingsPatch) applyTo(s Settings) Settings {
 func (s Settings) equal(o Settings) bool {
 	return s.WorkspaceName == o.WorkspaceName && s.StreamingCountryCode == o.StreamingCountryCode &&
 		s.MetadataLanguage == o.MetadataLanguage && s.MarkdownHistoryLimit == o.MarkdownHistoryLimit && sameRetention(s.TrashRetentionDays, o.TrashRetentionDays) &&
-		slices.Equal(s.PreferredStores, o.PreferredStores)
+		s.PreferredStore == o.PreferredStore
 }
 
 func sameRetention(a, b *int) bool {
@@ -245,7 +242,7 @@ func fromGetRow(r sqlc.GetSettingsRow) Settings {
 		MetadataLanguage:     r.MetadataLanguage,
 		MarkdownHistoryLimit: int(r.MarkdownHistoryLimit),
 		TrashRetentionDays:   retentionFromDB(r.TrashRetentionDays),
-		PreferredStores:      r.PreferredStores,
+		PreferredStore:       r.PreferredStore,
 		Version:              int(r.Version),
 	}
 }
@@ -257,7 +254,7 @@ func fromLockRow(r sqlc.LockSettingsRow) Settings {
 		MetadataLanguage:     r.MetadataLanguage,
 		MarkdownHistoryLimit: int(r.MarkdownHistoryLimit),
 		TrashRetentionDays:   retentionFromDB(r.TrashRetentionDays),
-		PreferredStores:      r.PreferredStores,
+		PreferredStore:       r.PreferredStore,
 		Version:              int(r.Version),
 	}
 }

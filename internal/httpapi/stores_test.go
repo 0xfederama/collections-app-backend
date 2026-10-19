@@ -17,11 +17,11 @@ func TestF016B4_ItemStoreLinksAreComputedOnRead(t *testing.T) {
 	e := newTreeEnv(t)
 	lid := e.listOfType("Books", nil, "book")["id"].(string)
 
-	it := e.newItem(lid, `{"title":"Dune","metadata":{"isbn":"978-0-441-17271-9","openlibrary_id":"OL893415W","stores":["kobo","openlibrary","bookshop"]}}`)
+	it := e.newItem(lid, `{"title":"Dune","metadata":{"isbn":"978-0-441-17271-9","openlibrary_id":"OL893415W","stores":["kobo","amazon","bookshop"]}}`)
 	want := map[string]any{
-		"kobo":        "https://www.kobo.com/search?query=9780441172719",
-		"openlibrary": "https://openlibrary.org/works/OL893415W",
-		"bookshop":    "https://bookshop.org/search?keywords=9780441172719",
+		"kobo":     "https://www.kobo.com/search?query=9780441172719",
+		"amazon":   "https://www.amazon.com/s?k=9780441172719",
+		"bookshop": "https://bookshop.org/search?keywords=9780441172719",
 	}
 	if got, ok := storeLinks(it); !ok || !reflect.DeepEqual(got, want) {
 		t.Fatalf("create: store_links = %v (present %v), want %v", got, ok, want)

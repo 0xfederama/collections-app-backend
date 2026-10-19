@@ -29,7 +29,7 @@ func (s *Server) UpdateSettings(ctx context.Context, req oapi.UpdateSettingsRequ
 		MetadataLanguage:     req.Body.MetadataLanguage,
 		MarkdownHistoryLimit: req.Body.MarkdownHistoryLimit,
 		TrashRetentionDays:   optionalRetention(req.Body.TrashRetentionDays),
-		PreferredStores:      optionalStores(req.Body.PreferredStores),
+		PreferredStore:       optionalStore(req.Body.PreferredStore),
 	})
 	if err != nil {
 		return nil, err
@@ -52,17 +52,13 @@ func optionalRetention(n nullable.Nullable[int]) workspace.Optional[int] {
 	return workspace.Optional[int]{Set: true}
 }
 
-// optionalStores copies the PATCH list (absent = nil). The copy is never nil, so
-// an explicit empty list clears the preference.
-func optionalStores(in *oapi.PreferredStores) *[]string {
+// optionalStore copies the PATCH store key (absent = nil).
+func optionalStore(in *oapi.StoreKey) *string {
 	if in == nil {
 		return nil
 	}
-	out := make([]string, 0, len(*in))
-	for _, key := range *in {
-		out = append(out, string(key))
-	}
-	return &out
+	v := string(*in)
+	return &v
 }
 
 func settingsBody(s workspace.Settings, lookupAvailable, bookLookupAvailable bool) oapi.Settings {
@@ -79,16 +75,7 @@ func settingsBody(s workspace.Settings, lookupAvailable, bookLookupAvailable boo
 		BookLookupAvailable:  &bookLookupAvailable,
 		MarkdownHistoryLimit: s.MarkdownHistoryLimit,
 		TrashRetentionDays:   retention,
-		PreferredStores:      storeKeys(s.PreferredStores),
+		PreferredStore:       oapi.StoreKey(s.PreferredStore),
 		Version:              s.Version,
 	}
-}
-
-// storeKeys converts the stored provider keys to the wire type; never nil (the field is required).
-func storeKeys(keys []string) oapi.PreferredStores {
-	out := make(oapi.PreferredStores, 0, len(keys))
-	for _, key := range keys {
-		out = append(out, oapi.StoreKey(key))
-	}
-	return out
 }

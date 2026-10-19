@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Collection App API
-  version: 0.12.1
+  version: 0.13.0
   description: |
     Private REST API of the Collection App (design-docs/API.md). There is no auth in the MVP, so it must stay on a private network.
 
@@ -188,7 +188,7 @@ paths:
         Requires `If-Match` (`"s-N"`). Lowering `markdown_history_limit` prunes on the next save per item, not immediately.
         `trash_retention_days` (F012-B3): absent = unchanged, `null` = off, otherwise 1 to 365. Setting it does not purge at once; the daily job does.
         `metadata_language` controls the locale used for lookup suggestions and imported metadata (TMDB; Open Library takes its language part as a preference).
-        `preferred_stores` (F-016) is the ordered list of stores offered on books: unique keys from `GET /api/v1/store-providers`, at most six.
+        `preferred_store` (F-016, 0.13.0) is the one default store of the workspace: a key from `GET /api/v1/store-providers`, never null, `amazon` by default. A new book gets `stores: [preferred_store]` when the request leaves `stores` unset, and book lookup sets it the same way when the item has no stores yet. An unknown key is `422 validation_failed` on `preferred_store`.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -222,7 +222,7 @@ paths:
       tags: [settings]
       operationId: listStoreProviders
       summary: List the stores a `stores` field can name
-      description: The fixed list of stores (F-016, D-096), in display order. It does not depend on the workspace.
+      description: The fixed list of stores (F-016, D-096), in display order (Amazon first; Open Library is not a store since 0.13.0). It does not depend on the workspace.
       responses:
         '200':
           description: The providers
@@ -233,9 +233,8 @@ paths:
                 default:
                   value:
                     providers:
-                      - { key: openlibrary, name: Open Library }
-                      - { key: bookshop, name: Bookshop.org }
                       - { key: amazon, name: Amazon }
+                      - { key: bookshop, name: Bookshop.org }
                       - { key: apple_books, name: Apple Books }
                       - { key: google_play_books, name: Google Play Books }
                       - { key: kobo, name: Kobo }
@@ -729,7 +728,7 @@ paths:
         For movie, TV and book lists, `lookup` defaults to `true`: the server searches by title and applies the first result. Send `tmdb_id`
         (movie and TV) or `source_id` (book) to select a known suggestion; the one that does not fit the list's type is ignored. Send
         `lookup: false` to create the item exactly as supplied. Lookup fields are ignored on other types. On a book, a matched work also
-        proposes the Open Library link in `stores` (plus the workspace's preferred stores) when the request leaves `stores` unset.
+        sets `stores` to `[preferred_store]` (the workspace default store) when the request leaves `stores` unset; an explicit value wins.
         If automatic lookup finds no match, the item is still created unchanged. If lookup was explicitly requested but unavailable, the
         request returns `503 lookup_disabled` or `503 upstream_unavailable` and no item is created.
       requestBody:
@@ -877,7 +876,7 @@ paths:
         (movie and TV) or `source_id` (book) selects a suggestion, then replaces the title and all fields fetched from the provider;
         `refresh` uses the stored `metadata.tmdb_id` or `metadata.openlibrary_id` unless the id is supplied and likewise replaces fetched
         fields. All modes preserve an existing item image. A poster or cover is stored through the normal image pipeline only when the item
-        has no image. On a book, `fill` also adds the Open Library link to `stores` when `stores` is empty; no mode ever removes or replaces
+        has no image. On a book, `fill` also sets `stores` to `[preferred_store]` (the workspace default store) when `stores` is empty; no mode ever removes or replaces
         the user's store choices. The default mode is `fill`. When a search has no result, the operation returns the unchanged item and its
         current ETag. An explicit lookup while the integration is disabled or the provider cannot be reached returns `503 lookup_disabled` or
         `503 upstream_unavailable` respectively.
@@ -1609,7 +1608,7 @@ components:
         book_lookup_available: true
         markdown_history_limit: 20
         trash_retention_days: null
-        preferred_stores: [openlibrary, kobo]
+        preferred_store: kobo
         version: 4
     Folder:
       value:
@@ -2128,7 +2127,7 @@ components:
         populated_item_count: { type: integer, minimum: 0, description: "Number of items, including trashed items, with a value for this field." }
     Settings:
       type: object
-      required: [workspace_name, streaming_country_code, metadata_language, lookup_available, book_lookup_available, markdown_history_limit, trash_retention_days, preferred_stores, version]
+      required: [workspace_name, streaming_country_code, metadata_language, lookup_available, book_lookup_available, markdown_history_limit, trash_retention_days, preferred_store, version]
       properties:
         workspace_name: { type: string, minLength: 1, maxLength: 200 }
         streaming_country_code: { type: string, pattern: '^[A-Z]{2}$' }
@@ -2137,7 +2136,7 @@ components:
         book_lookup_available: { type: boolean, readOnly: true, description: Whether book lookup (Open Library) is available. It needs no key and is always on. }
         markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
         trash_retention_days: { type: integer, nullable: true, minimum: 1, maximum: 365 }
-        preferred_stores: { $ref: '#/components/schemas/PreferredStores' }
+        preferred_store: { $ref: '#/components/schemas/StoreKey' }
         version: { type: integer }
     UpdateSettingsRequest:
       type: object
@@ -2148,7 +2147,7 @@ components:
         metadata_language: { $ref: '#/components/schemas/MetadataLanguage' }
         markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
         trash_retention_days: { type: integer, nullable: true, minimum: 1, maximum: 365 }
-        preferred_stores: { $ref: '#/components/schemas/PreferredStores' }
+        preferred_store: { $ref: '#/components/schemas/StoreKey' }
     MetadataLanguage:
       type: string
       pattern: '^[a-z]{2}(-[A-Z]{2})?$'
@@ -2156,14 +2155,8 @@ components:
       description: ISO 639-1 language (`xx`), optionally with an uppercase region (`xx-YY`), passed to TMDB.
     StoreKey:
       type: string
-      enum: [openlibrary, bookshop, amazon, apple_books, google_play_books, kobo]
-      description: A store a `stores` field or the preferred stores can name (F-016, D-096). Its display name comes from `GET /api/v1/store-providers`.
-    PreferredStores:
-      type: array
-      uniqueItems: true
-      maxItems: 6
-      description: The stores new books are offered with, in the order chosen. Empty means none. Each key once.
-      items: { $ref: '#/components/schemas/StoreKey' }
+      enum: [amazon, bookshop, apple_books, google_play_books, kobo]
+      description: A store a `stores` field or the `preferred_store` setting can name (F-016, D-096). Open Library is not a store since 0.13.0. Its display name comes from `GET /api/v1/store-providers`.
     StoreProvider:
       type: object
       required: [key, name]
@@ -2402,8 +2395,9 @@ components:
       description: >-
         An item. `type` is read-only and derived from the item's list; `metadata` is validated against that workspace type's field definitions.
         For a type with a `stores` field (F-016, D-096) the response `metadata` also carries a read-only `store_links` object: provider key
-        to URL, one entry per selected store that has a link (built from the item's title, `isbn` and `openlibrary_id`, never stored). Links follow the workspace country (`streaming_country_code`): Amazon uses the country's storefront (amazon.it for `IT`, amazon.com for countries without one), Bookshop.org uses its UK site for `GB`, Google Play Books adds the country; other stores are global. Because links are computed on read, changing the country changes them. Sending
+        to URL, one entry per selected store that has a link (built from the item's title and `isbn`, never stored). Links follow the workspace country (`streaming_country_code`): Amazon uses the country's storefront (amazon.it for `IT`, amazon.com for countries without one), Bookshop.org uses its UK site for `GB`, Google Play Books adds the country; other stores are global. Because links are computed on read, changing the country changes them. Sending
         `store_links` in `metadata` is rejected as an unknown field (`400 unknown_field`, path `metadata.store_links`).
+        A book item also carries the read-only `metadata.openlibrary_id`: it is set by lookup, used by refresh and by clients to build the Open Library link (`https://openlibrary.org/works/<id>`), and must not be edited. The built-in book type has no first publication year (removed in 0.13.0; a suggestion's `year` is display only).
       allOf:
         - $ref: '#/components/schemas/ItemBase'
         - type: object

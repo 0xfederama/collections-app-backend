@@ -20,9 +20,9 @@ type settingsBody struct {
 	LookupAvailable      bool   `json:"lookup_available"`
 	MarkdownHistoryLimit int    `json:"markdown_history_limit"`
 	// TrashRetentionDays is nil (JSON null) when off, else the decoded float64.
-	TrashRetentionDays any      `json:"trash_retention_days"`
-	PreferredStores    []string `json:"preferred_stores"`
-	Version            int      `json:"version"`
+	TrashRetentionDays any    `json:"trash_retention_days"`
+	PreferredStore     string `json:"preferred_store"`
+	Version            int    `json:"version"`
 }
 
 // settingsRouter returns a router on a fresh migrated database with the workspace bootstrapped.
@@ -66,7 +66,7 @@ func TestAT02_GetSettings(t *testing.T) {
 	if got := rec.Header().Get("ETag"); got != `"s-1"` {
 		t.Errorf("ETag = %q, want \"s-1\"", got)
 	}
-	want := settingsBody{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 20, PreferredStores: []string{}, Version: 1}
+	want := settingsBody{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 20, PreferredStore: "amazon", Version: 1}
 	if got := decodeSettings(t, rec); !reflect.DeepEqual(got, want) {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}
@@ -82,7 +82,7 @@ func TestAT02_PatchSettings(t *testing.T) {
 	if got := rec.Header().Get("ETag"); got != `"s-2"` {
 		t.Errorf("ETag = %q, want \"s-2\"", got)
 	}
-	want := settingsBody{WorkspaceName: "Home", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, PreferredStores: []string{}, Version: 2}
+	want := settingsBody{WorkspaceName: "Home", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, PreferredStore: "amazon", Version: 2}
 	if got := decodeSettings(t, rec); !reflect.DeepEqual(got, want) {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}
@@ -100,7 +100,7 @@ func TestAT02_PatchSettings(t *testing.T) {
 	}
 
 	get := do(t, h, req{method: "GET", path: "/api/v1/settings"})
-	if got, want := decodeSettings(t, get), (settingsBody{WorkspaceName: "Ours", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, PreferredStores: []string{}, Version: 3}); !reflect.DeepEqual(got, want) {
+	if got, want := decodeSettings(t, get), (settingsBody{WorkspaceName: "Ours", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, PreferredStore: "amazon", Version: 3}); !reflect.DeepEqual(got, want) {
 		t.Errorf("GET after patches = %+v, want %+v", got, want)
 	}
 }
@@ -131,8 +131,8 @@ func TestAT02_PatchSettingsValidation(t *testing.T) {
 		{"limit too high", `{"markdown_history_limit":201}`, []string{"markdown_history_limit"}},
 		{"several", `{"workspace_name":"","streaming_country_code":"x","markdown_history_limit":-1}`,
 			[]string{"workspace_name", "streaming_country_code", "markdown_history_limit"}},
-		{"unknown preferred store", `{"preferred_stores":["audible"]}`, []string{"preferred_stores"}},
-		{"duplicate preferred store", `{"preferred_stores":["kobo","kobo"]}`, []string{"preferred_stores"}},
+		{"unknown preferred store", `{"preferred_store":"audible"}`, []string{"preferred_store"}},
+		{"open library is not a store", `{"preferred_store":"openlibrary"}`, []string{"preferred_store"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -225,33 +225,26 @@ func TestF012_TrashRetentionSetting(t *testing.T) {
 	}
 }
 
-// F016-B4: the preferred stores are saved in order, cleared by [], and validated against the six keys.
-func TestF016B4_PreferredStoresRoundTrip(t *testing.T) {
+// F-016 (0.13.0): the one preferred store is saved, returned, and a repeat is a no-op.
+func TestF016_PreferredStoreRoundTrip(t *testing.T) {
 	h := settingsRouter(t)
-	rec := patchSettings(t, h, `"s-1"`, `{"preferred_stores":["kobo","openlibrary"]}`)
+	rec := patchSettings(t, h, `"s-1"`, `{"preferred_store":"kobo"}`)
 	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-2"` {
 		t.Fatalf("set: status = %d ETag = %q body=%s", rec.Code, rec.Header().Get("ETag"), rec.Body)
 	}
-	if got := decodeSettings(t, rec).PreferredStores; !reflect.DeepEqual(got, []string{"kobo", "openlibrary"}) {
-		t.Errorf("PATCH answered %v, want [kobo openlibrary]", got)
+	if got := decodeSettings(t, rec).PreferredStore; got != "kobo" {
+		t.Errorf("PATCH answered %q, want kobo", got)
 	}
 	get := decodeSettings(t, do(t, h, req{method: "GET", path: "/api/v1/settings"}))
-	if !reflect.DeepEqual(get.PreferredStores, []string{"kobo", "openlibrary"}) || get.Version != 2 {
-		t.Errorf("GET = %+v, want the saved order at version 2", get)
+	if get.PreferredStore != "kobo" || get.Version != 2 {
+		t.Errorf("GET = %+v, want kobo at version 2", get)
 	}
-
-	// Repeating the stored list is a no-op: no version bump.
-	if rec := patchSettings(t, h, `"s-2"`, `{"preferred_stores":["kobo","openlibrary"]}`); rec.Header().Get("ETag") != `"s-2"` {
-		t.Errorf("same list: ETag = %q, want \"s-2\"", rec.Header().Get("ETag"))
+	// Repeating the stored value is a no-op: no version bump.
+	if rec := patchSettings(t, h, `"s-2"`, `{"preferred_store":"kobo"}`); rec.Code != 200 || rec.Header().Get("ETag") != `"s-2"` {
+		t.Errorf("same value: status = %d ETag = %q, want 200 \"s-2\"", rec.Code, rec.Header().Get("ETag"))
 	}
-
-	rec = patchSettings(t, h, `"s-2"`, `{"preferred_stores":[]}`)
-	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-3"` {
-		t.Fatalf("clear: status = %d ETag = %q", rec.Code, rec.Header().Get("ETag"))
-	}
-	if !strings.Contains(rec.Body.String(), `"preferred_stores":[]`) {
-		t.Errorf("cleared list must be [] not null: %s", rec.Body)
-	}
+	// The old list setting is gone: an unknown key is rejected.
+	wantProblem(t, patchSettings(t, h, `"s-2"`, `{"preferred_stores":["kobo"]}`), 400, "unknown_field")
 }
 
 func TestF016B4_GetStoreProviders(t *testing.T) {
@@ -269,7 +262,7 @@ func TestF016B4_GetStoreProviders(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"openlibrary:Open Library", "bookshop:Bookshop.org", "amazon:Amazon", "apple_books:Apple Books", "google_play_books:Google Play Books", "kobo:Kobo"}
+	want := []string{"amazon:Amazon", "bookshop:Bookshop.org", "apple_books:Apple Books", "google_play_books:Google Play Books", "kobo:Kobo"}
 	var got []string
 	for _, p := range body.Providers {
 		got = append(got, p.Key+":"+p.Name)
@@ -280,7 +273,7 @@ func TestF016B4_GetStoreProviders(t *testing.T) {
 }
 
 // A wrong JSON type is rejected by the body decoder like on every other settings field.
-func TestAT02_PatchSettingsPreferredStoresWrongType(t *testing.T) {
+func TestAT02_PatchSettingsPreferredStoreWrongType(t *testing.T) {
 	h := settingsRouter(t)
-	wantProblem(t, patchSettings(t, h, `"s-1"`, `{"preferred_stores":"kobo"}`), 400, "malformed_request")
+	wantProblem(t, patchSettings(t, h, `"s-1"`, `{"preferred_store":3}`), 400, "malformed_request")
 }

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -136,7 +135,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 		Mode: ModeCreate, ListID: listID, Type: typ, CreateInput: &in,
 		Provider: provider.Name(), SourceID: candidate.details.SourceID,
 		Title: candidate.details.Title, OriginalTitle: in.Title,
-		Fields: candidate.details.Fields, FillOnly: createFillOnly(candidate.details.FillOnly, settings.PreferredStores),
+		Fields: candidate.details.Fields, FillOnly: defaultStoreFill(provider, candidate.details.FillOnly, settings.PreferredStore),
 		PosterPath: candidate.details.ImagePath, Poster: poster,
 		RefreshFields: true, RefreshPoster: true,
 	})
@@ -212,7 +211,7 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 		Mode: mode, ItemID: itemID, ExpectedVersion: expectedVersion, Type: itemType,
 		Provider: provider.Name(), SourceID: candidate.details.SourceID,
 		Title: candidate.details.Title, OriginalTitle: it.Title,
-		Fields: candidate.details.Fields, FillOnly: candidate.details.FillOnly,
+		Fields: candidate.details.Fields, FillOnly: defaultStoreFill(provider, candidate.details.FillOnly, settings.PreferredStore),
 		PosterPath: candidate.details.ImagePath, Poster: poster,
 		RefreshFields: true, RefreshPoster: refreshPoster,
 	})
@@ -355,26 +354,19 @@ func (s *Service) providerByName(name string) Provider {
 	return nil
 }
 
-// createFillOnly adds the workspace's preferred stores to a store link the
-// provider proposes (Open Library first), as a normal item create would seed
-// them (D-096). The result is applied only when the create request left
-// `stores` unset.
-func createFillOnly(fill map[string]any, preferred []string) map[string]any {
-	proposed, ok := fill["stores"].([]string)
-	if !ok {
+// defaultStoreFill adds the workspace's default store, [preferred_store], as a
+// fill-only `stores` value for providers that serve a type with a stores field
+// (Open Library, books; D-096). It applies where the item has no stores yet and
+// never replaces user-chosen ones.
+func defaultStoreFill(provider Provider, fill map[string]any, preferred string) map[string]any {
+	if provider.Name() != ProviderOpenLibrary || preferred == "" {
 		return fill
 	}
-	merged := slices.Clone(proposed)
-	for _, key := range preferred {
-		if !slices.Contains(merged, key) {
-			merged = append(merged, key)
-		}
-	}
-	out := make(map[string]any, len(fill))
+	out := make(map[string]any, len(fill)+1)
 	for k, v := range fill {
 		out[k] = v
 	}
-	out["stores"] = merged
+	out["stores"] = []string{preferred}
 	return out
 }
 

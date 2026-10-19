@@ -340,11 +340,11 @@ func TestF016B3_CreateBookWithSourceIDAndOptOut(t *testing.T) {
 	}
 }
 
-func TestF016B3_CreateBookWithPriceAndExplicitStores(t *testing.T) {
+func TestF016B3_CreateBookWithExplicitStoresRejectsPrice(t *testing.T) {
 	e := newBookEnv(t, bookEnvOptions{})
 	lid := e.bookList()
-	it := e.newItem(lid, `{"title":"the hobbit","price":{"amount":"9.90","currency":"EUR"},"metadata":{"stores":["bookshop"]}}`)
-	if it["price"] == nil || !reflect.DeepEqual(metaOf(it)["stores"], []any{"bookshop"}) {
+	it := e.newItem(lid, `{"title":"the hobbit","metadata":{"stores":["bookshop"]}}`)
+	if it["price"] != nil || !reflect.DeepEqual(metaOf(it)["stores"], []any{"bookshop"}) {
 		t.Errorf("price/stores = %v / %v", it["price"], metaOf(it)["stores"])
 	}
 	wantProblem(t, e.call(http.MethodPost, "/api/v1/lists/"+lid+"/items", `{"title":"the hobbit","price":{"amount":"9.9","currency":"EUR"}}`, ""), http.StatusUnprocessableEntity, "validation_failed")
@@ -441,7 +441,7 @@ func TestF016B3_LookupDisabledAndUnservedItems(t *testing.T) {
 
 	// An item of a type no provider serves is a validation error.
 	on := newBookEnv(t, bookEnvOptions{})
-	cars := on.listOfType("Cars", nil, "car")["id"].(string)
+	cars := on.listOfType("Cars", nil, "vehicle")["id"].(string)
 	car := on.newItem(cars, `{"title":"Panda"}`)
 	wantProblem(t, on.lookupItem(car, `{"mode":"fill"}`), http.StatusUnprocessableEntity, "validation_failed")
 }

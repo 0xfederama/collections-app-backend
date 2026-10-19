@@ -76,7 +76,7 @@ func idsJSON(ids ...string) string {
 }
 
 // matrix is the body of a movie item: create it in a list of type movie. Movie
-// items have no price (F009-B1); price behavior is tested on a motorcycle/car/camera list.
+// items have no price (F009-B1); price behavior is tested on a wishlist list (F-018).
 const matrix = `{"title":"The Matrix","website":"https://www.warnerbros.com/movies/matrix",
 	"metadata":{"release_year":1999,"runtime_minutes":136,"imdb_url":"https://www.imdb.com/title/tt0133093/","streaming":{"country":"IT","platforms":["Netflix","Prime Video"]}}}`
 
@@ -173,8 +173,8 @@ func TestAT05_ItemFieldRules(t *testing.T) {
 	e := newTreeEnv(t)
 	lid := e.listOfType("L", nil, "movie")["id"].(string)
 	tv := e.listOfType("TV", nil, "tv_show")["id"].(string)
-	car := e.listOfType("Cars", nil, "car")["id"].(string)
-	bike := e.listOfType("Bikes", nil, "motorcycle")["id"].(string)
+	car := e.listOfType("Cars", nil, "vehicle")["id"].(string)
+	bike := e.listOfType("Wishes", nil, "wishlist")["id"].(string)
 	gen := e.list("Generic", nil)["id"].(string)
 	long := func(n int) string { return strings.Repeat("a", n) }
 	tests := []struct {
@@ -264,7 +264,7 @@ func TestAT05_ItemFieldRules(t *testing.T) {
 
 func TestF007_PriceAmountIsASinglePrice(t *testing.T) {
 	e := newTreeEnv(t)
-	lid := e.listOfType("L", nil, "motorcycle")["id"].(string)
+	lid := e.listOfType("L", nil, "wishlist")["id"].(string)
 
 	it := e.newItem(lid, `{"title":"single","price":{"amount":"1200.00","currency":"EUR"}}`)
 	p := it["price"].(map[string]any)
@@ -303,7 +303,7 @@ func TestF007_PriceAmountIsASinglePrice(t *testing.T) {
 
 func TestPriceRoundTripIsExact(t *testing.T) {
 	e := newTreeEnv(t)
-	lid := e.listOfType("L", nil, "motorcycle")["id"].(string)
+	lid := e.listOfType("L", nil, "wishlist")["id"].(string)
 	for _, price := range []string{"1299.00", "0.10", "0.01", "12.30", "9999999999.99", "100.00", "0.00"} {
 		it := e.newItem(lid, fmt.Sprintf(`{"title":"p","price":{"min":%q,"max":%q,"currency":"EUR"}}`, price, price))
 		got := e.fetchItem(it["id"])["price"].(map[string]any)
@@ -328,7 +328,7 @@ func (e *treeEnv) queryRow(sql string, args []any, dest ...any) {
 func TestAT05_UpdateItem(t *testing.T) {
 	e := newTreeEnv(t)
 	lid := e.listOfType("L", nil, "movie")["id"].(string)
-	bike := e.listOfType("Bikes", nil, "motorcycle")["id"].(string)
+	bike := e.listOfType("Wishes", nil, "wishlist")["id"].(string)
 
 	t.Run("only supplied fields change and the version bumps", func(t *testing.T) {
 		it := e.newItem(lid, matrix)
@@ -372,7 +372,7 @@ func TestAT05_UpdateItem(t *testing.T) {
 
 	t.Run("TestF007 type is read-only: a type in the patch is an unknown field", func(t *testing.T) {
 		it := e.newItem(lid, matrix)
-		wantProblem(t, e.patchItem(it, `{"type":"car"}`), 400, "unknown_field")
+		wantProblem(t, e.patchItem(it, `{"type":"vehicle"}`), 400, "unknown_field")
 		for _, gone := range []string{`{"summary":"x"}`, `{"status":"x"}`, `{"official_website_url":"https://example.com"}`} {
 			wantProblem(t, e.patchItem(it, gone), 400, "unknown_field")
 		}
@@ -1081,7 +1081,7 @@ func TestF014B4_CustomFieldSortAndCombinedFilter(t *testing.T) {
 
 func TestF002B4_ListItemsSortByPrice(t *testing.T) {
 	e := newTreeEnv(t)
-	l := e.listOfType("Wishlist", nil, "motorcycle")
+	l := e.listOfType("Wishlist", nil, "wishlist")
 	lid := l["id"].(string)
 	mk := func(title string, min, max any) obj {
 		body := obj{"title": title}
@@ -1140,14 +1140,14 @@ func TestF002B4_ListItemsSortByPrice(t *testing.T) {
 	})
 
 	t.Run("?sort=price works on a list stored as manual, and create accepts it", func(t *testing.T) {
-		other := e.listOfType("Other", nil, "motorcycle")
+		other := e.listOfType("Other", nil, "wishlist")
 		oid := other["id"].(string)
 		e.titled(oid, "x")
 		rows, _ := e.page(oid, "?sort=price")
 		if len(rows) != 1 {
 			t.Fatalf("got %d rows", len(rows))
 		}
-		rec := e.call("POST", "/api/v1/lists", `{"name":"P","type":"motorcycle","sort_mode":"price"}`, "")
+		rec := e.call("POST", "/api/v1/lists", `{"name":"P","type":"wishlist","sort_mode":"price"}`, "")
 		wantStatus(t, rec, 201)
 		if decode(t, rec)["sort_mode"] != "price" {
 			t.Fatalf("created sort_mode: %s", rec.Body)

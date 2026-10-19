@@ -212,12 +212,11 @@ WHERE l.id = $1`, listID).Scan(&listPins, &listSort, &defaultSort, &defaultPins)
 func TestF014_BuiltinTypesSeedDefaultPinnedFields(t *testing.T) {
 	svc, _ := newDefinitionsService(t)
 	want := map[string][]string{
-		"movie":      {"runtime_minutes", "streaming"},
-		"tv_show":    {"seasons", "streaming"},
-		"motorcycle": {"displacement_cc", "price"},
-		"car":        {"model_year", "price"},
-		"camera":     {"camera_type", "price"},
-		"book":       {"author", "pages", "stores"},
+		"movie":    {"runtime_minutes", "streaming"},
+		"tv_show":  {"seasons", "streaming"},
+		"vehicle":  {"model_year", "power_hp"},
+		"wishlist": {"price"},
+		"book":     {"author", "pages", "stores"},
 	}
 	types, err := svc.List(t.Context())
 	if err != nil {

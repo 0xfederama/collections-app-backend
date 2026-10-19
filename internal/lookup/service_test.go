@@ -346,7 +346,7 @@ func TestF016B3_BookCreateDisabledAndOptOut(t *testing.T) {
 }
 
 func TestF016B3_UnservedTypesCreateWithoutLookup(t *testing.T) {
-	for _, typ := range []string{"", "motorcycle", "custom_type"} {
+	for _, typ := range []string{"", "vehicle", "custom_type"} {
 		book, tm := bookClient(true), &fakeClient{enabled: true}
 		itemSvc := &fakeItems{}
 		if _, err := bookService(book, tm, &fakeStore{typ: typ}, itemSvc).Create(t.Context(), uuid.New(), items.CreateInput{Title: "x"}, CreateOptions{}); err != nil || itemSvc.created == nil || book.searchQuery != "" || tm.searchQuery != "" {
@@ -424,7 +424,7 @@ func TestF016B3_ApplyDisabledProviderAndUnservedType(t *testing.T) {
 		t.Errorf("all disabled err = %v", err)
 	}
 	// A type no provider serves is a validation error on `item`.
-	itemSvc = &fakeItems{item: items.Item{ID: id, Title: "Bike", Type: ptr("motorcycle"), Version: 1}}
+	itemSvc = &fakeItems{item: items.Item{ID: id, Title: "Bike", Type: ptr("vehicle"), Version: 1}}
 	_, err := bookService(bookClient(true), &fakeClient{enabled: true}, &fakeStore{}, itemSvc).Apply(t.Context(), id, 1, ModeFill, Selection{})
 	var validation *apperr.ValidationError
 	if !errors.As(err, &validation) || validation.Errors[0].Field != "item" {

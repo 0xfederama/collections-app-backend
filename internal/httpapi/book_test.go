@@ -9,7 +9,7 @@ import (
 func TestF016B2_BuiltinBookTypeIsSeeded(t *testing.T) {
 	e := newTreeEnv(t)
 	typ := e.typ("book")
-	if typ["name"] != "Book" || typ["is_locked"] != true || typ["allows_price"] != true || typ["default_sort_field"] != nil {
+	if typ["name"] != "Books" || typ["is_locked"] != true || typ["allows_price"] != false || typ["default_sort_field"] != nil {
 		t.Fatalf("book type = %#v", typ)
 	}
 	if !reflect.DeepEqual(typ["default_pinned_fields"], []any{"author", "pages", "stores"}) {
@@ -29,13 +29,13 @@ func TestF016B2_BookItemValidation(t *testing.T) {
 	e := newTreeEnv(t)
 	lid := e.listOfType("Books", nil, "book")["id"].(string)
 
-	it := e.newItem(lid, `{"title":"Dune","price":{"amount":"9.90","currency":"EUR"},"metadata":{"author":"Frank Herbert","pages":412,"isbn":"978-0-441-17271-9","stores":["kobo"],"openlibrary_id":"OL893415W","lookup_disabled":true}}`)
+	it := e.newItem(lid, `{"title":"Dune","metadata":{"author":"Frank Herbert","pages":412,"isbn":"978-0-441-17271-9","stores":["kobo"],"openlibrary_id":"OL893415W","lookup_disabled":true}}`)
 	meta := it["metadata"].(map[string]any)
 	if meta["author"] != "Frank Herbert" || meta["pages"] != float64(412) || meta["lookup_disabled"] != true {
 		t.Errorf("metadata = %v", meta)
 	}
-	if it["price"] == nil {
-		t.Error("book price was not stored")
+	if it["price"] != nil {
+		t.Error("book has no price since F-018")
 	}
 
 	tests := []struct{ name, metadata string }{

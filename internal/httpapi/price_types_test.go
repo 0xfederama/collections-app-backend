@@ -9,10 +9,11 @@ import (
 const priceBody = `{"title":"t","price":{"amount":"12.00","currency":"EUR"}}`
 
 // f009NoPriceTypes are the types whose items have no price (F009-B1, subsuming
-// F008-B1 for lists with no type, ""); f009PriceTypes those that do.
+// F008-B1 for lists with no type, ""); f009PriceTypes those that do. Since F-018
+// only the wishlist built-in has a price.
 var (
-	f009NoPriceTypes = []string{"", "movie", "tv_show"}
-	f009PriceTypes   = []string{"motorcycle", "car", "camera", "book"}
+	f009NoPriceTypes = []string{"", "movie", "tv_show", "book", "vehicle"}
+	f009PriceTypes   = []string{"wishlist"}
 )
 
 // typeJSON is the JSON value of a list type; "" is a list with no type.
@@ -69,8 +70,8 @@ func TestF009B1_PriceOnlyOnPriceTypes(t *testing.T) {
 			}
 			wantStatus(t, e.patchItem(it, `{"price":null}`), 200)
 		}
-		bike := e.newItem(lists["motorcycle"], priceBody)
-		wantStatus(t, e.patchItem(bike, `{"price":{"amount":"13.00","currency":"EUR"}}`), 200)
+		wish := e.newItem(lists["wishlist"], priceBody)
+		wantStatus(t, e.patchItem(wish, `{"price":{"amount":"13.00","currency":"EUR"}}`), 200)
 	})
 }
 
@@ -84,7 +85,7 @@ func TestF009B1_PriceTypesPinsAndSort(t *testing.T) {
 				t.Errorf("%s: errors = %+v", typ, p.Errors)
 			}
 		}
-		wantStatus(t, e.call("POST", "/api/v1/lists", `{"name":"B","type":"motorcycle","pinned_fields":["price"]}`, ""), 201)
+		wantStatus(t, e.call("POST", "/api/v1/lists", `{"name":"B","type":"wishlist","pinned_fields":["price"]}`, ""), 201)
 		// An empty pin list stays fine on a type that has no price.
 		g := e.listOfType("G", nil, "")
 		wantStatus(t, e.call("PATCH", "/api/v1/lists/"+g["id"].(string), `{"pinned_fields":[]}`, etagOf("l", g)), 200)
@@ -97,30 +98,30 @@ func TestF009B1_PriceTypesPinsAndSort(t *testing.T) {
 				t.Errorf("%s: errors = %+v", typ, p.Errors)
 			}
 		}
-		wantStatus(t, e.call("POST", "/api/v1/lists", `{"name":"M","type":"motorcycle","sort_mode":"price"}`, ""), 201)
+		wantStatus(t, e.call("POST", "/api/v1/lists", `{"name":"M","type":"wishlist","sort_mode":"price"}`, ""), 201)
 	})
 
 	t.Run("?sort=price is 400 invalid_parameter without a price", func(t *testing.T) {
 		movie := e.listOfType("Films", nil, "movie")["id"].(string)
 		e.titled(movie, "x")
 		wantProblem(t, e.call("GET", "/api/v1/lists/"+movie+"/items?sort=price", "", ""), 400, "invalid_parameter")
-		bike := e.listOfType("Bikes", nil, "motorcycle")["id"].(string)
-		e.titled(bike, "x")
-		wantStatus(t, e.call("GET", "/api/v1/lists/"+bike+"/items?sort=price", "", ""), 200)
+		wish := e.listOfType("Wishes", nil, "wishlist")["id"].(string)
+		e.titled(wish, "x")
+		wantStatus(t, e.call("GET", "/api/v1/lists/"+wish+"/items?sort=price", "", ""), 200)
 	})
 }
 
 func TestF009B1_TypeChangeToTypeWithoutPriceClearsPrice(t *testing.T) {
 	e := newTreeEnv(t)
-	l := e.listOfType("Bikes", nil, "motorcycle")
+	l := e.listOfType("Wishes", nil, "wishlist")
 	lid := l["id"].(string)
 	priced := e.newItem(lid, priceBody)
 	plain := e.titled(lid, "plain")
 	trashed := e.newItem(lid, priceBody)
-	other := e.newItem(e.listOfType("Other", nil, "motorcycle")["id"].(string), priceBody)
+	other := e.newItem(e.listOfType("Other", nil, "wishlist")["id"].(string), priceBody)
 	e.exec(`UPDATE items SET deleted_at = now(), trash_batch_id = $2 WHERE id = $1`, trashed["id"], e.trashBatch("item", uuid.MustParse(trashed["id"].(string))))
 
-	l = decode(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"price","pinned_fields":["model_year","price"]}`, etagOf("l", l)))
+	l = decode(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"price","pinned_fields":["price"]}`, etagOf("l", l)))
 	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"movie"}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
 	got := decode(t, rec)
@@ -154,4 +155,19 @@ func TestF014_PriceFollowsAllowsPriceOnCustomTypes(t *testing.T) {
 	free := e.listOfType("Free", nil, "free")["id"].(string)
 	wantStatus(t, e.call("POST", "/api/v1/lists/"+priced+"/items", priceBody, ""), 201)
 	wantProblem(t, e.call("POST", "/api/v1/lists/"+free+"/items", priceBody, ""), 422, "validation_failed")
+}
+
+// F018: every built-in type accepts an item with only a title (201), and only
+// wishlist items take a price (vehicle rejects one with 422 on price).
+func TestF018_WishlistPriceVehicleRejects(t *testing.T) {
+	e := newTreeEnv(t)
+	vehicle := e.listOfType("Cars", nil, "vehicle")["id"].(string)
+	wishlist := e.listOfType("Buy", nil, "wishlist")["id"].(string)
+	p := wantProblem(t, e.call("POST", "/api/v1/lists/"+vehicle+"/items", priceBody, ""), 422, "validation_failed")
+	if len(p.Errors) != 1 || p.Errors[0].Field != "price" {
+		t.Errorf("vehicle errors = %+v", p.Errors)
+	}
+	if it := e.newItem(wishlist, priceBody); it["price"] == nil {
+		t.Errorf("wishlist item lost its price: %v", it)
+	}
 }

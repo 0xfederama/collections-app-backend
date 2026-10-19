@@ -21,9 +21,13 @@ func TestF009B2_ValidatePinned(t *testing.T) {
 		{"movie", []string{"release_year", "streaming"}, nil},
 		{"movie", []string{"tmdb_id"}, []string{"pinned_fields[0]"}},
 		{"movie", []string{"price"}, []string{"pinned_fields[0]"}},
-		{"motorcycle", []string{"price", "power_hp"}, nil},
+		{"vehicle", []string{"model_year", "power_hp"}, nil},
+		{"vehicle", []string{"price", "power_hp"}, []string{"pinned_fields[0]"}},
+		{"vehicle", []string{"license_class"}, []string{"pinned_fields[0]"}},
+		{"wishlist", []string{"price"}, nil},
+		{"wishlist", []string{"make"}, []string{"pinned_fields[0]"}},
 		{"movie", []string{"release_year", "runtime_minutes", "streaming"}, nil},
-		{"motorcycle", []string{"price", "power_hp", "model_year"}, nil},
+		{"vehicle", []string{"price", "power_hp", "model_year"}, []string{"pinned_fields[0]"}},
 		{"movie", []string{"release_year", "runtime_minutes", "streaming", "imdb_url"}, []string{"pinned_fields"}},
 		{"movie", []string{"release_year", "runtime_minutes", "release_year"}, []string{"pinned_fields[2]"}},
 	} {
@@ -38,6 +42,36 @@ func TestF009B2_ValidatePinned(t *testing.T) {
 		if !errors.As(err, &invalid) || len(invalid.Errors) != len(tt.want) {
 			t.Errorf("ValidatePinned(%q, %v) error = %v", tt.typ, tt.keys, err)
 		}
+	}
+}
+
+func TestF018_BuiltinTypes(t *testing.T) {
+	for _, typ := range []string{"movie", "tv_show", "book", "vehicle", "wishlist"} {
+		if !types.Known(typ) {
+			t.Errorf("Known(%q) = false", typ)
+		}
+	}
+	for _, typ := range []string{"motorcycle", "car", "camera", "generic", ""} {
+		if types.Known(typ) {
+			t.Errorf("Known(%q) = true, want false", typ)
+		}
+	}
+	for _, typ := range []string{"movie", "tv_show", "book", "vehicle"} {
+		if types.HasPrice(typ) {
+			t.Errorf("HasPrice(%q) = true, want false", typ)
+		}
+	}
+	if !types.HasPrice("wishlist") {
+		t.Error("HasPrice(wishlist) = false, want true")
+	}
+	if got := types.PinnableKeys("wishlist"); !slices.Equal(got, []string{"price"}) {
+		t.Errorf("PinnableKeys(wishlist) = %v, want [price]", got)
+	}
+	if got := types.PinnableKeys("vehicle"); !slices.Equal(got, []string{"displacement_cc", "make", "model", "model_year", "power_hp"}) {
+		t.Errorf("PinnableKeys(vehicle) = %v", got)
+	}
+	if got := types.PinnableKeys("motorcycle"); got != nil {
+		t.Errorf("PinnableKeys(motorcycle) = %v, want nil", got)
 	}
 }
 

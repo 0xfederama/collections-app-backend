@@ -311,3 +311,66 @@ func TestJustWatchLinkAcceptsOnlyHTTPSJustWatch(t *testing.T) {
 		t.Errorf("a foreign link was kept: %v", d.Metadata["streaming"])
 	}
 }
+
+func TestWatchLinkOneCheapCallAndOnlyJustWatchHTTPS(t *testing.T) {
+	var paths []string
+	c, calls := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path+"?"+r.URL.RawQuery)
+		switch r.URL.Path {
+		case "/3/movie/42/watch/providers":
+			_, _ = w.Write([]byte(`{"id":42,"results":{"IT":{"link":"https://www.justwatch.com/it/movie/example"},"FR":{"link":"https://evil.example/x"},"GB":{"link":"http://www.justwatch.com/gb/movie/x"}}}`))
+		case "/3/tv/7/watch/providers":
+			_, _ = w.Write([]byte(`{"id":7,"results":{}}`))
+		case "/3/movie/404/watch/providers":
+			http.NotFound(w, r)
+		case "/3/movie/9/watch/providers":
+			_, _ = w.Write([]byte(`{"id":10,"results":{}}`))
+		default:
+			http.Error(w, "boom", http.StatusInternalServerError)
+		}
+	})
+	ctx := context.Background()
+	if got, err := c.WatchLink(ctx, "movie", 42, "it"); err != nil || got != "https://www.justwatch.com/it/movie/example" {
+		t.Fatalf("IT = %q, %v", got, err)
+	}
+	if len(paths) != 1 || strings.Contains(paths[0], "append_to_response") || *calls != 1 {
+		t.Errorf("requests = %v, want exactly one plain watch/providers call", paths)
+	}
+	for _, country := range []string{"FR", "GB", "DE"} {
+		if got, err := c.WatchLink(ctx, "movie", 42, country); err != nil || got != "" {
+			t.Errorf("%s = %q, %v, want no link", country, got, err)
+		}
+	}
+	if got, err := c.WatchLink(ctx, "tv_show", 7, "IT"); err != nil || got != "" {
+		t.Errorf("tv without results = %q, %v", got, err)
+	}
+	if _, err := c.WatchLink(ctx, "movie", 404, "IT"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("404 error = %v, want ErrNotFound", err)
+	}
+	if _, err := c.WatchLink(ctx, "movie", 9, "IT"); err == nil || errors.Is(err, ErrNotFound) {
+		t.Errorf("mismatched id error = %v, want a plain error", err)
+	}
+	if _, err := c.WatchLink(ctx, "movie", 5, "IT"); err == nil || errors.Is(err, ErrNotFound) || strings.Contains(err.Error(), "test-secret") {
+		t.Errorf("500 error = %v, want a transient error without the key", err)
+	}
+	if _, err := c.WatchLink(ctx, "book", 5, "IT"); !errors.Is(err, ErrInvalid) {
+		t.Errorf("bad type = %v", err)
+	}
+}
+
+func TestWatchLinkRateLimitedAndDisabled(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(http.StatusTooManyRequests)
+	})
+	if _, err := c.WatchLink(context.Background(), "movie", 1, "IT"); !errors.Is(err, ErrRateLimited) {
+		t.Errorf("429 error = %v, want ErrRateLimited", err)
+	}
+	if _, err := New("").WatchLink(context.Background(), "movie", 1, "IT"); !errors.Is(err, ErrDisabled) {
+		t.Errorf("no key error = %v, want ErrDisabled", err)
+	}
+	mock := NewWithOptions("", Options{MockFixture: true})
+	if got, err := mock.WatchLink(context.Background(), "movie", mockMovieID, "it"); err != nil || got != "https://www.justwatch.com/it/movie/mock" {
+		t.Errorf("fixture = %q, %v", got, err)
+	}
+}

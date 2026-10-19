@@ -33,6 +33,10 @@ const (
 var (
 	ErrDisabled = errors.New("TMDB lookup is disabled")
 	ErrInvalid  = errors.New("invalid TMDB request")
+	// ErrRateLimited is returned for an HTTP 429 (the client has also paused itself).
+	ErrRateLimited = errors.New("TMDB rate limit exceeded")
+	// ErrNotFound is returned for an HTTP 404: the title no longer exists upstream.
+	ErrNotFound = errors.New("TMDB resource not found")
 )
 
 // Options allows tests to point the client at local fake servers.
@@ -296,6 +300,41 @@ func (c *Client) Details(ctx context.Context, typ string, id int, language, coun
 	return Details{ID: data.ID, Title: title, Metadata: metadata, PosterPath: data.PosterPath}, nil
 }
 
+// WatchLink fetches only the JustWatch page of one title for a country, with the
+// cheapest call that carries it (`/{movie|tv}/{id}/watch/providers`, one request).
+// It returns "" with a nil error when TMDB lists no (valid) link for the country.
+// An unknown title is ErrNotFound, a 429 is ErrRateLimited; both share the pacing
+// and timeout rules of every other call.
+func (c *Client) WatchLink(ctx context.Context, typ string, id int, country string) (string, error) {
+	if c != nil && c.mockFixture && typ == "movie" && id == mockMovieID {
+		if country == "" {
+			return "", nil
+		}
+		return "https://www.justwatch.com/" + strings.ToLower(country) + "/movie/mock", nil
+	}
+	if c == nil || c.key == "" {
+		return "", ErrDisabled
+	}
+	endpoint, err := typeEndpoint(typ)
+	country = strings.ToUpper(strings.TrimSpace(country))
+	if err != nil || id <= 0 || country == "" {
+		return "", ErrInvalid
+	}
+	var data struct {
+		ID      int `json:"id"`
+		Results map[string]struct {
+			Link string `json:"link"`
+		} `json:"results"`
+	}
+	if err := c.getJSON(ctx, "/"+endpoint+"/"+strconv.Itoa(id)+"/watch/providers", url.Values{}, &data); err != nil {
+		return "", err
+	}
+	if data.ID != id {
+		return "", errors.New("TMDB returned invalid watch providers")
+	}
+	return justWatchLink(data.Results[country].Link), nil
+}
+
 // justWatchLink returns raw when it is an https URL on justwatch.com (the one
 // page TMDB links watch providers to), otherwise "": nothing else is stored.
 func justWatchLink(raw string) string {
@@ -374,7 +413,10 @@ func (c *Client) getJSON(ctx context.Context, route string, query url.Values, ou
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusTooManyRequests {
 		c.note429(response.Header.Get("Retry-After"))
-		return errors.New("TMDB rate limit exceeded")
+		return ErrRateLimited
+	}
+	if response.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("TMDB request failed (HTTP %d): %w", response.StatusCode, ErrNotFound)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return fmt.Errorf("TMDB request failed (HTTP %d)", response.StatusCode)

@@ -4,21 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/google/uuid"
 )
-
-// storesType defines a locked type with isbn, openlibrary_id and a stores field,
-// straight in the database: the built-in book type comes in a later F-016 task.
-func (e *treeEnv) storesType(key string) {
-	e.t.Helper()
-	var id uuid.UUID
-	e.queryRow(`INSERT INTO type_definitions (workspace_id, key, name, is_locked) VALUES ($1, $2, 'Book', true) RETURNING id`, []any{e.ws, key}, &id)
-	e.exec(`INSERT INTO type_fields (workspace_id, type_id, key, label, field_type, position, is_locked) VALUES
-		($1, $2, 'isbn', 'ISBN', 'text', 0, true),
-		($1, $2, 'openlibrary_id', 'Open Library ID', 'text', 1, true),
-		($1, $2, 'stores', 'Where to get it', 'stores', 2, true)`, e.ws, id)
-}
 
 // storeLinks returns the store_links of an item response and whether it is present.
 func storeLinks(it obj) (map[string]any, bool) {
@@ -29,7 +15,6 @@ func storeLinks(it obj) (map[string]any, bool) {
 
 func TestF016B4_ItemStoreLinksAreComputedOnRead(t *testing.T) {
 	e := newTreeEnv(t)
-	e.storesType("book")
 	lid := e.listOfType("Books", nil, "book")["id"].(string)
 
 	it := e.newItem(lid, `{"title":"Dune","metadata":{"isbn":"978-0-441-17271-9","openlibrary_id":"OL893415W","stores":["kobo","openlibrary","bookshop"]}}`)
@@ -69,7 +54,6 @@ func TestF016B4_NonStoresTypeHasNoStoreLinks(t *testing.T) {
 
 func TestF016B4_StoreLinksCannotBeWritten(t *testing.T) {
 	e := newTreeEnv(t)
-	e.storesType("book")
 	lid := e.listOfType("Books", nil, "book")["id"].(string)
 	wantProblem(t, e.call("POST", "/api/v1/lists/"+lid+"/items", `{"title":"x","metadata":{"store_links":{}}}`, ""), 400, "unknown_field")
 
@@ -79,7 +63,6 @@ func TestF016B4_StoreLinksCannotBeWritten(t *testing.T) {
 
 func TestF016B4_StoresFieldValidation(t *testing.T) {
 	e := newTreeEnv(t)
-	e.storesType("book")
 	lid := e.listOfType("Books", nil, "book")["id"].(string)
 	tests := []struct{ name, metadata string }{
 		{"unknown key", `{"stores":["kobo","audible"]}`},
@@ -102,7 +85,6 @@ func TestF016B4_StoresFieldValidation(t *testing.T) {
 
 func TestF016B4_StoresFieldIsNotSortableOrFilterable(t *testing.T) {
 	e := newTreeEnv(t)
-	e.storesType("book")
 	lid := e.listOfType("Books", nil, "book")["id"].(string)
 	e.newItem(lid, `{"title":"Dune","metadata":{"stores":["kobo"]}}`)
 

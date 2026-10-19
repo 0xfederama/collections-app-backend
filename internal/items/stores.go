@@ -66,3 +66,48 @@ func (s *Service) storeLinks(ctx context.Context, q *sqlc.Queries, it Item) (map
 	}
 	return links, nil
 }
+
+// applyPreferredStores fills every stores field the create request left unset
+// (absent or null) with the workspace's preferred stores (F-016, D-096). An
+// explicit value, including [], wins. With no preferred stores nothing is added.
+// meta is the validated metadata; the result is meta or a copy with the defaults.
+func (s *Service) applyPreferredStores(ctx context.Context, q *sqlc.Queries, typ *string, requested, meta map[string]any) (map[string]any, error) {
+	if typ == nil {
+		return meta, nil
+	}
+	definition, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: *typ})
+	if err != nil {
+		return nil, fmt.Errorf("get type definition: %w", err)
+	}
+	fields, err := q.ListTypeFields(ctx, sqlc.ListTypeFieldsParams{WorkspaceID: s.workspaceID, TypeID: definition.ID})
+	if err != nil {
+		return nil, fmt.Errorf("list type fields: %w", err)
+	}
+	var unset []string
+	for _, f := range fields {
+		if _, set := meta[f.Key]; f.FieldType == "stores" && !set && requested[f.Key] == nil {
+			unset = append(unset, f.Key)
+		}
+	}
+	if len(unset) == 0 {
+		return meta, nil
+	}
+	settings, err := q.GetSettings(ctx, s.workspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return meta, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get settings: %w", err)
+	}
+	if len(settings.PreferredStores) == 0 {
+		return meta, nil
+	}
+	out := make(map[string]any, len(meta)+len(unset))
+	for k, v := range meta {
+		out[k] = v
+	}
+	for _, key := range unset {
+		out[key] = append([]string{}, settings.PreferredStores...)
+	}
+	return out, nil
+}

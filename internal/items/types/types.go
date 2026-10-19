@@ -26,6 +26,7 @@ const (
 	Motorcycle = "motorcycle"
 	Car        = "car"
 	Camera     = "camera"
+	Book       = "book"
 )
 
 const (
@@ -62,7 +63,7 @@ type Field struct {
 // Known reports whether type is one of the five built-in types. Definition
 // backed callers must not use it to decide whether a workspace type exists.
 func Known(typ string) bool {
-	return slices.Contains([]string{Movie, TVShow, Motorcycle, Car, Camera}, typ)
+	return slices.Contains([]string{Movie, TVShow, Motorcycle, Car, Camera, Book}, typ)
 }
 
 // Validate checks metadata against the supplied type fields and returns the
@@ -353,8 +354,8 @@ const maxPinned = 3
 const PriceKey = "price"
 
 // priceTypes are the types whose items can carry a price (F009-B1): price lives
-// only on motorcycle, car and camera items. Movie and tv_show items have none.
-var priceTypes = map[string]bool{Motorcycle: true, Car: true, Camera: true}
+// only on motorcycle, car, camera and book items. Movie and tv_show items have none.
+var priceTypes = map[string]bool{Motorcycle: true, Car: true, Camera: true, Book: true}
 
 var builtinPinnableKeys = map[string][]string{
 	Movie:      {"director", "imdb_url", "release_year", "runtime_minutes", "streaming"},
@@ -362,6 +363,7 @@ var builtinPinnableKeys = map[string][]string{
 	Motorcycle: {"displacement_cc", "license_class", "model_year", "power_hp"},
 	Car:        {"fuel_type", "make", "model", "model_year", "power_hp"},
 	Camera:     {"camera_type", "megapixels", "release_year", "sensor_format"},
+	Book:       {"author", "first_publish_year", "isbn", "pages", "stores"},
 }
 
 // HasPrice reports whether items of this type can carry a price (F009-B1).

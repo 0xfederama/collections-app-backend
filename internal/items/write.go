@@ -75,6 +75,10 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 		if err != nil {
 			return err
 		}
+		meta, err = s.applyPreferredStores(ctx, q, list.Type, in.Metadata, meta)
+		if err != nil {
+			return err
+		}
 		metaJSON, err := json.Marshal(meta)
 		if err != nil {
 			return fmt.Errorf("encode metadata: %w", err)

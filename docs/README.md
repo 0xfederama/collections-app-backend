@@ -10,9 +10,11 @@
 - [httpapi](modules/httpapi.md): HTTP router, probes, settings, tree/folder/list/item/content handlers
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping (`strip-images` backfill), validation, thumbnails, serving, orphan sweeper
 - [items](modules/items.md): items CRUD, move and reorder, per-type metadata validation (`items/types`)
-- [lookup](modules/lookup.md): TMDB lookup merge rules and imported-field provenance/retention
+- [lookup](modules/lookup.md): metadata provider lookup (TMDB, Open Library) merge rules and imported-field provenance/retention
+- [openlibrary](modules/openlibrary.md): bounded Open Library client for book search, work details and covers
 - [search](modules/search.md): item title search with folder and list paths (`GET /api/v1/search`) and recent items (`GET /api/v1/recent-items`)
 - [smoke](modules/smoke.md): HTTP smoke test over a running stack (`scripts/smoke.sh`, `make smoke`)
+- [stores](modules/stores.md): fixed online store list and read-time store link builder for `stores` fields
 - [storage](modules/storage.md): local file store under DATA_DIR (`os.Root`, generated keys)
 - [trash](modules/trash.md): delete into trash batches, trash list, restore, purge, empty trash, retention auto-purge
 - [tree](modules/tree.md): folders/lists CRUD, move/reorder, sidebar tree, list icons and director sort mode

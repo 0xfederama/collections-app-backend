@@ -2,6 +2,7 @@ package workspace_test
 
 import (
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -12,7 +13,7 @@ import (
 func ptr[T any](v T) *T { return &v }
 
 func TestService_Update(t *testing.T) {
-	base := workspace.Settings{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, Version: 1}
+	base := workspace.Settings{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, PreferredStores: []string{}, Version: 1}
 	tests := []struct {
 		name  string
 		patch workspace.SettingsPatch
@@ -23,8 +24,13 @@ func TestService_Update(t *testing.T) {
 		{"metadata language", workspace.SettingsPatch{MetadataLanguage: ptr("en-US")}, with(base, func(s *workspace.Settings) { s.MetadataLanguage = "en-US"; s.Version = 2 })},
 		{"limit zero", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(0)}, with(base, func(s *workspace.Settings) { s.MarkdownHistoryLimit = 0; s.Version = 2 })},
 		{"limit max", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(200)}, with(base, func(s *workspace.Settings) { s.MarkdownHistoryLimit = 200; s.Version = 2 })},
+		{"preferred stores keep their order", workspace.SettingsPatch{PreferredStores: ptr([]string{"kobo", "openlibrary"})}, with(base, func(s *workspace.Settings) { s.PreferredStores = []string{"kobo", "openlibrary"}; s.Version = 2 })},
+		{"empty preferred stores clear the list", workspace.SettingsPatch{PreferredStores: ptr([]string{})}, with(base, func(s *workspace.Settings) {
+			s.PreferredStores = []string{"kobo"}
+			s.Version = 2
+		})},
 		{"all fields bump once", workspace.SettingsPatch{WorkspaceName: ptr("X"), StreamingCountryCode: ptr("DE"), MarkdownHistoryLimit: ptr(5)},
-			workspace.Settings{WorkspaceName: "X", StreamingCountryCode: "DE", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 5, Version: 2}},
+			workspace.Settings{WorkspaceName: "X", StreamingCountryCode: "DE", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 5, PreferredStores: []string{}, Version: 2}},
 		{"empty patch is a no-op", workspace.SettingsPatch{}, base},
 		{"same values are a no-op", workspace.SettingsPatch{WorkspaceName: ptr(" Our Collection "), StreamingCountryCode: ptr("IT"), MetadataLanguage: ptr("it-IT")}, base},
 	}
@@ -41,14 +47,14 @@ func TestService_Update(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got != tt.want {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Update = %+v, want %+v", got, tt.want)
 			}
 			stored, err := svc.Get(t.Context(), id)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if stored != tt.want {
+			if !reflect.DeepEqual(stored, tt.want) {
 				t.Errorf("Get = %+v, want %+v", stored, tt.want)
 			}
 			var wsName string
@@ -82,8 +88,10 @@ func TestService_Update_Validation(t *testing.T) {
 		{"language malformed", workspace.SettingsPatch{MetadataLanguage: ptr("eng")}, []string{"metadata_language"}},
 		{"limit negative", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(-1)}, []string{"markdown_history_limit"}},
 		{"limit too high", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(201)}, []string{"markdown_history_limit"}},
-		{"every field reported", workspace.SettingsPatch{WorkspaceName: ptr(""), StreamingCountryCode: ptr("x"), MetadataLanguage: ptr("EN_us"), MarkdownHistoryLimit: ptr(999)},
-			[]string{"workspace_name", "streaming_country_code", "metadata_language", "markdown_history_limit"}},
+		{"unknown preferred store", workspace.SettingsPatch{PreferredStores: ptr([]string{"audible"})}, []string{"preferred_stores"}},
+		{"duplicate preferred store", workspace.SettingsPatch{PreferredStores: ptr([]string{"kobo", "kobo"})}, []string{"preferred_stores"}},
+		{"every field reported", workspace.SettingsPatch{WorkspaceName: ptr(""), StreamingCountryCode: ptr("x"), MetadataLanguage: ptr("EN_us"), MarkdownHistoryLimit: ptr(999), PreferredStores: ptr([]string{"nope"})},
+			[]string{"workspace_name", "streaming_country_code", "metadata_language", "markdown_history_limit", "preferred_stores"}},
 	}
 	pool := newPool(t)
 	id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")

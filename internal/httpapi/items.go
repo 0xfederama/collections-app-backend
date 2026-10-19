@@ -228,6 +228,10 @@ func itemBody(it items.Item) (oapi.Item, error) {
 	if metadata == nil {
 		metadata = map[string]interface{}{}
 	}
+	// store_links is computed at read and never stored: it is not a metadata key.
+	if it.StoreLinks != nil {
+		metadata["store_links"] = it.StoreLinks
+	}
 	out := oapi.Item{
 		Id: it.ID, ListId: it.ListID, Title: it.Title, Type: nullableString(it.Type), Metadata: metadata,
 		Image: image, Price: priceBody(it.Price), Website: nullableString(it.Website),

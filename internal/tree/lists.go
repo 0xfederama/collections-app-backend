@@ -335,7 +335,7 @@ func validateDefinitionSort(typ *string, sortMode string, allowsPrice bool, fiel
 		return nil
 	}
 	for _, f := range fields {
-		if f.Key == sortMode && sortMode != "manual" && sortMode != "title" && sortMode != "updated" && sortMode != "price" {
+		if f.Key == sortMode && f.FieldType != "stores" && sortMode != "manual" && sortMode != "title" && sortMode != "updated" && sortMode != "price" {
 			return nil
 		}
 	}

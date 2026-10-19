@@ -172,14 +172,20 @@ func defaultPins(raw []byte) (*[]string, error) {
 
 func validateDefaults(allowsPrice bool, fields []sqlc.TypeField, sort *string, pins *[]string) error {
 	allowed := make(map[string]struct{}, len(fields)+1)
+	sortable := make(map[string]struct{}, len(fields)+1)
 	for _, field := range fields {
 		allowed[field.Key] = struct{}{}
+		if field.FieldType != "stores" {
+			sortable[field.Key] = struct{}{}
+		}
 	}
 	if allowsPrice {
 		allowed["price"] = struct{}{}
+		sortable["price"] = struct{}{}
 	}
 	var errs []apperr.FieldError
-	if sort != nil && (!validFieldKey(*sort) || !allowedField(allowed, *sort)) {
+	// A stores field is pinnable but never a sort key (F-016).
+	if sort != nil && (!validFieldKey(*sort) || !allowedField(sortable, *sort)) {
 		errs = append(errs, apperr.FieldError{Field: "default_sort_field", Message: "must be a field key of this type"})
 	}
 	if pins != nil {

@@ -186,6 +186,7 @@ paths:
         Requires `If-Match` (`"s-N"`). Lowering `markdown_history_limit` prunes on the next save per item, not immediately.
         `trash_retention_days` (F012-B3): absent = unchanged, `null` = off, otherwise 1 to 365. Setting it does not purge at once; the daily job does.
         `metadata_language` controls the locale used for TMDB suggestions and imported metadata.
+        `preferred_stores` (F-016) is the ordered list of stores offered on books: unique keys from `GET /api/v1/store-providers`, at most six.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -213,6 +214,29 @@ paths:
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/store-providers:
+    get:
+      tags: [settings]
+      operationId: listStoreProviders
+      summary: List the stores a `stores` field can name
+      description: The fixed list of stores (F-016, D-096), in display order. It does not depend on the workspace.
+      responses:
+        '200':
+          description: The providers
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StoreProviders' }
+              examples:
+                default:
+                  value:
+                    providers:
+                      - { key: openlibrary, name: Open Library }
+                      - { key: bookshop, name: Bookshop.org }
+                      - { key: amazon, name: Amazon }
+                      - { key: apple_books, name: Apple Books }
+                      - { key: google_play_books, name: Google Play Books }
+                      - { key: kobo, name: Kobo }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/v1/tmdb/suggestions:
     get:
@@ -1544,6 +1568,7 @@ components:
         lookup_available: true
         markdown_history_limit: 20
         trash_retention_days: null
+        preferred_stores: [openlibrary, kobo]
         version: 4
     Folder:
       value:
@@ -2002,7 +2027,7 @@ components:
       properties:
         key: { type: string }
         label: { type: string }
-        type: { type: string, enum: [text, number, date, boolean, link, streaming] }
+        type: { type: string, enum: [text, number, date, boolean, link, streaming, stores] }
         position: { type: integer, minimum: 0 }
         is_locked: { type: boolean }
         version: { type: integer }
@@ -2062,7 +2087,7 @@ components:
         populated_item_count: { type: integer, minimum: 0, description: "Number of items, including trashed items, with a value for this field." }
     Settings:
       type: object
-      required: [workspace_name, streaming_country_code, metadata_language, lookup_available, markdown_history_limit, trash_retention_days, version]
+      required: [workspace_name, streaming_country_code, metadata_language, lookup_available, markdown_history_limit, trash_retention_days, preferred_stores, version]
       properties:
         workspace_name: { type: string, minLength: 1, maxLength: 200 }
         streaming_country_code: { type: string, pattern: '^[A-Z]{2}$' }
@@ -2070,6 +2095,7 @@ components:
         lookup_available: { type: boolean, readOnly: true, description: Whether this server has TMDB lookup configured. }
         markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
         trash_retention_days: { type: integer, nullable: true, minimum: 1, maximum: 365 }
+        preferred_stores: { $ref: '#/components/schemas/PreferredStores' }
         version: { type: integer }
     UpdateSettingsRequest:
       type: object
@@ -2080,11 +2106,36 @@ components:
         metadata_language: { $ref: '#/components/schemas/MetadataLanguage' }
         markdown_history_limit: { type: integer, minimum: 0, maximum: 200 }
         trash_retention_days: { type: integer, nullable: true, minimum: 1, maximum: 365 }
+        preferred_stores: { $ref: '#/components/schemas/PreferredStores' }
     MetadataLanguage:
       type: string
       pattern: '^[a-z]{2}(-[A-Z]{2})?$'
       example: it-IT
       description: ISO 639-1 language (`xx`), optionally with an uppercase region (`xx-YY`), passed to TMDB.
+    StoreKey:
+      type: string
+      enum: [openlibrary, bookshop, amazon, apple_books, google_play_books, kobo]
+      description: A store a `stores` field or the preferred stores can name (F-016, D-096). Its display name comes from `GET /api/v1/store-providers`.
+    PreferredStores:
+      type: array
+      uniqueItems: true
+      maxItems: 6
+      description: The stores new books are offered with, in the order chosen. Empty means none. Each key once.
+      items: { $ref: '#/components/schemas/StoreKey' }
+    StoreProvider:
+      type: object
+      required: [key, name]
+      properties:
+        key: { $ref: '#/components/schemas/StoreKey' }
+        name: { type: string, description: Display name. }
+    StoreProviders:
+      type: object
+      required: [providers]
+      properties:
+        providers:
+          type: array
+          description: Every store, in the fixed display order.
+          items: { $ref: '#/components/schemas/StoreProvider' }
     Tree:
       type: object
       required: [folders, lists]
@@ -2306,7 +2357,11 @@ components:
             type: { type: string, enum: [camera], readOnly: true }
             metadata: { $ref: '#/components/schemas/CameraMetadata' }
     Item:
-      description: An item. `type` is read-only and derived from the item's list; `metadata` is validated against that workspace type's field definitions.
+      description: >-
+        An item. `type` is read-only and derived from the item's list; `metadata` is validated against that workspace type's field definitions.
+        For a type with a `stores` field (F-016, D-096) the response `metadata` also carries a read-only `store_links` object: provider key
+        to URL, one entry per selected store that has a link (built from the item's title, `isbn` and `openlibrary_id`, never stored). Sending
+        `store_links` in `metadata` is rejected as an unknown field (`400 unknown_field`, path `metadata.store_links`).
       allOf:
         - $ref: '#/components/schemas/ItemBase'
         - type: object
@@ -2318,7 +2373,7 @@ components:
               additionalProperties: true
     ItemSummary:
       type: object
-      description: "An item row in lists, search and recent items: the same `metadata` object as the full item (`{}` when the type has none), and the image is reduced."
+      description: "An item row in lists, search and recent items: the same `metadata` object as the full item except `store_links`, which only the full item carries (`{}` when the type has none), and the image is reduced."
       required: [id, list_id, title, type, image, price, website, metadata, content_version, sort_order, version, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
@@ -2330,7 +2385,7 @@ components:
         website: { type: string, nullable: true }
         metadata:
           type: object
-          description: 'Same object as `metadata` on the full item; its shape depends on `type` (see the `*Metadata` schemas).'
+          description: 'Same object as `metadata` on the full item, without the read-only `store_links`; its shape depends on `type` (see the `*Metadata` schemas).'
           additionalProperties: true
         content_version: { type: integer }
         sort_order: { type: integer }

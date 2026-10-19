@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
+	"github.com/0xfederama/collections-app-backend/internal/stores"
 )
 
 // Type names (also the `type` enum of the spec).
@@ -127,6 +128,8 @@ func ruleFor(field Field) rule {
 		return link
 	case "streaming":
 		return streaming
+	case "stores":
+		return storeKeys
 	default:
 		return func(path string, _ any) outcome { return fail(path, "has an unsupported field type") }
 	}
@@ -289,6 +292,27 @@ func streaming(path string, v any) outcome {
 		return outcome{errs: errs}
 	}
 	return outcome{val: out}
+}
+
+// storeKeys checks a `stores` value: an array of unique provider keys (F-016).
+// The array is stored as given, with the keys in the order the client sent them.
+func storeKeys(path string, v any) outcome {
+	list, ok := v.([]any)
+	if !ok {
+		return fail(path, "must be an array of store keys")
+	}
+	keys := make([]string, 0, len(list))
+	for i, item := range list {
+		key, ok := item.(string)
+		if !ok {
+			return outcome{errs: []apperr.FieldError{{Field: fmt.Sprintf("%s[%d]", path, i), Message: "must be a string"}}}
+		}
+		keys = append(keys, key)
+	}
+	if err := stores.ValidateKeys(keys); err != nil {
+		return fail(path, "%s", err.Error())
+	}
+	return outcome{val: keys}
 }
 
 func platformList(path string, raw any) ([]string, []apperr.FieldError) {

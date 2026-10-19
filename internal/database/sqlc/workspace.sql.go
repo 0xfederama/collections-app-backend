@@ -12,7 +12,7 @@ import (
 )
 
 const getSettings = `-- name: GetSettings :one
-SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.version
+SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_stores, s.version
 FROM workspace_settings s
 JOIN workspaces w ON w.id = s.workspace_id
 WHERE s.workspace_id = $1
@@ -24,6 +24,7 @@ type GetSettingsRow struct {
 	MetadataLanguage     string
 	MarkdownHistoryLimit int32
 	TrashRetentionDays   *int32
+	PreferredStores      []string
 	Version              int32
 }
 
@@ -36,6 +37,7 @@ func (q *Queries) GetSettings(ctx context.Context, workspaceID uuid.UUID) (GetSe
 		&i.MetadataLanguage,
 		&i.MarkdownHistoryLimit,
 		&i.TrashRetentionDays,
+		&i.PreferredStores,
 		&i.Version,
 	)
 	return i, err
@@ -87,7 +89,7 @@ func (q *Queries) ListWorkspaceIDs(ctx context.Context) ([]uuid.UUID, error) {
 }
 
 const lockSettings = `-- name: LockSettings :one
-SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.version
+SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_stores, s.version
 FROM workspace_settings s
 JOIN workspaces w ON w.id = s.workspace_id
 WHERE s.workspace_id = $1
@@ -100,6 +102,7 @@ type LockSettingsRow struct {
 	MetadataLanguage     string
 	MarkdownHistoryLimit int32
 	TrashRetentionDays   *int32
+	PreferredStores      []string
 	Version              int32
 }
 
@@ -113,6 +116,7 @@ func (q *Queries) LockSettings(ctx context.Context, workspaceID uuid.UUID) (Lock
 		&i.MetadataLanguage,
 		&i.MarkdownHistoryLimit,
 		&i.TrashRetentionDays,
+		&i.PreferredStores,
 		&i.Version,
 	)
 	return i, err
@@ -135,6 +139,7 @@ SET streaming_country_code = $2,
     metadata_language      = $3,
     markdown_history_limit = $4,
     trash_retention_days   = $5,
+    preferred_stores       = $6,
     version                = version + 1,
     updated_at             = now()
 WHERE workspace_id = $1
@@ -146,6 +151,7 @@ type UpdateSettingsParams struct {
 	MetadataLanguage     string
 	MarkdownHistoryLimit int32
 	TrashRetentionDays   *int32
+	PreferredStores      []string
 }
 
 func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) error {
@@ -155,6 +161,7 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		arg.MetadataLanguage,
 		arg.MarkdownHistoryLimit,
 		arg.TrashRetentionDays,
+		arg.PreferredStores,
 	)
 	return err
 }

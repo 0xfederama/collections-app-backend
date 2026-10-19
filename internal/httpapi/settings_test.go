@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -19,8 +20,9 @@ type settingsBody struct {
 	LookupAvailable      bool   `json:"lookup_available"`
 	MarkdownHistoryLimit int    `json:"markdown_history_limit"`
 	// TrashRetentionDays is nil (JSON null) when off, else the decoded float64.
-	TrashRetentionDays any `json:"trash_retention_days"`
-	Version            int `json:"version"`
+	TrashRetentionDays any      `json:"trash_retention_days"`
+	PreferredStores    []string `json:"preferred_stores"`
+	Version            int      `json:"version"`
 }
 
 // settingsRouter returns a router on a fresh migrated database with the workspace bootstrapped.
@@ -64,8 +66,8 @@ func TestAT02_GetSettings(t *testing.T) {
 	if got := rec.Header().Get("ETag"); got != `"s-1"` {
 		t.Errorf("ETag = %q, want \"s-1\"", got)
 	}
-	want := settingsBody{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 20, Version: 1}
-	if got := decodeSettings(t, rec); got != want {
+	want := settingsBody{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 20, PreferredStores: []string{}, Version: 1}
+	if got := decodeSettings(t, rec); !reflect.DeepEqual(got, want) {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}
 }
@@ -80,8 +82,8 @@ func TestAT02_PatchSettings(t *testing.T) {
 	if got := rec.Header().Get("ETag"); got != `"s-2"` {
 		t.Errorf("ETag = %q, want \"s-2\"", got)
 	}
-	want := settingsBody{WorkspaceName: "Home", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, Version: 2}
-	if got := decodeSettings(t, rec); got != want {
+	want := settingsBody{WorkspaceName: "Home", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, PreferredStores: []string{}, Version: 2}
+	if got := decodeSettings(t, rec); !reflect.DeepEqual(got, want) {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}
 
@@ -98,7 +100,7 @@ func TestAT02_PatchSettings(t *testing.T) {
 	}
 
 	get := do(t, h, req{method: "GET", path: "/api/v1/settings"})
-	if got, want := decodeSettings(t, get), (settingsBody{WorkspaceName: "Ours", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, Version: 3}); got != want {
+	if got, want := decodeSettings(t, get), (settingsBody{WorkspaceName: "Ours", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, PreferredStores: []string{}, Version: 3}); !reflect.DeepEqual(got, want) {
 		t.Errorf("GET after patches = %+v, want %+v", got, want)
 	}
 }
@@ -129,6 +131,9 @@ func TestAT02_PatchSettingsValidation(t *testing.T) {
 		{"limit too high", `{"markdown_history_limit":201}`, []string{"markdown_history_limit"}},
 		{"several", `{"workspace_name":"","streaming_country_code":"x","markdown_history_limit":-1}`,
 			[]string{"workspace_name", "streaming_country_code", "markdown_history_limit"}},
+		{"unknown preferred store", `{"preferred_stores":["audible"]}`, []string{"preferred_stores"}},
+		{"duplicate preferred store", `{"preferred_stores":["kobo","kobo"]}`, []string{"preferred_stores"}},
+		{"preferred stores not an array", `{"preferred_stores":"kobo"}`, []string{"preferred_stores"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -218,5 +223,59 @@ func TestF012_TrashRetentionSetting(t *testing.T) {
 	get := do(t, h, req{method: "GET", path: "/api/v1/settings"})
 	if !strings.Contains(get.Body.String(), `"trash_retention_days":null`) {
 		t.Errorf("GET body = %s, want trash_retention_days null", get.Body)
+	}
+}
+
+// F016-B4: the preferred stores are saved in order, cleared by [], and validated against the six keys.
+func TestF016B4_PreferredStoresRoundTrip(t *testing.T) {
+	h := settingsRouter(t)
+	rec := patchSettings(t, h, `"s-1"`, `{"preferred_stores":["kobo","openlibrary"]}`)
+	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-2"` {
+		t.Fatalf("set: status = %d ETag = %q body=%s", rec.Code, rec.Header().Get("ETag"), rec.Body)
+	}
+	if got := decodeSettings(t, rec).PreferredStores; !reflect.DeepEqual(got, []string{"kobo", "openlibrary"}) {
+		t.Errorf("PATCH answered %v, want [kobo openlibrary]", got)
+	}
+	get := decodeSettings(t, do(t, h, req{method: "GET", path: "/api/v1/settings"}))
+	if !reflect.DeepEqual(get.PreferredStores, []string{"kobo", "openlibrary"}) || get.Version != 2 {
+		t.Errorf("GET = %+v, want the saved order at version 2", get)
+	}
+
+	// Repeating the stored list is a no-op: no version bump.
+	if rec := patchSettings(t, h, `"s-2"`, `{"preferred_stores":["kobo","openlibrary"]}`); rec.Header().Get("ETag") != `"s-2"` {
+		t.Errorf("same list: ETag = %q, want \"s-2\"", rec.Header().Get("ETag"))
+	}
+
+	rec = patchSettings(t, h, `"s-2"`, `{"preferred_stores":[]}`)
+	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-3"` {
+		t.Fatalf("clear: status = %d ETag = %q", rec.Code, rec.Header().Get("ETag"))
+	}
+	if !strings.Contains(rec.Body.String(), `"preferred_stores":[]`) {
+		t.Errorf("cleared list must be [] not null: %s", rec.Body)
+	}
+}
+
+func TestF016B4_GetStoreProviders(t *testing.T) {
+	h := settingsRouter(t)
+	rec := do(t, h, req{method: "GET", path: "/api/v1/store-providers"})
+	if rec.Code != 200 {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body)
+	}
+	var body struct {
+		Providers []struct {
+			Key  string `json:"key"`
+			Name string `json:"name"`
+		} `json:"providers"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"openlibrary:Open Library", "bookshop:Bookshop.org", "amazon:Amazon", "apple_books:Apple Books", "google_play_books:Google Play Books", "kobo:Kobo"}
+	var got []string
+	for _, p := range body.Providers {
+		got = append(got, p.Key+":"+p.Name)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("providers = %v, want %v", got, want)
 	}
 }

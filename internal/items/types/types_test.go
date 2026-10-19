@@ -118,3 +118,40 @@ func TestF014B2_ValidateKeepsStreamingAndTMDBRules(t *testing.T) {
 		}
 	}
 }
+
+func TestF016B4_ValidateStoresField(t *testing.T) {
+	fields := []types.Field{{Key: "stores", Type: "stores", Special: true}}
+	for _, tt := range []struct {
+		name  string
+		value any
+		want  []string
+		path  string
+	}{
+		{"unique known keys keep their order", []any{"kobo", "openlibrary"}, []string{"kobo", "openlibrary"}, ""},
+		{"empty array", []any{}, []string{}, ""},
+		{"unknown key", []any{"kobo", "audible"}, nil, "metadata.stores"},
+		{"duplicate key", []any{"kobo", "kobo"}, nil, "metadata.stores"},
+		{"not an array", "kobo", nil, "metadata.stores"},
+		{"non-string entry", []any{"kobo", 3}, nil, "metadata.stores[1]"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := types.Validate(fields, map[string]any{"stores": tt.value})
+			if tt.path == "" {
+				if err != nil {
+					t.Fatalf("Validate: %v", err)
+				}
+				if !reflect.DeepEqual(got["stores"], tt.want) {
+					t.Fatalf("stores = %#v, want %#v", got["stores"], tt.want)
+				}
+				return
+			}
+			var validation *apperr.ValidationError
+			if !errors.As(err, &validation) || len(validation.Errors) != 1 || validation.Errors[0].Field != tt.path {
+				t.Fatalf("Validate error = %v, want a 422 on %s", err, tt.path)
+			}
+		})
+	}
+	if _, err := types.Validate(fields, map[string]any{"stores": nil}); err != nil {
+		t.Fatalf("null stores should be omitted: %v", err)
+	}
+}

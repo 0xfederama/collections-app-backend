@@ -161,4 +161,5 @@ type WorkspaceSetting struct {
 	UpdatedAt            time.Time
 	TrashRetentionDays   *int32
 	MetadataLanguage     string
+	PreferredStores      []string
 }

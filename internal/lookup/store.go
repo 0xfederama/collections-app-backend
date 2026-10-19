@@ -487,7 +487,7 @@ func fillOnly(metadata, values map[string]any, emptyLists bool) {
 	for path, value := range flatten(values) {
 		current, present := getPath(metadata, path)
 		if present && current != nil {
-			if list, isList := current.([]any); !(emptyLists && isList && len(list) == 0) {
+			if list, isList := current.([]any); !emptyLists || !isList || len(list) != 0 {
 				continue
 			}
 		}

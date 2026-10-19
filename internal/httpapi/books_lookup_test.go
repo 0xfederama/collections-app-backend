@@ -87,10 +87,10 @@ func newBookEnv(t *testing.T, o bookEnvOptions) *bookEnv {
 				o.upstream(w, r)
 				return
 			}
-			switch q := r.URL.Query().Get("q"); {
-			case q == "key:/works/OL27482W":
+			switch r.URL.Query().Get("q") {
+			case "key:/works/OL27482W":
 				_, _ = w.Write(olFixture(t, "work_hobbit.json"))
-			case q == "dun frank herbart":
+			case "dun frank herbart":
 				_, _ = w.Write(olFixture(t, "search_misspelling.json"))
 			default:
 				_, _ = w.Write(olFixture(t, "search_english.json"))

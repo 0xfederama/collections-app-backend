@@ -19,8 +19,8 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 - `NewService(db *pgxpool.Pool) *Service`
 - `(*Service).Get(ctx, workspaceID) (Settings, error)`: `apperr.NotFound("settings")` if no row
 - `(*Service).Update(ctx, workspaceID, ifMatch int, p SettingsPatch) (Settings, error)`: 422 field errors, then 412 `apperr.VersionConflict` on a stale version
-- `Settings`: workspace name, streaming country, `MetadataLanguage`, markdown history limit, `TrashRetentionDays *int` (nil = off), `PreferredStores []string`, version
-- `SettingsPatch`: pointer fields; nil means "leave as is"; `TrashRetentionDays` is `Optional[int]` (absent vs explicit null); `PreferredStores *[]string`
+- `Settings`: workspace name, streaming country, `MetadataLanguage`, markdown history limit, `TrashRetentionDays *int` (nil = off), `PreferredStore string`, version
+- `SettingsPatch`: pointer fields; nil means "leave as is"; `TrashRetentionDays` is `Optional[int]` (absent vs explicit null); `PreferredStore *string`
 
 ## Gotchas
 
@@ -33,7 +33,7 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 - A name change updates `workspaces.name` in the same transaction; it bumps `workspaces.version`, but the ETag stream is only `workspace_settings.version` (`"s-N"`).
 - `Update` writes in `database.InTx` and locks the settings row `FOR UPDATE`.
 - `trash_retention_days` (1 to 365, or null = off; migration 000010, default NULL) is read by the trash auto-purge (`internal/trash`). Setting it purges nothing at once.
-- `preferred_stores` (migration 000020, default empty) is an ordered list of unique provider keys from `internal/stores`, at most six; order is kept and used when items are created.
+- `preferred_store` (migration 000023, NOT NULL, default `amazon`, CHECK on the five keys) is the one default store: new book items and book lookup (create, fill on empty stores) get `stores: [preferred_store]`. It replaced the `preferred_stores` list (backfilled from its first non-`openlibrary` element). An unknown key is 422 on `preferred_store`.
 - `book_lookup_available` is not stored: it is true when the Open Library client is enabled, which is always (no key or setting).
 - `metadata_language` defaults to `it-IT` for new workspaces; it accepts a lowercase ISO 639-1 code with optional uppercase region (`xx` or `xx-YY`) and is used for TMDB results.
 - Settings equality (`settings.equal`) compares the retention by value, so repeating the stored number changes nothing.

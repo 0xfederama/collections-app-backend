@@ -24,7 +24,7 @@
 - `POST /api/v1/types/{key}/fields`, `PUT .../fields/order`: add or reorder custom fields (If-Match)
 - `PATCH/GET/DELETE .../fields/{fieldKey}`: rename, preview deletion, or delete a custom field
 - `GET /api/v1/lists/{id}/items`: sort by a type field and filter with `filter_field`, `filter_value`, `filter_min`, `filter_max`
-- `GET /api/v1/store-providers`, `GET /api/v1/books/suggestions`: store list and book suggestions; settings carry `preferred_stores`
+- `GET /api/v1/store-providers`, `GET /api/v1/books/suggestions`: store list and book suggestions; settings carry `preferred_store` (one key); Open Library is not a store
 - `TestSpecIsValid`: loads and validates `api/openapi.yaml`
 - `TestSpecCoversAllAPIRoutes`: every API.md §5 route exists with a unique operationId
 

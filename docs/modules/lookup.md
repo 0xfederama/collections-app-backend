@@ -26,7 +26,7 @@ Merges values imported from a metadata provider (TMDB for movie and TV, Open Lib
 
 - `lookup_imports` rows carry `provider` (`tmdb` or `openlibrary`) and `source_id`; `tmdb_imports` is gone (migration 000022).
 - Only TMDB has retention: refresh at five months, expiry at six (D-089). Open Library rows have no deadlines and maintenance never touches them (D-095).
-- `FillOnly` values (the `stores` Open Library link, D-096) are applied only on create and fill and never tracked as imported.
+- `FillOnly` values (for books, `stores: [preferred_store]` added by the service via `defaultStoreFill`, D-096) are applied only on create and fill (absent, null or, on fill, empty), never overwrite user-chosen stores and are never tracked as imported. Providers no longer put an Open Library link in `stores`.
 - User edits survive refresh and expiry, including on trashed items. If an unchanged imported title expires, the original typed title is restored.
 - Poster expiry is tracked separately from metadata refresh; manual lookup modes keep the existing image.
 - A provider with no cover (Open Library) still applies the match, without an image (`ErrNoImage`).

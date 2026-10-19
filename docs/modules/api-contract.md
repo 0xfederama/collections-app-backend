@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`api/openapi.yaml` is the canonical OpenAPI 3.0.3 contract. It defines generated Go models and strict-server stubs, including workspace type-definition management. Design context: `/Users/federico/Developer/collections-app/design-docs/`.
+`api/openapi.yaml` is the canonical OpenAPI 3.0.3 contract (version 0.12.0). It defines generated Go models and strict-server stubs, including workspace type-definition management, book suggestions and store providers. Design context: `/Users/federico/Developer/collections-app/design-docs/`.
 
 ## Key files
 
@@ -24,16 +24,16 @@
 - `POST /api/v1/types/{key}/fields`, `PUT .../fields/order`: add or reorder custom fields (If-Match)
 - `PATCH/GET/DELETE .../fields/{fieldKey}`: rename, preview deletion, or delete a custom field
 - `GET /api/v1/lists/{id}/items`: sort by a type field and filter with `filter_field`, `filter_value`, `filter_min`, `filter_max`
+- `GET /api/v1/store-providers`, `GET /api/v1/books/suggestions`: store list and book suggestions; settings carry `preferred_stores`
 - `TestSpecIsValid`: loads and validates `api/openapi.yaml`
 - `TestSpecCoversAllAPIRoutes`: every API.md §5 route exists with a unique operationId
 
 ## Gotchas
 
-- The strict server does not reject unknown JSON fields or limit body size. The spec promises `400 unknown_field`, so B-04 must enforce it.
-- Default generated error handlers are text/plain. B-04 installs problem+json handlers.
 - `If-Match` is `required: false` so a missing header reaches the handler, which returns 428.
 - An unset `nullable.Nullable` in a response marshals as a zero value, not `null`.
 - `nullable: true` must sit on the schema itself, not next to `allOf`.
 - Type and field versions have independent ETag streams; all mutations except creation require If-Match.
 - Type create and update responses preserve `default_icon`; PATCH fields are optional and nullable defaults may be cleared with JSON `null`.
 - Item metadata is an object validated against its list type's definition; the item `type` is read-only and `null` (with `{}` metadata) for a list with no type; `List.type` is nullable and optional on create.
+- `metadata.store_links` is read-only and computed, never stored; item create accepts `source_id` for books.

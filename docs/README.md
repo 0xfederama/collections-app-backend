@@ -7,9 +7,9 @@
 - [content](modules/content.md): item Markdown content, versions, restore and retention
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
 - [definitions](modules/definitions.md): workspace type and field definitions
-- [httpapi](modules/httpapi.md): HTTP router, probes, settings, tree/folder/list/item/content handlers
+- [httpapi](modules/httpapi.md): HTTP router, probes, settings, tree/folder/list/item/content handlers, book suggestions and store providers
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping (`strip-images` backfill), validation, thumbnails, serving, orphan sweeper
-- [items](modules/items.md): items CRUD, move and reorder, per-type metadata validation (`items/types`)
+- [items](modules/items.md): items CRUD, move and reorder, per-type metadata validation (`items/types`), read-only `store_links`
 - [lookup](modules/lookup.md): metadata provider lookup (TMDB, Open Library) merge rules and imported-field provenance/retention
 - [openlibrary](modules/openlibrary.md): bounded Open Library client for book search, work details and covers
 - [search](modules/search.md): item title search with folder and list paths (`GET /api/v1/search`) and recent items (`GET /api/v1/recent-items`)

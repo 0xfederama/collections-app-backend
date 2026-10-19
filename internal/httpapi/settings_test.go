@@ -133,7 +133,6 @@ func TestAT02_PatchSettingsValidation(t *testing.T) {
 			[]string{"workspace_name", "streaming_country_code", "markdown_history_limit"}},
 		{"unknown preferred store", `{"preferred_stores":["audible"]}`, []string{"preferred_stores"}},
 		{"duplicate preferred store", `{"preferred_stores":["kobo","kobo"]}`, []string{"preferred_stores"}},
-		{"preferred stores not an array", `{"preferred_stores":"kobo"}`, []string{"preferred_stores"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -278,4 +277,10 @@ func TestF016B4_GetStoreProviders(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("providers = %v, want %v", got, want)
 	}
+}
+
+// A wrong JSON type is rejected by the body decoder like on every other settings field.
+func TestAT02_PatchSettingsPreferredStoresWrongType(t *testing.T) {
+	h := settingsRouter(t)
+	wantProblem(t, patchSettings(t, h, `"s-1"`, `{"preferred_stores":"kobo"}`), 400, "malformed_request")
 }

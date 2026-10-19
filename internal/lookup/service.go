@@ -382,7 +382,8 @@ func metadataSourceID(provider string, raw json.RawMessage) string {
 		}
 		return id
 	case string:
-		if ValidSourceID(provider, v) != nil {
+		// TMDB ids are numbers in metadata; only Open Library ids are strings.
+		if provider != ProviderOpenLibrary || ValidSourceID(provider, v) != nil {
 			return ""
 		}
 		return v

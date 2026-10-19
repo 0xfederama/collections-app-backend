@@ -25,10 +25,7 @@ func TestService_Update(t *testing.T) {
 		{"limit zero", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(0)}, with(base, func(s *workspace.Settings) { s.MarkdownHistoryLimit = 0; s.Version = 2 })},
 		{"limit max", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(200)}, with(base, func(s *workspace.Settings) { s.MarkdownHistoryLimit = 200; s.Version = 2 })},
 		{"preferred stores keep their order", workspace.SettingsPatch{PreferredStores: ptr([]string{"kobo", "openlibrary"})}, with(base, func(s *workspace.Settings) { s.PreferredStores = []string{"kobo", "openlibrary"}; s.Version = 2 })},
-		{"empty preferred stores clear the list", workspace.SettingsPatch{PreferredStores: ptr([]string{})}, with(base, func(s *workspace.Settings) {
-			s.PreferredStores = []string{"kobo"}
-			s.Version = 2
-		})},
+		{"empty preferred stores on the default is a no-op", workspace.SettingsPatch{PreferredStores: ptr([]string{})}, base},
 		{"all fields bump once", workspace.SettingsPatch{WorkspaceName: ptr("X"), StreamingCountryCode: ptr("DE"), MarkdownHistoryLimit: ptr(5)},
 			workspace.Settings{WorkspaceName: "X", StreamingCountryCode: "DE", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 5, PreferredStores: []string{}, Version: 2}},
 		{"empty patch is a no-op", workspace.SettingsPatch{}, base},

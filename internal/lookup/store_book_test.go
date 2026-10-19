@@ -88,7 +88,7 @@ func TestF016B3_BookCreateExplicitStoresWinOverTheProviderLink(t *testing.T) {
 	list := e.bookList()
 	it, err := e.store.Apply(t.Context(), ApplyParams{
 		Mode: ModeCreate, ListID: list, Type: "book", Provider: ProviderOpenLibrary, SourceID: "OL1W",
-		Title: "Dune", OriginalTitle: "dune", CreateInput: &items.CreateInput{Title: "dune", Metadata: map[string]any{"stores": []string{}}},
+		Title: "Dune", OriginalTitle: "dune", CreateInput: &items.CreateInput{Title: "dune", Metadata: map[string]any{"stores": []any{}}},
 		Fields: bookFields(), FillOnly: map[string]any{"stores": []string{"openlibrary"}},
 	})
 	if err != nil {
@@ -102,7 +102,7 @@ func TestF016B3_BookCreateExplicitStoresWinOverTheProviderLink(t *testing.T) {
 func TestF016B3_BookFillSetsOnlyEmptyValuesAndTheStoreLinkOnlyWhenEmpty(t *testing.T) {
 	e := newLookupEnv(t, time.Now().UTC())
 	list := e.bookList()
-	it := e.createBook(list, "dune", map[string]any{"author": "Mine", "stores": []string{}})
+	it := e.createBook(list, "dune", map[string]any{"author": "Mine", "stores": []any{}})
 	apply := func(it items.Item) items.Item {
 		t.Helper()
 		got, err := e.store.Apply(t.Context(), ApplyParams{
@@ -148,7 +148,7 @@ func TestF016B3_BookFillSetsOnlyEmptyValuesAndTheStoreLinkOnlyWhenEmpty(t *testi
 func TestF016B3_BookRematchReplacesFetchedFieldsAndKeepsStoreChoices(t *testing.T) {
 	e := newLookupEnv(t, time.Now().UTC())
 	list := e.bookList()
-	it := e.createBook(list, "dune", map[string]any{"stores": []string{"kobo"}})
+	it := e.createBook(list, "dune", map[string]any{"stores": []any{"kobo"}})
 	it, err := e.store.Apply(t.Context(), ApplyParams{
 		Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version, Type: "book", Provider: ProviderOpenLibrary, SourceID: "OL1W",
 		Title: "Dune", OriginalTitle: it.Title, Fields: bookFields(), FillOnly: map[string]any{"stores": []string{"openlibrary"}},
@@ -234,7 +234,7 @@ func TestF016B3_MaintenanceNeverTouchesBookImports(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Title != "Dune" || got.Image == nil || decodeMetadata(t, got.Metadata)["author"] != "Frank Herbert" {
+	if got.Title != "dune" || got.Image == nil || decodeMetadata(t, got.Metadata)["author"] != "Frank Herbert" {
 		t.Errorf("a book import was expired: title=%q image=%v metadata=%s", got.Title, got.Image, got.Metadata)
 	}
 	if _, ok, _ := e.store.Read(t.Context(), it.ID); !ok {

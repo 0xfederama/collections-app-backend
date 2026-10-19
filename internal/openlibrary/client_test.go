@@ -174,15 +174,12 @@ func TestSearchIsCached(t *testing.T) {
 
 func TestDisabledClient(t *testing.T) {
 	s, count := fakeServer(t, func(http.ResponseWriter, *http.Request) {})
-	c := testClient(s, Options{Disabled: true, MockFixture: true})
+	c := testClient(s, Options{Disabled: true})
 	if c.Enabled() {
 		t.Fatal("disabled client is enabled")
 	}
 	if _, err := c.Search(t.Context(), "the hobbit", ""); !errors.Is(err, ErrDisabled) {
 		t.Errorf("Search error = %v", err)
-	}
-	if _, err := c.Search(t.Context(), "[mock] book name", ""); !errors.Is(err, ErrDisabled) {
-		t.Errorf("fixture query on a disabled client: error = %v", err)
 	}
 	if _, err := c.Work(t.Context(), "OL1W", ""); !errors.Is(err, ErrDisabled) {
 		t.Errorf("Work error = %v", err)
@@ -197,8 +194,40 @@ func TestDisabledClient(t *testing.T) {
 	if nilClient.Enabled() {
 		t.Error("nil client enabled")
 	}
+	if _, err := nilClient.Search(t.Context(), "x", ""); !errors.Is(err, ErrDisabled) {
+		t.Errorf("nil client Search error = %v", err)
+	}
 	if !New("", false).Enabled() {
 		t.Error("the default client must be enabled (no key needed)")
+	}
+}
+
+// A disabled client with the fixture flag (the network-free test stack) serves the
+// fixture and nothing else.
+func TestDisabledClientStillServesTheFixture(t *testing.T) {
+	s, count := fakeServer(t, func(http.ResponseWriter, *http.Request) {})
+	c := testClient(s, Options{Disabled: true, MockFixture: true})
+	if !c.Enabled() {
+		t.Fatal("the fixture must keep a disabled client available")
+	}
+	got, err := c.Search(t.Context(), "[mock] book name", "")
+	if err != nil || len(got) != 1 || got[0].WorkID != "OL900001W" {
+		t.Fatalf("fixture search = %+v err = %v", got, err)
+	}
+	if _, err := c.Work(t.Context(), "OL900001W", ""); err != nil {
+		t.Errorf("fixture work error = %v", err)
+	}
+	if _, err := c.DownloadCover(t.Context(), got[0].CoverID); err != nil {
+		t.Errorf("fixture cover error = %v", err)
+	}
+	if _, err := c.Search(t.Context(), "the hobbit", ""); !errors.Is(err, ErrDisabled) {
+		t.Errorf("a non-fixture query on a disabled client: error = %v", err)
+	}
+	if _, err := c.Work(t.Context(), "OL1W", ""); !errors.Is(err, ErrDisabled) {
+		t.Errorf("a non-fixture work on a disabled client: error = %v", err)
+	}
+	if count.Load() != 0 {
+		t.Errorf("%d requests", count.Load())
 	}
 }
 

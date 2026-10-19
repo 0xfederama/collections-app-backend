@@ -65,10 +65,11 @@ type Options struct {
 	// Contact (an e-mail or URL) and Version go in the User-Agent.
 	Contact string
 	Version string
-	// Disabled turns the client off (OPENLIBRARY_DISABLED=true).
+	// Disabled turns the client off (OPENLIBRARY_DISABLED=true): no request is ever made.
 	Disabled bool
 	// MockFixture serves the deterministic test-stack book for the exact query
-	// "[mock] book name" without any HTTP request (D-090, D-096).
+	// "[mock] book name" without any HTTP request (D-090, D-096). It works even
+	// when Disabled, so a test stack can be network-free yet exercise the real path.
 	MockFixture bool
 }
 
@@ -168,7 +169,9 @@ func headerSafe(r rune) rune {
 }
 
 // Enabled reports whether book lookup is on (it is by default and needs no key).
-func (c *Client) Enabled() bool { return c != nil && !c.disabled }
+// The explicit test fixture keeps it available when the client is disabled, like
+// the TMDB fixture without a key.
+func (c *Client) Enabled() bool { return c != nil && (!c.disabled || c.mockFixture) }
 
 // Search returns Open Library works in upstream ranking order. language is a
 // metadata language such as it-IT; only its two-letter part is sent. A bare ISBN
@@ -178,11 +181,11 @@ func (c *Client) Search(ctx context.Context, query, language string) ([]Match, e
 	if query == "" {
 		return nil, ErrInvalid
 	}
-	if !c.Enabled() {
-		return nil, ErrDisabled
-	}
-	if c.mockFixture && query == mockBookQuery {
+	if c.Enabled() && c.mockFixture && query == mockBookQuery {
 		return []Match{mockMatch()}, nil
+	}
+	if c == nil || c.disabled {
+		return nil, ErrDisabled
 	}
 	q := searchQuery(query)
 	lang := langOf(language)
@@ -204,11 +207,11 @@ func (c *Client) Work(ctx context.Context, workID, language string) (Match, erro
 	if !workIDRe.MatchString(workID) {
 		return Match{}, ErrInvalid
 	}
-	if !c.Enabled() {
-		return Match{}, ErrDisabled
-	}
-	if c.mockFixture && workID == mockWorkID {
+	if c.Enabled() && c.mockFixture && workID == mockWorkID {
 		return mockMatch(), nil
+	}
+	if c == nil || c.disabled {
+		return Match{}, ErrDisabled
 	}
 	results, err := c.search(ctx, "key:/works/"+workID, langOf(language), 1)
 	if err != nil {
@@ -273,14 +276,14 @@ func (c *Client) CoverURL(coverID int) string {
 // ErrNoCover (default=false makes the covers API answer 404 instead of a blank
 // image).
 func (c *Client) DownloadCover(ctx context.Context, coverID int) ([]byte, error) {
-	if !c.Enabled() {
-		return nil, ErrDisabled
-	}
 	if coverID <= 0 {
 		return nil, ErrInvalid
 	}
-	if c.mockFixture && coverID == mockCoverID {
+	if c.Enabled() && c.mockFixture && coverID == mockCoverID {
 		return mockCover(), nil
+	}
+	if c == nil || c.disabled {
+		return nil, ErrDisabled
 	}
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()

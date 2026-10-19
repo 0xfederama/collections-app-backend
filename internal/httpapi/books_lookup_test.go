@@ -453,3 +453,29 @@ func TestF016B3_SettingsReportBookLookupAvailability(t *testing.T) {
 		})
 	}
 }
+
+// The network-free test stack: book lookup disabled, fixture flag on. The fixture
+// query works end to end, every other query is the normal disabled state.
+func TestF016B3_DisabledWithFixtureServesOnlyTheFixture(t *testing.T) {
+	e := newBookEnv(t, bookEnvOptions{disabled: true, mock: true})
+	rec := e.suggest("[mock] book name")
+	wantStatus(t, rec, http.StatusOK)
+	if got := decode(t, rec); got["available"] != true || len(got["results"].([]any)) != 1 {
+		t.Fatalf("fixture suggestions = %v", got)
+	}
+	other := e.suggest("the hobbit")
+	wantStatus(t, other, http.StatusOK)
+	if got := decode(t, other); got["available"] != false || len(got["results"].([]any)) != 0 {
+		t.Fatalf("non-fixture suggestions = %v", got)
+	}
+	lid := e.bookList()
+	if it := e.newItem(lid, `{"title":"[mock] book name"}`); it["title"] != "Mock Book Title" {
+		t.Errorf("fixture create = %v", it)
+	}
+	if it := e.newItem(lid, `{"title":"the hobbit"}`); it["title"] != "the hobbit" {
+		t.Errorf("non-fixture create must stay unchanged: %v", it)
+	}
+	if e.searches.Load() != 0 || e.covers.Load() != 0 {
+		t.Errorf("network used: searches=%d covers=%d", e.searches.Load(), e.covers.Load())
+	}
+}

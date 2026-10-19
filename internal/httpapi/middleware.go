@@ -106,6 +106,9 @@ func accessLog(log *slog.Logger) func(http.Handler) http.Handler {
 			if route == "/healthz" || route == "/readyz" {
 				level = slog.LevelDebug // probes would drown the log
 			}
+			if rec.status == statusClientClosedRequest {
+				level = slog.LevelDebug // the client went away, not a server problem
+			}
 			log.Log(r.Context(), level, "request",
 				"method", r.Method,
 				"route", route,

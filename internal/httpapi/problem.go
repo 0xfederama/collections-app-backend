@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -166,6 +167,15 @@ func capitalize(s string) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
+// statusClientClosedRequest is the (nginx) status for a request the client abandoned.
+const statusClientClosedRequest = 499
+
+// clientAborted is true when err is a cancellation and the request context itself
+// is cancelled. A deadline (context.DeadlineExceeded) is a real failure.
+func clientAborted(r *http.Request, err error) bool {
+	return errors.Is(err, context.Canceled) && errors.Is(r.Context().Err(), context.Canceled)
+}
+
 // handlerErrors are the error callbacks plugged into the generated server.
 type handlerErrors struct{ log *slog.Logger }
 
@@ -185,6 +195,13 @@ func (h handlerErrors) parameter(w http.ResponseWriter, _ *http.Request, err err
 
 // response answers errors returned by handlers (strict server, ResponseErrorHandlerFunc).
 func (h handlerErrors) response(w http.ResponseWriter, r *http.Request, err error) {
+	if clientAborted(r, err) {
+		// The client is gone: nobody reads an answer, so send a bare 499 (the
+		// access log records it) and keep it out of the error log.
+		h.log.DebugContext(r.Context(), "request canceled by the client", "request_id", requestIDFrom(r.Context()))
+		w.WriteHeader(statusClientClosedRequest)
+		return
+	}
 	p, unexpected := toProblem(err, requestIDFrom(r.Context()))
 	if unexpected {
 		h.log.ErrorContext(r.Context(), "unhandled error", "err", err, "request_id", p.RequestID)

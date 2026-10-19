@@ -197,7 +197,7 @@ func TestDisabledClient(t *testing.T) {
 	if _, err := nilClient.Search(t.Context(), "x", ""); !errors.Is(err, ErrDisabled) {
 		t.Errorf("nil client Search error = %v", err)
 	}
-	if !New("", false).Enabled() {
+	if !NewWithOptions(Options{}).Enabled() {
 		t.Error("the default client must be enabled (no key needed)")
 	}
 }
@@ -421,7 +421,7 @@ func TestFixedOriginsAreUsedWhenOverridesAreInvalid(t *testing.T) {
 	if c.apiBase.String() != "https://openlibrary.org" || c.coverBase.String() != "https://covers.openlibrary.org" {
 		t.Errorf("origins = %s %s", c.apiBase, c.coverBase)
 	}
-	d := New("", false)
+	d := NewWithOptions(Options{})
 	if d.apiBase.String() != "https://openlibrary.org" || d.coverBase.String() != "https://covers.openlibrary.org" {
 		t.Errorf("production origins = %s %s", d.apiBase, d.coverBase)
 	}

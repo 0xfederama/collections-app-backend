@@ -34,6 +34,6 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 - `Update` writes in `database.InTx` and locks the settings row `FOR UPDATE`.
 - `trash_retention_days` (1 to 365, or null = off; migration 000010, default NULL) is read by the trash auto-purge (`internal/trash`). Setting it purges nothing at once.
 - `preferred_stores` (migration 000020, default empty) is an ordered list of unique provider keys from `internal/stores`, at most six; order is kept and used when items are created.
-- `book_lookup_available` is not stored: it is true when the Open Library client is enabled (`OPENLIBRARY_DISABLED` unset or false).
+- `book_lookup_available` is not stored: it is true when the Open Library client is enabled, which is always (no key or setting).
 - `metadata_language` defaults to `it-IT` for new workspaces; it accepts a lowercase ISO 639-1 code with optional uppercase region (`xx` or `xx-YY`) and is used for TMDB results.
 - Settings equality (`settings.equal`) compares the retention by value, so repeating the stored number changes nothing.

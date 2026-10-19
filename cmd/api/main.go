@@ -87,7 +87,7 @@ func run() error {
 	tmdbProvider := lookup.NewTMDBProvider(tmdbClient)
 	// Books use Open Library: no key, on by default. The test-stack fixture flag also serves its one fixture book (D-096).
 	bookProvider := lookup.NewOpenLibraryProvider(openlibrary.NewWithOptions(openlibrary.Options{
-		Contact: cfg.OpenLibraryContact, Disabled: cfg.OpenLibraryDisabled, MockFixture: cfg.TMDBMockFixture,
+		MockFixture: cfg.TMDBMockFixture,
 	}))
 	lookupSvc := lookup.New(lookup.Providers{types.Movie: tmdbProvider, types.TVShow: tmdbProvider, types.Book: bookProvider}, lookupStore, itemSvc, settingsSvc, clock.System{}, workspaceID)
 	if _, err := lookupStore.Maintain(ctx, lookupSvc.RefreshOwned); err != nil {

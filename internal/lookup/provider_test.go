@@ -97,7 +97,7 @@ func TestOpenLibraryProviderDownloadImage(t *testing.T) {
 }
 
 func TestOpenLibraryProviderDisabledMapsToErrDisabled(t *testing.T) {
-	p := NewOpenLibraryProvider(openlibrary.New("", true))
+	p := NewOpenLibraryProvider(openlibrary.NewWithOptions(openlibrary.Options{Disabled: true}))
 	if p.Enabled() {
 		t.Fatal("disabled provider is enabled")
 	}

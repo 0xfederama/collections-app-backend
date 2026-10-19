@@ -9,7 +9,6 @@ Provides a bounded, server-side Open Library client for book search, work detail
 - `internal/openlibrary/client.go`: search, work details, cover download, caching, pacing, User-Agent, fixture
 - `internal/lookup/openlibrary_provider.go`: adapter onto the lookup `Provider` interface
 - `internal/httpapi/books.go`: `GET /books/suggestions` mapping
-- `internal/config/config.go`: `OPENLIBRARY_CONTACT` and `OPENLIBRARY_DISABLED`
 - `cmd/api/main.go`: client construction
 
 ## Interfaces
@@ -23,7 +22,7 @@ Provides a bounded, server-side Open Library client for book search, work detail
 
 ## Gotchas
 
-- No key. `OPENLIBRARY_CONTACT` (an e-mail or URL) goes into the User-Agent; `OPENLIBRARY_DISABLED=true` makes no request at all.
+- No key and no settings: always on, fixed User-Agent `CollectionsApp/1` (unidentified, so paced at one request per 1.1 s, under Open Library's 1 req/s limit).
 - Requests are paced below the identified-client limit (3/s), bounded in size and timeout, and searches are cached briefly.
 - `TMDB_MOCK_FIXTURE=true` enables the fixture: the exact query `[mock] book name` returns work `OL900001W` without HTTP, even when disabled. Other queries behave normally.
 - Open Library data has no retention duty (D-095); it is kept until the user changes it.

@@ -33,7 +33,7 @@ const (
 	searchTTL        = 5 * time.Minute
 	maxSearchEntries = 128
 	searchLimit      = 10
-	requestInterval  = 600 * time.Millisecond // well under the 3 requests/second of identified clients
+	requestInterval  = 1100 * time.Millisecond // above the 1 request/second limit of unidentified clients
 	maxRetryAfter    = time.Hour
 	searchFields     = "key,title,author_name,first_publish_year,number_of_pages_median,isbn,cover_i"
 
@@ -65,7 +65,7 @@ type Options struct {
 	// Contact (an e-mail or URL) and Version go in the User-Agent.
 	Contact string
 	Version string
-	// Disabled turns the client off (OPENLIBRARY_DISABLED=true): no request is ever made.
+	// Disabled turns the client off (tests only): no request is ever made.
 	Disabled bool
 	// MockFixture serves the deterministic test-stack book for the exact query
 	// "[mock] book name" without any HTTP request (D-090, D-096). It works even
@@ -104,11 +104,6 @@ type Client struct {
 	nextRequest  time.Time
 	blockedUntil time.Time
 	cache        map[string]cacheEntry
-}
-
-// New creates a client for Open Library's fixed production origins.
-func New(contact string, disabled bool) *Client {
-	return NewWithOptions(Options{Contact: contact, Disabled: disabled})
 }
 
 // NewWithOptions creates a client with optional endpoint overrides for tests.

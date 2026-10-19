@@ -363,7 +363,7 @@ var builtinPinnableKeys = map[string][]string{
 	Motorcycle: {"displacement_cc", "license_class", "model_year", "power_hp"},
 	Car:        {"fuel_type", "make", "model", "model_year", "power_hp"},
 	Camera:     {"camera_type", "megapixels", "release_year", "sensor_format"},
-	Book:       {"author", "first_publish_year", "isbn", "pages", "stores"},
+	Book:       {"author", "isbn", "pages", "stores"},
 }
 
 // HasPrice reports whether items of this type can carry a price (F009-B1).

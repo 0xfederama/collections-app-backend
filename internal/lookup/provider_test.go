@@ -65,12 +65,12 @@ func TestOpenLibraryProviderDetails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantFields := map[string]any{"author": "J.R.R. Tolkien", "pages": 310, "first_publish_year": 1937, "isbn": "9780261103283"}
+	wantFields := map[string]any{"author": "J.R.R. Tolkien", "pages": 310, "isbn": "9780261103283"}
 	if d.SourceID != "OL27482W" || d.Title != "The Hobbit" || !reflect.DeepEqual(d.Fields, wantFields) || d.ImagePath != "14627509" {
 		t.Errorf("details = %+v", d)
 	}
-	if !reflect.DeepEqual(d.FillOnly, map[string]any{"stores": []string{"openlibrary"}}) {
-		t.Errorf("fill-only = %v", d.FillOnly)
+	if d.FillOnly != nil {
+		t.Errorf("fill-only = %v, want none (the default store is added by the service)", d.FillOnly)
 	}
 	if _, err := p.Details(t.Context(), "movie", "OL27482W", "it-IT", ""); err == nil {
 		t.Error("a non-book type was accepted")
@@ -125,7 +125,7 @@ func TestOpenLibraryProviderFixtureNeedsNoNetwork(t *testing.T) {
 		t.Fatalf("got %+v err %v", got, err)
 	}
 	d, err := p.Details(t.Context(), "book", "OL900001W", "it-IT", "IT")
-	if err != nil || d.Fields["pages"] != 321 || d.Fields["first_publish_year"] != 2002 || d.Fields["isbn"] != "9780000000002" || d.Fields["author"] != "Mock Author" || d.ImagePath == "" {
+	if err != nil || d.Fields["pages"] != 321 || d.Fields["isbn"] != "9780000000002" || d.Fields["author"] != "Mock Author" || d.ImagePath == "" {
 		t.Fatalf("details %+v err %v", d, err)
 	}
 	cover, err := p.DownloadImage(t.Context(), d.ImagePath)

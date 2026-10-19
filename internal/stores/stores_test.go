@@ -9,9 +9,8 @@ import (
 
 func TestF016B4_ProvidersAreFixedAndOrdered(t *testing.T) {
 	want := []stores.Provider{
-		{Key: "openlibrary", Name: "Open Library"},
-		{Key: "bookshop", Name: "Bookshop.org"},
 		{Key: "amazon", Name: "Amazon"},
+		{Key: "bookshop", Name: "Bookshop.org"},
 		{Key: "apple_books", Name: "Apple Books"},
 		{Key: "google_play_books", Name: "Google Play Books"},
 		{Key: "kobo", Name: "Kobo"},
@@ -22,7 +21,7 @@ func TestF016B4_ProvidersAreFixedAndOrdered(t *testing.T) {
 	}
 	// The returned slice is a copy: callers cannot reorder the list.
 	got[0].Key = "changed"
-	if stores.Providers()[0].Key != "openlibrary" {
+	if stores.Providers()[0].Key != "amazon" {
 		t.Fatal("Providers() shares its backing array")
 	}
 }
@@ -32,7 +31,8 @@ func TestF016B4_Valid(t *testing.T) {
 		key  string
 		want bool
 	}{
-		{"openlibrary", true},
+		{"amazon", true},
+		{"openlibrary", false},
 		{"google_play_books", true},
 		{"kobo", true},
 		{"", false},
@@ -56,8 +56,9 @@ func TestF016B4_ValidateKeys(t *testing.T) {
 		wantErr bool
 	}{
 		{"none", nil, false},
-		{"several known", []string{"kobo", "amazon", "openlibrary"}, false},
-		{"all six", []string{"openlibrary", "bookshop", "amazon", "apple_books", "google_play_books", "kobo"}, false},
+		{"several known", []string{"kobo", "amazon", "bookshop"}, false},
+		{"open library is not a store", []string{"openlibrary"}, true},
+		{"all five", []string{"amazon", "bookshop", "apple_books", "google_play_books", "kobo"}, false},
 		{"unknown", []string{"kobo", "audible"}, true},
 		{"duplicate", []string{"kobo", "kobo"}, true},
 		{"empty string", []string{""}, true},
@@ -79,26 +80,6 @@ func TestF016B4_Link(t *testing.T) {
 		in       stores.LinkInput
 		want     string
 	}{
-		{
-			name: "open library by work id", provider: "openlibrary",
-			in:   stores.LinkInput{ISBN: "9780140449136", Title: "The Odyssey", OpenLibraryID: "OL2071383W"},
-			want: "https://openlibrary.org/works/OL2071383W",
-		},
-		{
-			name: "open library by isbn when no work id", provider: "openlibrary",
-			in:   stores.LinkInput{ISBN: "978-0-14-044913-6", Title: "The Odyssey"},
-			want: "https://openlibrary.org/isbn/9780140449136",
-		},
-		{
-			name: "open library title search without isbn or id", provider: "openlibrary",
-			in:   stores.LinkInput{Title: "Dune & Co"},
-			want: "https://openlibrary.org/search?q=Dune+%26+Co",
-		},
-		{
-			name: "open library escapes the work id", provider: "openlibrary",
-			in:   stores.LinkInput{OpenLibraryID: "OL 1/W?x"},
-			want: "https://openlibrary.org/works/OL%201%2FW%3Fx",
-		},
 		{
 			name: "bookshop by isbn", provider: "bookshop",
 			in:   stores.LinkInput{ISBN: "9780441172719", Title: "Dune"},
@@ -170,8 +151,8 @@ func TestF016B4_Link(t *testing.T) {
 			want: "",
 		},
 		{
-			name: "nothing to search for on open library", provider: "openlibrary",
-			in:   stores.LinkInput{},
+			name: "open library is no longer a store", provider: "openlibrary",
+			in:   stores.LinkInput{ISBN: "9780441172719", Title: "Dune"},
 			want: "",
 		},
 		{
@@ -192,7 +173,7 @@ func TestF016B4_Link(t *testing.T) {
 
 func TestF016B4_LinksAreHTTPS(t *testing.T) {
 	for _, p := range stores.Providers() {
-		link := stores.Link(p.Key, stores.LinkInput{ISBN: "9780441172719", Title: "Dune", OpenLibraryID: "OL1W"})
+		link := stores.Link(p.Key, stores.LinkInput{ISBN: "9780441172719", Title: "Dune"})
 		if len(link) < len("https://") || link[:len("https://")] != "https://" {
 			t.Errorf("Link(%q) = %q, want https", p.Key, link)
 		}

@@ -30,6 +30,7 @@ Manages workspace-scoped type definitions and their fields. Built-in types (movi
 - A default sort or pin must name an existing field of the type; `price` is permitted only when the type allows prices. Defaults may be updated after fields are created.
 - Default pins hold at most three unique keys (migration 000019 CHECK). A `stores` field is pinnable but never a sort key.
 - `stores` is a locked-only field type (DB CHECK); custom fields cannot use it.
+- The built-in `book` has no first publication year since migration 000023 (6 fields, default sort manual/NULL, default pins `author, pages, stores`); a custom `book_custom` is untouched.
 - Migration 000021 renames a custom type keyed `book` to `book_custom` (`book_custom_2`, ... when taken) before the built-in takes the key; its lists follow.
 - Reorder accepts exactly the custom-field keys; locked fields retain their seed positions.
 - Deleting a custom field clears matching metadata, resets affected defaults/pins/sorts, and includes trashed items in its count.

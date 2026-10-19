@@ -127,7 +127,8 @@ func TestF016B4_ValidateStoresField(t *testing.T) {
 		want  []string
 		path  string
 	}{
-		{"unique known keys keep their order", []any{"kobo", "openlibrary"}, []string{"kobo", "openlibrary"}, ""},
+		{"unique known keys keep their order", []any{"kobo", "bookshop"}, []string{"kobo", "bookshop"}, ""},
+		{"open library is not a store", []any{"openlibrary"}, nil, "metadata.stores"},
 		{"empty array", []any{}, []string{}, ""},
 		{"unknown key", []any{"kobo", "audible"}, nil, "metadata.stores"},
 		{"duplicate key", []any{"kobo", "kobo"}, nil, "metadata.stores"},

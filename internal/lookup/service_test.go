@@ -106,7 +106,7 @@ func newService(client *fakeClient, store *fakeStore, itemSvc *fakeItems) *Servi
 
 func newServiceWith(providers Providers, store *fakeStore, itemSvc *fakeItems) *Service {
 	return New(providers, store, itemSvc, fakeSettings{workspace.Settings{
-		MetadataLanguage: "it-IT", StreamingCountryCode: "IT", PreferredStores: []string{"kobo"},
+		MetadataLanguage: "it-IT", StreamingCountryCode: "IT", PreferredStore: "kobo",
 	}}, testClock{now: time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)}, uuid.New())
 }
 
@@ -256,7 +256,7 @@ func bookClient(enabled bool) *fakeClient {
 		matches: []Suggestion{{SourceID: "OL1W"}},
 		details: Details{
 			SourceID: "OL1W", Title: "Dune", Fields: map[string]any{"author": "Frank Herbert", "pages": 608},
-			FillOnly: map[string]any{"stores": []string{"openlibrary"}}, ImagePath: "123",
+			ImagePath: "123",
 		},
 	}
 }
@@ -295,8 +295,8 @@ func TestF016B3_CreateAppliesBookDetailsWithoutCover(t *testing.T) {
 	if p.Fields["author"] != "Frank Herbert" {
 		t.Errorf("fields = %v", p.Fields)
 	}
-	// The Open Library link first, then the workspace's preferred stores (kobo in the fake settings).
-	if got, want := p.FillOnly["stores"], []string{"openlibrary", "kobo"}; !equalStrings(got, want) {
+	// The workspace's default store (kobo in the fake settings), no Open Library link.
+	if got, want := p.FillOnly["stores"], []string{"kobo"}; !equalStrings(got, want) {
 		t.Errorf("fill-only stores = %v, want %v", got, want)
 	}
 }
@@ -487,25 +487,27 @@ func TestF013B3_RefreshOwnedStillUsesTheFiveMonthRule(t *testing.T) {
 	}
 }
 
-func TestCreateFillOnlyAddsPreferredStoresAfterTheProviderLink(t *testing.T) {
+func TestF016_DefaultStoreFill(t *testing.T) {
+	book, movie := &fakeClient{name: ProviderOpenLibrary}, &fakeClient{name: ProviderTMDB}
 	for _, tc := range []struct {
 		name      string
+		provider  Provider
 		fill      map[string]any
-		preferred []string
+		preferred string
 		want      any
 	}{
-		{"no stores proposed", map[string]any{"x": 1}, []string{"kobo"}, nil},
-		{"link first", map[string]any{"stores": []string{"openlibrary"}}, []string{"kobo", "amazon"}, []string{"openlibrary", "kobo", "amazon"}},
-		{"deduplicated", map[string]any{"stores": []string{"openlibrary"}}, []string{"kobo", "openlibrary"}, []string{"openlibrary", "kobo"}},
-		{"no preferred", map[string]any{"stores": []string{"openlibrary"}}, nil, []string{"openlibrary"}},
+		{"book gets the default store", book, nil, "kobo", []string{"kobo"}},
+		{"book keeps other fill-only values", book, map[string]any{"x": 1}, "amazon", []string{"amazon"}},
+		{"movie has no stores field", movie, nil, "kobo", nil},
+		{"no preferred store", book, nil, "", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := createFillOnly(tc.fill, tc.preferred)["stores"]
+			got := defaultStoreFill(tc.provider, tc.fill, tc.preferred)["stores"]
 			if tc.want == nil && got != nil || tc.want != nil && !equalStrings(got, tc.want) {
 				t.Errorf("stores = %v, want %v", got, tc.want)
 			}
-			if s, ok := tc.fill["stores"].([]string); ok && len(s) != 1 {
-				t.Errorf("the provider's own map was modified: %v", tc.fill)
+			if _, ok := tc.fill["stores"]; ok {
+				t.Errorf("the caller's map was modified: %v", tc.fill)
 			}
 		})
 	}

@@ -626,7 +626,7 @@ func TestF007_ListTypeIsOptionalAndReturned(t *testing.T) {
 	for _, typ := range []string{"", "movie", "tv_show", "motorcycle", "car", "camera", "book"} {
 		e.listOfType("K "+typ, nil, typ)
 	}
-	for typ, field := range map[string]string{"movie": "release_year", "tv_show": "first_air_year", "motorcycle": "displacement_cc", "car": "power_hp", "camera": "megapixels", "book": "first_publish_year"} {
+	for typ, field := range map[string]string{"movie": "release_year", "tv_show": "first_air_year", "motorcycle": "displacement_cc", "car": "power_hp", "camera": "megapixels", "book": "manual"} {
 		rec := e.call("POST", "/api/v1/lists", fmt.Sprintf(`{"name":"S %s","type":%q}`, typ, typ), "")
 		wantStatus(t, rec, 201)
 		if decode(t, rec)["sort_mode"] != field {

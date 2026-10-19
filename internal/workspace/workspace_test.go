@@ -131,7 +131,7 @@ func TestBootstrap_DefaultsAndInvalidName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := workspace.Settings{WorkspaceName: "Ours", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, PreferredStores: []string{}, Version: 1}
+	want := workspace.Settings{WorkspaceName: "Ours", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, PreferredStore: "amazon", Version: 1}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("settings = %+v, want %+v", got, want)
 	}
@@ -150,7 +150,7 @@ func TestBootstrap_SeedsBuiltinTypeDefinitions(t *testing.T) {
 	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM type_fields WHERE workspace_id = $1 AND is_locked`, workspaceID).Scan(&fields); err != nil {
 		t.Fatal(err)
 	}
-	if types != 6 || fields != 36 {
-		t.Errorf("seeded definitions = %d types, %d fields; want 6 types, 36 fields", types, fields)
+	if types != 6 || fields != 35 {
+		t.Errorf("seeded definitions = %d types, %d fields; want 6 types, 35 fields", types, fields)
 	}
 }

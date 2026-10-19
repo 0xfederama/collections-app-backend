@@ -52,8 +52,7 @@ func (p openLibraryProvider) Search(ctx context.Context, typ, query, language st
 }
 
 // Details returns the work's fields: author (authors joined with ", "), pages,
-// first_publish_year and isbn, plus the Open Library link, proposed for `stores`
-// as a fill-only value (it never replaces or removes a user's store choices).
+// and isbn. The default store is added by the service (fill-only), not here.
 func (p openLibraryProvider) Details(ctx context.Context, typ, sourceID, language, _ string) (Details, error) {
 	if typ != types.Book {
 		return Details{}, openlibrary.ErrInvalid
@@ -69,15 +68,11 @@ func (p openLibraryProvider) Details(ctx context.Context, typ, sourceID, languag
 	if m.Pages > 0 {
 		fields["pages"] = m.Pages
 	}
-	if m.Year > 0 {
-		fields["first_publish_year"] = m.Year
-	}
 	if m.ISBN != "" {
 		fields["isbn"] = m.ISBN
 	}
 	d := Details{
 		SourceID: m.WorkID, Title: truncateRunes(m.Title, maxTitleRunes), Fields: fields,
-		FillOnly: map[string]any{"stores": []string{"openlibrary"}},
 	}
 	if m.CoverID > 0 {
 		d.ImagePath = strconv.Itoa(m.CoverID)

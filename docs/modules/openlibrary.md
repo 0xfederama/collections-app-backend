@@ -29,3 +29,4 @@ Provides a bounded, server-side Open Library client for book search, work detail
 - Open Library data has no retention duty (D-095); it is kept until the user changes it.
 - Covers may be absent (`ErrNoCover`) or fail to download: the lookup keeps the metadata and imports without an image (Warn log).
 - Settings expose this as read-only `book_lookup_available`.
+- The adapter fills `author`, `pages` and `isbn` only (the first publication year was removed from the book type in 0.13.0; a suggestion's `year` is display only). `openlibrary_id` is stored and read-only by convention; the web builds the Open Library link from it.

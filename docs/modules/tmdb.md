@@ -18,7 +18,7 @@ Provides an optional bounded server-side client for TMDB movie and TV search, de
 - `(*Client).Enabled() bool`: whether a server key is configured
 - `(*Client).Search(ctx, type, query, language) ([]Match, error)`: movie or TV suggestions
 - `(*Client).Details(ctx, type, id, language, country) (Details, error)`: localized metadata and provider data
-- `(*Client).WatchLink(ctx, type, id, country) (string, error)`: only the JustWatch page of a title for a country, one `/{movie|tv}/{id}/watch/providers` call; `""` when TMDB has none. `ErrNotFound` (404) and `ErrRateLimited` (429) are distinguishable; used by the lookup `streaming.link` backfill
+- `(*Client).WatchLink(ctx, type, id, country) (string, error)`: only the JustWatch page of a title for a country, one `/{movie|tv}/{id}/watch/providers` call; `""` when TMDB has none. `ErrNotFound` (404) and `ErrRateLimited` (429) are distinguishable; no production caller in the tree (tests only)
 - `(*Client).DownloadPoster(ctx, posterPath) ([]byte, error)`: fetches a bounded poster image
 - `GET /api/v1/tmdb/suggestions`: returns provider-ranked suggestions or a disabled empty result
 

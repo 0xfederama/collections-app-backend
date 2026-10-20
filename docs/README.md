@@ -8,7 +8,7 @@
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
 - [definitions](modules/definitions.md): workspace type and field definitions
 - [httpapi](modules/httpapi.md): HTTP router, probes, settings, tree/folder/list/item/content handlers, book suggestions and store providers
-- [images](modules/images.md): item image upload/URL/delete, metadata stripping (`strip-images` backfill), validation, thumbnails, serving, orphan sweeper
+- [images](modules/images.md): item image upload/URL/delete, metadata stripping on upload, validation, thumbnails, serving, orphan sweeper
 - [streamlinks](modules/streamlinks.md): streaming service search URLs (`streaming.platform_links`)
 - [items](modules/items.md): items CRUD, move and reorder, per-type metadata validation (`items/types`), read-only `store_links`
 - [lookup](modules/lookup.md): metadata provider lookup (TMDB, Open Library) merge rules and imported-field provenance/retention

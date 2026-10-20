@@ -9,9 +9,7 @@ Manages workspace-scoped type definitions and their fields. Built-in types (movi
 - `internal/definitions/service.go`: definition and field mutations
 - `db/queries/types.sql`: workspace-scoped definition persistence
 - `internal/httpapi/types.go`: type-management handlers and ETags
-- `db/migrations/000014_kind_definitions.up.sql`: tables and built-in seed function
-- `db/migrations/000021_book_type.up.sql`: built-in `book` type, seed and default pins
-- `db/migrations/000025_type_refactor.{up,down}.sql`: built-in set reduced to five plural-named types (API 0.16.0)
+- `db/migrations/000001_init.up.sql`: definition tables, built-in seed functions and default pins
 
 ## Interfaces
 

@@ -9,7 +9,7 @@ Owns the fixed list of online stores a `stores` field on books can name, and bui
 - `internal/stores/stores.go`: provider list, key validation, `Link` builder
 - `internal/items/stores.go`: `store_links` computation for item reads
 - `internal/httpapi/stores.go`: `GET /store-providers` handler
-- `db/migrations/000020_preferred_stores.up.sql`, `000023_book_cleanup.up.sql`: the `stores` field type; `workspace_settings.preferred_store` replaces the old list
+- `db/migrations/000001_init.up.sql`: the `stores` field type and `workspace_settings.preferred_store` (one key, replaces the old list)
 
 ## Interfaces
 

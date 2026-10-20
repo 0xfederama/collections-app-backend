@@ -39,14 +39,14 @@ internal/search        search and recent items
 internal/workspace     bootstrap of the single workspace
 internal/httpapi       router, handlers, middleware, problem mapping; oapi/ is GENERATED from api/openapi.yaml (never edit)
 api/openapi.yaml       the canonical API contract (spec wins over design-docs/API.md)
-db/migrations          golang-migrate files
+db/migrations          golang-migrate files: one baseline `000001_init` (up/down); later changes append as new numbered files
 db/queries             sqlc queries (generated into internal/database/sqlc)
 scripts/               backup, restore, verify, compose exposure check, reset-dev
 docs/                  one short doc per module
 ```
 
 The binary also has a `healthcheck` subcommand (`/app/api healthcheck`) used by the compose healthcheck, because the
-distroless runtime image has no shell or curl, and a `strip-images` subcommand (`/app/api strip-images`, see below).
+distroless runtime image has no shell or curl.
 
 ## Prerequisites
 
@@ -110,17 +110,6 @@ scripts/restore.sh ./backups/<timestamp> --force   # deletes the current data fi
 - **Back up before every migration in production** (upgrade steps: backup, pull new images, `migrate up`, restart, check `/readyz`). To roll back, restore the backup taken before the upgrade: a migration `down` does not bring the files back and can lose data.
 - **Retention:** keep at least 7 daily and 4 weekly copies **off the device** (another disk, NAS or cloud of your choice). Backups hold all your data and the images unencrypted; keep them private and never commit them (`backups/` is gitignored).
 - Only restore backups you made yourself: the manifest checksums detect corruption, not a malicious archive.
-
-## Strip metadata from existing images
-
-New uploads are stored without EXIF, GPS, XMP, IPTC or comment metadata (the pixels are not re-encoded; a JPEG keeps only its orientation tag, and ICC colour profiles stay). Images uploaded before that still carry it. To clean them:
-
-```bash
-docker compose exec api /app/api strip-images   # or: make strip-images
-./deploy/prod exec api /app/api strip-images    # prod stack, run from the parent repo
-```
-
-It reports `total`, `stripped`, `already clean`, `skipped` (missing or unparseable files, left untouched) and `failed` (I/O or database errors; the exit code is non-zero only then). It never deletes a file, updates `size_bytes` and `sha256` of each rewritten original, and is safe to re-run: a second run strips nothing. Take a backup first if you want a way back.
 
 ## Host-run loop (faster iteration)
 

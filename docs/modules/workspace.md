@@ -27,7 +27,7 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 - `Bootstrap` runs from `cmd/api/main.go` before the server starts. It takes `pg_advisory_xact_lock` with a fixed key; any other bootstrap-like task needs a different key.
 - A later `WORKSPACE_NAME` does not rename an existing workspace.
 - More than one workspace is an error (the MVP supports exactly one).
-- Bootstrap seeds built-in definitions only when it creates the workspace; migration 000014 seeds existing workspaces.
+- Bootstrap seeds built-in definitions only when it creates the workspace; the baseline migration seeds existing workspaces.
 - Validation runs before the row lock, so an invalid body answers 422 even when If-Match is stale.
 - A patch that changes nothing returns the current settings with no version bump.
 - A name change updates `workspaces.name` in the same transaction; it bumps `workspaces.version`, but the ETag stream is only `workspace_settings.version` (`"s-N"`).

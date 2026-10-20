@@ -155,48 +155,6 @@ func (q *Queries) ListAttachmentKeys(ctx context.Context, workspaceID uuid.UUID)
 	return items, nil
 }
 
-const listAttachmentsForStrip = `-- name: ListAttachmentsForStrip :many
-SELECT id, storage_key, media_type, size_bytes, sha256
-FROM attachments
-WHERE workspace_id = $1
-ORDER BY created_at, id
-`
-
-type ListAttachmentsForStripRow struct {
-	ID         uuid.UUID
-	StorageKey string
-	MediaType  string
-	SizeBytes  int64
-	Sha256     []byte
-}
-
-// Every original with the size and hash recorded for it, for the strip-images backfill.
-func (q *Queries) ListAttachmentsForStrip(ctx context.Context, workspaceID uuid.UUID) ([]ListAttachmentsForStripRow, error) {
-	rows, err := q.db.Query(ctx, listAttachmentsForStrip, workspaceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListAttachmentsForStripRow{}
-	for rows.Next() {
-		var i ListAttachmentsForStripRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.StorageKey,
-			&i.MediaType,
-			&i.SizeBytes,
-			&i.Sha256,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listUnreferencedAttachments = `-- name: ListUnreferencedAttachments :many
 SELECT a.id FROM attachments a
 WHERE a.workspace_id = $1 AND a.created_at < $2
@@ -273,31 +231,4 @@ func (q *Queries) SetItemImageURL(ctx context.Context, arg SetItemImageURLParams
 		arg.WorkspaceID,
 	)
 	return err
-}
-
-const updateAttachmentFile = `-- name: UpdateAttachmentFile :execrows
-UPDATE attachments
-SET size_bytes = $1, sha256 = $2
-WHERE id = $3 AND workspace_id = $4
-`
-
-type UpdateAttachmentFileParams struct {
-	SizeBytes   int64
-	Sha256      []byte
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-// Records the size and hash of an original rewritten without metadata.
-func (q *Queries) UpdateAttachmentFile(ctx context.Context, arg UpdateAttachmentFileParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateAttachmentFile,
-		arg.SizeBytes,
-		arg.Sha256,
-		arg.ID,
-		arg.WorkspaceID,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }

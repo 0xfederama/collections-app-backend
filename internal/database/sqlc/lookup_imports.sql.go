@@ -282,67 +282,6 @@ func (q *Queries) ListExpiredTMDBImportIDs(ctx context.Context, arg ListExpiredT
 	return items, nil
 }
 
-const listStreamingLinkBackfillCandidates = `-- name: ListStreamingLinkBackfillCandidates :many
-SELECT t.item_id, t.source_id, t.type
-FROM lookup_imports t
-JOIN items i ON i.id = t.item_id AND i.workspace_id = t.workspace_id
-JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-WHERE t.workspace_id = $1 AND t.provider = 'tmdb'
-  AND t.item_id > $2
-  AND i.deleted_at IS NULL AND l.type = t.type AND t.type IN ('movie', 'tv_show')
-  AND i.metadata ->> 'tmdb_id' = t.source_id
-  AND COALESCE(i.metadata ->> 'lookup_disabled', 'false') <> 'true'
-  AND jsonb_typeof(i.metadata -> 'streaming') = 'object'
-  AND i.metadata #>> '{streaming,country}' = $3::text
-  AND jsonb_typeof(i.metadata #> '{streaming,platforms}') = 'array'
-  AND jsonb_array_length(i.metadata #> '{streaming,platforms}') > 0
-  AND NOT jsonb_exists(i.metadata -> 'streaming', 'link')
-  AND NOT jsonb_exists(t.imported_fields, 'streaming.link')
-ORDER BY t.item_id
-LIMIT $4
-`
-
-type ListStreamingLinkBackfillCandidatesParams struct {
-	WorkspaceID uuid.UUID
-	AfterID     uuid.UUID
-	Country     string
-	BatchLimit  int32
-}
-
-type ListStreamingLinkBackfillCandidatesRow struct {
-	ItemID   uuid.UUID
-	SourceID string
-	Type     string
-}
-
-// One-time backfill of streaming.link (api 0.14.0): active TMDB movie/TV items whose item
-// country is @country, that list streaming platforms, have no link key, no "checked" marker in
-// the snapshots, and did not opt out of lookup. Keyset-paged by item id.
-func (q *Queries) ListStreamingLinkBackfillCandidates(ctx context.Context, arg ListStreamingLinkBackfillCandidatesParams) ([]ListStreamingLinkBackfillCandidatesRow, error) {
-	rows, err := q.db.Query(ctx, listStreamingLinkBackfillCandidates,
-		arg.WorkspaceID,
-		arg.AfterID,
-		arg.Country,
-		arg.BatchLimit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListStreamingLinkBackfillCandidatesRow{}
-	for rows.Next() {
-		var i ListStreamingLinkBackfillCandidatesRow
-		if err := rows.Scan(&i.ItemID, &i.SourceID, &i.Type); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const lockLookupItem = `-- name: LockLookupItem :one
 SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id, l.type
 FROM items i
@@ -494,45 +433,6 @@ type RetainTMDBPosterAfterMetadataExpiryParams struct {
 // Metadata is removed at its own deadline while the independently aged poster remains tracked.
 func (q *Queries) RetainTMDBPosterAfterMetadataExpiry(ctx context.Context, arg RetainTMDBPosterAfterMetadataExpiryParams) error {
 	_, err := q.db.Exec(ctx, retainTMDBPosterAfterMetadataExpiry, arg.ItemID, arg.WorkspaceID)
-	return err
-}
-
-const setItemStreamingLink = `-- name: SetItemStreamingLink :exec
-UPDATE items
-SET metadata = jsonb_set(metadata, '{streaming,link}', to_jsonb($1::text))
-WHERE id = $2 AND workspace_id = $3 AND deleted_at IS NULL
-`
-
-type SetItemStreamingLinkParams struct {
-	Link        string
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-// Derived data like ClearItemStreamingLinks: no version or updated_at bump, so ETags and
-// the recent-items order stay as they are.
-func (q *Queries) SetItemStreamingLink(ctx context.Context, arg SetItemStreamingLinkParams) error {
-	_, err := q.db.Exec(ctx, setItemStreamingLink, arg.Link, arg.ID, arg.WorkspaceID)
-	return err
-}
-
-const setStreamingLinkSnapshot = `-- name: SetStreamingLinkSnapshot :exec
-UPDATE lookup_imports
-SET imported_fields = imported_fields || jsonb_build_object('streaming.link', $1::text)
-WHERE item_id = $2 AND workspace_id = $3
-`
-
-type SetStreamingLinkSnapshotParams struct {
-	Snapshot    string
-	ItemID      uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-// Writes the imported-fields entry streaming.link: the link itself, or a "none:<COUNTRY>"
-// marker meaning "checked, TMDB has no link". The snapshot path is absent from the item, so
-// every later import write drops the marker and the settings country change clears it.
-func (q *Queries) SetStreamingLinkSnapshot(ctx context.Context, arg SetStreamingLinkSnapshotParams) error {
-	_, err := q.db.Exec(ctx, setStreamingLinkSnapshot, arg.Snapshot, arg.ItemID, arg.WorkspaceID)
 	return err
 }
 

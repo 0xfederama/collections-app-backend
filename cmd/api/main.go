@@ -37,13 +37,6 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		os.Exit(healthcheck())
 	}
-	if len(os.Args) > 1 && os.Args[1] == "strip-images" {
-		if err := stripImages(); err != nil {
-			fmt.Fprintln(os.Stderr, "fatal:", err)
-			os.Exit(1)
-		}
-		return
-	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "fatal:", err)
 		os.Exit(1)
@@ -96,9 +89,6 @@ func run() error {
 		logger.Warn("lookup retention maintenance failed at startup", "err", err)
 	}
 	go lookupStore.Run(ctx, 24*time.Hour, lookupSvc.RefreshOwned) // stops when ctx is cancelled on shutdown
-	// One-time, bounded, idempotent fill of streaming.link for items looked up before api 0.14.0.
-	// Runs in the background (never blocks start-up), recovers panics and stops with ctx.
-	go lookupStore.RunStreamingLinkBackfill(ctx, tmdbClient, settingsSvc)
 
 	handler, err := httpapi.NewRouter(httpapi.Deps{
 		DB:                  pool,

@@ -19,7 +19,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/seed"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
-	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
 
 // newRecentEnv wires every service the recent-items tests touch: items, content saves, trash and search.
@@ -44,7 +43,7 @@ func newRecentEnv(t *testing.T) *treeEnv {
 	t.Cleanup(func() { _ = store.Close() })
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: dir, Logger: quietLogger(), WorkspaceID: ws,
-		Tree: tree.New(pool, clock.System{}, ws), Items: items.New(pool, clock.System{}, ws),
+		Items:   items.New(pool, clock.System{}, ws),
 		Content: content.New(pool, clock.System{}, ws), Search: search.New(pool, ws),
 		Trash: trash.New(pool, store, clock.System{}, quietLogger(), ws),
 	})

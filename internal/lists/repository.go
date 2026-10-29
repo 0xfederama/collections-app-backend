@@ -39,6 +39,11 @@ func (p *Postgres) Get(ctx context.Context, id uuid.UUID) (List, error) {
 	return (&repo{q: sqlc.New(p.db)}).Get(ctx, id)
 }
 
+// ListActive reads every active list outside a transaction (the sidebar tree).
+func (p *Postgres) ListActive(ctx context.Context) ([]List, error) {
+	return (&repo{q: sqlc.New(p.db)}).ListActive(ctx)
+}
+
 // repo runs the queries of one transaction.
 type repo struct{ q *sqlc.Queries }
 

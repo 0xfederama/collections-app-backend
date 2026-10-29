@@ -37,6 +37,11 @@ func (p *Postgres) Get(ctx context.Context, id uuid.UUID) (Folder, error) {
 	return (&repo{q: sqlc.New(p.db)}).Get(ctx, id)
 }
 
+// ListActive reads every active folder outside a transaction (the sidebar tree).
+func (p *Postgres) ListActive(ctx context.Context) ([]Folder, error) {
+	return (&repo{q: sqlc.New(p.db)}).ListActive(ctx)
+}
+
 // repo runs the queries of one transaction. The workspace comes from the
 // context on every call (scope), never from a field.
 type repo struct{ q *sqlc.Queries }

@@ -12,7 +12,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
-	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
 
 // These tests pin what every hard delete removes today (F019-B2 T3), so the
@@ -29,7 +28,7 @@ func newPurgeEnv(t *testing.T) *imageEnv {
 	}
 	e.h = newRouter(t, httpapi.Deps{
 		DB: e.pool, DataDir: e.dir, Logger: quietLogger(), WorkspaceID: e.ws,
-		Tree: tree.New(e.pool, e.clk, e.ws), Items: items.New(e.pool, e.clk, e.ws), Images: e.svc,
+		Items: items.New(e.pool, e.clk, e.ws), Images: e.svc,
 		Search: search.New(e.pool, e.ws), Trash: trash.New(e.pool, e.store, e.clk, quietLogger(), e.ws),
 		Content: content.New(e.pool, e.clk, e.ws),
 	})

@@ -15,9 +15,9 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
+	"github.com/0xfederama/collections-app-backend/internal/lists"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
-	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
 
 // Field limits of DATA_MODEL §2 (the same rules are CHECK constraints).
@@ -38,8 +38,8 @@ type CreateInput struct {
 // Metadata is absent, an empty map replaces the metadata with {}.
 type Patch struct {
 	Title    *string
-	Price    tree.Optional[Price]
-	Website  tree.Optional[string]
+	Price    lists.Optional[Price]
+	Website  lists.Optional[string]
 	Metadata map[string]any
 }
 

@@ -54,8 +54,6 @@ type Deps struct {
 	Books lookup.Provider
 	// Lookup orchestrates item imports and refreshes (F013-B3).
 	Lookup *lookup.Service
-	// Tree serves folders, lists and the sidebar tree (B-06).
-	Tree *tree.Service
 	// Items serves items (B-07).
 	Items *items.Service
 	// Content serves Markdown content and its versions (B-08).
@@ -109,8 +107,11 @@ func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
 			Lookup:     d.LookupAvailable,
 			BookLookup: d.BookLookupAvailable,
 		})
-		folders.Register(api, d.Logger, folders.NewService(folders.NewPostgres(folderDB(d.DB)), d.Clock))
-		lists.Register(api, d.Logger, lists.NewService(lists.NewPostgres(folderDB(d.DB)), d.Clock))
+		folderRepo := folders.NewPostgres(folderDB(d.DB))
+		listRepo := lists.NewPostgres(folderDB(d.DB))
+		folders.Register(api, d.Logger, folders.NewService(folderRepo, d.Clock))
+		lists.Register(api, d.Logger, lists.NewService(listRepo, d.Clock))
+		tree.Register(api, d.Logger, folderRepo, listRepo)
 	})
 
 	return httpserver.Wrap(r, d.Logger), nil

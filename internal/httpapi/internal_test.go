@@ -121,7 +121,7 @@ func assertNoInternals(t *testing.T, body string) {
 	}
 }
 
-// failingServer returns canned results for GetTree so tests can drive the error paths.
+// failingServer returns canned results for ListItems (a legacy route) so tests can drive the error paths.
 type failingServer struct {
 	*Server
 	err   error
@@ -129,10 +129,6 @@ type failingServer struct {
 }
 
 func (f failingServer) ListItems(context.Context, oapi.ListItemsRequestObject) (oapi.ListItemsResponseObject, error) {
-	return nil, f.err
-}
-
-func (f failingServer) GetTree(context.Context, oapi.GetTreeRequestObject) (oapi.GetTreeResponseObject, error) {
 	if f.panic != nil {
 		panic(f.panic)
 	}
@@ -160,7 +156,7 @@ func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
 
 func TestHandlerErrorsMapThroughResponseErrorHandler(t *testing.T) {
 	h, _ := injected(t, failingServer{err: apperr.VersionConflict(3)})
-	rec := get(t, h, "/api/v1/tree")
+	rec := get(t, h, "/api/v1/lists/0192f4a0-1111-7000-8000-000000000001/items")
 	if rec.Code != 412 || !strings.Contains(rec.Body.String(), `"current_version":3`) {
 		t.Fatalf("got %d %s", rec.Code, rec.Body)
 	}
@@ -168,7 +164,7 @@ func TestHandlerErrorsMapThroughResponseErrorHandler(t *testing.T) {
 
 func TestInternalErrorIsOpaqueAndLogged(t *testing.T) {
 	h, logs := injected(t, failingServer{err: errors.New(`pq: relation "items" does not exist /srv/app/x.go:1 SELECT secret`)})
-	rec := get(t, h, "/api/v1/tree")
+	rec := get(t, h, "/api/v1/lists/0192f4a0-1111-7000-8000-000000000001/items")
 	if rec.Code != 500 {
 		t.Fatalf("status = %d", rec.Code)
 	}
@@ -189,7 +185,7 @@ func TestInternalErrorIsOpaqueAndLogged(t *testing.T) {
 
 func TestPanicBecomes500Problem(t *testing.T) {
 	h, logs := injected(t, failingServer{panic: "kaboom: secret internals"})
-	rec := get(t, h, "/api/v1/tree")
+	rec := get(t, h, "/api/v1/lists/0192f4a0-1111-7000-8000-000000000001/items")
 	if rec.Code != 500 {
 		t.Fatalf("status = %d", rec.Code)
 	}
@@ -286,7 +282,7 @@ func TestF016_ClientAbortIsNot500(t *testing.T) {
 			}
 			rec := httptest.NewRecorder()
 			h = httpserver.Wrap(h, d.Logger)
-			h.ServeHTTP(rec, httptest.NewRequestWithContext(tc.ctx(t), http.MethodGet, "/api/v1/tree", nil))
+			h.ServeHTTP(rec, httptest.NewRequestWithContext(tc.ctx(t), http.MethodGet, "/api/v1/lists/0192f4a0-1111-7000-8000-000000000001/items", nil))
 			if rec.Code != tc.wantStatus {
 				t.Fatalf("status = %d, want %d", rec.Code, tc.wantStatus)
 			}
@@ -294,7 +290,7 @@ func TestF016_ClientAbortIsNot500(t *testing.T) {
 			if got := strings.Contains(out, "unhandled error"); got != tc.wantError {
 				t.Errorf("unhandled error logged = %v, want %v: %s", got, tc.wantError, out)
 			}
-			wantAccess := fmt.Sprintf(`"msg":"request","method":"GET","route":"/api/v1/tree","status":%d`, tc.wantStatus)
+			wantAccess := fmt.Sprintf(`"msg":"request","method":"GET","route":"/api/v1/lists/{id}/items","status":%d`, tc.wantStatus)
 			if !strings.Contains(out, wantAccess) {
 				t.Errorf("access log lacks status %d: %s", tc.wantStatus, out)
 			}

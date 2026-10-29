@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
@@ -51,24 +50,6 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 
 type handler struct{ svc *Service }
 
-// FolderJSON is the wire shape of a folder (published as the schema "Folder").
-type FolderJSON struct {
-	ID             uuid.UUID  `json:"id" format:"uuid"`
-	ParentFolderID *uuid.UUID `json:"parent_folder_id" format:"uuid" nullable:"true"`
-	Name           string     `json:"name"`
-	SortOrder      int        `json:"sort_order"`
-	Version        int        `json:"version"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-}
-
-func toJSON(f Folder) FolderJSON {
-	return FolderJSON{
-		ID: f.ID, ParentFolderID: f.ParentID, Name: f.Name, SortOrder: f.SortOrder,
-		Version: f.Version, CreatedAt: f.CreatedAt, UpdatedAt: f.UpdatedAt,
-	}
-}
-
 // FolderOutput is a folder with its ETag.
 type FolderOutput struct {
 	ETag string `header:"ETag"`
@@ -83,7 +64,7 @@ type CreatedFolderOutput struct {
 }
 
 func output(f Folder) *FolderOutput {
-	return &FolderOutput{ETag: etag.Format(etag.Folder, f.Version), Body: toJSON(f)}
+	return &FolderOutput{ETag: etag.Format(etag.Folder, f.Version), Body: ToJSON(f)}
 }
 
 // CreateFolderRequest is the body of createFolder.
@@ -100,7 +81,7 @@ func (h *handler) create(ctx context.Context, in *createInput) (*CreatedFolderOu
 		return nil, err
 	}
 	return &CreatedFolderOutput{
-		ETag: etag.Format(etag.Folder, f.Version), Location: "/api/v1/folders/" + f.ID.String(), Body: toJSON(f),
+		ETag: etag.Format(etag.Folder, f.Version), Location: "/api/v1/folders/" + f.ID.String(), Body: ToJSON(f),
 	}, nil
 }
 

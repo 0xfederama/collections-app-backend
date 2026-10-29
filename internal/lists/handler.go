@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
@@ -59,25 +58,6 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 
 type handler struct{ svc *Service }
 
-// ListJSON is the wire shape of a list (published as the schema "List").
-type ListJSON struct {
-	ID           uuid.UUID  `json:"id" format:"uuid"`
-	FolderID     *uuid.UUID `json:"folder_id" format:"uuid" nullable:"true"`
-	Name         string     `json:"name"`
-	Type         *string    `json:"type" nullable:"true"`
-	Description  *string    `json:"description" nullable:"true"`
-	DisplayMode  string     `json:"display_mode" enum:"compact,thumbnail,grid"`
-	SortMode     string     `json:"sort_mode"`
-	PinnedFields *[]string  `json:"pinned_fields" nullable:"true"`
-	Icon         *string    `json:"icon" nullable:"true"`
-	IconColor    *string    `json:"icon_color" nullable:"true" enum:"red,orange,amber,green,teal,blue,indigo,purple,pink,gray"`
-	SortOrder    int        `json:"sort_order"`
-	ItemCount    int        `json:"item_count"`
-	Version      int        `json:"version"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-}
-
 // PathSegmentJSON is one ancestor folder of a list (published as "PathSegment").
 type PathSegmentJSON struct {
 	Type string    `json:"type" enum:"folder,list"`
@@ -89,22 +69,6 @@ type PathSegmentJSON struct {
 type ListWithPathJSON struct {
 	ListJSON
 	Path []PathSegmentJSON `json:"path"`
-}
-
-func toJSON(l List) ListJSON {
-	out := ListJSON{
-		ID: l.ID, FolderID: l.FolderID, Name: l.Name, Type: l.Type, Description: l.Description,
-		DisplayMode: l.DisplayMode, SortMode: l.SortMode, Icon: l.Icon, IconColor: l.IconColor,
-		SortOrder: l.SortOrder, ItemCount: l.ItemCount, Version: l.Version, CreatedAt: l.CreatedAt, UpdatedAt: l.UpdatedAt,
-	}
-	if l.PinnedFields != nil {
-		keys := []string(*l.PinnedFields)
-		if keys == nil {
-			keys = []string{}
-		}
-		out.PinnedFields = &keys
-	}
-	return out
 }
 
 func toPathJSON(path []PathFolder) []PathSegmentJSON {
@@ -135,7 +99,7 @@ type ListWithPathOutput struct {
 }
 
 func output(l List) *ListOutput {
-	return &ListOutput{ETag: etag.Format(etag.List, l.Version), Body: toJSON(l)}
+	return &ListOutput{ETag: etag.Format(etag.List, l.Version), Body: ToJSON(l)}
 }
 
 // CreateListRequest is the body of createList. The service checks the values
@@ -166,7 +130,7 @@ func (h *handler) create(ctx context.Context, in *createInput) (*CreatedListOutp
 		return nil, err
 	}
 	return &CreatedListOutput{
-		ETag: etag.Format(etag.List, l.Version), Location: "/api/v1/lists/" + l.ID.String(), Body: toJSON(l),
+		ETag: etag.Format(etag.List, l.Version), Location: "/api/v1/lists/" + l.ID.String(), Body: ToJSON(l),
 	}, nil
 }
 
@@ -182,7 +146,7 @@ func (h *handler) get(ctx context.Context, in *IDParam) (*ListWithPathOutput, er
 	}
 	return &ListWithPathOutput{
 		ETag: etag.Format(etag.List, l.Version),
-		Body: ListWithPathJSON{ListJSON: toJSON(l), Path: toPathJSON(l.Path)},
+		Body: ListWithPathJSON{ListJSON: ToJSON(l), Path: toPathJSON(l.Path)},
 	}, nil
 }
 

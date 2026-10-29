@@ -28,7 +28,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
-	"github.com/0xfederama/collections-app-backend/internal/tree"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
@@ -127,7 +126,7 @@ func newBookEnv(t *testing.T, o bookEnvOptions) *bookEnv {
 	svc := lookup.New(lookup.Providers{types.Book: books}, store, itemSvc, settingsSvc, clock.System{}, ws)
 	deps := httpapi.Deps{
 		DB: pool, DataDir: dataDir, Logger: quietLogger(), WorkspaceID: ws, Settings: settingsSvc,
-		Definitions: definitions.New(pool, ws), Tree: tree.New(pool, clock.System{}, ws), Items: itemSvc,
+		Definitions: definitions.New(pool, ws), Items: itemSvc,
 		Search: search.New(pool, ws), Lookup: svc, BookLookupAvailable: books.Enabled(),
 	}
 	if !o.noBooks {

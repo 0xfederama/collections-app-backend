@@ -25,7 +25,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/seed"
-	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
 
 // treeEnv is a router on a fresh migrated database with one workspace.
@@ -49,7 +48,7 @@ func newTreeEnv(t *testing.T) *treeEnv {
 	}
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: ws,
-		Definitions: definitions.New(pool, ws), Tree: tree.New(pool, clock.System{}, ws), Items: items.New(pool, clock.System{}, ws),
+		Definitions: definitions.New(pool, ws), Items: items.New(pool, clock.System{}, ws),
 		Search: search.New(pool, ws),
 	})
 	return &treeEnv{t: t, h: h, pool: pool, ws: ws}

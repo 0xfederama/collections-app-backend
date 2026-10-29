@@ -29,7 +29,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 	"github.com/0xfederama/collections-app-backend/internal/tmdb"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
-	"github.com/0xfederama/collections-app-backend/internal/tree"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
@@ -103,7 +102,6 @@ func run() error {
 		Lookup:              lookupSvc,
 		LookupAvailable:     tmdbProvider.Enabled(),
 		BookLookupAvailable: bookProvider.Enabled(),
-		Tree:                tree.New(pool, clock.System{}, workspaceID),
 		Items:               itemSvc,
 		Content:             content.New(pool, clock.System{}, workspaceID),
 		Search:              search.New(pool, workspaceID),

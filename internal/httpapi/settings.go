@@ -5,8 +5,8 @@ import (
 
 	"github.com/oapi-codegen/nullable"
 
-	"github.com/0xfederama/collections-app-backend/internal/httpapi/etag"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
+	"github.com/0xfederama/collections-app-backend/internal/platform/etag"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 

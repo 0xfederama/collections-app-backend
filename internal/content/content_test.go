@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
-	"github.com/0xfederama/collections-app-backend/internal/clock"
 	"github.com/0xfederama/collections-app-backend/internal/content"
+	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 )
 
 // The body rules run before any query, so a nil database is enough: reaching it would panic.

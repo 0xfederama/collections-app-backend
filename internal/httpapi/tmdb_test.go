@@ -10,7 +10,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
-	"github.com/0xfederama/collections-app-backend/internal/testdb"
+	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/tmdb"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )

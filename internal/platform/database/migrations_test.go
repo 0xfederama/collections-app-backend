@@ -24,7 +24,7 @@ import (
 
 const (
 	postgresImage = "postgres:18.6-alpine3.24"
-	migrationsDir = "file://../../db/migrations"
+	migrationsDir = "file://../../../db/migrations"
 )
 
 // schemaTables are the tables created by 000001 (DATA_MODEL §2), in FK order.

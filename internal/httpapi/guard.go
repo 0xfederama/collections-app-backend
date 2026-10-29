@@ -16,7 +16,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/0xfederama/collections-app-backend/internal/httpapi/etag"
+	"github.com/0xfederama/collections-app-backend/internal/platform/etag"
 )
 
 // Body limits (API.md §6).

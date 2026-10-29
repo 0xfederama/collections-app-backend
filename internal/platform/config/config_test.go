@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/0xfederama/collections-app-backend/internal/config"
+	"github.com/0xfederama/collections-app-backend/internal/platform/config"
 )
 
 const validDB = "postgres://db:5432/collection?sslmode=disable"

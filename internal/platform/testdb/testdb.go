@@ -88,7 +88,7 @@ func NewMigrated(t *testing.T, adminURL string) *pgxpool.Pool {
 	dsn := u.String()
 
 	_, file, _, _ := runtime.Caller(0)
-	dir := filepath.Join(filepath.Dir(file), "..", "..", "db", "migrations")
+	dir := filepath.Join(filepath.Dir(file), "..", "..", "..", "db", "migrations")
 	m, err := migrate.New("file://"+filepath.ToSlash(dir), strings.Replace(dsn, "postgres://", "pgx5://", 1))
 	if err != nil {
 		t.Fatalf("new migrate: %v", err)

@@ -71,6 +71,9 @@ WHERE id = @id AND workspace_id = @workspace_id RETURNING *;
 -- name: DeleteTypeField :exec
 DELETE FROM type_fields WHERE id = @id AND workspace_id = @workspace_id;
 
+-- name: DeleteTypeFieldsOfType :exec
+DELETE FROM type_fields WHERE type_id = @type_id AND workspace_id = @workspace_id;
+
 -- name: NextTypeFieldPosition :one
 SELECT COALESCE(MAX(position) + 1, 0)::int FROM type_fields WHERE workspace_id = @workspace_id AND type_id = @type_id;
 

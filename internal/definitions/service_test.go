@@ -92,6 +92,35 @@ func TestF014B3_CustomFieldLifecycle(t *testing.T) {
 	}
 }
 
+func TestF019B2_DeleteTypeDeletesItsFields(t *testing.T) {
+	svc, db := newDefinitionsService(t)
+	typ, err := svc.Create(t.Context(), definitions.CreateType{Name: "Board game"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.CreateField(t.Context(), typ.Key, typ.Version, definitions.CreateField{Label: "Rating", Type: "number"}); err != nil {
+		t.Fatal(err)
+	}
+	var typeID uuid.UUID
+	if err := db.pool.QueryRow(t.Context(), "SELECT id FROM type_definitions WHERE workspace_id = $1 AND key = $2", db.workspaceID, typ.Key).Scan(&typeID); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.Delete(t.Context(), typ.Key, typ.Version+1); err != nil {
+		t.Fatalf("Delete() = %v", err)
+	}
+	var fields, types int
+	if err := db.pool.QueryRow(t.Context(), "SELECT count(*) FROM type_fields WHERE type_id = $1", typeID).Scan(&fields); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.pool.QueryRow(t.Context(), "SELECT count(*) FROM type_definitions WHERE id = $1", typeID).Scan(&types); err != nil {
+		t.Fatal(err)
+	}
+	if fields != 0 || types != 0 {
+		t.Errorf("after Delete: fields = %d, types = %d; want 0, 0", fields, types)
+	}
+}
+
 func TestF014B4_CustomTypeDefaultsAllowAtMostThreePins(t *testing.T) {
 	svc, _ := newDefinitionsService(t)
 	pins := []string{"rating", "status", "title"}

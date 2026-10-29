@@ -338,6 +338,9 @@ func (s *Service) Delete(ctx context.Context, key string, v int) error {
 		if len(lists) > 0 {
 			return apperr.Validation(apperr.FieldError{Field: "type", Message: fmt.Sprintf("is used by %d list(s), including %s", len(lists), lists[0].Name)})
 		}
+		if e = q.DeleteTypeFieldsOfType(ctx, sqlc.DeleteTypeFieldsOfTypeParams{TypeID: cur.ID, WorkspaceID: s.workspaceID}); e != nil {
+			return e
+		}
 		return q.DeleteTypeDefinition(ctx, sqlc.DeleteTypeDefinitionParams{ID: cur.ID, WorkspaceID: s.workspaceID})
 	})
 }

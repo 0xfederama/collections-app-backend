@@ -59,6 +59,20 @@ func (q *Queries) DeleteTypeField(ctx context.Context, arg DeleteTypeFieldParams
 	return err
 }
 
+const deleteTypeFieldsOfType = `-- name: DeleteTypeFieldsOfType :exec
+DELETE FROM type_fields WHERE type_id = $1 AND workspace_id = $2
+`
+
+type DeleteTypeFieldsOfTypeParams struct {
+	TypeID      uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) DeleteTypeFieldsOfType(ctx context.Context, arg DeleteTypeFieldsOfTypeParams) error {
+	_, err := q.db.Exec(ctx, deleteTypeFieldsOfType, arg.TypeID, arg.WorkspaceID)
+	return err
+}
+
 const getTypeDefinitionByKey = `-- name: GetTypeDefinitionByKey :one
 SELECT id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at FROM type_definitions
 WHERE workspace_id = $1 AND key = $2

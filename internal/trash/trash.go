@@ -684,26 +684,34 @@ func (s *Service) RunAutoPurge(ctx context.Context, interval time.Duration) {
 }
 
 // purgeBatch removes one locked batch inside the caller's transaction: the root
-// with its whole subtree (FK cascades), the attachment rows of its items, and the
-// batch rows that lost their root. It returns the storage keys of the removed
-// attachments; the caller deletes those files after the commit.
+// with its whole subtree, the attachment rows of its items, and the batch rows
+// that lost their root. Every row is deleted explicitly, children before parents,
+// so nothing depends on ON DELETE CASCADE. It returns the storage keys of the
+// removed attachments; the caller deletes those files after the commit.
 func (s *Service) purgeBatch(ctx context.Context, q *sqlc.Queries, batch sqlc.TrashBatch) ([]string, error) {
-	atts, err := q.PurgeAttachments(ctx, sqlc.PurgeAttachmentsParams{RootType: batch.RootType, RootID: batch.RootID, WorkspaceID: s.workspaceID})
+	sub, err := s.purgeSubtree(ctx, q, batch)
+	if err != nil {
+		return nil, err
+	}
+	// Read the attachments before the items that point to them go.
+	atts, err := q.ListAttachmentKeysByItems(ctx, sqlc.ListAttachmentKeysByItemsParams{WorkspaceID: s.workspaceID, ItemIds: sub.items})
 	if err != nil {
 		return nil, fmt.Errorf("collect attachments: %w", err)
 	}
-	switch batch.RootType {
-	case TypeFolder:
-		_, err = q.PurgeFolder(ctx, sqlc.PurgeFolderParams{ID: batch.RootID, WorkspaceID: s.workspaceID})
-	case TypeList:
-		_, err = q.PurgeList(ctx, sqlc.PurgeListParams{ID: batch.RootID, WorkspaceID: s.workspaceID})
-	case TypeItem:
-		_, err = q.PurgeItem(ctx, sqlc.PurgeItemParams{ID: batch.RootID, WorkspaceID: s.workspaceID})
-	default:
-		err = fmt.Errorf("unknown trash root type %q", batch.RootType)
+	if err := q.DeleteContentVersionsOfItems(ctx, sub.items); err != nil {
+		return nil, fmt.Errorf("delete content versions: %w", err)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("purge root: %w", err)
+	if err := q.DeleteLookupImportsOfItems(ctx, sqlc.DeleteLookupImportsOfItemsParams{WorkspaceID: s.workspaceID, ItemIds: sub.items}); err != nil {
+		return nil, fmt.Errorf("delete lookup imports: %w", err)
+	}
+	if err := q.DeleteItems(ctx, sqlc.DeleteItemsParams{WorkspaceID: s.workspaceID, ItemIds: sub.items}); err != nil {
+		return nil, fmt.Errorf("delete items: %w", err)
+	}
+	if err := q.DeleteLists(ctx, sqlc.DeleteListsParams{WorkspaceID: s.workspaceID, ListIds: sub.lists}); err != nil {
+		return nil, fmt.Errorf("delete lists: %w", err)
+	}
+	if err := q.DeleteFolders(ctx, sqlc.DeleteFoldersParams{WorkspaceID: s.workspaceID, FolderIds: sub.folders}); err != nil {
+		return nil, fmt.Errorf("delete folders: %w", err)
 	}
 	ids := make([]uuid.UUID, 0, len(atts))
 	keys := make([]string, 0, 2*len(atts))
@@ -723,6 +731,65 @@ func (s *Service) purgeBatch(ctx context.Context, q *sqlc.Queries, batch sqlc.Tr
 		return nil, fmt.Errorf("delete nested trash batches: %w", err)
 	}
 	return keys, nil
+}
+
+// purgeTree is the ids of a purged root's subtree, in any state.
+type purgeTree struct {
+	folders, lists, items []uuid.UUID
+}
+
+// purgeSubtree collects the ids a purge of batch removes. A folder root reaches
+// its descendant folders, their lists and the items of those lists; a list root
+// its items; an item root only itself.
+func (s *Service) purgeSubtree(ctx context.Context, q *sqlc.Queries, batch sqlc.TrashBatch) (purgeTree, error) {
+	var t purgeTree
+	switch batch.RootType {
+	case TypeFolder:
+		parents, err := q.ListFolderParents(ctx, s.workspaceID)
+		if err != nil {
+			return purgeTree{}, fmt.Errorf("collect folders: %w", err)
+		}
+		t.folders = folderSubtree(parents, batch.RootID)
+		t.lists, err = q.ListListIDsByFolders(ctx, sqlc.ListListIDsByFoldersParams{WorkspaceID: s.workspaceID, FolderIds: t.folders})
+		if err != nil {
+			return purgeTree{}, fmt.Errorf("collect lists: %w", err)
+		}
+	case TypeList:
+		t.lists = []uuid.UUID{batch.RootID}
+	case TypeItem:
+		t.items = []uuid.UUID{batch.RootID}
+		return t, nil
+	default:
+		return purgeTree{}, fmt.Errorf("unknown trash root type %q", batch.RootType)
+	}
+	items, err := q.ListItemIDsByLists(ctx, sqlc.ListItemIDsByListsParams{WorkspaceID: s.workspaceID, ListIds: t.lists})
+	if err != nil {
+		return purgeTree{}, fmt.Errorf("collect items: %w", err)
+	}
+	t.items = items
+	return t, nil
+}
+
+// folderSubtree returns root and every folder below it, in any state. The visited
+// set keeps corrupt data with a cycle finite.
+func folderSubtree(parents []sqlc.ListFolderParentsRow, root uuid.UUID) []uuid.UUID {
+	children := make(map[uuid.UUID][]uuid.UUID)
+	for _, p := range parents {
+		if p.ParentFolderID.Valid {
+			children[p.ParentFolderID.UUID] = append(children[p.ParentFolderID.UUID], p.ID)
+		}
+	}
+	seen := map[uuid.UUID]bool{root: true}
+	out := []uuid.UUID{root}
+	for i := 0; i < len(out); i++ {
+		for _, c := range children[out[i]] {
+			if !seen[c] {
+				seen[c] = true
+				out = append(out, c)
+			}
+		}
+	}
+	return out
 }
 
 // deleteFiles removes purged image files after the commit. A failure is logged

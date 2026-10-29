@@ -62,6 +62,72 @@ func (q *Queries) CountTrashBatches(ctx context.Context, workspaceID uuid.UUID) 
 	return total, err
 }
 
+const deleteContentVersionsOfItems = `-- name: DeleteContentVersionsOfItems :exec
+DELETE FROM item_content_versions WHERE item_id = ANY($1::uuid[])
+`
+
+func (q *Queries) DeleteContentVersionsOfItems(ctx context.Context, itemIds []uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteContentVersionsOfItems, itemIds)
+	return err
+}
+
+const deleteFolders = `-- name: DeleteFolders :exec
+DELETE FROM folders WHERE workspace_id = $1 AND id = ANY($2::uuid[])
+`
+
+type DeleteFoldersParams struct {
+	WorkspaceID uuid.UUID
+	FolderIds   []uuid.UUID
+}
+
+// One statement for the whole subtree: the parent check runs at the end of the statement.
+func (q *Queries) DeleteFolders(ctx context.Context, arg DeleteFoldersParams) error {
+	_, err := q.db.Exec(ctx, deleteFolders, arg.WorkspaceID, arg.FolderIds)
+	return err
+}
+
+const deleteItems = `-- name: DeleteItems :exec
+DELETE FROM items WHERE workspace_id = $1 AND id = ANY($2::uuid[])
+`
+
+type DeleteItemsParams struct {
+	WorkspaceID uuid.UUID
+	ItemIds     []uuid.UUID
+}
+
+func (q *Queries) DeleteItems(ctx context.Context, arg DeleteItemsParams) error {
+	_, err := q.db.Exec(ctx, deleteItems, arg.WorkspaceID, arg.ItemIds)
+	return err
+}
+
+const deleteLists = `-- name: DeleteLists :exec
+DELETE FROM lists WHERE workspace_id = $1 AND id = ANY($2::uuid[])
+`
+
+type DeleteListsParams struct {
+	WorkspaceID uuid.UUID
+	ListIds     []uuid.UUID
+}
+
+func (q *Queries) DeleteLists(ctx context.Context, arg DeleteListsParams) error {
+	_, err := q.db.Exec(ctx, deleteLists, arg.WorkspaceID, arg.ListIds)
+	return err
+}
+
+const deleteLookupImportsOfItems = `-- name: DeleteLookupImportsOfItems :exec
+DELETE FROM lookup_imports WHERE workspace_id = $1 AND item_id = ANY($2::uuid[])
+`
+
+type DeleteLookupImportsOfItemsParams struct {
+	WorkspaceID uuid.UUID
+	ItemIds     []uuid.UUID
+}
+
+func (q *Queries) DeleteLookupImportsOfItems(ctx context.Context, arg DeleteLookupImportsOfItemsParams) error {
+	_, err := q.db.Exec(ctx, deleteLookupImportsOfItems, arg.WorkspaceID, arg.ItemIds)
+	return err
+}
+
 const deleteOrphanTrashBatches = `-- name: DeleteOrphanTrashBatches :exec
 DELETE FROM trash_batches b
 WHERE b.workspace_id = $1
@@ -305,6 +371,48 @@ func (q *Queries) InsertTrashBatch(ctx context.Context, arg InsertTrashBatchPara
 	return id, err
 }
 
+const listAttachmentKeysByItems = `-- name: ListAttachmentKeysByItems :many
+SELECT a.id, a.storage_key, a.thumbnail_storage_key
+FROM attachments a
+WHERE a.workspace_id = $1
+  AND a.id IN (
+    SELECT i.image_attachment_id FROM items i
+    WHERE i.workspace_id = $1 AND i.image_attachment_id IS NOT NULL AND i.id = ANY($2::uuid[])
+  )
+`
+
+type ListAttachmentKeysByItemsParams struct {
+	WorkspaceID uuid.UUID
+	ItemIds     []uuid.UUID
+}
+
+type ListAttachmentKeysByItemsRow struct {
+	ID                  uuid.UUID
+	StorageKey          string
+	ThumbnailStorageKey string
+}
+
+// Image attachments of the items, with their file keys. Read before the items are deleted.
+func (q *Queries) ListAttachmentKeysByItems(ctx context.Context, arg ListAttachmentKeysByItemsParams) ([]ListAttachmentKeysByItemsRow, error) {
+	rows, err := q.db.Query(ctx, listAttachmentKeysByItems, arg.WorkspaceID, arg.ItemIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAttachmentKeysByItemsRow{}
+	for rows.Next() {
+		var i ListAttachmentKeysByItemsRow
+		if err := rows.Scan(&i.ID, &i.StorageKey, &i.ThumbnailStorageKey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listExpiredTrashBatchIDs = `-- name: ListExpiredTrashBatchIDs :many
 SELECT id FROM trash_batches WHERE workspace_id = $1 AND deleted_at < $2
 `
@@ -317,6 +425,99 @@ type ListExpiredTrashBatchIDsParams struct {
 // Batches trashed before the cutoff (deleted_at is the trash time). Read under the tree lock.
 func (q *Queries) ListExpiredTrashBatchIDs(ctx context.Context, arg ListExpiredTrashBatchIDsParams) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, listExpiredTrashBatchIDs, arg.WorkspaceID, arg.Cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFolderParents = `-- name: ListFolderParents :many
+SELECT id, parent_folder_id FROM folders
+WHERE workspace_id = $1
+`
+
+type ListFolderParentsRow struct {
+	ID             uuid.UUID
+	ParentFolderID uuid.NullUUID
+}
+
+// Every folder of the workspace with its parent, trashed or not. The purge walks
+// the root's subtree over these rows in Go (cycle-safe). The purge queries below
+// read lists and items in any state, under any batch.
+func (q *Queries) ListFolderParents(ctx context.Context, workspaceID uuid.UUID) ([]ListFolderParentsRow, error) {
+	rows, err := q.db.Query(ctx, listFolderParents, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFolderParentsRow{}
+	for rows.Next() {
+		var i ListFolderParentsRow
+		if err := rows.Scan(&i.ID, &i.ParentFolderID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listItemIDsByLists = `-- name: ListItemIDsByLists :many
+SELECT id FROM items
+WHERE workspace_id = $1 AND list_id = ANY($2::uuid[])
+`
+
+type ListItemIDsByListsParams struct {
+	WorkspaceID uuid.UUID
+	ListIds     []uuid.UUID
+}
+
+func (q *Queries) ListItemIDsByLists(ctx context.Context, arg ListItemIDsByListsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listItemIDsByLists, arg.WorkspaceID, arg.ListIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listListIDsByFolders = `-- name: ListListIDsByFolders :many
+SELECT id FROM lists
+WHERE workspace_id = $1 AND folder_id = ANY($2::uuid[])
+`
+
+type ListListIDsByFoldersParams struct {
+	WorkspaceID uuid.UUID
+	FolderIds   []uuid.UUID
+}
+
+func (q *Queries) ListListIDsByFolders(ctx context.Context, arg ListListIDsByFoldersParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listListIDsByFolders, arg.WorkspaceID, arg.FolderIds)
 	if err != nil {
 		return nil, err
 	}
@@ -473,117 +674,6 @@ type PurgeAttachmentRowsParams struct {
 func (q *Queries) PurgeAttachmentRows(ctx context.Context, arg PurgeAttachmentRowsParams) error {
 	_, err := q.db.Exec(ctx, purgeAttachmentRows, arg.WorkspaceID, arg.Ids)
 	return err
-}
-
-const purgeAttachments = `-- name: PurgeAttachments :many
-WITH RECURSIVE folder_tree(id) AS (
-    SELECT f.id FROM folders f
-    WHERE $2::text = 'folder' AND f.id = $3::uuid AND f.workspace_id = $1::uuid
-  UNION
-    SELECT c.id FROM folders c
-    JOIN folder_tree t ON c.parent_folder_id = t.id
-    WHERE c.workspace_id = $1::uuid
-), tree_lists(id) AS (
-    SELECT l.id FROM lists l
-    WHERE l.workspace_id = $1::uuid AND l.folder_id IN (SELECT id FROM folder_tree)
-  UNION
-    SELECT l.id FROM lists l
-    WHERE l.workspace_id = $1::uuid AND $2::text = 'list' AND l.id = $3::uuid
-)
-SELECT a.id, a.storage_key, a.thumbnail_storage_key
-FROM attachments a
-WHERE a.workspace_id = $1::uuid
-  AND a.id IN (
-    SELECT i.image_attachment_id FROM items i
-    WHERE i.workspace_id = $1::uuid AND i.image_attachment_id IS NOT NULL
-      AND (i.list_id IN (SELECT id FROM tree_lists)
-           OR ($2::text = 'item' AND i.id = $3::uuid))
-  )
-`
-
-type PurgeAttachmentsParams struct {
-	WorkspaceID uuid.UUID
-	RootType    string
-	RootID      uuid.UUID
-}
-
-type PurgeAttachmentsRow struct {
-	ID                  uuid.UUID
-	StorageKey          string
-	ThumbnailStorageKey string
-}
-
-// Attachments of every item in the root's subtree, in any state and under any
-// batch. root_type is folder, list or item.
-func (q *Queries) PurgeAttachments(ctx context.Context, arg PurgeAttachmentsParams) ([]PurgeAttachmentsRow, error) {
-	rows, err := q.db.Query(ctx, purgeAttachments, arg.WorkspaceID, arg.RootType, arg.RootID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []PurgeAttachmentsRow{}
-	for rows.Next() {
-		var i PurgeAttachmentsRow
-		if err := rows.Scan(&i.ID, &i.StorageKey, &i.ThumbnailStorageKey); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const purgeFolder = `-- name: PurgeFolder :execrows
-DELETE FROM folders WHERE id = $1 AND workspace_id = $2
-`
-
-type PurgeFolderParams struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-func (q *Queries) PurgeFolder(ctx context.Context, arg PurgeFolderParams) (int64, error) {
-	result, err := q.db.Exec(ctx, purgeFolder, arg.ID, arg.WorkspaceID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const purgeItem = `-- name: PurgeItem :execrows
-DELETE FROM items WHERE id = $1 AND workspace_id = $2
-`
-
-type PurgeItemParams struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-func (q *Queries) PurgeItem(ctx context.Context, arg PurgeItemParams) (int64, error) {
-	result, err := q.db.Exec(ctx, purgeItem, arg.ID, arg.WorkspaceID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const purgeList = `-- name: PurgeList :execrows
-DELETE FROM lists WHERE id = $1 AND workspace_id = $2
-`
-
-type PurgeListParams struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-func (q *Queries) PurgeList(ctx context.Context, arg PurgeListParams) (int64, error) {
-	result, err := q.db.Exec(ctx, purgeList, arg.ID, arg.WorkspaceID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }
 
 const restoreBatchFolders = `-- name: RestoreBatchFolders :exec

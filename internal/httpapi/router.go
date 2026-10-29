@@ -112,6 +112,7 @@ func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
 		folders.Register(api, d.Logger, folders.NewService(folderRepo, d.Clock))
 		lists.Register(api, d.Logger, lists.NewService(listRepo, d.Clock))
 		tree.Register(api, d.Logger, folderRepo, listRepo)
+		definitions.Register(api, d.Logger, definitions.NewManager(definitions.NewPostgres(typeDB(d.DB)), d.Clock))
 	})
 
 	return httpserver.Wrap(r, d.Logger), nil
@@ -124,4 +125,10 @@ func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
 func folderDB(db Pinger) folders.DB {
 	fdb, _ := db.(folders.DB)
 	return fdb
+}
+
+// typeDB is the database the type repository runs on, with the same rule as folderDB.
+func typeDB(db Pinger) definitions.DB {
+	tdb, _ := db.(definitions.DB)
+	return tdb
 }

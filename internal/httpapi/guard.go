@@ -43,12 +43,6 @@ var ifMatchPrefix = map[string]string{
 	"LookupItemMetadata":    etag.Item,
 	"UpdateItemContent":     etag.Content,
 	"RestoreContentVersion": etag.Content,
-	"UpdateType":            etag.Type,
-	"DeleteType":            etag.Type,
-	"CreateTypeField":       etag.Type,
-	"ReorderTypeFields":     etag.Type,
-	"UpdateTypeField":       etag.Field,
-	"DeleteTypeField":       etag.Field,
 }
 
 // operation is what the guard needs to know about one spec operation.

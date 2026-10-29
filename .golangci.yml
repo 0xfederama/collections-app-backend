@@ -3,10 +3,36 @@ linters:
   default: standard
   enable:
     - bodyclose
+    - depguard
     - errorlint
     - misspell
     - noctx
     - unconvert
+  settings:
+    depguard:
+      rules:
+        # Layer rules: handler -> service -> repository -> database, one direction.
+        # Legacy services not yet migrated (B3b..f) are excluded by file below; the
+        # package list lives in internal/platform/archtest.
+        handler-is-http-only:
+          files: ["**/handler.go"]
+          deny:
+            - {pkg: github.com/jackc/pgx, desc: "handlers never touch the database"}
+            - {pkg: github.com/0xfederama/collections-app-backend/internal/platform/database, desc: "handlers never touch the database"}
+            - {pkg: github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc, desc: "handlers never use sqlc code"}
+        service-has-no-sql-or-http:
+          files: ["**/service.go", "!**/internal/definitions/service.go", "!**/internal/images/service.go"]
+          deny:
+            - {pkg: github.com/jackc/pgx, desc: "services hold rules, SQL lives in repository.go"}
+            - {pkg: github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc, desc: "services reach the database through their Repo interface"}
+            - {pkg: github.com/danielgtaylor/huma, desc: "services know no HTTP"}
+            - {pkg: net/http, desc: "services know no HTTP"}
+            - {pkg: github.com/0xfederama/collections-app-backend/internal/platform/problem, desc: "problems are mapped in handlers"}
+        repository-has-no-http:
+          files: ["**/repository.go"]
+          deny:
+            - {pkg: github.com/danielgtaylor/huma, desc: "repositories know no HTTP"}
+            - {pkg: net/http, desc: "repositories know no HTTP"}
 formatters:
   enable:
     - gofmt

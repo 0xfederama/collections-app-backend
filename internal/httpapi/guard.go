@@ -47,7 +47,6 @@ var ifMatchPrefix = map[string]string{
 	"LookupItemMetadata":    etag.Item,
 	"UpdateItemContent":     etag.Content,
 	"RestoreContentVersion": etag.Content,
-	"UpdateSettings":        etag.Settings,
 	"UpdateType":            etag.Type,
 	"DeleteType":            etag.Type,
 	"CreateTypeField":       etag.Type,

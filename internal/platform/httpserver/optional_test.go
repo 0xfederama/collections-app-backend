@@ -92,13 +92,14 @@ func TestOptional_AbsentNullValueInABody(t *testing.T) {
 	}
 }
 
-func TestOptional_WrongTypeIsA422(t *testing.T) {
+// A wrong JSON type is the decoder's answer (400), not a field rule (422).
+func TestOptional_WrongTypeIsA400(t *testing.T) {
 	h := newPatchAPI(t)
 	rec := request(t, h, http.MethodPatch, "/thing", jsonCT, `{"count":"three"}`)
-	if rec.Code != http.StatusUnprocessableEntity {
+	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body)
 	}
-	if p := decodeProblem(t, rec.Body.Bytes()); p["code"] != "validation_failed" {
+	if p := decodeProblem(t, rec.Body.Bytes()); p["code"] != "malformed_request" {
 		t.Errorf("code = %v", p["code"])
 	}
 }

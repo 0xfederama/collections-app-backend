@@ -19,6 +19,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 	"github.com/0xfederama/collections-app-backend/internal/platform/httpserver"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
@@ -95,6 +96,16 @@ func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
 		BaseRouter:       r,
 		Middlewares:      []oapi.MiddlewareFunc{newGuard(doc).middleware},
 		ErrorHandlerFunc: errs.parameter,
+	})
+
+	// Operations migrated to Huma are registered after the old routes on the same
+	// router: chi replaces the old handler of the same method and path, so Huma answers.
+	r.Group(func(r chi.Router) {
+		r.Use(scope.Middleware(d.WorkspaceID))
+		workspace.Register(httpserver.NewAPI(r), d.Logger, d.Settings, d.Settings, workspace.Availability{
+			Lookup:     d.LookupAvailable,
+			BookLookup: d.BookLookupAvailable,
+		})
 	})
 
 	return httpserver.Wrap(r, d.Logger), nil

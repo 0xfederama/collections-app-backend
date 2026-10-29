@@ -149,7 +149,10 @@ func TestFromHuma(t *testing.T) {
 		{"body that is not JSON", 400, []error{detail("body", "invalid character 's' looking for beginning of value")}, 400, "malformed_request", detailNotJSON},
 		{"wrong content type", 415, []error{detail("body", "unknown content type: text/plain")}, 400, "malformed_request", detailUnsupportedContentType},
 		{"body over the limit", 413, []error{errors.New("request body is too large limit=10 bytes")}, 413, "payload_too_large", "The request body exceeds the limit for this route."},
-		{"field rules", 422, []error{detail("body.title", "expected string"), detail("body.count", "expected integer")}, 422, "validation_failed", "One or more fields are invalid."},
+		{"field rules", 422, []error{detail("body.title", "expected length >= 1"), detail("body.count", "expected number <= 10")}, 422, "validation_failed", "One or more fields are invalid."},
+		{"constraint that starts like a type message stays a field error", 422, []error{detail("body.count", "expected number >= 0")}, 422, "validation_failed", "One or more fields are invalid."},
+		{"wrong JSON type on a body field is a malformed request", 422, []error{detail("body.preferred_store", "expected string")}, 400, "malformed_request", detailNotJSON},
+		{"wrong JSON type nested in a body field is a malformed request", 422, []error{detail("body.price.min", "expected string")}, 400, "malformed_request", detailNotJSON},
 		{"handler error mapped as a service error", 500, []error{apperr.NotFound("item")}, 404, "not_found", "Item not found."},
 		{"unknown handler error is opaque", 500, []error{errors.New("pq: SELECT secret")}, 500, "internal", "Something went wrong."},
 		{"status without details keeps its standard text", 406, nil, 406, "not_acceptable", ""},
@@ -170,10 +173,10 @@ func TestFromHuma(t *testing.T) {
 
 func TestFromHuma_FieldErrorsKeepTheirPath(t *testing.T) {
 	p := fromHuma(context.Background(), 422, []error{
-		&huma.ErrorDetail{Location: "body.title", Message: "expected string"},
-		&huma.ErrorDetail{Location: "body.count", Message: "expected integer"},
+		&huma.ErrorDetail{Location: "body.title", Message: "expected length >= 1"},
+		&huma.ErrorDetail{Location: "body.count", Message: "expected number <= 10"},
 	})
-	if len(p.Errors) != 2 || p.Errors[0] != (FieldError{Field: "title", Message: "expected string"}) {
+	if len(p.Errors) != 2 || p.Errors[0] != (FieldError{Field: "title", Message: "expected length >= 1"}) {
 		t.Fatalf("errors = %+v", p.Errors)
 	}
 }

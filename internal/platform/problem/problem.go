@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/validation"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 )
@@ -252,6 +253,12 @@ func fromHuma(ctx context.Context, status int, errs []error) *Problem {
 	if len(details) == 0 {
 		return generic(status)
 	}
+	for _, d := range details {
+		if isBodyTypeError(d) {
+			// A value of the wrong JSON type is the decoder's answer (400), not a field rule.
+			return Malformed(detailNotJSON)
+		}
+	}
 	var fields []FieldError
 	for _, d := range details {
 		switch {
@@ -267,6 +274,23 @@ func fromHuma(ctx context.Context, status int, errs []error) *Problem {
 	p := New(http.StatusUnprocessableEntity, "validation_failed", "Validation failed", "One or more fields are invalid.")
 	p.Errors = fields
 	return p
+}
+
+// bodyTypeMessages are Huma's messages for a value of the wrong JSON type.
+// Constraint messages that start with the same words (`expected number >= 0`)
+// are not in the set: they stay field errors.
+var bodyTypeMessages = map[string]bool{
+	validation.MsgExpectedBoolean: true,
+	validation.MsgExpectedNumber:  true,
+	validation.MsgExpectedInteger: true,
+	validation.MsgExpectedString:  true,
+	validation.MsgExpectedArray:   true,
+	validation.MsgExpectedObject:  true,
+}
+
+// isBodyTypeError reports whether d is a wrong JSON type on a body field.
+func isBodyTypeError(d *huma.ErrorDetail) bool {
+	return strings.HasPrefix(d.Location, "body.") && bodyTypeMessages[d.Message]
 }
 
 // generic answers a Huma status that carries no detail the mapping knows, with

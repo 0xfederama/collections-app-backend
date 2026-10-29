@@ -9,6 +9,7 @@ Manages workspace-scoped type definitions and their fields. Built-in types (movi
 - `internal/definitions/service.go`: definition and field mutations
 - `db/queries/types.sql`: workspace-scoped definition persistence
 - `internal/httpapi/types.go`: type-management handlers and ETags
+- `internal/lists/icon.go`: `lists.ValidIcon`, the default-icon check used here
 - `internal/seed/seed.go`: built-in types and fields (seeded from Go, not SQL)
 - `db/migrations/000001_init.up.sql`: definition tables
 
@@ -26,7 +27,7 @@ Manages workspace-scoped type definitions and their fields. Built-in types (movi
 
 - Keys derive from names/labels and use lowercase letters, digits, and underscores. `store_links` is a reserved field key.
 - Locked built-ins cannot be updated or deleted; a type in an active list cannot be deleted. `Delete` removes the type's fields explicitly before the type row (no cascade).
-- A custom type's optional default icon uses the same one-emoji or `i:<name>` grammar as list icons. `UpdateType` distinguishes an omitted default from an explicit null.
+- A custom type's optional default icon uses the same grammar as list icons (`lists.ValidIcon`). Lists read definitions through their own `TypeDefinition` query until B3c. `UpdateType` distinguishes an omitted default from an explicit null.
 - A default sort or pin must name an existing field of the type; `price` is permitted only when the type allows prices. Defaults may be updated after fields are created.
 - Default pins hold at most three unique keys (migration 000019 CHECK). A `stores` field is pinnable but never a sort key.
 - `stores` is a locked-only field type (DB CHECK); custom fields cannot use it.

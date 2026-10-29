@@ -1,0 +1,40 @@
+# lists
+
+## Purpose
+
+Owns lists: create, get (with ancestor folder path), patch, move and reorder. A list has one optional type (`nil` = no type: no fields, no price, built-in sorts, no pins). A given type must exist in the workspace; it governs defaults, pins, sort and its items. Type changes clear the items' metadata in the same transaction. Deleting lists is in `internal/trash`. Design context: `/Users/federico/Developer/collections-app/design-docs/` (API.md §5, DATA_MODEL §2).
+
+## Key files
+
+- `internal/lists/service.go`: `Service`, `Store`/`Repo`, create, get, update, move, reorder
+- `internal/lists/plan.go`: pure `planUpdate`, decides what a PATCH writes (no I/O)
+- `internal/lists/validate.go`: name, description, enum, type, sort and pin checks
+- `internal/lists/icon.go`: icon grammar (one emoji or `i:<name>`), palette, `ValidIcon`
+- `internal/lists/repository.go`: `Postgres`, `repo`; type and item-clear queries are the seams
+- `internal/lists/handler.go`, `wire.go`: Huma operations, `ListJSON`, `ListWithPathJSON`
+
+## Interfaces
+
+- `NewService(store Store, clk clock.Clock) *Service`; `NewPostgres(db DB) *Postgres`
+- `Service.Create(ctx, CreateInput) (List, error)`; `Get(ctx, id) (List, error)` fills `Path` (root first)
+- `Service.Update(ctx, id, version, Patch) (List, error)`: `Optional` fields tell absent from `null`
+- `Service.Move(ctx, id, version, folder *uuid.UUID)`; `Reorder(ctx, folder *uuid.UUID, ids []uuid.UUID) error`
+- `ValidIcon(icon string) bool`: used by `internal/definitions` for default icons
+- `Postgres.ListActive(ctx) ([]List, error)`: used by `internal/tree`, fills `ItemCount`
+- `POST /api/v1/lists` (201), `GET`/`PATCH /api/v1/lists/{id}`, `POST /api/v1/lists/{id}/move`, `PUT /api/v1/lists/order` (204)
+- Seams to move: `TypeDefinition` to definitions (B3c); `ClearItemsMetadata`/`ClearItemsPrice` to items (B3d)
+
+## Gotchas
+
+- Create, move and reorder take `LockTree` first; a PATCH that sends `type` takes it too, before the row lock.
+- Update and move need `If-Match` (`"l-N"`); a stale version is 412 `version_conflict`. A PATCH that changes nothing writes nothing and keeps the version.
+- Unknown type on create or update is 422 on `type`; a blank type key is 422.
+- A type change clears all items' metadata (trashed ones too) and their price when the new type has none. Same type sent again is no change.
+- Sort on a type change: the patch's sort, else the new type's default sort field, else `manual`. An invalid stored sort falls back to `manual`.
+- Sort is `manual`, `title`, `updated`, `price` (only if the type allows it) or a field key (never a `stores` field).
+- Pins: at most 3 unique keys, each a field of the type (or `price` when allowed). `null` resets to the type default; a type change resets pins.
+- `icon_color` needs a built-in icon (else 422); changing to an emoji or none clears it.
+- Description is Markdown: over 64 KiB is 413, invalid UTF-8 or NUL is 422, empty clears it. Name is trimmed to 1 to 200 characters.
+- Move: 404, 412, 409 `destination_unavailable`. Create with a missing or trashed folder is also 409.
+- Reorder: a missing folder is 404; `ids` must be exactly the active child lists, else 409 `order_stale`.
+- `GET` path is empty for a root list; `ItemCount` is filled only by `Get` and `ListActive`.

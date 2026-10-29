@@ -28,7 +28,9 @@ There is no authentication, so the API is published on `127.0.0.1` only. See the
 cmd/api/main.go        wiring only: config → logger → pgx pool → services → chi router → http.Server (graceful shutdown)
 internal/platform      shared infra: config, database (sqlc/ GENERATED, never edit), clock, etag, httpserver (Huma on chi), problem, scope, testdb, archtest
 internal/apperr        typed domain errors (no HTTP)
-internal/tree          folders and lists
+internal/folders       folders: create, get, rename, move, reorder (Huma)
+internal/lists         lists: create, get with path, update, move, reorder (Huma)
+internal/tree          GET /api/v1/tree, the flat sidebar read (handler only)
 internal/items         items; items/types validates per-type metadata
 internal/content       Markdown content and versions
 internal/images        upload validation, thumbnails, serving, orphan sweeper

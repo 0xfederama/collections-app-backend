@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Serves the legacy generated strict-server routes on chi, with a per-operation guard that enforces rules the generated code skips. Routes migrated to Huma (currently settings, in `workspace`) are mounted on the same router after them. Shared middleware, Huma and problem mapping live in `internal/platform` (see [platform](platform.md)). Design context: `/Users/federico/Developer/collections-app/design-docs/`.
+Serves the legacy generated strict-server routes on chi, with a per-operation guard that enforces rules the generated code skips. Routes migrated to Huma (settings in `workspace`; folders, lists and the tree read in their own packages) are mounted on the same router after them. Shared middleware, Huma and problem mapping live in `internal/platform` (see [platform](platform.md)). Design context: `/Users/federico/Developer/collections-app/design-docs/`.
 
 ## Key files
 
 - `internal/httpapi/router.go`: `NewRouter`, `Deps`, route order, scope and `workspace.Register` mounting
 - `internal/httpapi/server.go`: `Server`, `/healthz` and `/readyz` handlers, DATA_DIR probe
-- `internal/httpapi/types.go`, `tree.go`, `folders.go`, `lists.go`, `trash.go`: type, tree and trash handlers
+- `internal/httpapi/types.go`, `trash.go`: type and trash handlers (folder/list routes are Huma in [folders](folders.md), [lists](lists.md), [tree](tree.md))
 - `internal/httpapi/items.go`, `content.go`, `search.go`, `images.go`, `tmdb.go`, `books.go`, `stores.go`: item, content, search, file, TMDB, book and store handlers
 - `internal/httpapi/middleware.go`: `IfMatchVersion` only
 - `internal/httpapi/guard.go`: query schemas, If-Match, media type, body limits, unknown fields
@@ -31,7 +31,8 @@ Serves the legacy generated strict-server routes on chi, with a per-operation gu
 - `/healthz` ignores the DB and storage. `/readyz` creates and deletes a `.readyz-*` file in DATA_DIR on every call.
 - The guard, not the generated server, enforces body limits (413), unknown JSON fields (400 `unknown_field`), missing If-Match (428) and query ranges (400).
 - List create and update take 2 MiB JSON bodies (64 KiB Markdown `description`); other JSON bodies keep the 64 KiB limit.
-- Move and reorder bodies must carry the nullable parent field: absent is 422, null means root.
+- Folder and list move and reorder bodies must carry the nullable parent field: absent is 422, null means root (generated server for the legacy routes, Huma for folders and lists).
+- `folderDB` type-asserts `Deps.DB` to the pool for the folder and list repositories; a Ping-only fake gets a nil database, so folder/list routes need a real DB in tests.
 - `toProblem` is the apperr mapper for legacy routes; Huma routes use `platform/problem.From`. Change error mapping in both until B3b..f.
 - Attachment responses set `Cache-Control: private, max-age=31536000, immutable` and `Content-Disposition: inline`; nosniff and CSP come from `platform/httpserver`.
 - Item metadata keys are checked against database-backed type fields, not by the guard. Item responses add read-only `metadata.store_links` and `metadata.streaming.platform_links`.

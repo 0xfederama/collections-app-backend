@@ -28,45 +28,6 @@ func (p *Postgres) InTx(ctx context.Context, fn func(Repo) error) error {
 	})
 }
 
-// Repo is the set of queries one transaction may run. Every method is one
-// plain query; the rules that combine them live in the service. Methods read
-// the workspace from the context. Lookups of a missing row are apperr.NotFound.
-type Repo interface {
-	ListTypes(ctx context.Context) ([]Type, error)
-	GetTypeByKey(ctx context.Context, key string) (Type, error)
-	GetTypeForUpdate(ctx context.Context, id uuid.UUID) (Type, error)
-	InsertType(ctx context.Context, t Type, now time.Time) (Type, error)
-	// UpdateType writes every editable column of t (ID addresses the row); the
-	// caller merges the patch first and holds the row lock.
-	UpdateType(ctx context.Context, t Type, now time.Time) (Type, error)
-	DeleteType(ctx context.Context, id uuid.UUID) error
-	TouchType(ctx context.Context, id uuid.UUID, now time.Time) error
-	// ListActiveListsByType returns the active lists of a type, by name.
-	ListActiveListsByType(ctx context.Context, typeKey string) ([]ListRef, error)
-	ListStoresFields(ctx context.Context) ([]StoresField, error)
-
-	ListFields(ctx context.Context, typeID uuid.UUID) ([]Field, error)
-	GetField(ctx context.Context, typeID uuid.UUID, key string) (Field, error)
-	GetFieldForUpdate(ctx context.Context, id uuid.UUID) (Field, error)
-	NextFieldPosition(ctx context.Context, typeID uuid.UUID) (int, error)
-	InsertField(ctx context.Context, typeID uuid.UUID, f Field, now time.Time) (Field, error)
-	UpdateFieldLabel(ctx context.Context, id uuid.UUID, label string, now time.Time) (Field, error)
-	// ParkFieldPosition and SetFieldPosition are the two passes of a reorder. Park
-	// writes no version; Set bumps the field version once.
-	ParkFieldPosition(ctx context.Context, id uuid.UUID, position int, now time.Time) error
-	SetFieldPosition(ctx context.Context, id uuid.UUID, position int, now time.Time) error
-	DeleteField(ctx context.Context, id uuid.UUID) error
-	DeleteFieldsOfType(ctx context.Context, typeID uuid.UUID) error
-
-	// CountFieldValues counts the items of the type's lists (trashed ones too) that hold a value for the field.
-	CountFieldValues(ctx context.Context, typeKey, fieldKey string) (int, error)
-	StripFieldValues(ctx context.Context, typeKey, fieldKey string, now time.Time) error
-	// ResetFieldDefaults drops the field from the type's default sort and pins.
-	ResetFieldDefaults(ctx context.Context, typeID uuid.UUID, fieldKey string, now time.Time) error
-	ResetListFieldPins(ctx context.Context, typeKey, fieldKey string, now time.Time) error
-	ResetListFieldSort(ctx context.Context, typeKey, fieldKey string, now time.Time) error
-}
-
 // repo runs the queries of one transaction. The workspace comes from the
 // context on every call (scope), never from a field.
 type repo struct{ q *sqlc.Queries }

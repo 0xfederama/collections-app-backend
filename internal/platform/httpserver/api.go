@@ -25,6 +25,8 @@ const humaDefaultBodyBytes = 1 << 20
 
 // NewAPI returns the Huma API mounted on r. The spec is generated from the
 // registered operations (api.OpenAPI()); no docs or spec route is served.
+// Handlers should be registered through Op, so that their errors are logged and
+// answered the same way everywhere.
 func NewAPI(r chi.Router) huma.API {
 	problem.Install()
 	cfg := huma.DefaultConfig("Collection App API", "1.0.0")

@@ -207,7 +207,9 @@ var installOnce sync.Once
 // Install replaces Huma's error constructors so every error Huma writes (its
 // own validation and body errors, and errors returned by handlers) is a
 // Problem. Huma keeps these as package variables, which is the one global this
-// approach costs; the replacement runs once per process.
+// approach costs; the replacement runs once per process. Handlers should be
+// registered through httpserver.Op, which also logs unexpected errors and
+// answers a client that went away with 499.
 func Install() {
 	installOnce.Do(func() {
 		huma.NewError = func(status int, _ string, errs ...error) huma.StatusError {

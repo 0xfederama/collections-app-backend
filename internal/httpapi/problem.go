@@ -9,10 +9,8 @@ import (
 	"strings"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
+	"github.com/0xfederama/collections-app-backend/internal/platform/httpserver"
 )
-
-// errPanic is mapped like any unexpected error: a generic 500.
-var errPanic = errors.New("panic")
 
 const problemTypeBase = "https://collection-app.invalid/problems/"
 
@@ -198,11 +196,11 @@ func (h handlerErrors) response(w http.ResponseWriter, r *http.Request, err erro
 	if clientAborted(r, err) {
 		// The client is gone: nobody reads an answer, so send a bare 499 (the
 		// access log records it) and keep it out of the error log.
-		h.log.DebugContext(r.Context(), "request canceled by the client", "request_id", requestIDFrom(r.Context()))
+		h.log.DebugContext(r.Context(), "request canceled by the client", "request_id", httpserver.RequestIDFrom(r.Context()))
 		w.WriteHeader(statusClientClosedRequest)
 		return
 	}
-	p, unexpected := toProblem(err, requestIDFrom(r.Context()))
+	p, unexpected := toProblem(err, httpserver.RequestIDFrom(r.Context()))
 	if unexpected {
 		h.log.ErrorContext(r.Context(), "unhandled error", "err", err, "request_id", p.RequestID)
 	}

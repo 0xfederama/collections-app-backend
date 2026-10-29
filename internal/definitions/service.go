@@ -35,7 +35,6 @@ type Repo interface {
 	TouchType(ctx context.Context, id uuid.UUID, now time.Time) error
 	// ListActiveListsByType returns the active lists of a type, by name.
 	ListActiveListsByType(ctx context.Context, typeKey string) ([]ListRef, error)
-	ListStoresFields(ctx context.Context) ([]StoresField, error)
 
 	ListFields(ctx context.Context, typeID uuid.UUID) ([]Field, error)
 	GetField(ctx context.Context, typeID uuid.UUID, key string) (Field, error)

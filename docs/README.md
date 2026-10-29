@@ -10,8 +10,7 @@
 - [folders](modules/folders.md): folder create, get, rename, move (cycle check) and reorder (Huma)
 - [httpapi](modules/httpapi.md): legacy HTTP router, probes, trash/item/content handlers, book suggestions and store providers; Huma mounting
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping on upload, validation, thumbnails, serving, orphan sweeper
-- [streamlinks](modules/streamlinks.md): streaming service search URLs (`streaming.platform_links`)
-- [items](modules/items.md): items CRUD, move and reorder, per-type metadata validation (`items/types`), read-only `store_links`
+- [items](modules/items.md): items CRUD, move and reorder, per-type metadata validation (`items/types`)
 - [lists](modules/lists.md): list create, get with path, update (type change, pure patch planner), move and reorder (Huma)
 - [lookup](modules/lookup.md): metadata provider lookup (TMDB, Open Library) merge rules and imported-field provenance/retention
 - [openlibrary](modules/openlibrary.md): bounded Open Library client for book search, work details and covers
@@ -19,7 +18,7 @@
 - [seed](modules/seed.md): idempotent Go seed of the five built-in types and their locked fields, run at every bootstrap
 - [search](modules/search.md): item title search with folder and list paths (`GET /api/v1/search`) and recent items (`GET /api/v1/recent-items`)
 - [smoke](modules/smoke.md): HTTP smoke test over a running stack (`scripts/smoke.sh`, `make smoke`)
-- [stores](modules/stores.md): fixed online store list and read-time store link builder for `stores` fields
+- [stores](modules/stores.md): fixed online store provider keys for `stores` fields and `preferred_store`
 - [storage](modules/storage.md): local file store under DATA_DIR (`os.Root`, generated keys)
 - [trash](modules/trash.md): delete into trash batches, trash list, restore, purge, empty trash, retention auto-purge
 - [tree](modules/tree.md): `GET /api/v1/tree`, the flat read of active folders and lists for the sidebar (handler only)

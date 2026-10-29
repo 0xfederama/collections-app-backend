@@ -73,10 +73,7 @@ type Item struct {
 	Price   *Price
 	Website *string
 	// Metadata is the stored JSON object, already validated at write time.
-	Metadata json.RawMessage
-	// StoreLinks is the read-only store_links of an item whose type has a stores
-	// field (provider key -> URL), set on reads (get, list, search, recent); nil when the type has none.
-	StoreLinks     map[string]string
+	Metadata       json.RawMessage
 	ContentVersion int
 	SortOrder      int
 	Version        int
@@ -148,9 +145,6 @@ func (s *Service) get(ctx context.Context, id uuid.UUID, withPath bool) (Item, e
 		return Item{}, notFoundOr(err, "item")
 	}
 	it := itemFromRow(sqlc.ListItemsRow(row))
-	if it.StoreLinks, err = s.storeLinks(ctx, q, it); err != nil {
-		return Item{}, err
-	}
 	if withPath {
 		if it.Path, err = s.path(ctx, q, it.ListID); err != nil {
 			return Item{}, err
@@ -266,13 +260,6 @@ func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (Ite
 	page := ItemPage{Items: make([]Item, 0, len(rows)), Limit: p.Limit, Offset: p.Offset, Total: int(total)}
 	for _, r := range rows {
 		page.Items = append(page.Items, itemFromRow(r))
-	}
-	refs := make([]*Item, len(page.Items))
-	for i := range page.Items {
-		refs[i] = &page.Items[i]
-	}
-	if err := FillStoreLinks(ctx, s.db, s.workspaceID, refs); err != nil {
-		return ItemPage{}, err
 	}
 	return page, nil
 }

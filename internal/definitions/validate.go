@@ -22,9 +22,9 @@ const (
 )
 
 // isFieldKey reports whether key is a field key: a lowercase letter, then up to 31
-// lowercase letters, digits or underscores. "store_links" is reserved.
+// lowercase letters, digits or underscores.
 func isFieldKey(key string) bool {
-	if key == "store_links" || len(key) == 0 || len(key) > maxFieldKeyLen || key[0] < 'a' || key[0] > 'z' {
+	if len(key) == 0 || len(key) > maxFieldKeyLen || key[0] < 'a' || key[0] > 'z' {
 		return false
 	}
 	for _, r := range key[1:] {

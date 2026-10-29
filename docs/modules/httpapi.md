@@ -35,5 +35,5 @@ Serves the legacy generated strict-server routes on chi, with a per-operation gu
 - `folderDB` type-asserts `Deps.DB` to the pool for the folder and list repositories; a Ping-only fake gets a nil database, so folder/list routes need a real DB in tests.
 - `toProblem` is the apperr mapper for legacy routes; Huma routes use `platform/problem.From`. Change error mapping in both until B3b..f.
 - Attachment responses set `Cache-Control: private, max-age=31536000, immutable` and `Content-Disposition: inline`; nosniff and CSP come from `platform/httpserver`.
-- Item metadata keys are checked against database-backed type fields, not by the guard. Item responses add read-only `metadata.store_links` and `metadata.streaming.platform_links`.
+- Item metadata keys are checked against database-backed type fields, not by the guard. Item responses carry no computed link fields (API 0.17.0).
 - No CORS (D-033); errors outside `apperr` become 500 `internal` with only the request id. Extend `ifMatchPrefix` in `guard.go` by hand for new If-Match operations.

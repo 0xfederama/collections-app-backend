@@ -59,8 +59,3 @@ type ListRef struct {
 	ID   uuid.UUID
 	Name string
 }
-
-// StoresField is one stores field of a type (store links are built for it).
-type StoresField struct {
-	TypeKey, FieldKey string
-}

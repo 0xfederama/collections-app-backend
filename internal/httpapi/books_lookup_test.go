@@ -289,8 +289,8 @@ func TestF016B3_CreateBookWithLookupFillsFieldsCoverAndStores(t *testing.T) {
 	if !reflect.DeepEqual(meta["stores"], []any{"kobo"}) {
 		t.Errorf("stores = %v", meta["stores"])
 	}
-	if links, _ := meta["store_links"].(map[string]any); links["kobo"] == nil || links["openlibrary"] != nil {
-		t.Errorf("store_links = %v", meta["store_links"])
+	if _, has := meta["store_links"]; has {
+		t.Errorf("store_links must not be returned (spec 0.17.0): %v", meta)
 	}
 	if e.covers.Load() != 1 {
 		t.Errorf("covers downloaded = %d, want one per imported item", e.covers.Load())

@@ -19,7 +19,6 @@ func TestIsFieldKey(t *testing.T) {
 		{"_x", false},
 		{"Rating", false},
 		{"with-dash", false},
-		{"store_links", false},
 		{strings.Repeat("a", 32), true},
 		{strings.Repeat("a", 33), false},
 	}

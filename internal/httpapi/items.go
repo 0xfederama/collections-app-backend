@@ -15,7 +15,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/lists"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
 	"github.com/0xfederama/collections-app-backend/internal/platform/etag"
-	"github.com/0xfederama/collections-app-backend/internal/streamlinks"
 )
 
 func (s *Server) ListItems(ctx context.Context, r oapi.ListItemsRequestObject) (oapi.ListItemsResponseObject, error) {
@@ -231,12 +230,6 @@ func itemBody(it items.Item) (oapi.Item, error) {
 	if metadata == nil {
 		metadata = map[string]interface{}{}
 	}
-	// platform_links (inside streaming) is computed at read and never stored.
-	streamlinks.AddToMetadata(metadata, it.Title)
-	// store_links is computed at read and never stored: it is not a metadata key.
-	if it.StoreLinks != nil {
-		metadata["store_links"] = it.StoreLinks
-	}
 	out := oapi.Item{
 		Id: it.ID, ListId: it.ListID, Title: it.Title, Type: nullableString(it.Type), Metadata: metadata,
 		Image: image, Price: priceBody(it.Price), Website: nullableString(it.Website),
@@ -267,11 +260,6 @@ func itemSummaryBody(it items.Item) oapi.ItemSummary {
 		if err := json.Unmarshal(it.Metadata, &meta); err == nil && meta != nil {
 			out.Metadata = meta
 		}
-	}
-	// platform_links and store_links are computed at read and never stored (see itemBody).
-	streamlinks.AddToMetadata(out.Metadata, it.Title)
-	if it.StoreLinks != nil {
-		out.Metadata["store_links"] = it.StoreLinks
 	}
 	if img := it.Image; img != nil {
 		sum := oapi.ImageSummary{Url: img.URL}

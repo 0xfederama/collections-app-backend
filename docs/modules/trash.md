@@ -31,7 +31,7 @@ Moves folders, lists and items to the trash as one batch per delete, lists the b
 - Restore without a destination answers 409 `parent_in_trash` (with `blocking_parent`) when the original parent is not active; items check their list the same way.
 - Restore with a destination validates like a move. `cycle_detected` (folder into its own subtree, any state) is checked before `destination_unavailable`.
 - A restored root is appended last among its siblings and its version is bumped; the rest of the batch keeps its versions.
-- Purge deletes the root subtree in the DB (all batches inside it go too), then deletes image files after commit. A failed file delete is logged; the images sweeper removes it later.
+- Purge collects the subtree ids in Go (folders, their lists, their items) and deletes rows explicitly, children first (content versions, lookup imports, items, lists, folders, attachment rows, batches); no FK cascade. Batches inside the subtree go too. Image files are deleted after commit; a failed delete is logged and the images sweeper removes it later.
 - Purge collects attachments of the subtree's items in any state and any batch.
 - PurgeAll and PurgeExpired share `purgeBatch` with Purge: same rules, one tx, files deleted after commit.
 - Auto-purge is off unless the workspace sets `trash_retention_days`; a failed run is logged and retried on the next tick. Batches are cut by `deleted_at` (trash time), not by the batch's content.

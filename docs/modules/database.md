@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and sqlc-generated queries. The baseline migration holds the full schema, including the seeded built-in types. Schema intent: `/Users/federico/Developer/collections-app/design-docs/DATA_MODEL.md`.
+Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and sqlc-generated queries. The baseline migration is pure schema (no triggers, functions or ON DELETE CASCADE); built-in types are seeded from Go (`internal/seed`). Schema intent: `/Users/federico/Developer/collections-app/design-docs/DATA_MODEL.md`.
 
 ## Key files
 
 - `internal/database/database.go`: `NewPool`, `TxBeginner`, `InTx`
 - `internal/database/intx_test.go`: commit, rollback, panic and `NewPool` tests
-- `db/migrations/000001_init.{up,down}.sql`: the baseline schema (pg_trgm, all tables, seed functions, trigger); down drops everything. Later changes append as new numbered files
+- `db/migrations/000001_init.{up,down}.sql`: the baseline schema (pg_trgm, all tables, no logic); down drops everything. Later changes append as new numbered files
 - `db/queries/types.sql`: definition reads, locks, writes and cleanup queries
 - `db/queries/schema.sql`: smoke query, sqlc input
 - `db/queries/workspace.sql`: workspace bootstrap and settings queries (see `workspace` module)
@@ -31,4 +31,5 @@ Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and 
 - `make check-generate` fails if regenerated files differ from the committed ones; run `make generate` and commit.
 - sqlc errors on an empty `db/queries` dir (hence `schema.sql`) and on a recursive CTE filtering with a plain `@param` (use `sqlc.arg(x)::uuid`, see `folders.sql`).
 - Constraint names follow `<table>_<cols>_{pkey,key,fkey,check,idx}`; tests assert on them.
+- No ON DELETE CASCADE and no triggers in the schema (`schema_test.go` asserts both): code deletes children explicitly, children first (D-051).
 - Migration tests use the `pgx5://` scheme and one testcontainers database per test; `internal/testdb` shares one container per test binary.

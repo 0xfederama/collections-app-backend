@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/0xfederama/collections-app-backend/internal/database"
-	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/platform/database"
+	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 )
 
 // spyBeginner hands out the pool's transactions and remembers the last one, so

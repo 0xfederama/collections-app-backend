@@ -3,7 +3,7 @@ package etag_test
 import (
 	"testing"
 
-	"github.com/0xfederama/collections-app-backend/internal/httpapi/etag"
+	"github.com/0xfederama/collections-app-backend/internal/platform/etag"
 )
 
 func TestFormat(t *testing.T) {

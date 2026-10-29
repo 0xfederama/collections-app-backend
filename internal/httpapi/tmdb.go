@@ -11,6 +11,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 )
 
 // ListTmdbSuggestions returns TMDB's ranked movie or TV matches in the
@@ -30,7 +31,7 @@ func (s *Server) ListTmdbSuggestions(ctx context.Context, r oapi.ListTmdbSuggest
 		}, nil
 	}
 
-	settings, err := s.deps.Settings.Get(ctx, s.deps.WorkspaceID)
+	settings, err := s.deps.Settings.Get(scope.With(ctx, s.deps.WorkspaceID))
 	if err != nil {
 		return nil, err
 	}

@@ -92,7 +92,7 @@ const immutableCacheControl = "private, max-age=31536000, immutable"
 
 // inlineFile and inlineThumbnail add Content-Disposition: inline to the
 // generated responses (the spec declares only Cache-Control). nosniff and the
-// restrictive Content-Security-Policy come from the securityHeaders middleware.
+// restrictive Content-Security-Policy come from the httpserver.SecurityHeaders middleware.
 type inlineFile struct {
 	oapi.GetAttachmentFileResponseObject
 }

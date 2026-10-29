@@ -11,13 +11,15 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/0xfederama/collections-app-backend/internal/clock"
 	"github.com/0xfederama/collections-app-backend/internal/content"
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
+	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
+	"github.com/0xfederama/collections-app-backend/internal/platform/httpserver"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
@@ -88,27 +90,23 @@ func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
 	})
 
 	r := chi.NewRouter()
-	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
-		writeProblem(w, newProblem(http.StatusNotFound, "not_found", "Not found", "No such endpoint."))
-	})
-	r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
-		writeProblem(w, newProblem(http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed",
-			"This endpoint does not support that method."))
-	})
+	r.NotFound(httpserver.NotFound)
+	r.MethodNotAllowed(httpserver.MethodNotAllowed)
 	oapi.HandlerWithOptions(strict, oapi.ChiServerOptions{
 		BaseRouter:       r,
 		Middlewares:      []oapi.MiddlewareFunc{newGuard(doc).middleware},
 		ErrorHandlerFunc: errs.parameter,
 	})
 
-	return wrap(r, d.Logger), nil
-}
+	// Operations migrated to Huma are registered after the old routes on the same
+	// router: chi replaces the old handler of the same method and path, so Huma answers.
+	r.Group(func(r chi.Router) {
+		r.Use(scope.Middleware(d.WorkspaceID))
+		workspace.Register(httpserver.NewAPI(r), d.Logger, d.Settings, d.Settings, workspace.Availability{
+			Lookup:     d.LookupAvailable,
+			BookLookup: d.BookLookupAvailable,
+		})
+	})
 
-// wrap adds the cross-cutting middleware, outermost first: request id,
-// security headers, access log, panic recovery.
-func wrap(h http.Handler, log *slog.Logger) http.Handler {
-	h = recoverer(log)(h)
-	h = accessLog(log)(h)
-	h = securityHeaders(h)
-	return requestID(h)
+	return httpserver.Wrap(r, d.Logger), nil
 }

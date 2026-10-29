@@ -20,9 +20,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
-	"github.com/0xfederama/collections-app-backend/internal/clock"
-	"github.com/0xfederama/collections-app-backend/internal/database"
-	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
+	"github.com/0xfederama/collections-app-backend/internal/platform/database"
+	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 )
 
 // Limits and enums from DATA_MODEL §2 (the same rules are CHECK constraints).

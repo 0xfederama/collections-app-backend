@@ -10,10 +10,10 @@ import (
 	"github.com/oapi-codegen/nullable"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
-	"github.com/0xfederama/collections-app-backend/internal/httpapi/etag"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
+	"github.com/0xfederama/collections-app-backend/internal/platform/etag"
 	"github.com/0xfederama/collections-app-backend/internal/streamlinks"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 )

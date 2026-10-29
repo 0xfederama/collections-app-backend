@@ -10,7 +10,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
-	"github.com/0xfederama/collections-app-backend/internal/testdb"
+	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/tmdb"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
@@ -24,7 +24,7 @@ func tmdbRouter(t *testing.T, client *tmdb.Client) http.Handler {
 	}
 	return newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: workspaceID,
-		Settings: workspace.NewService(pool), TMDB: lookup.NewTMDBProvider(client), LookupAvailable: client.Enabled(),
+		Settings: workspace.NewService(workspace.NewPostgres(pool)), TMDB: lookup.NewTMDBProvider(client), LookupAvailable: client.Enabled(),
 	})
 }
 

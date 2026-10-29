@@ -61,7 +61,7 @@ generate: ## Regenerate code: sqlc (db/queries) and oapi-codegen (api/openapi.ya
 
 check-generate: ## Fail if regenerating changes (or adds) tracked generated files (D-019)
 	@$(MAKE) --no-print-directory generate
-	@out="$$(git status --porcelain -- internal/database/sqlc db/queries sqlc.yaml internal/httpapi/oapi api oapi-codegen.yaml)"; \
+	@out="$$(git status --porcelain -- internal/platform/database/sqlc db/queries sqlc.yaml internal/httpapi/oapi api oapi-codegen.yaml)"; \
 	if [ -n "$$out" ]; then echo "generated code is stale or uncommitted, run 'make generate' and commit:"; echo "$$out"; exit 1; fi
 
 reset-dev: ## Delete the dev containers and volumes (asks first, refuses in production)

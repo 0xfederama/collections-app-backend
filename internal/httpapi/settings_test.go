@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
-	"github.com/0xfederama/collections-app-backend/internal/testdb"
+	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
@@ -35,7 +35,7 @@ func settingsRouter(t *testing.T) http.Handler {
 	}
 	return newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(),
-		WorkspaceID: id, Settings: workspace.NewService(pool), LookupAvailable: true,
+		WorkspaceID: id, Settings: workspace.NewService(workspace.NewPostgres(pool)), LookupAvailable: true,
 	})
 }
 

@@ -18,16 +18,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xfederama/collections-app-backend/internal/clock"
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
 	"github.com/0xfederama/collections-app-backend/internal/openlibrary"
+	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
+	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
-	"github.com/0xfederama/collections-app-backend/internal/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
@@ -122,7 +122,7 @@ func newBookEnv(t *testing.T, o bookEnvOptions) *bookEnv {
 	}
 	t.Cleanup(func() { _ = files.Close() })
 	itemSvc := items.New(pool, clock.System{}, ws)
-	settingsSvc := workspace.NewService(pool)
+	settingsSvc := workspace.NewService(workspace.NewPostgres(pool))
 	store := lookup.NewStore(pool, files, clock.System{}, itemSvc, quietLogger(), ws)
 	svc := lookup.New(lookup.Providers{types.Book: books}, store, itemSvc, settingsSvc, clock.System{}, ws)
 	deps := httpapi.Deps{

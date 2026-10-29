@@ -22,9 +22,9 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
-	"github.com/0xfederama/collections-app-backend/internal/clock"
-	"github.com/0xfederama/collections-app-backend/internal/database"
-	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
+	"github.com/0xfederama/collections-app-backend/internal/platform/database"
+	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 )
 
 // MaxBodyBytes is the largest Markdown body: 1 MiB of UTF-8 bytes (API.md §6).

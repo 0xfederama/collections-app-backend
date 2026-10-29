@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 )
 
 // NewPool parses the URL, applies the pool size and verifies connectivity.

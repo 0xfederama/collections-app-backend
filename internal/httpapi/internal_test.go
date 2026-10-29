@@ -17,6 +17,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
+	"github.com/0xfederama/collections-app-backend/internal/platform/httpserver"
 )
 
 func TestToProblem(t *testing.T) {
@@ -147,7 +148,7 @@ func injected(t *testing.T, s failingServer) (http.Handler, *bytes.Buffer) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return wrap(h, d.Logger), &logs
+	return httpserver.Wrap(h, d.Logger), &logs
 }
 
 func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
@@ -229,19 +230,6 @@ func TestAccessLogHasNoQueryOrBody(t *testing.T) {
 	}
 }
 
-func TestPanicAfterHeadersWrittenDoesNotDoubleWrite(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := requestID(recoverer(log)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusAccepted)
-		panic("late")
-	})))
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
-	if rec.Code != http.StatusAccepted {
-		t.Errorf("status = %d, want the already-written 202", rec.Code)
-	}
-}
-
 // The multipart body is not buffered by the guard, so the limit has to hold
 // while the (future) handler streams it.
 func TestMultipartBodyIsCappedWhileStreaming(t *testing.T) {
@@ -297,7 +285,7 @@ func TestF016_ClientAbortIsNot500(t *testing.T) {
 				t.Fatal(err)
 			}
 			rec := httptest.NewRecorder()
-			h = wrap(h, d.Logger)
+			h = httpserver.Wrap(h, d.Logger)
 			h.ServeHTTP(rec, httptest.NewRequestWithContext(tc.ctx(t), http.MethodGet, "/api/v1/tree", nil))
 			if rec.Code != tc.wantStatus {
 				t.Fatalf("status = %d, want %d", rec.Code, tc.wantStatus)

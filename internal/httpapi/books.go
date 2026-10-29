@@ -9,6 +9,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 )
 
 // SearchBookSuggestions returns Open Library's ranked matches in the workspace
@@ -28,7 +29,7 @@ func (s *Server) SearchBookSuggestions(ctx context.Context, r oapi.SearchBookSug
 		}, nil
 	}
 
-	settings, err := s.deps.Settings.Get(ctx, s.deps.WorkspaceID)
+	settings, err := s.deps.Settings.Get(scope.With(ctx, s.deps.WorkspaceID))
 	if err != nil {
 		return nil, err
 	}

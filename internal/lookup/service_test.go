@@ -92,7 +92,7 @@ func (f *fakeItems) Update(_ context.Context, _ uuid.UUID, _ int, _ items.Patch)
 
 type fakeSettings struct{ value workspace.Settings }
 
-func (f fakeSettings) Get(context.Context, uuid.UUID) (workspace.Settings, error) {
+func (f fakeSettings) Get(context.Context) (workspace.Settings, error) {
 	return f.value, nil
 }
 

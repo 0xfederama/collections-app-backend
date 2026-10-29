@@ -14,8 +14,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 )
 
 // Limits of the q parameter (after trimming) and page sizes (API.md §5).

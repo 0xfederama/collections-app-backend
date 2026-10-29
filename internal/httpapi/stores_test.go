@@ -10,8 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 )
 
 // storeLinks returns the store_links of an item response and whether it is present.

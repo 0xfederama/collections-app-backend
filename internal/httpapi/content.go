@@ -7,8 +7,8 @@ import (
 	"github.com/oapi-codegen/nullable"
 
 	"github.com/0xfederama/collections-app-backend/internal/content"
-	"github.com/0xfederama/collections-app-backend/internal/httpapi/etag"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
+	"github.com/0xfederama/collections-app-backend/internal/platform/etag"
 )
 
 func (s *Server) GetItemContent(ctx context.Context, req oapi.GetItemContentRequestObject) (oapi.GetItemContentResponseObject, error) {

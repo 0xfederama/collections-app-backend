@@ -12,6 +12,8 @@ import (
 // Server implements oapi.StrictServerInterface. Each endpoint group has its own
 // file (settings.go, folders.go, trash.go, …).
 type Server struct {
+	// TEMPORARY until B5: operations already served by Huma are not implemented here.
+	oapi.StrictServerInterface
 	deps Deps
 }
 

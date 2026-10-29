@@ -13,10 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/0xfederama/collections-app-backend/internal/clock"
-	"github.com/0xfederama/collections-app-backend/internal/config"
 	"github.com/0xfederama/collections-app-backend/internal/content"
-	"github.com/0xfederama/collections-app-backend/internal/database"
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/hardcover"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
@@ -25,6 +22,9 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
 	"github.com/0xfederama/collections-app-backend/internal/openlibrary"
+	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
+	"github.com/0xfederama/collections-app-backend/internal/platform/config"
+	"github.com/0xfederama/collections-app-backend/internal/platform/database"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 	"github.com/0xfederama/collections-app-backend/internal/tmdb"
@@ -76,7 +76,7 @@ func run() error {
 	trashSvc := trash.New(pool, store, clock.System{}, logger, workspaceID)
 	go trashSvc.RunAutoPurge(ctx, 24*time.Hour) // stops when ctx is cancelled on shutdown
 	tmdbClient := tmdb.NewWithOptions(cfg.TMDBAPIKey, tmdb.Options{MockFixture: cfg.TMDBMockFixture})
-	settingsSvc := workspace.NewService(pool)
+	settingsSvc := workspace.NewService(workspace.NewPostgres(pool))
 	lookupStore := lookup.NewStore(pool, store, clock.System{}, itemSvc, logger, workspaceID)
 	tmdbProvider := lookup.NewTMDBProvider(tmdbClient)
 	// Books use Open Library: no key, on by default. The test-stack fixture flag also serves its one fixture book (D-096).

@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
-	"github.com/0xfederama/collections-app-backend/internal/database"
-	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/platform/database"
+	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 )
 
 // CreateListInput is a new list. A nil Type is a list with no type. Empty DisplayMode / SortMode take the defaults.

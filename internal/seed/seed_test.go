@@ -1,8 +1,9 @@
 package seed_test
 
 import (
+	"encoding/json"
 	"os"
-	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
@@ -41,7 +42,7 @@ type fieldRow struct {
 	Version   int32  `db:"version"`
 }
 
-// newWorkspace inserts a workspace with the raw SQL insert (the trigger seeds it).
+// newWorkspace inserts a workspace with the raw SQL insert (nothing seeds it: the baseline has no triggers).
 func newWorkspace(t *testing.T, pool *pgxpool.Pool) uuid.UUID {
 	t.Helper()
 	ws := uuid.New()
@@ -91,35 +92,50 @@ func countRows(t *testing.T, pool *pgxpool.Pool, ws uuid.UUID, table string) int
 	return n
 }
 
-func TestSeed_MatchesSQLFunction(t *testing.T) {
+func TestSeed_BuiltinShape(t *testing.T) {
 	pool := testdb.NewMigrated(t, testdb.AdminURL(t))
 	ctx := t.Context()
-	// A is seeded by the trigger (the SQL function); B is seeded by Go.
-	wsA := newWorkspace(t, pool)
-	wsB := newWorkspace(t, pool)
-	if _, err := pool.Exec(ctx, "DELETE FROM type_fields WHERE workspace_id = $1", wsB); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, "DELETE FROM type_definitions WHERE workspace_id = $1", wsB); err != nil {
-		t.Fatal(err)
-	}
-	if err := seed.BuiltinTypes(ctx, sqlc.New(pool), wsB); err != nil {
+	ws := newWorkspace(t, pool)
+	if err := seed.BuiltinTypes(ctx, sqlc.New(pool), ws); err != nil {
 		t.Fatal(err)
 	}
 
-	typesA, typesB := readTypes(t, pool, wsA), readTypes(t, pool, wsB)
-	if len(typesA) != 5 {
-		t.Fatalf("SQL function seeded %d types, want 5", len(typesA))
+	types := readTypes(t, pool, ws)
+	if len(types) != 5 {
+		t.Fatalf("seeded %d types, want 5", len(types))
 	}
-	if !reflect.DeepEqual(typesA, typesB) {
-		t.Errorf("built-in types differ:\nSQL: %+v\nGo:  %+v", typesA, typesB)
+	wantPins := map[string][]string{
+		"movie":    {"runtime_minutes", "streaming"},
+		"tv_show":  {"seasons", "streaming"},
+		"book":     {"author", "pages", "stores"},
+		"vehicle":  {"model_year", "power_hp"},
+		"wishlist": {"price"},
 	}
-	fieldsA, fieldsB := readFields(t, pool, wsA), readFields(t, pool, wsB)
-	if len(fieldsA) != 27 {
-		t.Fatalf("SQL function seeded %d fields, want 27", len(fieldsA))
+	for _, typ := range types {
+		if !typ.IsLocked {
+			t.Errorf("type %s is not locked", typ.Key)
+		}
+		if typ.DefaultPinned == nil {
+			t.Errorf("type %s has no default pins", typ.Key)
+			continue
+		}
+		var pins []string
+		if err := json.Unmarshal([]byte(*typ.DefaultPinned), &pins); err != nil {
+			t.Fatalf("pins of type %s: %v", typ.Key, err)
+		}
+		if !slices.Equal(pins, wantPins[typ.Key]) {
+			t.Errorf("default pins of type %s = %v, want %v", typ.Key, pins, wantPins[typ.Key])
+		}
 	}
-	if !reflect.DeepEqual(fieldsA, fieldsB) {
-		t.Errorf("built-in fields differ:\nSQL: %+v\nGo:  %+v", fieldsA, fieldsB)
+
+	fields := readFields(t, pool, ws)
+	if len(fields) != 27 {
+		t.Fatalf("seeded %d fields, want 27", len(fields))
+	}
+	for _, f := range fields {
+		if !f.IsLocked {
+			t.Errorf("field %s.%s is not locked", f.TypeKey, f.Key)
+		}
 	}
 }
 

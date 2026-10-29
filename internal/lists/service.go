@@ -83,14 +83,17 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (List, error) {
 	if err := validate(errs); err != nil {
 		return List{}, err
 	}
+	// The type is read before the transaction: the type source opens its own, and
+	// nesting it would hold two pool connections. Its failure is kept and returned
+	// inside the transaction, where it always came (after the tree lock).
+	def, fields, typeErr := s.typeOf(ctx, in.Type)
 	var id uuid.UUID
 	err := s.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return fmt.Errorf("lock tree: %w", err)
 		}
-		def, fields, err := s.typeOf(ctx, in.Type)
-		if err != nil {
-			return err
+		if typeErr != nil {
+			return typeErr
 		}
 		if in.SortMode == "" {
 			in.SortMode = DefaultSortMode
@@ -102,10 +105,11 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (List, error) {
 			return err
 		}
 		if in.PinnedFields != nil {
-			in.PinnedFields, err = validateDefinitionPins(def.AllowsPrice, fields, in.PinnedFields)
+			pins, err := validateDefinitionPins(def.AllowsPrice, fields, in.PinnedFields)
 			if err != nil {
 				return err
 			}
+			in.PinnedFields = pins
 		}
 		if err := requireFolder(ctx, r, in.FolderID); err != nil {
 			return err
@@ -157,6 +161,9 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (List, error) {
 // Update applies a partial update. An empty patch changes nothing and does not
 // bump the version. version is the caller's If-Match version.
 //
+// The type that applies is read before the transaction; if the locked row's type
+// differs from the one read, the list changed under the caller: VersionConflict.
+//
 // A patch that sends a type takes the tree lock first, then locks the row. A type
 // that differs from the stored one clears the metadata (and, when the new type has
 // no price, the price) of all the list's items, trashed ones included, in the same
@@ -167,6 +174,18 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 	if err != nil {
 		return List{}, err
 	}
+	// Read the row and the type before the transaction (see Create). The row read
+	// only decides which type applies; the transaction re-reads the locked row and
+	// answers a type that changed in between as a version conflict.
+	pre, err := s.store.Get(ctx, id)
+	if err != nil {
+		return List{}, err
+	}
+	newType := pre.Type
+	if p.Type.Set {
+		newType = p.Type.Value
+	}
+	def, fields, typeErr := s.typeOf(ctx, newType)
 	err = s.store.InTx(ctx, func(r Repo) error {
 		if p.Type.Set {
 			if err := r.LockTree(ctx); err != nil {
@@ -180,13 +199,11 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 		if cur.Version != version {
 			return apperr.VersionConflict(cur.Version)
 		}
-		newType := cur.Type
-		if p.Type.Set {
-			newType = p.Type.Value
+		if !equalPtr(cur.Type, pre.Type) {
+			return apperr.VersionConflict(cur.Version)
 		}
-		def, fields, err := s.typeOf(ctx, newType)
-		if err != nil {
-			return err
+		if typeErr != nil {
+			return typeErr
 		}
 		plan, err := planUpdate(cur, def, fields, p)
 		if err != nil {

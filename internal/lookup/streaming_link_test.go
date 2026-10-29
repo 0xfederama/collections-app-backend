@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
@@ -153,10 +154,10 @@ func TestStreamingLink_CountryChangeClearsItemsAndSnapshots(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := workspace.NewService(e.db.(*pgxpool.Pool))
+	svc := workspace.NewService(workspace.NewPostgres(e.db.(*pgxpool.Pool)))
 	// A change that is not the country keeps the link.
 	name := "Renamed"
-	if _, err := svc.Update(t.Context(), e.ws, 1, workspace.SettingsPatch{WorkspaceName: &name}); err != nil {
+	if _, err := svc.Update(scope.With(t.Context(), e.ws), 1, workspace.SettingsPatch{WorkspaceName: &name}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := e.items.Get(t.Context(), it.ID)
@@ -164,7 +165,7 @@ func TestStreamingLink_CountryChangeClearsItemsAndSnapshots(t *testing.T) {
 		t.Fatal("link cleared by a change of the name")
 	}
 	gb := "GB"
-	if _, err := svc.Update(t.Context(), e.ws, 2, workspace.SettingsPatch{StreamingCountryCode: &gb}); err != nil {
+	if _, err := svc.Update(scope.With(t.Context(), e.ws), 2, workspace.SettingsPatch{StreamingCountryCode: &gb}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ = e.items.Get(t.Context(), it.ID)

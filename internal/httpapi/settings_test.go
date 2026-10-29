@@ -35,7 +35,7 @@ func settingsRouter(t *testing.T) http.Handler {
 	}
 	return newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(),
-		WorkspaceID: id, Settings: workspace.NewService(pool), LookupAvailable: true,
+		WorkspaceID: id, Settings: workspace.NewService(workspace.NewPostgres(pool)), LookupAvailable: true,
 	})
 }
 

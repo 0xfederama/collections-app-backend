@@ -7,11 +7,12 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/platform/etag"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
 func (s *Server) GetSettings(ctx context.Context, _ oapi.GetSettingsRequestObject) (oapi.GetSettingsResponseObject, error) {
-	cur, err := s.deps.Settings.Get(ctx, s.deps.WorkspaceID)
+	cur, err := s.deps.Settings.Get(scope.With(ctx, s.deps.WorkspaceID))
 	if err != nil {
 		return nil, err
 	}
@@ -23,7 +24,7 @@ func (s *Server) GetSettings(ctx context.Context, _ oapi.GetSettingsRequestObjec
 
 func (s *Server) UpdateSettings(ctx context.Context, req oapi.UpdateSettingsRequestObject) (oapi.UpdateSettingsResponseObject, error) {
 	// A missing body cannot reach here: the guard answers 400 for it first.
-	updated, err := s.deps.Settings.Update(ctx, s.deps.WorkspaceID, IfMatchVersion(ctx), workspace.SettingsPatch{
+	updated, err := s.deps.Settings.Update(scope.With(ctx, s.deps.WorkspaceID), IfMatchVersion(ctx), workspace.SettingsPatch{
 		WorkspaceName:        req.Body.WorkspaceName,
 		StreamingCountryCode: req.Body.StreamingCountryCode,
 		MetadataLanguage:     req.Body.MetadataLanguage,

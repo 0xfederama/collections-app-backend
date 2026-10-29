@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
@@ -127,7 +128,7 @@ func TestBootstrap_DefaultsAndInvalidName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := workspace.NewService(pool).Get(t.Context(), id)
+	got, err := workspace.NewService(workspace.NewPostgres(pool)).Get(scope.With(t.Context(), id))
 	if err != nil {
 		t.Fatal(err)
 	}

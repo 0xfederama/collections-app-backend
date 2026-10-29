@@ -24,7 +24,7 @@ func tmdbRouter(t *testing.T, client *tmdb.Client) http.Handler {
 	}
 	return newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: workspaceID,
-		Settings: workspace.NewService(pool), TMDB: lookup.NewTMDBProvider(client), LookupAvailable: client.Enabled(),
+		Settings: workspace.NewService(workspace.NewPostgres(pool)), TMDB: lookup.NewTMDBProvider(client), LookupAvailable: client.Enabled(),
 	})
 }
 

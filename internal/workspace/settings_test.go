@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
@@ -38,16 +39,16 @@ func TestService_Update(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			svc := workspace.NewService(pool)
+			svc := workspace.NewService(workspace.NewPostgres(pool))
 
-			got, err := svc.Update(t.Context(), id, 1, tt.patch)
+			got, err := svc.Update(scope.With(t.Context(), id), 1, tt.patch)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Update = %+v, want %+v", got, tt.want)
 			}
-			stored, err := svc.Get(t.Context(), id)
+			stored, err := svc.Get(scope.With(t.Context(), id))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -96,10 +97,10 @@ func TestService_Update_Validation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := workspace.NewService(pool)
+	svc := workspace.NewService(workspace.NewPostgres(pool))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := svc.Update(t.Context(), id, 1, tt.patch)
+			_, err := svc.Update(scope.With(t.Context(), id), 1, tt.patch)
 			var ve *apperr.ValidationError
 			if !errors.As(err, &ve) {
 				t.Fatalf("err = %v, want a ValidationError", err)
@@ -118,7 +119,7 @@ func TestService_Update_Validation(t *testing.T) {
 			}
 		})
 	}
-	got, err := svc.Get(t.Context(), id)
+	got, err := svc.Get(scope.With(t.Context(), id))
 	if err != nil || got.Version != 1 {
 		t.Errorf("after rejected patches: %+v, %v; want version 1", got, err)
 	}
@@ -130,20 +131,20 @@ func TestService_Update_StaleVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := workspace.NewService(pool)
-	if _, err := svc.Update(t.Context(), id, 1, workspace.SettingsPatch{StreamingCountryCode: ptr("US")}); err != nil {
+	svc := workspace.NewService(workspace.NewPostgres(pool))
+	if _, err := svc.Update(scope.With(t.Context(), id), 1, workspace.SettingsPatch{StreamingCountryCode: ptr("US")}); err != nil {
 		t.Fatal(err)
 	}
 
 	// A stale version loses even when the patch would change nothing.
 	for _, p := range []workspace.SettingsPatch{{StreamingCountryCode: ptr("GB")}, {}} {
-		_, err := svc.Update(t.Context(), id, 1, p)
+		_, err := svc.Update(scope.With(t.Context(), id), 1, p)
 		var vc *apperr.VersionConflictError
 		if !errors.As(err, &vc) || vc.Current != 2 {
 			t.Fatalf("err = %v, want VersionConflict with current 2", err)
 		}
 	}
-	got, _ := svc.Get(t.Context(), id)
+	got, _ := svc.Get(scope.With(t.Context(), id))
 	if got.StreamingCountryCode != "US" || got.Version != 2 {
 		t.Errorf("stored = %+v, want the stale write ignored", got)
 	}
@@ -156,7 +157,7 @@ func TestService_Update_ConcurrentSameVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := workspace.NewService(pool)
+	svc := workspace.NewService(workspace.NewPostgres(pool))
 
 	const racers = 6
 	errs := make([]error, racers)
@@ -167,7 +168,7 @@ func TestService_Update_ConcurrentSameVersion(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			_, errs[i] = svc.Update(t.Context(), id, 1, workspace.SettingsPatch{MarkdownHistoryLimit: ptr(i + 1)})
+			_, errs[i] = svc.Update(scope.With(t.Context(), id), 1, workspace.SettingsPatch{MarkdownHistoryLimit: ptr(i + 1)})
 		}()
 	}
 	close(start)
@@ -187,7 +188,7 @@ func TestService_Update_ConcurrentSameVersion(t *testing.T) {
 	if wins != 1 {
 		t.Errorf("winners = %d, want 1", wins)
 	}
-	if got, _ := svc.Get(t.Context(), id); got.Version != 2 {
+	if got, _ := svc.Get(scope.With(t.Context(), id)); got.Version != 2 {
 		t.Errorf("version = %d, want 2", got.Version)
 	}
 }

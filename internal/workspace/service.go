@@ -2,72 +2,41 @@ package workspace
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf8"
 
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
-	"github.com/0xfederama/collections-app-backend/internal/platform/database"
-	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/stores"
 )
 
-// Settings is the workspace name plus the workspace_settings row. Version is
-// workspace_settings.version, the single ETag stream "s-N" (API.md §3).
-// TrashRetentionDays nil means off: the trash is never purged automatically (F012-B3).
-// PreferredStore is the one default store key (F-016, 0.13.0); never empty.
-type Settings struct {
-	WorkspaceName        string
-	StreamingCountryCode string
-	MetadataLanguage     string
-	MarkdownHistoryLimit int
-	TrashRetentionDays   *int
-	PreferredStore       string
-	Version              int
+// Store opens transactions and reads the settings. Declared here, where it is
+// used; *Postgres implements it and tests use a fake.
+type Store interface {
+	InTx(ctx context.Context, fn func(Repo) error) error
+	Get(ctx context.Context) (Settings, error)
 }
 
-// SettingsPatch holds the fields a PATCH supplied; nil means "leave as is".
-// TrashRetentionDays is an Optional: absent leaves it, an explicit null turns it off.
-type SettingsPatch struct {
-	WorkspaceName        *string
-	StreamingCountryCode *string
-	MetadataLanguage     *string
-	MarkdownHistoryLimit *int
-	TrashRetentionDays   Optional[int]
-	PreferredStore       *string
-}
-
-// Optional is a PATCH field that can be cleared: Set tells absent from present,
-// and a nil Value means an explicit null.
-type Optional[T any] struct {
-	Set   bool
-	Value *T
+// Repo is the set of queries one transaction may run. Every method is one
+// plain query on the workspace of the context; the rules live in Service.
+type Repo interface {
+	LockSettings(ctx context.Context) (Settings, error)
+	UpdateWorkspaceName(ctx context.Context, name string) error
+	UpdateSettings(ctx context.Context, s Settings) error
+	ClearItemStreamingLinks(ctx context.Context) error
+	ClearStreamingLinkSnapshots(ctx context.Context) error
 }
 
 // Service reads and updates the settings of the workspace.
 type Service struct {
-	db *pgxpool.Pool
+	store Store
 }
 
-// NewService returns a Service on the pool.
-func NewService(db *pgxpool.Pool) *Service { return &Service{db: db} }
+// NewService returns a Service on the store.
+func NewService(store Store) *Service { return &Service{store: store} }
 
-// Get returns the current settings.
-func (s *Service) Get(ctx context.Context, workspaceID uuid.UUID) (Settings, error) {
-	row, err := sqlc.New(s.db).GetSettings(ctx, workspaceID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Settings{}, apperr.NotFound("settings")
-	}
-	if err != nil {
-		return Settings{}, fmt.Errorf("get settings: %w", err)
-	}
-	return fromGetRow(row), nil
-}
+// Get returns the current settings of the workspace of ctx.
+func (s *Service) Get(ctx context.Context) (Settings, error) { return s.store.Get(ctx) }
 
 // Update applies the patch if ifMatch is the current version. It validates the
 // fields first (422), then locks the settings row so concurrent PATCHes are
@@ -75,22 +44,18 @@ func (s *Service) Get(ctx context.Context, workspaceID uuid.UUID) (Settings, err
 // changes nothing returns the current settings without bumping the version.
 // A name change updates workspaces.name in the same transaction and bumps the
 // same version.
-func (s *Service) Update(ctx context.Context, workspaceID uuid.UUID, ifMatch int, p SettingsPatch) (Settings, error) {
+func (s *Service) Update(ctx context.Context, ifMatch int, p SettingsPatch) (Settings, error) {
 	p, err := p.validate()
 	if err != nil {
 		return Settings{}, err
 	}
 
 	var out Settings
-	err = database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
-		row, err := q.LockSettings(ctx, workspaceID)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return apperr.NotFound("settings")
-		}
+	err = s.store.InTx(ctx, func(r Repo) error {
+		cur, err := r.LockSettings(ctx)
 		if err != nil {
-			return fmt.Errorf("lock settings: %w", err)
+			return err
 		}
-		cur := fromLockRow(row)
 		if cur.Version != ifMatch {
 			return apperr.VersionConflict(cur.Version)
 		}
@@ -101,28 +66,20 @@ func (s *Service) Update(ctx context.Context, workspaceID uuid.UUID, ifMatch int
 			return nil
 		}
 		if next.WorkspaceName != cur.WorkspaceName {
-			if err := q.UpdateWorkspaceName(ctx, sqlc.UpdateWorkspaceNameParams{ID: workspaceID, Name: next.WorkspaceName}); err != nil {
-				return fmt.Errorf("update workspace name: %w", err)
+			if err := r.UpdateWorkspaceName(ctx, next.WorkspaceName); err != nil {
+				return err
 			}
 		}
-		err = q.UpdateSettings(ctx, sqlc.UpdateSettingsParams{
-			WorkspaceID:          workspaceID,
-			StreamingCountryCode: next.StreamingCountryCode,
-			MetadataLanguage:     next.MetadataLanguage,
-			MarkdownHistoryLimit: int32(next.MarkdownHistoryLimit),
-			TrashRetentionDays:   retentionToDB(next.TrashRetentionDays),
-			PreferredStore:       next.PreferredStore,
-		})
-		if err != nil {
-			return fmt.Errorf("update settings: %w", err)
+		if err := r.UpdateSettings(ctx, next); err != nil {
+			return err
 		}
 		if next.StreamingCountryCode != cur.StreamingCountryCode {
 			// The imported JustWatch link belongs to the old country.
-			if err := q.ClearItemStreamingLinks(ctx, workspaceID); err != nil {
-				return fmt.Errorf("clear item streaming links: %w", err)
+			if err := r.ClearItemStreamingLinks(ctx); err != nil {
+				return err
 			}
-			if err := q.ClearStreamingLinkSnapshots(ctx, workspaceID); err != nil {
-				return fmt.Errorf("clear streaming link snapshots: %w", err)
+			if err := r.ClearStreamingLinkSnapshots(ctx); err != nil {
+				return err
 			}
 		}
 		next.Version = cur.Version + 1
@@ -224,46 +181,4 @@ func sameRetention(a, b *int) bool {
 		return a == b
 	}
 	return *a == *b
-}
-
-// retentionToDB maps the nullable retention to the column (NULL = off).
-func retentionToDB(days *int) *int32 {
-	if days == nil {
-		return nil
-	}
-	v := int32(*days)
-	return &v
-}
-
-// retentionFromDB maps the column back to the nullable retention.
-func retentionFromDB(days *int32) *int {
-	if days == nil {
-		return nil
-	}
-	v := int(*days)
-	return &v
-}
-
-func fromGetRow(r sqlc.GetSettingsRow) Settings {
-	return Settings{
-		WorkspaceName:        r.WorkspaceName,
-		StreamingCountryCode: r.StreamingCountryCode,
-		MetadataLanguage:     r.MetadataLanguage,
-		MarkdownHistoryLimit: int(r.MarkdownHistoryLimit),
-		TrashRetentionDays:   retentionFromDB(r.TrashRetentionDays),
-		PreferredStore:       r.PreferredStore,
-		Version:              int(r.Version),
-	}
-}
-
-func fromLockRow(r sqlc.LockSettingsRow) Settings {
-	return Settings{
-		WorkspaceName:        r.WorkspaceName,
-		StreamingCountryCode: r.StreamingCountryCode,
-		MetadataLanguage:     r.MetadataLanguage,
-		MarkdownHistoryLimit: int(r.MarkdownHistoryLimit),
-		TrashRetentionDays:   retentionFromDB(r.TrashRetentionDays),
-		PreferredStore:       r.PreferredStore,
-		Version:              int(r.Version),
-	}
 }

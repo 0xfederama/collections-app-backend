@@ -15,6 +15,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
@@ -25,9 +26,10 @@ type ItemService interface {
 	Update(ctx context.Context, id uuid.UUID, version int, p items.Patch) (items.Item, error)
 }
 
-// SettingsReader supplies localization and streaming-region preferences.
+// SettingsReader supplies localization and streaming-region preferences for
+// the workspace of ctx.
 type SettingsReader interface {
-	Get(ctx context.Context, workspaceID uuid.UUID) (workspace.Settings, error)
+	Get(ctx context.Context) (workspace.Settings, error)
 }
 
 // Service resolves provider data (the provider is picked from the list's type)
@@ -115,7 +117,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 		}
 		return s.items.Create(ctx, listID, in)
 	}
-	settings, err := s.settings.Get(ctx, s.workspaceID)
+	settings, err := s.settings.Get(scope.With(ctx, s.workspaceID))
 	if err != nil {
 		return items.Item{}, err
 	}
@@ -182,7 +184,7 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 	if !provider.Enabled() {
 		return items.Item{}, apperr.LookupDisabled()
 	}
-	settings, err := s.settings.Get(ctx, s.workspaceID)
+	settings, err := s.settings.Get(scope.With(ctx, s.workspaceID))
 	if err != nil {
 		return items.Item{}, err
 	}
@@ -256,7 +258,7 @@ func (s *Service) RefreshOwned(ctx context.Context, itemID uuid.UUID, expectedVe
 	if it.Version != expectedVersion {
 		return apperr.VersionConflict(it.Version)
 	}
-	settings, err := s.settings.Get(ctx, s.workspaceID)
+	settings, err := s.settings.Get(scope.With(ctx, s.workspaceID))
 	if err != nil {
 		return err
 	}

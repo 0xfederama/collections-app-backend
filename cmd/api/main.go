@@ -76,7 +76,7 @@ func run() error {
 	trashSvc := trash.New(pool, store, clock.System{}, logger, workspaceID)
 	go trashSvc.RunAutoPurge(ctx, 24*time.Hour) // stops when ctx is cancelled on shutdown
 	tmdbClient := tmdb.NewWithOptions(cfg.TMDBAPIKey, tmdb.Options{MockFixture: cfg.TMDBMockFixture})
-	settingsSvc := workspace.NewService(pool)
+	settingsSvc := workspace.NewService(workspace.NewPostgres(pool))
 	lookupStore := lookup.NewStore(pool, store, clock.System{}, itemSvc, logger, workspaceID)
 	tmdbProvider := lookup.NewTMDBProvider(tmdbClient)
 	// Books use Open Library: no key, on by default. The test-stack fixture flag also serves its one fixture book (D-096).

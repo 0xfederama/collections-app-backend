@@ -269,7 +269,7 @@ func fromHuma(ctx context.Context, status int, errs []error) *Problem {
 		case d.Location == "body" && status == http.StatusBadRequest:
 			return Malformed(detailNotJSON)
 		}
-		fields = append(fields, FieldError{Field: strings.TrimPrefix(d.Location, "body."), Message: d.Message})
+		fields = append(fields, fieldError(d))
 	}
 	p := New(http.StatusUnprocessableEntity, "validation_failed", "Validation failed", "One or more fields are invalid.")
 	p.Errors = fields
@@ -288,9 +288,36 @@ var bodyTypeMessages = map[string]bool{
 	validation.MsgExpectedObject:  true,
 }
 
-// isBodyTypeError reports whether d is a wrong JSON type on a body field.
+// isBodyTypeError reports whether d is a wrong JSON type on the body or a body field.
 func isBodyTypeError(d *huma.ErrorDetail) bool {
-	return strings.HasPrefix(d.Location, "body.") && bodyTypeMessages[d.Message]
+	return (d.Location == "body" || strings.HasPrefix(d.Location, "body.")) && bodyTypeMessages[d.Message]
+}
+
+// fieldError names the body field a 422 rule is about.
+func fieldError(d *huma.ErrorDetail) FieldError {
+	if name, ok := requiredProperty(d); ok {
+		return FieldError{Field: name, Message: d.Message}
+	}
+	return FieldError{Field: strings.TrimPrefix(d.Location, "body."), Message: d.Message}
+}
+
+// Huma's message for a missing property (validation.MsgExpectedRequiredProperty).
+const (
+	msgRequiredPrefix = "expected required property "
+	msgRequiredSuffix = " to be present"
+)
+
+// requiredProperty returns the property named by a missing-property error of
+// the body root. Huma reports those at "body", not at the property.
+func requiredProperty(d *huma.ErrorDetail) (string, bool) {
+	if d.Location != "body" {
+		return "", false
+	}
+	rest, ok := strings.CutPrefix(d.Message, msgRequiredPrefix)
+	if !ok {
+		return "", false
+	}
+	return strings.CutSuffix(rest, msgRequiredSuffix)
 }
 
 // generic answers a Huma status that carries no detail the mapping knows, with

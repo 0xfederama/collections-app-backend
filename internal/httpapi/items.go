@@ -12,10 +12,10 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/lists"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
 	"github.com/0xfederama/collections-app-backend/internal/platform/etag"
 	"github.com/0xfederama/collections-app-backend/internal/streamlinks"
-	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
 
 func (s *Server) ListItems(ctx context.Context, r oapi.ListItemsRequestObject) (oapi.ListItemsResponseObject, error) {
@@ -172,13 +172,13 @@ func itemETag(it items.Item) string { return etag.Format(etag.Item, it.Version) 
 
 // optionalPrice turns the nullable price of a request into an Optional: absent
 // is not Set, `null` is Set with a nil Value (clear the price).
-func optionalPrice(n nullable.Nullable[oapi.PriceInput]) tree.Optional[items.Price] {
+func optionalPrice(n nullable.Nullable[oapi.PriceInput]) lists.Optional[items.Price] {
 	if !n.IsSpecified() {
-		return tree.Optional[items.Price]{}
+		return lists.Optional[items.Price]{}
 	}
 	p, err := n.Get()
 	if err != nil {
-		return tree.Optional[items.Price]{Set: true}
+		return lists.Optional[items.Price]{Set: true}
 	}
 	out := items.Price{Currency: p.Currency, Amount: p.Amount}
 	if v, err := p.Min.Get(); err == nil {
@@ -187,7 +187,7 @@ func optionalPrice(n nullable.Nullable[oapi.PriceInput]) tree.Optional[items.Pri
 	if v, err := p.Max.Get(); err == nil {
 		out.Max = &v
 	}
-	return tree.Optional[items.Price]{Set: true, Value: &out}
+	return lists.Optional[items.Price]{Set: true, Value: &out}
 }
 
 func priceBody(p *items.Price) nullable.Nullable[oapi.Price] {

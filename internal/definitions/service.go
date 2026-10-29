@@ -15,9 +15,9 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
+	"github.com/0xfederama/collections-app-backend/internal/lists"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
-	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
 
 type DB interface {
@@ -101,7 +101,7 @@ func (s *Service) Create(ctx context.Context, in CreateType) (Type, error) {
 	if err != nil {
 		return Type{}, err
 	}
-	if in.DefaultIcon != nil && !tree.ValidIcon(*in.DefaultIcon) {
+	if in.DefaultIcon != nil && !lists.ValidIcon(*in.DefaultIcon) {
 		return Type{}, apperr.Validation(apperr.FieldError{Field: "default_icon", Message: "must be one emoji or i: followed by a lowercase name of 1 to 40 letters, digits or hyphens"})
 	}
 	key := keyFor(name)
@@ -246,7 +246,7 @@ func (s *Service) Update(ctx context.Context, key string, v int, in UpdateType) 
 		nextIcon := cur.DefaultIcon
 		if in.DefaultIcon.Set {
 			nextIcon = in.DefaultIcon.Value
-			if nextIcon != nil && !tree.ValidIcon(*nextIcon) {
+			if nextIcon != nil && !lists.ValidIcon(*nextIcon) {
 				return apperr.Validation(apperr.FieldError{Field: "default_icon", Message: "must be one emoji or i: followed by a lowercase name of 1 to 40 letters, digits or hyphens"})
 			}
 		}

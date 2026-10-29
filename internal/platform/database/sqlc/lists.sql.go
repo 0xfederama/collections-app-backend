@@ -397,6 +397,30 @@ func (q *Queries) ReorderLists(ctx context.Context, arg ReorderListsParams) erro
 	return err
 }
 
+const setListSortOrder = `-- name: SetListSortOrder :exec
+UPDATE lists
+SET sort_order = $1, updated_at = $2
+WHERE id = $3 AND workspace_id = $4 AND deleted_at IS NULL
+`
+
+type SetListSortOrderParams struct {
+	SortOrder   int32
+	Now         time.Time
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+// Sets one list's position. The version stays (DATA_MODEL §7).
+func (q *Queries) SetListSortOrder(ctx context.Context, arg SetListSortOrderParams) error {
+	_, err := q.db.Exec(ctx, setListSortOrder,
+		arg.SortOrder,
+		arg.Now,
+		arg.ID,
+		arg.WorkspaceID,
+	)
+	return err
+}
+
 const updateList = `-- name: UpdateList :one
 UPDATE lists
 SET name = $1, description = $2, display_mode = $3, sort_mode = $4,

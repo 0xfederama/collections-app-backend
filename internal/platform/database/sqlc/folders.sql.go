@@ -12,33 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const folderIsSelfOrAncestor = `-- name: FolderIsSelfOrAncestor :one
-WITH RECURSIVE chain(id, parent_folder_id, depth) AS (
-    SELECT f.id, f.parent_folder_id, 1 AS depth FROM folders f
-    WHERE f.id = $2 AND f.workspace_id = $3 AND f.deleted_at IS NULL
-  UNION ALL
-    SELECT p.id, p.parent_folder_id, c.depth + 1 FROM folders p
-    JOIN chain c ON p.id = c.parent_folder_id
-    WHERE p.workspace_id = $3 AND p.deleted_at IS NULL AND c.depth < 10000
-)
-SELECT count(*)::int AS matches FROM chain WHERE chain.id = $1::uuid
-`
-
-type FolderIsSelfOrAncestorParams struct {
-	FolderID      uuid.UUID
-	DestinationID uuid.UUID
-	WorkspaceID   uuid.UUID
-}
-
-// Counts 1 when folder_id is the destination itself or one of its ancestors: the
-// walk goes up from the destination. The depth cap keeps it finite even on corrupt data.
-func (q *Queries) FolderIsSelfOrAncestor(ctx context.Context, arg FolderIsSelfOrAncestorParams) (int32, error) {
-	row := q.db.QueryRow(ctx, folderIsSelfOrAncestor, arg.FolderID, arg.DestinationID, arg.WorkspaceID)
-	var matches int32
-	err := row.Scan(&matches)
-	return matches, err
-}
-
 const getFolder = `-- name: GetFolder :one
 SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM folders
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
@@ -105,38 +78,6 @@ func (q *Queries) InsertFolder(ctx context.Context, arg InsertFolderParams) (Fol
 	return i, err
 }
 
-const listActiveFolderIDsByParent = `-- name: ListActiveFolderIDsByParent :many
-SELECT id FROM folders
-WHERE workspace_id = $1 AND deleted_at IS NULL
-  AND parent_folder_id IS NOT DISTINCT FROM $2::uuid
-ORDER BY sort_order, id
-`
-
-type ListActiveFolderIDsByParentParams struct {
-	WorkspaceID    uuid.UUID
-	ParentFolderID uuid.NullUUID
-}
-
-func (q *Queries) ListActiveFolderIDsByParent(ctx context.Context, arg ListActiveFolderIDsByParentParams) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, listActiveFolderIDsByParent, arg.WorkspaceID, arg.ParentFolderID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []uuid.UUID{}
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listActiveFolders = `-- name: ListActiveFolders :many
 SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM folders
 WHERE workspace_id = $1 AND deleted_at IS NULL
@@ -167,6 +108,38 @@ func (q *Queries) ListActiveFolders(ctx context.Context, workspaceID uuid.UUID) 
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChildFolderIDs = `-- name: ListChildFolderIDs :many
+SELECT id FROM folders
+WHERE workspace_id = $1 AND deleted_at IS NULL
+  AND parent_folder_id IS NOT DISTINCT FROM $2::uuid
+ORDER BY sort_order, id
+`
+
+type ListChildFolderIDsParams struct {
+	WorkspaceID    uuid.UUID
+	ParentFolderID uuid.NullUUID
+}
+
+func (q *Queries) ListChildFolderIDs(ctx context.Context, arg ListChildFolderIDsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listChildFolderIDs, arg.WorkspaceID, arg.ParentFolderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -298,21 +271,26 @@ func (q *Queries) RenameFolder(ctx context.Context, arg RenameFolderParams) (Fol
 	return i, err
 }
 
-const reorderFolders = `-- name: ReorderFolders :exec
-UPDATE folders f
-SET sort_order = (o.ord - 1)::int, updated_at = $1
-FROM unnest($3::uuid[]) WITH ORDINALITY AS o(id, ord)
-WHERE f.id = o.id AND f.workspace_id = $2 AND f.deleted_at IS NULL
+const setFolderSortOrder = `-- name: SetFolderSortOrder :exec
+UPDATE folders
+SET sort_order = $1, updated_at = $2
+WHERE id = $3 AND workspace_id = $4 AND deleted_at IS NULL
 `
 
-type ReorderFoldersParams struct {
+type SetFolderSortOrderParams struct {
+	SortOrder   int32
 	Now         time.Time
+	ID          uuid.UUID
 	WorkspaceID uuid.UUID
-	Ids         []uuid.UUID
 }
 
-// Rewrites sort_order to the position in ids (0..n-1). Versions stay (DATA_MODEL §7).
-func (q *Queries) ReorderFolders(ctx context.Context, arg ReorderFoldersParams) error {
-	_, err := q.db.Exec(ctx, reorderFolders, arg.Now, arg.WorkspaceID, arg.Ids)
+// Sets one folder's position. The version stays (DATA_MODEL §7).
+func (q *Queries) SetFolderSortOrder(ctx context.Context, arg SetFolderSortOrderParams) error {
+	_, err := q.db.Exec(ctx, setFolderSortOrder,
+		arg.SortOrder,
+		arg.Now,
+		arg.ID,
+		arg.WorkspaceID,
+	)
 	return err
 }

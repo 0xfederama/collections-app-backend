@@ -35,28 +35,14 @@ SET parent_folder_id = sqlc.narg(parent_folder_id), sort_order = @sort_order, ve
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 RETURNING *;
 
--- name: FolderIsSelfOrAncestor :one
--- Counts 1 when folder_id is the destination itself or one of its ancestors: the
--- walk goes up from the destination. The depth cap keeps it finite even on corrupt data.
-WITH RECURSIVE chain(id, parent_folder_id, depth) AS (
-    SELECT f.id, f.parent_folder_id, 1 AS depth FROM folders f
-    WHERE f.id = @destination_id AND f.workspace_id = @workspace_id AND f.deleted_at IS NULL
-  UNION ALL
-    SELECT p.id, p.parent_folder_id, c.depth + 1 FROM folders p
-    JOIN chain c ON p.id = c.parent_folder_id
-    WHERE p.workspace_id = @workspace_id AND p.deleted_at IS NULL AND c.depth < 10000
-)
-SELECT count(*)::int AS matches FROM chain WHERE chain.id = sqlc.arg(folder_id)::uuid;
-
--- name: ListActiveFolderIDsByParent :many
+-- name: ListChildFolderIDs :many
 SELECT id FROM folders
 WHERE workspace_id = @workspace_id AND deleted_at IS NULL
   AND parent_folder_id IS NOT DISTINCT FROM sqlc.narg(parent_folder_id)::uuid
 ORDER BY sort_order, id;
 
--- name: ReorderFolders :exec
--- Rewrites sort_order to the position in ids (0..n-1). Versions stay (DATA_MODEL §7).
-UPDATE folders f
-SET sort_order = (o.ord - 1)::int, updated_at = @now
-FROM unnest(@ids::uuid[]) WITH ORDINALITY AS o(id, ord)
-WHERE f.id = o.id AND f.workspace_id = @workspace_id AND f.deleted_at IS NULL;
+-- name: SetFolderSortOrder :exec
+-- Sets one folder's position. The version stays (DATA_MODEL §7).
+UPDATE folders
+SET sort_order = @sort_order, updated_at = @now
+WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;

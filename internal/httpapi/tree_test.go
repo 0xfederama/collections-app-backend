@@ -18,12 +18,13 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/lists"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/seed"
-	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
 
 // treeEnv is a router on a fresh migrated database with one workspace.
@@ -47,7 +48,7 @@ func newTreeEnv(t *testing.T) *treeEnv {
 	}
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: ws,
-		Definitions: definitions.New(pool, ws), Tree: tree.New(pool, clock.System{}, ws), Items: items.New(pool, clock.System{}, ws),
+		Definitions: definitions.New(pool, ws), Items: items.New(pool, clock.System{}, ws),
 		Search: search.New(pool, ws),
 	})
 	return &treeEnv{t: t, h: h, pool: pool, ws: ws}
@@ -731,11 +732,11 @@ func TestF014B4_ListSortModeUsesFieldDefinitions(t *testing.T) {
 	}
 }
 
-// descEnv returns a tree service on the env's database and a fresh list with no type.
-func (e *treeEnv) descEnv() (*tree.Service, tree.List) {
+// descEnv returns a lists service on the env's database and a fresh list with no type.
+func (e *treeEnv) descEnv() (*lists.Service, lists.List) {
 	e.t.Helper()
-	svc := tree.New(e.pool, clock.System{}, e.ws)
-	l, err := svc.CreateList(e.t.Context(), tree.CreateListInput{Name: "L"})
+	svc := lists.NewService(lists.NewPostgres(e.pool), clock.System{})
+	l, err := svc.Create(scope.With(e.t.Context(), e.ws), lists.CreateInput{Name: "L"})
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -745,9 +746,9 @@ func (e *treeEnv) descEnv() (*tree.Service, tree.List) {
 func TestF007_ListDescriptionLimitIsBytes(t *testing.T) {
 	e := newTreeEnv(t)
 	svc, l := e.descEnv()
-	ctx := t.Context()
-	patch := func(v *string) tree.ListPatch {
-		return tree.ListPatch{Description: tree.Optional[string]{Set: true, Value: v}}
+	ctx := scope.With(t.Context(), e.ws)
+	patch := func(v *string) lists.Patch {
+		return lists.Patch{Description: lists.Optional[string]{Set: true, Value: v}}
 	}
 	str := func(s string) *string { return &s }
 
@@ -765,11 +766,11 @@ func TestF007_ListDescriptionLimitIsBytes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cur, err := svc.GetList(ctx, l.ID)
+			cur, err := svc.Get(ctx, l.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = svc.UpdateList(ctx, l.ID, cur.Version, patch(str(tt.desc)))
+			_, err = svc.Update(ctx, l.ID, cur.Version, patch(str(tt.desc)))
 			var tooLarge *apperr.PayloadTooLargeError
 			var invalid *apperr.ValidationError
 			switch tt.wantErr {
@@ -790,12 +791,12 @@ func TestF007_ListDescriptionLimitIsBytes(t *testing.T) {
 	}
 
 	t.Run("create applies the same limit", func(t *testing.T) {
-		_, err := svc.CreateList(ctx, tree.CreateListInput{Name: "N", Description: str(strings.Repeat("x", 65537))})
+		_, err := svc.Create(ctx, lists.CreateInput{Name: "N", Description: str(strings.Repeat("x", 65537))})
 		var tooLarge *apperr.PayloadTooLargeError
 		if !errors.As(err, &tooLarge) {
 			t.Fatalf("err = %v, want PayloadTooLarge", err)
 		}
-		if _, err := svc.CreateList(ctx, tree.CreateListInput{Name: "N", Description: str(strings.Repeat("x", 65536))}); err != nil {
+		if _, err := svc.Create(ctx, lists.CreateInput{Name: "N", Description: str(strings.Repeat("x", 65536))}); err != nil {
 			t.Fatal(err)
 		}
 	})

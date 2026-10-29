@@ -17,7 +17,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/seed"
-	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
 
 // newContentEnv is a treeEnv whose router also serves content, with a settings
@@ -37,7 +36,7 @@ func newContentEnv(t *testing.T) *treeEnv {
 	}
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: ws,
-		Tree: tree.New(pool, clock.System{}, ws), Items: items.New(pool, clock.System{}, ws),
+		Items:   items.New(pool, clock.System{}, ws),
 		Content: content.New(pool, clock.System{}, ws),
 	})
 	return &treeEnv{t: t, h: h, pool: pool, ws: ws}

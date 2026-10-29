@@ -43,7 +43,6 @@ type Deps struct {
 	// WorkspaceID is the single workspace, from workspace.Bootstrap.
 	WorkspaceID uuid.UUID
 	Settings    *workspace.Service
-	Definitions *definitions.Service
 	// LookupAvailable reports whether the optional server-side TMDB key is configured (F013-B5).
 	LookupAvailable bool
 	// BookLookupAvailable reports whether book lookup (Open Library) is on (F016-B3).
@@ -109,10 +108,11 @@ func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
 		})
 		folderRepo := folders.NewPostgres(folderDB(d.DB))
 		listRepo := lists.NewPostgres(folderDB(d.DB))
+		typeDefs := definitions.NewPostgres(typeDB(d.DB))
 		folders.Register(api, d.Logger, folders.NewService(folderRepo, d.Clock))
-		lists.Register(api, d.Logger, lists.NewService(listRepo, d.Clock))
+		lists.Register(api, d.Logger, lists.NewService(listRepo, listTypes{typeDefs}, d.Clock))
 		tree.Register(api, d.Logger, folderRepo, listRepo)
-		definitions.Register(api, d.Logger, definitions.NewManager(definitions.NewPostgres(typeDB(d.DB)), d.Clock))
+		definitions.Register(api, d.Logger, definitions.NewService(typeDefs, d.Clock))
 	})
 
 	return httpserver.Wrap(r, d.Logger), nil
@@ -131,4 +131,33 @@ func folderDB(db Pinger) folders.DB {
 func typeDB(db Pinger) definitions.DB {
 	tdb, _ := db.(definitions.DB)
 	return tdb
+}
+
+// listTypes is the lists.TypeSource: it reads a type from the type definitions and
+// converts it to the lists rules' view. The composition root wires it, so lists
+// does not import definitions.
+type listTypes struct{ defs *definitions.Postgres }
+
+func (a listTypes) TypeInfo(ctx context.Context, key *string) (lists.TypeInfo, []lists.FieldInfo, error) {
+	if key == nil {
+		return lists.TypeInfo{}, nil, nil
+	}
+	var typ definitions.Type
+	var fields []definitions.Field
+	err := a.defs.InTx(ctx, func(r definitions.Repo) error {
+		var err error
+		if typ, err = r.GetTypeByKey(ctx, *key); err != nil {
+			return err
+		}
+		fields, err = r.ListFields(ctx, typ.ID)
+		return err
+	})
+	if err != nil {
+		return lists.TypeInfo{}, nil, err
+	}
+	out := make([]lists.FieldInfo, 0, len(fields))
+	for _, f := range fields {
+		out = append(out, lists.FieldInfo{Key: f.Key, FieldType: f.Type})
+	}
+	return lists.TypeInfo{Key: typ.Key, AllowsPrice: typ.AllowsPrice, DefaultSortField: typ.DefaultSortField}, out, nil
 }

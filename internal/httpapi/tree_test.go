@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,7 +16,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
-	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/lists"
@@ -48,7 +48,7 @@ func newTreeEnv(t *testing.T) *treeEnv {
 	}
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: ws,
-		Definitions: definitions.New(pool, ws), Items: items.New(pool, clock.System{}, ws),
+		Items:  items.New(pool, clock.System{}, ws),
 		Search: search.New(pool, ws),
 	})
 	return &treeEnv{t: t, h: h, pool: pool, ws: ws}
@@ -732,10 +732,18 @@ func TestF014B4_ListSortModeUsesFieldDefinitions(t *testing.T) {
 	}
 }
 
+// noTypeSource answers for lists with no type only: descEnv creates such a list, so the
+// source is never asked. A list that names a type in these tests is a test bug.
+type noTypeSource struct{}
+
+func (noTypeSource) TypeInfo(context.Context, *string) (lists.TypeInfo, []lists.FieldInfo, error) {
+	return lists.TypeInfo{}, nil, apperr.NotFound("type")
+}
+
 // descEnv returns a lists service on the env's database and a fresh list with no type.
 func (e *treeEnv) descEnv() (*lists.Service, lists.List) {
 	e.t.Helper()
-	svc := lists.NewService(lists.NewPostgres(e.pool), clock.System{})
+	svc := lists.NewService(lists.NewPostgres(e.pool), noTypeSource{}, clock.System{})
 	l, err := svc.Create(scope.With(e.t.Context(), e.ws), lists.CreateInput{Name: "L"})
 	if err != nil {
 		e.t.Fatal(err)

@@ -17,7 +17,7 @@ import (
 // they are: httpserver.Op maps them to problems. The value rules (name length,
 // field types, defaults) are the manager's, so the request bodies carry no
 // schema constraints of their own.
-func Register(api huma.API, log *slog.Logger, svc *Manager) {
+func Register(api huma.API, log *slog.Logger, svc *Service) {
 	h := &handler{svc: svc}
 	tags := []string{"types"}
 
@@ -68,7 +68,7 @@ func Register(api huma.API, log *slog.Logger, svc *Manager) {
 	}, httpserver.Op(log, h.removeField))
 }
 
-type handler struct{ svc *Manager }
+type handler struct{ svc *Service }
 
 // ListTypesOutput is the listTypes answer.
 type ListTypesOutput struct {

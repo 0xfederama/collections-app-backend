@@ -157,8 +157,11 @@ func (f *fakeDB) FolderExists(_ context.Context, id uuid.UUID) (bool, error) {
 	return ok, nil
 }
 
-func (f *fakeDB) TypeDefinition(_ context.Context, key string) (TypeInfo, []FieldInfo, error) {
-	t, ok := f.types[key]
+func (f *fakeDB) TypeInfo(_ context.Context, key *string) (TypeInfo, []FieldInfo, error) {
+	if key == nil {
+		return TypeInfo{}, nil, nil
+	}
+	t, ok := f.types[*key]
 	if !ok {
 		return TypeInfo{}, nil, apperr.NotFound("type")
 	}
@@ -234,7 +237,7 @@ func TestCreate_Defaults(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := newFakeDB()
-			got, err := NewService(db, fixedClock{}).Create(t.Context(), tt.in)
+			got, err := NewService(db, db, fixedClock{}).Create(t.Context(), tt.in)
 			if err != nil {
 				t.Fatalf("Create: %v", err)
 			}
@@ -254,7 +257,7 @@ func TestCreate_Defaults(t *testing.T) {
 func TestCreate_DestinationUnavailableWritesNothing(t *testing.T) {
 	db := newFakeDB()
 	trashed := uuid.New() // not an active folder
-	_, err := NewService(db, fixedClock{}).Create(t.Context(), CreateInput{Name: "L", FolderID: &trashed})
+	_, err := NewService(db, db, fixedClock{}).Create(t.Context(), CreateInput{Name: "L", FolderID: &trashed})
 	if code(err) != apperr.CodeDestinationUnavailable {
 		t.Fatalf("err = %v, want destination_unavailable", err)
 	}
@@ -265,7 +268,7 @@ func TestCreate_DestinationUnavailableWritesNothing(t *testing.T) {
 
 func TestCreate_ValidationRunsBeforeTheTransaction(t *testing.T) {
 	db := newFakeDB()
-	_, err := NewService(db, fixedClock{}).Create(t.Context(), CreateInput{Name: "   "})
+	_, err := NewService(db, db, fixedClock{}).Create(t.Context(), CreateInput{Name: "   "})
 	var ve *apperr.ValidationError
 	if !errors.As(err, &ve) || ve.Errors[0].Field != "name" {
 		t.Fatalf("err = %v, want a validation error on name", err)
@@ -277,7 +280,7 @@ func TestCreate_ValidationRunsBeforeTheTransaction(t *testing.T) {
 
 func TestCreate_UnknownTypeIsValidationError(t *testing.T) {
 	db := newFakeDB()
-	_, err := NewService(db, fixedClock{}).Create(t.Context(), CreateInput{Name: "L", Type: ptr("nope")})
+	_, err := NewService(db, db, fixedClock{}).Create(t.Context(), CreateInput{Name: "L", Type: ptr("nope")})
 	var ve *apperr.ValidationError
 	if !errors.As(err, &ve) || ve.Errors[0].Field != "type" {
 		t.Fatalf("err = %v, want a validation error on type", err)
@@ -290,7 +293,7 @@ func TestCreate_UnknownTypeIsValidationError(t *testing.T) {
 func TestUpdate_StaleVersionWritesNothing(t *testing.T) {
 	db := newFakeDB()
 	l := db.seed(List{Name: "A", Version: 3})
-	_, err := NewService(db, fixedClock{}).Update(t.Context(), l.ID, 2, Patch{Name: ptr("B")})
+	_, err := NewService(db, db, fixedClock{}).Update(t.Context(), l.ID, 2, Patch{Name: ptr("B")})
 	var vc *apperr.VersionConflictError
 	if !errors.As(err, &vc) || vc.Current != 3 {
 		t.Fatalf("err = %v, want version conflict at 3", err)
@@ -325,7 +328,7 @@ func TestUpdate_TypeChange(t *testing.T) {
 				from = ptr("movie")
 			}
 			l := db.seed(List{Name: "A", Type: from, SortMode: "manual"})
-			got, err := NewService(db, fixedClock{}).Update(t.Context(), l.ID, 1, Patch{Type: Optional[string]{Set: true, Value: tt.to}})
+			got, err := NewService(db, db, fixedClock{}).Update(t.Context(), l.ID, 1, Patch{Type: Optional[string]{Set: true, Value: tt.to}})
 			if err != nil {
 				t.Fatalf("Update: %v", err)
 			}
@@ -348,7 +351,7 @@ func TestUpdate_NoOpPatchWritesNothing(t *testing.T) {
 		DisplayMode: ptr("thumbnail"),
 		Type:        Optional[string]{Set: true, Value: ptr("wishlist")}, // same type: lock only
 	}
-	got, err := NewService(db, fixedClock{}).Update(t.Context(), l.ID, 1, patch)
+	got, err := NewService(db, db, fixedClock{}).Update(t.Context(), l.ID, 1, patch)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -360,7 +363,7 @@ func TestUpdate_NoOpPatchWritesNothing(t *testing.T) {
 func TestUpdate_UnknownTypeIsValidationError(t *testing.T) {
 	db := newFakeDB()
 	l := db.seed(List{Name: "A"})
-	_, err := NewService(db, fixedClock{}).Update(t.Context(), l.ID, 1, Patch{Type: Optional[string]{Set: true, Value: ptr("nope")}})
+	_, err := NewService(db, db, fixedClock{}).Update(t.Context(), l.ID, 1, Patch{Type: Optional[string]{Set: true, Value: ptr("nope")}})
 	var ve *apperr.ValidationError
 	if !errors.As(err, &ve) || ve.Errors[0].Field != "type" {
 		t.Fatalf("err = %v, want a validation error on type", err)
@@ -386,7 +389,7 @@ func TestMove_ErrorOrder(t *testing.T) {
 			db := newFakeDB()
 			l := db.seed(List{Name: "A"})
 			gone := uuid.New()
-			_, err := NewService(db, fixedClock{}).Move(t.Context(), l.ID, tt.version, &gone)
+			_, err := NewService(db, db, fixedClock{}).Move(t.Context(), l.ID, tt.version, &gone)
 			var vc *apperr.VersionConflictError
 			if tt.wantVC {
 				if !errors.As(err, &vc) || vc.Current != 1 {
@@ -408,7 +411,7 @@ func TestMove_AppendsToTheDestination(t *testing.T) {
 	db.folders[folder] = fakeFolder{name: "Media"}
 	db.seed(List{Name: "Other", FolderID: &folder, SortOrder: 0})
 	l := db.seed(List{Name: "A"})
-	got, err := NewService(db, fixedClock{}).Move(t.Context(), l.ID, 1, &folder)
+	got, err := NewService(db, db, fixedClock{}).Move(t.Context(), l.ID, 1, &folder)
 	if err != nil {
 		t.Fatalf("Move: %v", err)
 	}
@@ -421,7 +424,7 @@ func TestReorder(t *testing.T) {
 	db := newFakeDB()
 	a := db.seed(List{Name: "A", SortOrder: 0})
 	b := db.seed(List{Name: "B", SortOrder: 1})
-	svc := NewService(db, fixedClock{})
+	svc := NewService(db, db, fixedClock{})
 
 	if err := svc.Reorder(t.Context(), nil, []uuid.UUID{a.ID}); code(err) != apperr.CodeOrderStale {
 		t.Fatalf("missing sibling: err = %v, want order_stale", err)
@@ -450,7 +453,7 @@ func TestGet_PathIsTheAncestorChain(t *testing.T) {
 	db.folders[child] = fakeFolder{name: "Movies", parent: &root}
 	atRoot := db.seed(List{Name: "Loose"})
 	inChild := db.seed(List{Name: "Watchlist", FolderID: &child})
-	svc := NewService(db, fixedClock{})
+	svc := NewService(db, db, fixedClock{})
 
 	got, err := svc.Get(t.Context(), inChild.ID)
 	if err != nil {

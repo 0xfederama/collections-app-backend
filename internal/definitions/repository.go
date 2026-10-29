@@ -16,7 +16,13 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 )
 
-// Postgres implements the repository on a pool (DB is declared in service.go).
+// DB is what the repository runs on: a pool or a connection, and a transaction starter.
+type DB interface {
+	database.TxBeginner
+	sqlc.DBTX
+}
+
+// Postgres implements the repository on a pool.
 type Postgres struct{ db DB }
 
 func NewPostgres(db DB) *Postgres { return &Postgres{db: db} }
@@ -78,8 +84,8 @@ func (r *repo) InsertType(ctx context.Context, t Type, now time.Time) (Type, err
 	return typeFromRow(row), nil
 }
 
-// UpdateType sets every editable column. The Set flags of the query are all
-// true: the row is locked and t already holds the merged values.
+// UpdateType sets every editable column. The row is locked and t already holds the
+// merged values.
 func (r *repo) UpdateType(ctx context.Context, t Type, now time.Time) (Type, error) {
 	pins, err := pinsToJSON(t.DefaultPinnedFields)
 	if err != nil {
@@ -87,11 +93,8 @@ func (r *repo) UpdateType(ctx context.Context, t Type, now time.Time) (Type, err
 	}
 	row, err := r.q.UpdateTypeDefinition(ctx, sqlc.UpdateTypeDefinitionParams{
 		ID: t.ID, WorkspaceID: scope.WorkspaceID(ctx),
-		Name: t.Name, SetName: true,
-		DefaultIcon: t.DefaultIcon, SetDefaultIcon: true,
-		AllowsPrice: t.AllowsPrice, SetAllowsPrice: true,
-		DefaultSortField: t.DefaultSortField, SetDefaultSortField: true,
-		DefaultPinnedFields: pins, SetDefaultPinnedFields: true,
+		Name: t.Name, DefaultIcon: t.DefaultIcon, AllowsPrice: t.AllowsPrice,
+		DefaultSortField: t.DefaultSortField, DefaultPinnedFields: pins,
 		Now: now,
 	})
 	if err != nil {

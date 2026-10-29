@@ -21,7 +21,7 @@ linters:
             - {pkg: github.com/0xfederama/collections-app-backend/internal/platform/database, desc: "handlers never touch the database"}
             - {pkg: github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc, desc: "handlers never use sqlc code"}
         service-has-no-sql-or-http:
-          files: ["**/service.go", "!**/internal/definitions/service.go", "!**/internal/images/service.go"]
+          files: ["**/service.go", "!**/internal/images/service.go"]
           deny:
             - {pkg: github.com/jackc/pgx, desc: "services hold rules, SQL lives in repository.go"}
             - {pkg: github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc, desc: "services reach the database through their Repo interface"}

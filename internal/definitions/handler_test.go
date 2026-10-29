@@ -35,7 +35,7 @@ func newHandlerEnv(t *testing.T) *handlerEnv {
 	}
 	r := chi.NewRouter()
 	r.Use(scope.Middleware(ws))
-	mgr := definitions.NewManager(definitions.NewPostgres(pool), clock.System{})
+	mgr := definitions.NewService(definitions.NewPostgres(pool), clock.System{})
 	definitions.Register(httpserver.NewAPI(r), slog.New(slog.DiscardHandler), mgr)
 	return &handlerEnv{t: t, h: r, pool: pool}
 }

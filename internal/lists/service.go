@@ -40,13 +40,17 @@ type Repo interface {
 	// FolderChain returns the ancestors of folderID and folderID itself, root first. A folder that is not active gives none.
 	FolderChain(ctx context.Context, folderID uuid.UUID) ([]PathFolder, error)
 	FolderExists(ctx context.Context, id uuid.UUID) (bool, error)
-	// TypeDefinition returns the type with this key and its fields. A missing type is apperr.NotFound("type").
-	// SEAM: moves to definitions in B3c
-	TypeDefinition(ctx context.Context, key string) (TypeInfo, []FieldInfo, error)
 	// SEAM: moves to items in B3d
 	ClearItemsMetadata(ctx context.Context, listID uuid.UUID, now time.Time) error
 	// SEAM: moves to items in B3d
 	ClearItemsPrice(ctx context.Context, listID uuid.UUID, now time.Time) error
+}
+
+// TypeSource reads the type of a list. A nil key is a list with no type (no info, no
+// fields). An unknown key is apperr.NotFound("type"). The composition root builds it
+// over the type definitions, so this package does not import them.
+type TypeSource interface {
+	TypeInfo(ctx context.Context, key *string) (TypeInfo, []FieldInfo, error)
 }
 
 // Service holds the list rules. Structural writes (create, move, reorder) and
@@ -54,10 +58,13 @@ type Repo interface {
 // as every other structural write.
 type Service struct {
 	store Store
+	types TypeSource
 	clock clock.Clock
 }
 
-func NewService(store Store, clk clock.Clock) *Service { return &Service{store: store, clock: clk} }
+func NewService(store Store, types TypeSource, clk clock.Clock) *Service {
+	return &Service{store: store, types: types, clock: clk}
+}
 
 // Create appends a list after its active siblings. A missing or trashed folder is
 // DestinationUnavailable. An empty display mode takes the default, an empty sort
@@ -81,7 +88,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (List, error) {
 		if err := r.LockTree(ctx); err != nil {
 			return fmt.Errorf("lock tree: %w", err)
 		}
-		def, fields, err := typeOf(ctx, r, in.Type)
+		def, fields, err := s.typeOf(ctx, in.Type)
 		if err != nil {
 			return err
 		}
@@ -177,7 +184,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 		if p.Type.Set {
 			newType = p.Type.Value
 		}
-		def, fields, err := typeOf(ctx, r, newType)
+		def, fields, err := s.typeOf(ctx, newType)
 		if err != nil {
 			return err
 		}
@@ -287,11 +294,11 @@ func (s *Service) Reorder(ctx context.Context, folder *uuid.UUID, ids []uuid.UUI
 // typeOf reads the definition and fields of a list type. A nil type is a list with
 // no type: no definition, no fields. Any failure to read the type is an unknown
 // type (422), as it has always been.
-func typeOf(ctx context.Context, r Repo, typ *string) (TypeInfo, []FieldInfo, error) {
+func (s *Service) typeOf(ctx context.Context, typ *string) (TypeInfo, []FieldInfo, error) {
 	if typ == nil {
 		return TypeInfo{}, nil, nil
 	}
-	def, fields, err := r.TypeDefinition(ctx, *typ)
+	def, fields, err := s.types.TypeInfo(ctx, typ)
 	if err != nil {
 		return TypeInfo{}, nil, unknownListType()
 	}

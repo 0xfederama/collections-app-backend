@@ -477,64 +477,6 @@ func (q *Queries) ParkTypeFieldPosition(ctx context.Context, arg ParkTypeFieldPo
 	return err
 }
 
-const prepareReorderTypeFields = `-- name: PrepareReorderTypeFields :exec
-UPDATE type_fields f
-SET position = position + (
-      SELECT COALESCE(MAX(position), 0) + 1
-      FROM type_fields
-      WHERE type_fields.workspace_id = $1 AND type_fields.type_id = $2
-    ),
-    updated_at = $3
-WHERE f.workspace_id = $1 AND f.type_id = $2 AND f.key = ANY($4::text[])
-`
-
-type PrepareReorderTypeFieldsParams struct {
-	WorkspaceID uuid.UUID
-	TypeID      uuid.UUID
-	Now         time.Time
-	Keys        []string
-}
-
-func (q *Queries) PrepareReorderTypeFields(ctx context.Context, arg PrepareReorderTypeFieldsParams) error {
-	_, err := q.db.Exec(ctx, prepareReorderTypeFields,
-		arg.WorkspaceID,
-		arg.TypeID,
-		arg.Now,
-		arg.Keys,
-	)
-	return err
-}
-
-const reorderTypeFields = `-- name: ReorderTypeFields :exec
-UPDATE type_fields f
-SET position = (
-      SELECT count(*)::int
-      FROM type_fields locked
-      WHERE locked.workspace_id = $1 AND locked.type_id = $2 AND locked.is_locked
-    ) + (o.ord - 1)::int,
-    version = version + 1,
-    updated_at = $3
-FROM unnest($4::text[]) WITH ORDINALITY AS o(key, ord)
-WHERE f.workspace_id = $1 AND f.type_id = $2 AND f.key = o.key
-`
-
-type ReorderTypeFieldsParams struct {
-	WorkspaceID uuid.UUID
-	TypeID      uuid.UUID
-	Now         time.Time
-	Keys        []string
-}
-
-func (q *Queries) ReorderTypeFields(ctx context.Context, arg ReorderTypeFieldsParams) error {
-	_, err := q.db.Exec(ctx, reorderTypeFields,
-		arg.WorkspaceID,
-		arg.TypeID,
-		arg.Now,
-		arg.Keys,
-	)
-	return err
-}
-
 const resetListTypeFieldPins = `-- name: ResetListTypeFieldPins :exec
 UPDATE lists
 SET pinned_fields = NULL, version = version + 1, updated_at = $1
@@ -674,43 +616,34 @@ func (q *Queries) TouchTypeDefinition(ctx context.Context, arg TouchTypeDefiniti
 
 const updateTypeDefinition = `-- name: UpdateTypeDefinition :one
 UPDATE type_definitions
-SET name = CASE WHEN $1::boolean THEN $2::text ELSE name END,
-    default_icon = CASE WHEN $3::boolean THEN $4 ELSE default_icon END,
-    allows_price = CASE WHEN $5::boolean THEN $6::boolean ELSE allows_price END,
-    default_sort_field = CASE WHEN $7::boolean THEN $8 ELSE default_sort_field END,
-    default_pinned_fields = CASE WHEN $9::boolean THEN $10 ELSE default_pinned_fields END,
+SET name = $1::text,
+    default_icon = $2,
+    allows_price = $3::boolean,
+    default_sort_field = $4,
+    default_pinned_fields = $5,
     version = version + 1,
-    updated_at = $11
-WHERE id = $12 AND workspace_id = $13 RETURNING id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at
+    updated_at = $6
+WHERE id = $7 AND workspace_id = $8 RETURNING id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at
 `
 
 type UpdateTypeDefinitionParams struct {
-	SetName                bool
-	Name                   string
-	SetDefaultIcon         bool
-	DefaultIcon            *string
-	SetAllowsPrice         bool
-	AllowsPrice            bool
-	SetDefaultSortField    bool
-	DefaultSortField       *string
-	SetDefaultPinnedFields bool
-	DefaultPinnedFields    []byte
-	Now                    time.Time
-	ID                     uuid.UUID
-	WorkspaceID            uuid.UUID
+	Name                string
+	DefaultIcon         *string
+	AllowsPrice         bool
+	DefaultSortField    *string
+	DefaultPinnedFields []byte
+	Now                 time.Time
+	ID                  uuid.UUID
+	WorkspaceID         uuid.UUID
 }
 
+// Writes every editable column: the caller merges the patch and holds the row lock.
 func (q *Queries) UpdateTypeDefinition(ctx context.Context, arg UpdateTypeDefinitionParams) (TypeDefinition, error) {
 	row := q.db.QueryRow(ctx, updateTypeDefinition,
-		arg.SetName,
 		arg.Name,
-		arg.SetDefaultIcon,
 		arg.DefaultIcon,
-		arg.SetAllowsPrice,
 		arg.AllowsPrice,
-		arg.SetDefaultSortField,
 		arg.DefaultSortField,
-		arg.SetDefaultPinnedFields,
 		arg.DefaultPinnedFields,
 		arg.Now,
 		arg.ID,

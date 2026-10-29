@@ -2,40 +2,37 @@
 
 ## Purpose
 
-Serves the HTTP API: the generated strict server mounted on chi, behind request id, security headers, access log and panic recovery. A per-operation guard enforces rules the generated code skips. Every operation in the spec is implemented. Design context: `/Users/federico/Developer/collections-app/design-docs/`.
+Serves the legacy generated strict-server routes on chi, with a per-operation guard that enforces rules the generated code skips. Routes migrated to Huma (currently settings, in `workspace`) are mounted on the same router after them. Shared middleware, Huma and problem mapping live in `internal/platform` (see [platform](platform.md)). Design context: `/Users/federico/Developer/collections-app/design-docs/`.
 
 ## Key files
 
-- `internal/httpapi/router.go`: `NewRouter`, `Deps`, middleware order, chi mounting
+- `internal/httpapi/router.go`: `NewRouter`, `Deps`, route order, scope and `workspace.Register` mounting
 - `internal/httpapi/server.go`: `Server`, `/healthz` and `/readyz` handlers, DATA_DIR probe
-- `internal/httpapi/types.go`: type and field definition management handlers
-- `internal/httpapi/items.go`, `content.go`, `search.go`, `images.go`, `tmdb.go`, `books.go`, `stores.go`: item, content, search, file, TMDB, book suggestion and store provider handlers
-- `internal/httpapi/trash.go`: DELETE folder/list/item, trash list, restore and purge handlers
-- `internal/httpapi/middleware.go`: request id, security headers, access log, recovery, `IfMatchVersion`
+- `internal/httpapi/types.go`, `tree.go`, `folders.go`, `lists.go`, `trash.go`: type, tree and trash handlers
+- `internal/httpapi/items.go`, `content.go`, `search.go`, `images.go`, `tmdb.go`, `books.go`, `stores.go`: item, content, search, file, TMDB, book and store handlers
+- `internal/httpapi/middleware.go`: `IfMatchVersion` only
 - `internal/httpapi/guard.go`: query schemas, If-Match, media type, body limits, unknown fields
-- `internal/httpapi/problem.go`, `paramerr.go`: problem+json writer, `toProblem` (the only apperr mapper)
-- `internal/httpapi/etag/etag.go`: `Format` and `Parse` for `"<prefix>-N"`
+- `internal/httpapi/problem.go`, `paramerr.go`: legacy problem writer and `toProblem` mapper
 - `internal/httpapi/oapi/oapi.gen.go`: generated, never edit (embeds the spec)
 
 ## Interfaces
 
 - `NewRouter(d Deps) (http.Handler, error)`: defaults `Clock` to `clock.System{}`; fails if the embedded spec does not load
-- `Deps`: includes `Definitions *definitions.Service`, `Books lookup.Provider`, `BookLookupAvailable`, alongside the domain services
+- `Deps`: domain services (`Definitions`, `Books lookup.Provider`, `BookLookupAvailable`, ...) and `WorkspaceID`
 - `IfMatchVersion(ctx) int`: version N of the validated `If-Match` in guarded handlers
 - `GET /healthz`: 200 `ok`, liveness only; `GET /readyz`: 200 `ready` or 503 (DB ping, DATA_DIR probe)
-- `GET/POST/PATCH/DELETE /api/v1/types...`: definition and custom-field management; PATCH updates supplied custom-type defaults as well as its name; see `api/openapi.yaml`
+- `GET/POST/PATCH/DELETE /api/v1/types...`: definition and custom-field management; see `api/openapi.yaml`
 - Delete folder/list/item: 204 with If-Match; trash supports list, restore, single purge and empty
-- `GET /api/v1/tmdb/suggestions?type=movie|tv_show&q=...`: ranked suggestions; unavailable integration returns an empty disabled result
-- `GET /api/v1/books/suggestions?q=...`, `GET /api/v1/store-providers`: Open Library matches (`available: false` when off) and the fixed store list
-- `POST /api/v1/items/{id}/lookup` (`source_id` for books) and item create (`source_id`): explicit lookup with item If-Match
+- `GET /api/v1/tmdb/suggestions`, `GET /api/v1/books/suggestions`, `GET /api/v1/store-providers`: suggestions and the fixed store list
+- `POST /api/v1/items/{id}/lookup` and item create (`source_id`): explicit lookup with item If-Match
 
 ## Gotchas
 
-- `/healthz` ignores the DB and storage. Use `/readyz`; every `/readyz` call creates and deletes a `.readyz-*` file in DATA_DIR.
-- The guard, not the generated server, enforces: body limits (413), unknown JSON fields (400 `unknown_field`), missing If-Match (428), and query schema ranges (400).
+- `/healthz` ignores the DB and storage. `/readyz` creates and deletes a `.readyz-*` file in DATA_DIR on every call.
+- The guard, not the generated server, enforces body limits (413), unknown JSON fields (400 `unknown_field`), missing If-Match (428) and query ranges (400).
 - List create and update take 2 MiB JSON bodies (64 KiB Markdown `description`); other JSON bodies keep the 64 KiB limit.
-- Move and reorder bodies must carry the nullable parent field (`parent_folder_id` or `folder_id`): absent is 422, null means root.
-- Attachment responses set `Cache-Control: private, max-age=31536000, immutable` and `Content-Disposition: inline`; nosniff and CSP come from middleware.
-- Item metadata keys are checked against database-backed type fields, not by the guard. Single-item responses and item rows (list, search, recent) add read-only `metadata.store_links`.
-- `itemBody`/`itemSummaryBody` also add read-only `metadata.streaming.platform_links` (`streamlinks.AddToMetadata`, pure, no queries) for any streaming object with platforms.
+- Move and reorder bodies must carry the nullable parent field: absent is 422, null means root.
+- `toProblem` is the apperr mapper for legacy routes; Huma routes use `platform/problem.From`. Change error mapping in both until B3b..f.
+- Attachment responses set `Cache-Control: private, max-age=31536000, immutable` and `Content-Disposition: inline`; nosniff and CSP come from `platform/httpserver`.
+- Item metadata keys are checked against database-backed type fields, not by the guard. Item responses add read-only `metadata.store_links` and `metadata.streaming.platform_links`.
 - No CORS (D-033); errors outside `apperr` become 500 `internal` with only the request id. Extend `ifMatchPrefix` in `guard.go` by hand for new If-Match operations.

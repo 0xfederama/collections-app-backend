@@ -9,7 +9,7 @@ Provides an optional bounded server-side client for TMDB movie and TV search, de
 - `internal/tmdb/client.go`: API client, result mapping, cache, pacing, poster download
 - `internal/lookup/tmdb_provider.go`: adapter onto the lookup `Provider` interface
 - `internal/httpapi/tmdb.go`: suggestions endpoint mapping
-- `internal/config/config.go`: optional `TMDB_API_KEY` and E2E fixture switch
+- `internal/platform/config/config.go`: optional `TMDB_API_KEY` and E2E fixture switch
 - `cmd/api/main.go`: client construction and availability wiring
 
 ## Interfaces

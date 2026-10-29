@@ -10,7 +10,7 @@ Owns the Markdown body of an item: the current content, saved versions, restore 
 - `db/queries/content.sql`: sqlc inputs for locking, versions, pruning, `updated_at` touch
 - `internal/httpapi/content.go`: content handlers and `contentBody` mapping
 - `internal/content/content_test.go`: service tests
-- `internal/httpapi/etag/etag.go`: `Content = "c"` prefix
+- `internal/platform/etag/etag.go`: `Content = "c"` prefix
 
 ## Interfaces
 

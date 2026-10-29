@@ -6,8 +6,8 @@ Parses and validates the API's environment configuration once at startup. Every 
 
 ## Key files
 
-- `internal/config/config.go`: `Config`, `Load`, all validation rules
-- `internal/config/config_test.go`: defaults, overrides, validation table, password-leak check
+- `internal/platform/config/config.go`: `Config`, `Load`, all validation rules
+- `internal/platform/config/config_test.go`: defaults, overrides, validation table, password-leak check
 
 ## Interfaces
 

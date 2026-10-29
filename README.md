@@ -26,8 +26,7 @@ There is no authentication, so the API is published on `127.0.0.1` only. See the
 
 ```text
 cmd/api/main.go        wiring only: config → logger → pgx pool → services → chi router → http.Server (graceful shutdown)
-internal/config        env parsing and validation
-internal/database      pgx pool, InTx; sqlc/ is GENERATED (never edit)
+internal/platform      shared infra: config, database (sqlc/ GENERATED, never edit), clock, etag, httpserver (Huma on chi), problem, scope, testdb, archtest
 internal/apperr        typed domain errors (no HTTP)
 internal/tree          folders and lists
 internal/items         items; items/types validates per-type metadata
@@ -36,11 +35,11 @@ internal/images        upload validation, thumbnails, serving, orphan sweeper
 internal/storage       FileStore (local files)
 internal/trash         delete, list, restore, purge
 internal/search        search and recent items
-internal/workspace     bootstrap of the single workspace
-internal/httpapi       router, handlers, middleware, problem mapping; oapi/ is GENERATED from api/openapi.yaml (never edit)
+internal/workspace     bootstrap of the single workspace; settings (Huma)
+internal/httpapi       legacy router and handlers; oapi/ is GENERATED from api/openapi.yaml (never edit)
 api/openapi.yaml       the canonical API contract (spec wins over design-docs/API.md)
 db/migrations          golang-migrate files: one baseline `000001_init` (up/down); later changes append as new numbered files
-db/queries             sqlc queries (generated into internal/database/sqlc)
+db/queries             sqlc queries (generated into internal/platform/database/sqlc)
 scripts/               backup, restore, verify, compose exposure check, reset-dev
 docs/                  one short doc per module
 ```

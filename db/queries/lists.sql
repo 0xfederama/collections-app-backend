@@ -66,6 +66,12 @@ SET sort_order = (o.ord - 1)::int, updated_at = @now
 FROM unnest(@ids::uuid[]) WITH ORDINALITY AS o(id, ord)
 WHERE l.id = o.id AND l.workspace_id = @workspace_id AND l.deleted_at IS NULL;
 
+-- name: SetListSortOrder :exec
+-- Sets one list's position. The version stays (DATA_MODEL §7).
+UPDATE lists
+SET sort_order = @sort_order, updated_at = @now
+WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;
+
 -- name: FolderPath :many
 -- Ancestor folders of a folder, root first, including the folder itself.
 WITH RECURSIVE chain(id, parent_folder_id, name, depth) AS (

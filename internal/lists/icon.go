@@ -1,4 +1,4 @@
-package tree
+package lists
 
 import (
 	"regexp"
@@ -49,6 +49,12 @@ func validIcon(icon string) bool {
 // ValidIcon reports whether icon is a built-in icon key or one emoji. It is
 // shared by list icons and type default icons.
 func ValidIcon(icon string) bool { return validIcon(icon) }
+
+// IsBuiltinIcon is isBuiltinIcon for the list rules still in internal/tree (they go with it in B3b T3).
+func IsBuiltinIcon(icon *string) bool { return isBuiltinIcon(icon) }
+
+// IconErrors is iconErrors for the list rules still in internal/tree (they go with it in B3b T3).
+func IconErrors(icon, iconColor *string) []apperr.FieldError { return iconErrors(icon, iconColor) }
 
 // iconErrors checks a supplied icon and icon_color against each other (the colour needs a built-in icon).
 // icon is the icon that applies after the request (nil = none).

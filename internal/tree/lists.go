@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
+	"github.com/0xfederama/collections-app-backend/internal/lists"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 )
@@ -54,7 +55,7 @@ func (s *Service) CreateList(ctx context.Context, in CreateListInput) (List, err
 	in.Description = nilIfEmpty(in.Description)
 	name, errs := validateListFields(&in.Name, &in.DisplayMode, &in.SortMode)
 	errs = append(errs, typeErrors(in.Type)...)
-	errs = append(errs, iconErrors(in.Icon, in.IconColor)...)
+	errs = append(errs, lists.IconErrors(in.Icon, in.IconColor)...)
 	if err := validate(errs); err != nil {
 		return List{}, err
 	}
@@ -215,10 +216,10 @@ func (s *Service) UpdateList(ctx context.Context, id uuid.UUID, version int, p L
 		if p.IconColor.Set {
 			sentColor = p.IconColor.Value
 		}
-		if errs := iconErrors(newIcon, sentColor); len(errs) > 0 {
+		if errs := lists.IconErrors(newIcon, sentColor); len(errs) > 0 {
 			return apperr.Validation(errs...)
 		}
-		if !isBuiltinIcon(newIcon) {
+		if !lists.IsBuiltinIcon(newIcon) {
 			newIconColor = nil
 		}
 		iconChanged := !equalPtr(newIcon, cur.Icon) || !equalPtr(newIconColor, cur.IconColor)

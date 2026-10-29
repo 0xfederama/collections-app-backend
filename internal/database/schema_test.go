@@ -321,63 +321,76 @@ func TestSchema_D051_BatchStillReferenced(t *testing.T) {
 	}
 }
 
-func TestSchema_D051_WorkspaceDeleteCascades(t *testing.T) {
+// TestSchema_NoCascades pins that the baseline has no ON DELETE CASCADE: a parent
+// with children cannot be deleted, the application deletes children explicitly.
+func TestSchema_NoCascades(t *testing.T) {
+	folder := `INSERT INTO folders (id, workspace_id, name, sort_order) VALUES ('` + folderA + `', '` + wsA + `', 'F', 0)`
+	list := `INSERT INTO lists (id, workspace_id, folder_id, name, type, sort_order) VALUES ('` + listA + `', '` + wsA + `', '` + folderA + `', 'L', 'movie', 0)`
+	cases := []struct {
+		name       string
+		setup      []string
+		stmt       string
+		wantConstr string
+	}{
+		{
+			name:       "deleting a workspace with a folder",
+			setup:      []string{sqlWorkspaces, folder},
+			stmt:       `DELETE FROM workspaces WHERE id = '` + wsA + `'`,
+			wantConstr: "folders_workspace_id_fkey",
+		},
+		{
+			name:       "deleting a folder with a list",
+			setup:      []string{sqlWorkspaces, folder, list},
+			stmt:       `DELETE FROM folders WHERE id = '` + folderA + `'`,
+			wantConstr: "lists_folder_fkey",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			pool := newMigratedPool(t)
+			ctx := t.Context()
+			for i, s := range c.setup {
+				if _, err := pool.Exec(ctx, s); err != nil {
+					t.Fatalf("setup statement %d: %v", i, err)
+				}
+			}
+
+			_, err := pool.Exec(ctx, c.stmt)
+			var pgErr *pgconn.PgError
+			if !errors.As(err, &pgErr) {
+				t.Fatalf("delete error = %v, want PgError 23503 %s", err, c.wantConstr)
+			}
+			if pgErr.Code != "23503" || pgErr.ConstraintName != c.wantConstr {
+				t.Errorf("got %s %q, want 23503 %s", pgErr.Code, pgErr.ConstraintName, c.wantConstr)
+			}
+		})
+	}
+}
+
+// TestSchema_NoTriggersOrFunctions pins that the baseline carries no logic:
+// no user trigger and no function in public (extension functions excluded).
+func TestSchema_NoTriggersOrFunctions(t *testing.T) {
 	pool := newMigratedPool(t)
 	ctx := t.Context()
 
-	const (
-		ws        = wsA
-		fActive   = "00000000-0000-0000-0000-000000000101"
-		fTrashed  = "00000000-0000-0000-0000-000000000102"
-		lActive   = "00000000-0000-0000-0000-000000000201"
-		lTrashed  = "00000000-0000-0000-0000-000000000202"
-		iActive   = "00000000-0000-0000-0000-000000000301"
-		iTrashed  = "00000000-0000-0000-0000-000000000302"
-		iTrashed2 = "00000000-0000-0000-0000-000000000303"
-		batch1    = "00000000-0000-0000-0000-000000000401"
-		batch2    = "00000000-0000-0000-0000-000000000402"
-	)
-	setup := []string{
-		`INSERT INTO workspaces (id, name) VALUES ('` + ws + `', 'W')`,
-		`INSERT INTO workspace_settings (workspace_id) VALUES ('` + ws + `')`,
-		`INSERT INTO trash_batches (id, workspace_id, root_type, root_id, root_name, former_path)
-		   VALUES ('` + batch1 + `', '` + ws + `', 'folder', '` + fTrashed + `', 'FT', '[]'),
-		          ('` + batch2 + `', '` + ws + `', 'item', '` + iTrashed2 + `', 'I3', '[]')`,
-		// active branch
-		`INSERT INTO folders (id, workspace_id, name, sort_order) VALUES ('` + fActive + `', '` + ws + `', 'F', 0)`,
-		`INSERT INTO lists (id, workspace_id, folder_id, name, type, sort_order) VALUES ('` + lActive + `', '` + ws + `', '` + fActive + `', 'L', 'generic', 0)`,
-		attachmentSQL("00000000-0000-0000-0000-000000000501", "x"),
-		`INSERT INTO items (id, workspace_id, list_id, title, sort_order, image_attachment_id)
-		   VALUES ('` + iActive + `', '` + ws + `', '` + lActive + `', 'I', 0, '00000000-0000-0000-0000-000000000501')`,
-		`INSERT INTO item_content_versions (item_id, version, body, size_bytes, sha256) VALUES ('` + iActive + `', 1, 'hi', 2, '\x00')`,
-		// trashed folder > trashed list > trashed item, all in batch1
-		`INSERT INTO folders (id, workspace_id, name, sort_order, deleted_at, trash_batch_id)
-		   VALUES ('` + fTrashed + `', '` + ws + `', 'FT', 1, now(), '` + batch1 + `')`,
-		`INSERT INTO lists (id, workspace_id, folder_id, name, type, sort_order, deleted_at, trash_batch_id)
-		   VALUES ('` + lTrashed + `', '` + ws + `', '` + fTrashed + `', 'LT', 'generic', 0, now(), '` + batch1 + `')`,
-		`INSERT INTO items (id, workspace_id, list_id, title, sort_order, deleted_at, trash_batch_id)
-		   VALUES ('` + iTrashed + `', '` + ws + `', '` + lTrashed + `', 'IT', 0, now(), '` + batch1 + `')`,
-		// trashed item in an active list, batch2
-		`INSERT INTO items (id, workspace_id, list_id, title, sort_order, deleted_at, trash_batch_id)
-		   VALUES ('` + iTrashed2 + `', '` + ws + `', '` + lActive + `', 'I3', 1, now(), '` + batch2 + `')`,
+	var triggers int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal`).Scan(&triggers); err != nil {
+		t.Fatal(err)
 	}
-	for i, s := range setup {
-		if _, err := pool.Exec(ctx, s); err != nil {
-			t.Fatalf("setup statement %d: %v", i, err)
-		}
+	if triggers != 0 {
+		t.Errorf("user triggers = %d, want 0", triggers)
 	}
 
-	if _, err := pool.Exec(ctx, `DELETE FROM workspaces`); err != nil {
-		t.Fatalf("DELETE FROM workspaces: %v", err)
+	var functions int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*) FROM pg_proc p
+		JOIN pg_namespace n ON n.oid = p.pronamespace
+		WHERE n.nspname = 'public'
+		  AND NOT EXISTS (SELECT 1 FROM pg_depend d
+		                  WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')`).Scan(&functions); err != nil {
+		t.Fatal(err)
 	}
-
-	for _, table := range schemaTables {
-		var n int
-		if err := pool.QueryRow(ctx, `SELECT count(*) FROM `+table).Scan(&n); err != nil {
-			t.Fatal(err)
-		}
-		if n != 0 {
-			t.Errorf("%s has %d rows after workspace delete, want 0", table, n)
-		}
+	if functions != 0 {
+		t.Errorf("user functions in public = %d, want 0", functions)
 	}
 }

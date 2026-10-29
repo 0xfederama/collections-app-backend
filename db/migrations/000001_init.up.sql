@@ -1,97 +1,12 @@
 -- Baseline of the F-019 refactor, produced from the final schema of the former
 -- migrations 000001..000025. Later schema changes append new migrations after this file.
 -- The former 000001..000025 chain is in git history before the baseline commit.
+-- The baseline carries no logic: no triggers, no functions, no ON DELETE CASCADE.
+-- Built-in types are seeded from Go (internal/seed) and deletes are explicit (D-051).
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
 
 COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching based on trigrams';
-
-CREATE FUNCTION public.apply_builtin_type_default_pins(target_workspace_id uuid) RETURNS void
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-  UPDATE type_definitions k
-  SET default_pinned_fields = s.pins::jsonb
-  FROM (
-  VALUES
-    ('movie', '["runtime_minutes","streaming"]'),
-    ('tv_show', '["seasons","streaming"]'),
-    ('book', '["author","pages","stores"]'),
-    ('vehicle', '["model_year","power_hp"]'),
-    ('wishlist', '["price"]')
-  ) AS s(key, pins)
-  WHERE k.workspace_id = target_workspace_id
-    AND k.key = s.key
-    AND k.is_locked
-    AND k.default_pinned_fields IS NULL;
-END;
-$$;
-
-CREATE FUNCTION public.seed_builtin_type_definitions(target_workspace_id uuid) RETURNS void
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-  INSERT INTO type_definitions (workspace_id, key, name, default_icon, allows_price, default_sort_field, is_locked)
-  SELECT target_workspace_id, s.key, s.name, s.default_icon, s.allows_price, s.default_sort_field, true
-  FROM (
-  VALUES
-    ('movie', 'Movies', NULL::text, false, 'release_year'),
-    ('tv_show', 'TV shows', NULL, false, 'first_air_year'),
-    ('book', 'Books', NULL, false, NULL),
-    ('vehicle', 'Vehicles', 'i:car', false, NULL),
-    ('wishlist', 'Wishlist', 'i:tag', true, NULL)
-) AS s(key, name, default_icon, allows_price, default_sort_field)
-  ON CONFLICT (workspace_id, key) DO NOTHING;
-
-  PERFORM apply_builtin_type_default_pins(target_workspace_id);
-
-  INSERT INTO type_fields (workspace_id, type_id, key, label, field_type, position, is_locked)
-  SELECT k.workspace_id, k.id, s.key, s.label, s.field_type, s.position, true
-  FROM type_definitions k
-  JOIN (
-  VALUES
-    ('movie', 0, 'release_year', 'Release year', 'number'),
-    ('movie', 1, 'runtime_minutes', 'Runtime', 'number'),
-    ('movie', 2, 'director', 'Director', 'text'),
-    ('movie', 3, 'imdb_url', 'IMDb URL', 'link'),
-    ('movie', 4, 'streaming', 'Streaming', 'streaming'),
-    ('movie', 5, 'tmdb_id', 'TMDB ID', 'number'),
-    ('movie', 6, 'lookup_disabled', 'Disable lookup', 'boolean'),
-    ('tv_show', 0, 'first_air_year', 'First air year', 'number'),
-    ('tv_show', 1, 'end_year', 'End year', 'number'),
-    ('tv_show', 2, 'seasons', 'Seasons', 'number'),
-    ('tv_show', 3, 'episodes_per_season', 'Episodes per season', 'number'),
-    ('tv_show', 4, 'episode_minutes', 'Episode minutes', 'number'),
-    ('tv_show', 5, 'imdb_url', 'IMDb URL', 'link'),
-    ('tv_show', 6, 'streaming', 'Streaming', 'streaming'),
-    ('tv_show', 7, 'tmdb_id', 'TMDB ID', 'number'),
-    ('tv_show', 8, 'lookup_disabled', 'Disable lookup', 'boolean'),
-    ('book', 0, 'author', 'Writer', 'text'),
-    ('book', 1, 'pages', 'Pages', 'number'),
-    ('book', 2, 'isbn', 'ISBN', 'text'),
-    ('book', 3, 'stores', 'Where to get it', 'stores'),
-    ('book', 4, 'openlibrary_id', 'Open Library ID', 'text'),
-    ('book', 5, 'lookup_disabled', 'Disable lookup', 'boolean'),
-    ('vehicle', 0, 'make', 'Make', 'text'),
-    ('vehicle', 1, 'model', 'Model', 'text'),
-    ('vehicle', 2, 'model_year', 'Year', 'number'),
-    ('vehicle', 3, 'displacement_cc', 'Engine size (cc)', 'number'),
-    ('vehicle', 4, 'power_hp', 'Power (hp)', 'number')
-) AS s(type_key, position, key, label, field_type)
-    ON k.key = s.type_key
-  WHERE k.workspace_id = target_workspace_id
-  ON CONFLICT (type_id, key) DO NOTHING;
-END;
-$$;
-
-CREATE FUNCTION public.seed_builtin_type_definitions_on_workspace_insert() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-  PERFORM seed_builtin_type_definitions(NEW.id);
-  RETURN NEW;
-END;
-$$;
 
 CREATE TABLE public.attachments (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -402,56 +317,54 @@ CREATE INDEX type_definitions_workspace_idx ON public.type_definitions USING btr
 
 CREATE INDEX type_fields_workspace_type_position_idx ON public.type_fields USING btree (workspace_id, type_id, "position");
 
-CREATE TRIGGER workspaces_seed_builtin_type_definitions AFTER INSERT ON public.workspaces FOR EACH ROW EXECUTE FUNCTION public.seed_builtin_type_definitions_on_workspace_insert();
-
 ALTER TABLE ONLY public.attachments
-    ADD CONSTRAINT attachments_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+    ADD CONSTRAINT attachments_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
 
 ALTER TABLE ONLY public.folders
-    ADD CONSTRAINT folders_parent_fkey FOREIGN KEY (parent_folder_id, workspace_id) REFERENCES public.folders(id, workspace_id) ON DELETE CASCADE;
+    ADD CONSTRAINT folders_parent_fkey FOREIGN KEY (parent_folder_id, workspace_id) REFERENCES public.folders(id, workspace_id);
 
 ALTER TABLE ONLY public.folders
     ADD CONSTRAINT folders_trash_batch_id_fkey FOREIGN KEY (trash_batch_id) REFERENCES public.trash_batches(id);
 
 ALTER TABLE ONLY public.folders
-    ADD CONSTRAINT folders_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+    ADD CONSTRAINT folders_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
 
 ALTER TABLE ONLY public.item_content_versions
-    ADD CONSTRAINT item_content_versions_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE;
+    ADD CONSTRAINT item_content_versions_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id);
 
 ALTER TABLE ONLY public.items
     ADD CONSTRAINT items_image_attachment_fkey FOREIGN KEY (image_attachment_id, workspace_id) REFERENCES public.attachments(id, workspace_id);
 
 ALTER TABLE ONLY public.items
-    ADD CONSTRAINT items_list_fkey FOREIGN KEY (list_id, workspace_id) REFERENCES public.lists(id, workspace_id) ON DELETE CASCADE;
+    ADD CONSTRAINT items_list_fkey FOREIGN KEY (list_id, workspace_id) REFERENCES public.lists(id, workspace_id);
 
 ALTER TABLE ONLY public.items
     ADD CONSTRAINT items_trash_batch_id_fkey FOREIGN KEY (trash_batch_id) REFERENCES public.trash_batches(id);
 
 ALTER TABLE ONLY public.items
-    ADD CONSTRAINT items_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+    ADD CONSTRAINT items_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
 
 ALTER TABLE ONLY public.lists
-    ADD CONSTRAINT lists_folder_fkey FOREIGN KEY (folder_id, workspace_id) REFERENCES public.folders(id, workspace_id) ON DELETE CASCADE;
+    ADD CONSTRAINT lists_folder_fkey FOREIGN KEY (folder_id, workspace_id) REFERENCES public.folders(id, workspace_id);
 
 ALTER TABLE ONLY public.lists
     ADD CONSTRAINT lists_trash_batch_id_fkey FOREIGN KEY (trash_batch_id) REFERENCES public.trash_batches(id);
 
 ALTER TABLE ONLY public.lists
-    ADD CONSTRAINT lists_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+    ADD CONSTRAINT lists_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
 
 ALTER TABLE ONLY public.lookup_imports
-    ADD CONSTRAINT lookup_imports_item_workspace_fkey FOREIGN KEY (item_id, workspace_id) REFERENCES public.items(id, workspace_id) ON DELETE CASCADE;
+    ADD CONSTRAINT lookup_imports_item_workspace_fkey FOREIGN KEY (item_id, workspace_id) REFERENCES public.items(id, workspace_id);
 
 ALTER TABLE ONLY public.trash_batches
-    ADD CONSTRAINT trash_batches_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+    ADD CONSTRAINT trash_batches_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
 
 ALTER TABLE ONLY public.type_definitions
-    ADD CONSTRAINT type_definitions_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+    ADD CONSTRAINT type_definitions_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
 
 ALTER TABLE ONLY public.type_fields
-    ADD CONSTRAINT type_fields_type_workspace_fkey FOREIGN KEY (type_id, workspace_id) REFERENCES public.type_definitions(id, workspace_id) ON DELETE CASCADE;
+    ADD CONSTRAINT type_fields_type_workspace_fkey FOREIGN KEY (type_id, workspace_id) REFERENCES public.type_definitions(id, workspace_id);
 
 ALTER TABLE ONLY public.workspace_settings
-    ADD CONSTRAINT workspace_settings_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+    ADD CONSTRAINT workspace_settings_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
 

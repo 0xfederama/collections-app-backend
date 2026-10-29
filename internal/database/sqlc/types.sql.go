@@ -59,6 +59,20 @@ func (q *Queries) DeleteTypeField(ctx context.Context, arg DeleteTypeFieldParams
 	return err
 }
 
+const deleteTypeFieldsOfType = `-- name: DeleteTypeFieldsOfType :exec
+DELETE FROM type_fields WHERE type_id = $1 AND workspace_id = $2
+`
+
+type DeleteTypeFieldsOfTypeParams struct {
+	TypeID      uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) DeleteTypeFieldsOfType(ctx context.Context, arg DeleteTypeFieldsOfTypeParams) error {
+	_, err := q.db.Exec(ctx, deleteTypeFieldsOfType, arg.TypeID, arg.WorkspaceID)
+	return err
+}
+
 const getTypeDefinitionByKey = `-- name: GetTypeDefinitionByKey :one
 SELECT id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at FROM type_definitions
 WHERE workspace_id = $1 AND key = $2
@@ -276,11 +290,14 @@ func (q *Queries) ListStoresFieldKeys(ctx context.Context, workspaceID uuid.UUID
 }
 
 const listTypeDefinitions = `-- name: ListTypeDefinitions :many
+
 SELECT id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at FROM type_definitions
 WHERE workspace_id = $1
 ORDER BY is_locked DESC, name, key
 `
 
+// Type definitions are workspace scoped. B2/B3 use these reads and locks to
+// replace the fixed in-process type registry.
 func (q *Queries) ListTypeDefinitions(ctx context.Context, workspaceID uuid.UUID) ([]TypeDefinition, error) {
 	rows, err := q.db.Query(ctx, listTypeDefinitions, workspaceID)
 	if err != nil {
@@ -565,18 +582,6 @@ func (q *Queries) ResetTypeFieldDefaults(ctx context.Context, arg ResetTypeField
 		arg.ID,
 		arg.WorkspaceID,
 	)
-	return err
-}
-
-const seedBuiltinTypeDefinitions = `-- name: SeedBuiltinTypeDefinitions :exec
-
-SELECT seed_builtin_type_definitions($1)
-`
-
-// Type definitions are workspace scoped. B2/B3 use these reads and locks to
-// replace the fixed in-process type registry.
-func (q *Queries) SeedBuiltinTypeDefinitions(ctx context.Context, workspaceID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, seedBuiltinTypeDefinitions, workspaceID)
 	return err
 }
 

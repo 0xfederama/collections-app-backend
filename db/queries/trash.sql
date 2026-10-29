@@ -164,41 +164,46 @@ WHERE workspace_id = @workspace_id AND trash_batch_id = @batch_id;
 UPDATE items SET deleted_at = NULL, trash_batch_id = NULL, updated_at = @now
 WHERE workspace_id = @workspace_id AND trash_batch_id = @batch_id;
 
--- name: PurgeAttachments :many
--- Attachments of every item in the root's subtree, in any state and under any
--- batch. root_type is folder, list or item.
-WITH RECURSIVE folder_tree(id) AS (
-    SELECT f.id FROM folders f
-    WHERE sqlc.arg(root_type)::text = 'folder' AND f.id = sqlc.arg(root_id)::uuid AND f.workspace_id = sqlc.arg(workspace_id)::uuid
-  UNION
-    SELECT c.id FROM folders c
-    JOIN folder_tree t ON c.parent_folder_id = t.id
-    WHERE c.workspace_id = sqlc.arg(workspace_id)::uuid
-), tree_lists(id) AS (
-    SELECT l.id FROM lists l
-    WHERE l.workspace_id = sqlc.arg(workspace_id)::uuid AND l.folder_id IN (SELECT id FROM folder_tree)
-  UNION
-    SELECT l.id FROM lists l
-    WHERE l.workspace_id = sqlc.arg(workspace_id)::uuid AND sqlc.arg(root_type)::text = 'list' AND l.id = sqlc.arg(root_id)::uuid
-)
+-- name: ListFolderParents :many
+-- Every folder of the workspace with its parent, trashed or not. The purge walks
+-- the root's subtree over these rows in Go (cycle-safe). The purge queries below
+-- read lists and items in any state, under any batch.
+SELECT id, parent_folder_id FROM folders
+WHERE workspace_id = @workspace_id;
+
+-- name: ListListIDsByFolders :many
+SELECT id FROM lists
+WHERE workspace_id = @workspace_id AND folder_id = ANY(@folder_ids::uuid[]);
+
+-- name: ListItemIDsByLists :many
+SELECT id FROM items
+WHERE workspace_id = @workspace_id AND list_id = ANY(@list_ids::uuid[]);
+
+-- name: ListAttachmentKeysByItems :many
+-- Image attachments of the items, with their file keys. Read before the items are deleted.
 SELECT a.id, a.storage_key, a.thumbnail_storage_key
 FROM attachments a
-WHERE a.workspace_id = sqlc.arg(workspace_id)::uuid
+WHERE a.workspace_id = @workspace_id
   AND a.id IN (
     SELECT i.image_attachment_id FROM items i
-    WHERE i.workspace_id = sqlc.arg(workspace_id)::uuid AND i.image_attachment_id IS NOT NULL
-      AND (i.list_id IN (SELECT id FROM tree_lists)
-           OR (sqlc.arg(root_type)::text = 'item' AND i.id = sqlc.arg(root_id)::uuid))
+    WHERE i.workspace_id = @workspace_id AND i.image_attachment_id IS NOT NULL AND i.id = ANY(@item_ids::uuid[])
   );
 
--- name: PurgeFolder :execrows
-DELETE FROM folders WHERE id = @id AND workspace_id = @workspace_id;
+-- name: DeleteContentVersionsOfItems :exec
+DELETE FROM item_content_versions WHERE item_id = ANY(@item_ids::uuid[]);
 
--- name: PurgeList :execrows
-DELETE FROM lists WHERE id = @id AND workspace_id = @workspace_id;
+-- name: DeleteLookupImportsOfItems :exec
+DELETE FROM lookup_imports WHERE workspace_id = @workspace_id AND item_id = ANY(@item_ids::uuid[]);
 
--- name: PurgeItem :execrows
-DELETE FROM items WHERE id = @id AND workspace_id = @workspace_id;
+-- name: DeleteItems :exec
+DELETE FROM items WHERE workspace_id = @workspace_id AND id = ANY(@item_ids::uuid[]);
+
+-- name: DeleteLists :exec
+DELETE FROM lists WHERE workspace_id = @workspace_id AND id = ANY(@list_ids::uuid[]);
+
+-- name: DeleteFolders :exec
+-- One statement for the whole subtree: the parent check runs at the end of the statement.
+DELETE FROM folders WHERE workspace_id = @workspace_id AND id = ANY(@folder_ids::uuid[]);
 
 -- name: PurgeAttachmentRows :exec
 DELETE FROM attachments WHERE workspace_id = @workspace_id AND id = ANY(@ids::uuid[]);

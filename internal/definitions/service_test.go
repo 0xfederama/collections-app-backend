@@ -10,7 +10,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
+	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
+	"github.com/0xfederama/collections-app-backend/internal/seed"
 	"github.com/0xfederama/collections-app-backend/internal/testdb"
 )
 
@@ -25,6 +27,9 @@ func newDefinitionsService(t *testing.T) (*definitions.Service, *definitionDB) {
 	pool := testdb.NewMigrated(t, testdb.AdminURL(t))
 	workspaceID := uuid.New()
 	if _, err := pool.Exec(t.Context(), "INSERT INTO workspaces (id, name) VALUES ($1, 'W')", workspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.BuiltinTypes(t.Context(), sqlc.New(pool), workspaceID); err != nil {
 		t.Fatal(err)
 	}
 	return definitions.New(pool, workspaceID), &definitionDB{pool: pool, workspaceID: workspaceID}
@@ -84,6 +89,35 @@ func TestF014B3_CustomFieldLifecycle(t *testing.T) {
 		if !errors.As(err, &conflict) {
 			t.Fatalf("RenameField stale error = %v", err)
 		}
+	}
+}
+
+func TestF019B2_DeleteTypeDeletesItsFields(t *testing.T) {
+	svc, db := newDefinitionsService(t)
+	typ, err := svc.Create(t.Context(), definitions.CreateType{Name: "Board game"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.CreateField(t.Context(), typ.Key, typ.Version, definitions.CreateField{Label: "Rating", Type: "number"}); err != nil {
+		t.Fatal(err)
+	}
+	var typeID uuid.UUID
+	if err := db.pool.QueryRow(t.Context(), "SELECT id FROM type_definitions WHERE workspace_id = $1 AND key = $2", db.workspaceID, typ.Key).Scan(&typeID); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.Delete(t.Context(), typ.Key, typ.Version+1); err != nil {
+		t.Fatalf("Delete() = %v", err)
+	}
+	var fields, types int
+	if err := db.pool.QueryRow(t.Context(), "SELECT count(*) FROM type_fields WHERE type_id = $1", typeID).Scan(&fields); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.pool.QueryRow(t.Context(), "SELECT count(*) FROM type_definitions WHERE id = $1", typeID).Scan(&types); err != nil {
+		t.Fatal(err)
+	}
+	if fields != 0 || types != 0 {
+		t.Errorf("after Delete: fields = %d, types = %d; want 0, 0", fields, types)
 	}
 }
 

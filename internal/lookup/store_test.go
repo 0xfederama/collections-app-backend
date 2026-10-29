@@ -16,8 +16,10 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
+	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/seed"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 	"github.com/0xfederama/collections-app-backend/internal/testdb"
 )
@@ -67,7 +69,7 @@ func newLookupEnv(t *testing.T, now time.Time) *lookupEnv {
 	if _, err := db.Exec(t.Context(), `INSERT INTO workspaces (id, name) VALUES ($1, 'W')`, ws); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(t.Context(), `SELECT seed_builtin_type_definitions($1)`, ws); err != nil {
+	if err := seed.BuiltinTypes(t.Context(), sqlc.New(db), ws); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(t.Context(), `INSERT INTO workspace_settings (workspace_id) VALUES ($1)`, ws); err != nil {

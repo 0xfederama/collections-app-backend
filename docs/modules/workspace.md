@@ -6,7 +6,7 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 
 ## Key files
 
-- `internal/workspace/bootstrap.go`: `Bootstrap`, advisory lock, built-in definition seed
+- `internal/workspace/bootstrap.go`: `Bootstrap`, advisory lock, calls `seed.BuiltinTypes`
 - `internal/workspace/settings.go`: `Service`, `Get`, `Update`, validation, version check
 - `db/queries/workspace.sql`: bootstrap, settings get/lock/update queries
 - `internal/database/sqlc/workspace.sql.go`: generated, never edit
@@ -15,7 +15,7 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 
 ## Interfaces
 
-- `Bootstrap(ctx, db database.TxBeginner, name string) (uuid.UUID, error)`: creates a workspace with settings and built-in definitions, or returns its ID
+- `Bootstrap(ctx, db database.TxBeginner, name string) (uuid.UUID, error)`: creates the workspace with settings if missing, runs `seed.BuiltinTypes` on every call, returns its ID
 - `NewService(db *pgxpool.Pool) *Service`
 - `(*Service).Get(ctx, workspaceID) (Settings, error)`: `apperr.NotFound("settings")` if no row
 - `(*Service).Update(ctx, workspaceID, ifMatch int, p SettingsPatch) (Settings, error)`: 422 field errors, then 412 `apperr.VersionConflict` on a stale version
@@ -27,7 +27,7 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 - `Bootstrap` runs from `cmd/api/main.go` before the server starts. It takes `pg_advisory_xact_lock` with a fixed key; any other bootstrap-like task needs a different key.
 - A later `WORKSPACE_NAME` does not rename an existing workspace.
 - More than one workspace is an error (the MVP supports exactly one).
-- Bootstrap seeds built-in definitions only when it creates the workspace; the baseline migration seeds existing workspaces.
+- Built-in types are seeded on every start, not only on creation (idempotent, see `seed` module). No SQL trigger seeds them.
 - Validation runs before the row lock, so an invalid body answers 422 even when If-Match is stale.
 - A patch that changes nothing returns the current settings with no version bump.
 - A name change updates `workspaces.name` in the same transaction; it bumps `workspaces.version`, but the ETag stream is only `workspace_settings.version` (`"s-N"`).

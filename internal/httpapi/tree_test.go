@@ -16,10 +16,12 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/clock"
+	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/search"
+	"github.com/0xfederama/collections-app-backend/internal/seed"
 	"github.com/0xfederama/collections-app-backend/internal/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
@@ -40,7 +42,7 @@ func newTreeEnv(t *testing.T) *treeEnv {
 	if _, err := pool.Exec(ctx, "INSERT INTO workspaces (id, name) VALUES ($1, 'W')", ws); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "SELECT seed_builtin_type_definitions($1)", ws); err != nil {
+	if err := seed.BuiltinTypes(ctx, sqlc.New(pool), ws); err != nil {
 		t.Fatal(err)
 	}
 	h := newRouter(t, httpapi.Deps{

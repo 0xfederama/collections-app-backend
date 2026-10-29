@@ -13,6 +13,7 @@
 - [items](modules/items.md): items CRUD, move and reorder, per-type metadata validation (`items/types`), read-only `store_links`
 - [lookup](modules/lookup.md): metadata provider lookup (TMDB, Open Library) merge rules and imported-field provenance/retention
 - [openlibrary](modules/openlibrary.md): bounded Open Library client for book search, work details and covers
+- [seed](modules/seed.md): idempotent Go seed of the five built-in types and their locked fields, run at every bootstrap
 - [search](modules/search.md): item title search with folder and list paths (`GET /api/v1/search`) and recent items (`GET /api/v1/recent-items`)
 - [smoke](modules/smoke.md): HTTP smoke test over a running stack (`scripts/smoke.sh`, `make smoke`)
 - [stores](modules/stores.md): fixed online store list and read-time store link builder for `stores` fields

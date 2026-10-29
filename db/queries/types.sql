@@ -44,12 +44,13 @@ VALUES (@workspace_id, @key, @name, sqlc.narg(default_icon), @allows_price, sqlc
 RETURNING *;
 
 -- name: UpdateTypeDefinition :one
+-- Writes every editable column: the caller merges the patch and holds the row lock.
 UPDATE type_definitions
-SET name = CASE WHEN @set_name::boolean THEN @name::text ELSE name END,
-    default_icon = CASE WHEN @set_default_icon::boolean THEN sqlc.narg(default_icon) ELSE default_icon END,
-    allows_price = CASE WHEN @set_allows_price::boolean THEN @allows_price::boolean ELSE allows_price END,
-    default_sort_field = CASE WHEN @set_default_sort_field::boolean THEN sqlc.narg(default_sort_field) ELSE default_sort_field END,
-    default_pinned_fields = CASE WHEN @set_default_pinned_fields::boolean THEN sqlc.narg(default_pinned_fields) ELSE default_pinned_fields END,
+SET name = @name::text,
+    default_icon = sqlc.narg(default_icon),
+    allows_price = @allows_price::boolean,
+    default_sort_field = sqlc.narg(default_sort_field),
+    default_pinned_fields = sqlc.narg(default_pinned_fields),
     version = version + 1,
     updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id RETURNING *;
@@ -76,28 +77,6 @@ DELETE FROM type_fields WHERE type_id = @type_id AND workspace_id = @workspace_i
 
 -- name: NextTypeFieldPosition :one
 SELECT COALESCE(MAX(position) + 1, 0)::int FROM type_fields WHERE workspace_id = @workspace_id AND type_id = @type_id;
-
--- name: PrepareReorderTypeFields :exec
-UPDATE type_fields f
-SET position = position + (
-      SELECT COALESCE(MAX(position), 0) + 1
-      FROM type_fields
-      WHERE type_fields.workspace_id = @workspace_id AND type_fields.type_id = @type_id
-    ),
-    updated_at = @now
-WHERE f.workspace_id = @workspace_id AND f.type_id = @type_id AND f.key = ANY(@keys::text[]);
-
--- name: ReorderTypeFields :exec
-UPDATE type_fields f
-SET position = (
-      SELECT count(*)::int
-      FROM type_fields locked
-      WHERE locked.workspace_id = @workspace_id AND locked.type_id = @type_id AND locked.is_locked
-    ) + (o.ord - 1)::int,
-    version = version + 1,
-    updated_at = @now
-FROM unnest(@keys::text[]) WITH ORDINALITY AS o(key, ord)
-WHERE f.workspace_id = @workspace_id AND f.type_id = @type_id AND f.key = o.key;
 
 -- name: StripTypeFieldValues :exec
 UPDATE items i SET metadata = i.metadata - @key::text, version = i.version + 1, updated_at = @now
@@ -132,4 +111,16 @@ WHERE workspace_id = @workspace_id AND type = sqlc.arg(type)::text AND sort_mode
 
 -- name: TouchTypeDefinition :exec
 UPDATE type_definitions SET version = version + 1, updated_at = @now
+WHERE id = @id AND workspace_id = @workspace_id;
+
+-- name: ParkTypeFieldPosition :exec
+-- Pass 1 of a reorder: moves one field to a position without a version bump.
+-- The (type_id, position) unique constraint is not deferrable, so the caller
+-- parks every field on a free position first, then sets the final ones.
+UPDATE type_fields SET position = @position, updated_at = @now
+WHERE id = @id AND workspace_id = @workspace_id;
+
+-- name: SetTypeFieldPosition :exec
+-- Pass 2 of a reorder: the final position of one field, with its version bump.
+UPDATE type_fields SET position = @position, version = version + 1, updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id;

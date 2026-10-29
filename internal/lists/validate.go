@@ -81,8 +81,8 @@ func validate(errs []apperr.FieldError) error {
 }
 
 // typeErrors checks that a given type key is not blank (nil is a list with no
-// type); existence is checked against this workspace's definitions inside the
-// write transaction.
+// type); existence is checked against this workspace's definitions before the
+// write transaction (the type source runs its own).
 func typeErrors(typ *string) []apperr.FieldError {
 	if typ != nil && strings.TrimSpace(*typ) == "" {
 		return []apperr.FieldError{{Field: "type", Message: "must not be empty (send null for no type)"}}

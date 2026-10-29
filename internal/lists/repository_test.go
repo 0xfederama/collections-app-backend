@@ -493,54 +493,6 @@ func TestRepo_FolderExists(t *testing.T) {
 	}
 }
 
-func TestRepo_TypeDefinition(t *testing.T) {
-	e := newEnv(t)
-	tests := []struct {
-		key         string
-		allowsPrice bool
-		wantFields  []string
-	}{
-		{"book", false, []string{"author", "pages", "isbn", "stores", "openlibrary_id", "lookup_disabled"}},
-		{"wishlist", true, nil},
-	}
-	for _, tt := range tests {
-		t.Run(tt.key, func(t *testing.T) {
-			var def lists.TypeInfo
-			var fields []lists.FieldInfo
-			err := e.store.InTx(e.ctx, func(r lists.Repo) error {
-				var err error
-				def, fields, err = r.TypeDefinition(e.ctx, tt.key)
-				return err
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if def.Key != tt.key || def.AllowsPrice != tt.allowsPrice {
-				t.Errorf("definition = %+v, want key %s allows price %v", def, tt.key, tt.allowsPrice)
-			}
-			for _, want := range tt.wantFields {
-				found := false
-				for _, f := range fields {
-					found = found || f.Key == want
-				}
-				if !found {
-					t.Errorf("fields = %+v, missing %s", fields, want)
-				}
-			}
-		})
-	}
-	err := e.store.InTx(e.ctx, func(r lists.Repo) error {
-		_, _, err := r.TypeDefinition(e.ctx, "no-such-type")
-		if !isNotFound(err, "type") {
-			t.Errorf("unknown type err = %v, want NotFound type", err)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 // SEAM methods (moves to items in B3d): a type change clears the metadata and,
 // when the new type has no price, the price of every item of the list, trashed ones included.
 func TestRepo_ClearItemsMetadataAndPrice(t *testing.T) {

@@ -6,29 +6,29 @@ Owns lists: create, get (with ancestor folder path), patch, move and reorder. A 
 
 ## Key files
 
-- `internal/lists/service.go`: `Service`, `Store`/`Repo`, create, get, update, move, reorder
+- `internal/lists/service.go`: `Service`, `Store`/`Repo`, `TypeSource`, create, get, update, move, reorder
 - `internal/lists/plan.go`: pure `planUpdate`, decides what a PATCH writes (no I/O)
 - `internal/lists/validate.go`: name, description, enum, type, sort and pin checks
 - `internal/lists/icon.go`: icon grammar (one emoji or `i:<name>`), palette, `ValidIcon`
-- `internal/lists/repository.go`: `Postgres`, `repo`; type and item-clear queries are the seams
+- `internal/lists/repository.go`: `Postgres`, `repo`; item-clear queries are the seams (B3d)
+- `internal/httpapi/router.go`: `listTypes`, the `TypeSource` adapter over [definitions](definitions.md)
 - `internal/lists/handler.go`, `wire.go`: Huma operations, `ListJSON`, `ListWithPathJSON`
 
 ## Interfaces
 
-- `NewService(store Store, clk clock.Clock) *Service`; `NewPostgres(db DB) *Postgres`
+- `NewService(store Store, types TypeSource, clk clock.Clock) *Service`; `NewPostgres(db DB) *Postgres`; `TypeSource.TypeInfo(ctx, key *string)` (nil = no type, wired in `httpapi`)
 - `Service.Create(ctx, CreateInput) (List, error)`; `Get(ctx, id) (List, error)` fills `Path` (root first)
 - `Service.Update(ctx, id, version, Patch) (List, error)`: `Optional` fields tell absent from `null`
 - `Service.Move(ctx, id, version, folder *uuid.UUID)`; `Reorder(ctx, folder *uuid.UUID, ids []uuid.UUID) error`
 - `ValidIcon(icon string) bool`: used by `internal/definitions` for default icons
 - `Postgres.ListActive(ctx) ([]List, error)`: used by `internal/tree`, fills `ItemCount`
 - `POST /api/v1/lists` (201), `GET`/`PATCH /api/v1/lists/{id}`, `POST /api/v1/lists/{id}/move`, `PUT /api/v1/lists/order` (204)
-- Seams to move: `TypeDefinition` to definitions (B3c); `ClearItemsMetadata`/`ClearItemsPrice` to items (B3d)
 
 ## Gotchas
 
 - Create, move and reorder take `LockTree` first; a PATCH that sends `type` takes it too, before the row lock.
 - Update and move need `If-Match` (`"l-N"`); a stale version is 412 `version_conflict`. A PATCH that changes nothing writes nothing and keeps the version.
-- Unknown type on create or update is 422 on `type`; a blank type key is 422.
+- Unknown type on create or update is 422 on `type`; a blank type key is 422. The type is read before the transaction, so no second pool connection is held while the tree lock is taken.
 - A type change clears all items' metadata (trashed ones too) and their price when the new type has none. Same type sent again is no change.
 - Sort on a type change: the patch's sort, else the new type's default sort field, else `manual`. An invalid stored sort falls back to `manual`.
 - Sort is `manual`, `title`, `updated`, `price` (only if the type allows it) or a field key (never a `stores` field).

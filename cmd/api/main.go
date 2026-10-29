@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/0xfederama/collections-app-backend/internal/content"
-	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/hardcover"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
@@ -96,7 +95,6 @@ func run() error {
 		Clock:               clock.System{},
 		WorkspaceID:         workspaceID,
 		Settings:            settingsSvc,
-		Definitions:         definitions.New(pool, workspaceID),
 		TMDB:                tmdbProvider,
 		Books:               bookProvider,
 		Lookup:              lookupSvc,

@@ -200,23 +200,6 @@ func (r *repo) FolderExists(ctx context.Context, id uuid.UUID) (bool, error) {
 	return true, nil
 }
 
-func (r *repo) TypeDefinition(ctx context.Context, key string) (TypeInfo, []FieldInfo, error) {
-	ws := scope.WorkspaceID(ctx)
-	def, err := r.q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: ws, Key: key})
-	if err != nil {
-		return TypeInfo{}, nil, notFound(err, "type")
-	}
-	rows, err := r.q.ListTypeFields(ctx, sqlc.ListTypeFieldsParams{WorkspaceID: ws, TypeID: def.ID})
-	if err != nil {
-		return TypeInfo{}, nil, fmt.Errorf("list type fields: %w", err)
-	}
-	fields := make([]FieldInfo, 0, len(rows))
-	for _, f := range rows {
-		fields = append(fields, FieldInfo{Key: f.Key, FieldType: f.FieldType})
-	}
-	return TypeInfo{Key: def.Key, AllowsPrice: def.AllowsPrice, DefaultSortField: def.DefaultSortField}, fields, nil
-}
-
 func (r *repo) ClearItemsMetadata(ctx context.Context, listID uuid.UUID, now time.Time) error {
 	if _, err := r.q.ClearListItemsMetadata(ctx, sqlc.ClearListItemsMetadataParams{Now: now, ListID: listID, WorkspaceID: scope.WorkspaceID(ctx)}); err != nil {
 		return fmt.Errorf("clear items metadata: %w", err)

@@ -6,9 +6,9 @@
 - [config](modules/config.md): env var parsing and startup validation
 - [content](modules/content.md): item Markdown content, versions, restore and retention
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
-- [definitions](modules/definitions.md): workspace type and field definitions
+- [definitions](modules/definitions.md): workspace type and custom-field definitions (Huma `/api/v1/types...`), locked built-ins excluded
 - [folders](modules/folders.md): folder create, get, rename, move (cycle check) and reorder (Huma)
-- [httpapi](modules/httpapi.md): legacy HTTP router, probes, type/trash/item/content handlers, book suggestions and store providers; Huma mounting
+- [httpapi](modules/httpapi.md): legacy HTTP router, probes, trash/item/content handlers, book suggestions and store providers; Huma mounting
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping on upload, validation, thumbnails, serving, orphan sweeper
 - [streamlinks](modules/streamlinks.md): streaming service search URLs (`streaming.platform_links`)
 - [items](modules/items.md): items CRUD, move and reorder, per-type metadata validation (`items/types`), read-only `store_links`

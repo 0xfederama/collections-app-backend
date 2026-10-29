@@ -133,3 +133,15 @@ WHERE workspace_id = @workspace_id AND type = sqlc.arg(type)::text AND sort_mode
 -- name: TouchTypeDefinition :exec
 UPDATE type_definitions SET version = version + 1, updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id;
+
+-- name: ParkTypeFieldPosition :exec
+-- Pass 1 of a reorder: moves one field to a position without a version bump.
+-- The (type_id, position) unique constraint is not deferrable, so the caller
+-- parks every field on a free position first, then sets the final ones.
+UPDATE type_fields SET position = @position, updated_at = @now
+WHERE id = @id AND workspace_id = @workspace_id;
+
+-- name: SetTypeFieldPosition :exec
+-- Pass 2 of a reorder: the final position of one field, with its version bump.
+UPDATE type_fields SET position = @position, version = version + 1, updated_at = @now
+WHERE id = @id AND workspace_id = @workspace_id;

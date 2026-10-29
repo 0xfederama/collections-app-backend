@@ -31,49 +31,6 @@ type Service struct {
 
 func New(db DB, workspaceID uuid.UUID) *Service { return &Service{db: db, workspaceID: workspaceID} }
 
-type Field struct {
-	Key, Label, Type  string
-	Position, Version int
-	Locked            bool
-}
-type Type struct {
-	Key, Name           string
-	AllowsPrice, Locked bool
-	Version             int
-	DefaultIcon         *string
-	DefaultSortField    *string
-	DefaultPinnedFields *[]string
-	Fields              []Field
-}
-type CreateType struct {
-	Name                string
-	DefaultIcon         *string
-	AllowsPrice         bool
-	DefaultSortField    *string
-	DefaultPinnedFields *[]string
-}
-
-// NullableString distinguishes an omitted property from a supplied null.
-type NullableString struct {
-	Set   bool
-	Value *string
-}
-
-// NullableStrings distinguishes an omitted property from a supplied null.
-type NullableStrings struct {
-	Set   bool
-	Value *[]string
-}
-
-type UpdateType struct {
-	Name                *string
-	DefaultIcon         NullableString
-	AllowsPrice         *bool
-	DefaultSortField    NullableString
-	DefaultPinnedFields NullableStrings
-}
-type CreateField struct{ Label, Type string }
-
 const maxFieldLabelLen = 100
 
 func (s *Service) List(ctx context.Context) ([]Type, error) {

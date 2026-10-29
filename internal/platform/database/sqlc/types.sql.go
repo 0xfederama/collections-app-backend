@@ -452,6 +452,31 @@ func (q *Queries) NextTypeFieldPosition(ctx context.Context, arg NextTypeFieldPo
 	return column_1, err
 }
 
+const parkTypeFieldPosition = `-- name: ParkTypeFieldPosition :exec
+UPDATE type_fields SET position = $1, updated_at = $2
+WHERE id = $3 AND workspace_id = $4
+`
+
+type ParkTypeFieldPositionParams struct {
+	Position    int32
+	Now         time.Time
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+// Pass 1 of a reorder: moves one field to a position without a version bump.
+// The (type_id, position) unique constraint is not deferrable, so the caller
+// parks every field on a free position first, then sets the final ones.
+func (q *Queries) ParkTypeFieldPosition(ctx context.Context, arg ParkTypeFieldPositionParams) error {
+	_, err := q.db.Exec(ctx, parkTypeFieldPosition,
+		arg.Position,
+		arg.Now,
+		arg.ID,
+		arg.WorkspaceID,
+	)
+	return err
+}
+
 const prepareReorderTypeFields = `-- name: PrepareReorderTypeFields :exec
 UPDATE type_fields f
 SET position = position + (
@@ -578,6 +603,29 @@ type ResetTypeFieldDefaultsParams struct {
 func (q *Queries) ResetTypeFieldDefaults(ctx context.Context, arg ResetTypeFieldDefaultsParams) error {
 	_, err := q.db.Exec(ctx, resetTypeFieldDefaults,
 		arg.Key,
+		arg.Now,
+		arg.ID,
+		arg.WorkspaceID,
+	)
+	return err
+}
+
+const setTypeFieldPosition = `-- name: SetTypeFieldPosition :exec
+UPDATE type_fields SET position = $1, version = version + 1, updated_at = $2
+WHERE id = $3 AND workspace_id = $4
+`
+
+type SetTypeFieldPositionParams struct {
+	Position    int32
+	Now         time.Time
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+// Pass 2 of a reorder: the final position of one field, with its version bump.
+func (q *Queries) SetTypeFieldPosition(ctx context.Context, arg SetTypeFieldPositionParams) error {
+	_, err := q.db.Exec(ctx, setTypeFieldPosition,
+		arg.Position,
 		arg.Now,
 		arg.ID,
 		arg.WorkspaceID,

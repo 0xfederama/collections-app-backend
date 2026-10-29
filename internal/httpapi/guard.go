@@ -34,9 +34,7 @@ const (
 // an independent list written from API.md.
 var ifMatchPrefix = map[string]string{
 	"DeleteFolder":          etag.Folder,
-	"UpdateList":            etag.List,
 	"DeleteList":            etag.List,
-	"MoveList":              etag.List,
 	"UpdateItem":            etag.Item,
 	"DeleteItem":            etag.Item,
 	"MoveItem":              etag.Item,

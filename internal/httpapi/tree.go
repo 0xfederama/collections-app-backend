@@ -6,9 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/oapi-codegen/nullable"
 
-	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
-	"github.com/0xfederama/collections-app-backend/internal/platform/etag"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 )
 
@@ -50,13 +48,6 @@ func listBody(l tree.List) oapi.List {
 		}
 		out.PinnedFields = nullable.NewNullableWithValue(keys)
 	}
-	if l.Path != nil {
-		path := make([]oapi.PathSegment, 0, len(l.Path))
-		for _, p := range l.Path {
-			path = append(path, oapi.PathSegment{Type: oapi.PathSegmentTypeFolder, Id: p.ID, Name: p.Name})
-		}
-		out.Path = &path
-	}
 	return out
 }
 
@@ -91,15 +82,6 @@ func optionalUUID(n nullable.Nullable[uuid.UUID]) *uuid.UUID {
 	return nil
 }
 
-// requiredUUID reads a field the spec marks required but the generated types
-// leave optional: absent is a 422, null means the root.
-func requiredUUID(field string, n nullable.Nullable[uuid.UUID]) (*uuid.UUID, error) {
-	if !n.IsSpecified() {
-		return nil, apperr.Validation(apperr.FieldError{Field: field, Message: "is required (null means the root)"})
-	}
-	return optionalUUID(n), nil
-}
-
 // optionalString turns a nullable PATCH field into a tree.Optional.
 func optionalString(n nullable.Nullable[string]) tree.Optional[string] {
 	if !n.IsSpecified() {
@@ -111,40 +93,10 @@ func optionalString(n nullable.Nullable[string]) tree.Optional[string] {
 	return tree.Optional[string]{Set: true}
 }
 
-// optionalText is optionalString for the spec's named string types (the list icon colour is an enum).
-func optionalText[T ~string](n nullable.Nullable[T]) tree.Optional[string] {
-	if !n.IsSpecified() {
-		return tree.Optional[string]{}
+// derefOr returns the string a pointer holds, or "" when it is nil.
+func derefOr(s *string) string {
+	if s == nil {
+		return ""
 	}
-	if v, err := n.Get(); err == nil {
-		s := string(v)
-		return tree.Optional[string]{Set: true, Value: &s}
-	}
-	return tree.Optional[string]{Set: true}
+	return *s
 }
-
-// optionalPinned reads the pinned_fields PATCH field: absent is unset, null is a reset.
-func optionalPinned(n nullable.Nullable[oapi.PinnedFields]) tree.Optional[tree.PinnedFields] {
-	if !n.IsSpecified() {
-		return tree.Optional[tree.PinnedFields]{}
-	}
-	v, err := n.Get()
-	if err != nil {
-		return tree.Optional[tree.PinnedFields]{Set: true}
-	}
-	p := tree.PinnedFields(v)
-	if p == nil {
-		p = tree.PinnedFields{}
-	}
-	return tree.Optional[tree.PinnedFields]{Set: true, Value: &p}
-}
-
-func enumPtr[T ~string](v *T) *string {
-	if v == nil {
-		return nil
-	}
-	s := string(*v)
-	return &s
-}
-
-func listETag(l tree.List) string { return etag.Format(etag.List, l.Version) }

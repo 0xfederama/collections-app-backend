@@ -17,6 +17,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/lists"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 	"github.com/0xfederama/collections-app-backend/internal/platform/httpserver"
@@ -109,6 +110,7 @@ func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
 			BookLookup: d.BookLookupAvailable,
 		})
 		folders.Register(api, d.Logger, folders.NewService(folders.NewPostgres(folderDB(d.DB)), d.Clock))
+		lists.Register(api, d.Logger, lists.NewService(lists.NewPostgres(folderDB(d.DB)), d.Clock))
 	})
 
 	return httpserver.Wrap(r, d.Logger), nil

@@ -22,38 +22,7 @@ type DB interface {
 	sqlc.DBTX
 }
 
-// Repo is the set of queries one transaction may run. Every method is one
-// plain query (or a small read that combines rows in Go); the rules that
-// combine them live in the service. Methods read the workspace from the context.
-type Repo interface {
-	LockTree(ctx context.Context) error
-	// Get and GetForUpdate return an active list. Only Get and ListActive fill ItemCount.
-	Get(ctx context.Context, id uuid.UUID) (List, error)
-	GetForUpdate(ctx context.Context, id uuid.UUID) (List, error)
-	ListActive(ctx context.Context) ([]List, error)
-	ChildIDs(ctx context.Context, folder *uuid.UUID) ([]uuid.UUID, error)
-	NextSortOrder(ctx context.Context, folder *uuid.UUID) (int, error)
-	// Insert writes l (ID ignored) and returns the stored row.
-	Insert(ctx context.Context, l List, now time.Time) (List, error)
-	// Update writes the editable fields of the list l.ID (the service merges the patch first).
-	Update(ctx context.Context, l List, now time.Time) (List, error)
-	// UpdateType sets the type (nil = no type) and resets the pinned fields to the type default.
-	UpdateType(ctx context.Context, id uuid.UUID, typ *string, now time.Time) (List, error)
-	Move(ctx context.Context, id uuid.UUID, folder *uuid.UUID, sortOrder int, now time.Time) (List, error)
-	SetSortOrder(ctx context.Context, id uuid.UUID, sortOrder int, now time.Time) error
-	// FolderChain returns the ancestors of folderID and folderID itself, root first. A folder that is not active gives none.
-	FolderChain(ctx context.Context, folderID uuid.UUID) ([]PathFolder, error)
-	FolderExists(ctx context.Context, id uuid.UUID) (bool, error)
-	// TypeDefinition returns the type with this key and its fields. A missing type is apperr.NotFound("type").
-	// SEAM: moves to definitions in B3c
-	TypeDefinition(ctx context.Context, key string) (TypeInfo, []FieldInfo, error)
-	// SEAM: moves to items in B3d
-	ClearItemsMetadata(ctx context.Context, listID uuid.UUID, now time.Time) error
-	// SEAM: moves to items in B3d
-	ClearItemsPrice(ctx context.Context, listID uuid.UUID, now time.Time) error
-}
-
-// Postgres implements the repository on a pool.
+// Postgres implements Store on a pool.
 type Postgres struct{ db DB }
 
 func NewPostgres(db DB) *Postgres { return &Postgres{db: db} }

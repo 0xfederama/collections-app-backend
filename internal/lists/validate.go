@@ -17,9 +17,12 @@ const (
 
 var displayModes = map[string]bool{"compact": true, "thumbnail": true, "grid": true}
 
-// DefaultSortMode is the sort of a list created without sort_mode and the fallback when a type change leaves
-// the stored sort without a meaning.
-const DefaultSortMode = "manual"
+// DefaultDisplayMode and DefaultSortMode are the modes of a list created without them. The sort mode also
+// falls back to manual when a type change leaves the stored sort without a meaning.
+const (
+	DefaultDisplayMode = "thumbnail"
+	DefaultSortMode    = "manual"
+)
 
 // normalizePatch runs the checks of an update that need no row, in the order the API has always answered them:
 // the name is trimmed and checked, the description is checked (an error here is returned at once) and an empty one

@@ -153,6 +153,7 @@ func TestFromHuma(t *testing.T) {
 		{"constraint that starts like a type message stays a field error", 422, []error{detail("body.count", "expected number >= 0")}, 422, "validation_failed", "One or more fields are invalid."},
 		{"wrong JSON type on a body field is a malformed request", 422, []error{detail("body.preferred_store", "expected string")}, 400, "malformed_request", detailNotJSON},
 		{"wrong JSON type nested in a body field is a malformed request", 422, []error{detail("body.price.min", "expected string")}, 400, "malformed_request", detailNotJSON},
+		{"wrong JSON type of the body root is a malformed request", 422, []error{detail("body", "expected object")}, 400, "malformed_request", detailNotJSON},
 		{"handler error mapped as a service error", 500, []error{apperr.NotFound("item")}, 404, "not_found", "Item not found."},
 		{"unknown handler error is opaque", 500, []error{errors.New("pq: SELECT secret")}, 500, "internal", "Something went wrong."},
 		{"status without details keeps its standard text", 406, nil, 406, "not_acceptable", ""},
@@ -178,6 +179,15 @@ func TestFromHuma_FieldErrorsKeepTheirPath(t *testing.T) {
 	})
 	if len(p.Errors) != 2 || p.Errors[0] != (FieldError{Field: "title", Message: "expected length >= 1"}) {
 		t.Fatalf("errors = %+v", p.Errors)
+	}
+}
+
+func TestFromHuma_RequiredRootPropertyNamesTheField(t *testing.T) {
+	p := fromHuma(context.Background(), 422, []error{
+		&huma.ErrorDetail{Location: "body", Message: "expected required property parent_folder_id to be present"},
+	})
+	if p.Status != 422 || len(p.Errors) != 1 || p.Errors[0] != (FieldError{Field: "parent_folder_id", Message: "expected required property parent_folder_id to be present"}) {
+		t.Fatalf("got %d %+v", p.Status, p.Errors)
 	}
 }
 

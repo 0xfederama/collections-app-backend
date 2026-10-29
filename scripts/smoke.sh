@@ -148,7 +148,7 @@ json 200 POST "/api/v1/trash/$BATCH_ID/restore"
 expect "restored root" "$FOLDER_ID" "$(field .root_id)"
 call 200 GET /api/v1/tree
 expect "folder back in /tree" 1 "$(jq --arg id "$FOLDER_ID" '[.folders[] | select(.id == $id)] | length' "$T/body")"
-expect "lists back in /tree" 3 "$(jq --arg id "$FOLDER_ID" '[.lists[] | select(.folder_id == $id)] | length' "$T/body")"
+expect "lists back in /tree" 4 "$(jq --arg id "$FOLDER_ID" '[.lists[] | select(.folder_id == $id)] | length' "$T/body")"
 
 step "trash the folder again and purge it"
 call 200 GET "/api/v1/folders/$FOLDER_ID"

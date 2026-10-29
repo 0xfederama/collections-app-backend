@@ -30,6 +30,7 @@ internal/platform      shared infra: config, database (sqlc/ GENERATED, never ed
 internal/apperr        typed domain errors (no HTTP)
 internal/folders       folders: create, get, rename, move, reorder (Huma)
 internal/lists         lists: create, get with path, update, move, reorder (Huma)
+internal/definitions   type and custom-field definitions (Huma); repository, service rules, validators
 internal/tree          GET /api/v1/tree, the flat sidebar read (handler only)
 internal/items         items; items/types validates per-type metadata
 internal/content       Markdown content and versions

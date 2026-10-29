@@ -8,7 +8,7 @@ Serves the legacy generated strict-server routes on chi, with a per-operation gu
 
 - `internal/httpapi/router.go`: `NewRouter`, `Deps`, route order, scope and `workspace.Register` mounting
 - `internal/httpapi/server.go`: `Server`, `/healthz` and `/readyz` handlers, DATA_DIR probe
-- `internal/httpapi/types.go`, `trash.go`: type and trash handlers (folder/list routes are Huma in [folders](folders.md), [lists](lists.md), [tree](tree.md))
+- `internal/httpapi/trash.go`: trash handlers (folder/list routes are Huma in [folders](folders.md), [lists](lists.md), [tree](tree.md); types in [definitions](definitions.md))
 - `internal/httpapi/items.go`, `content.go`, `search.go`, `images.go`, `tmdb.go`, `books.go`, `stores.go`: item, content, search, file, TMDB, book and store handlers
 - `internal/httpapi/middleware.go`: `IfMatchVersion` only
 - `internal/httpapi/guard.go`: query schemas, If-Match, media type, body limits, unknown fields
@@ -18,10 +18,10 @@ Serves the legacy generated strict-server routes on chi, with a per-operation gu
 ## Interfaces
 
 - `NewRouter(d Deps) (http.Handler, error)`: defaults `Clock` to `clock.System{}`; fails if the embedded spec does not load
-- `Deps`: domain services (`Definitions`, `Books lookup.Provider`, `BookLookupAvailable`, ...) and `WorkspaceID`
+- `Deps`: domain services (`Books lookup.Provider`, `BookLookupAvailable`, ...) and `WorkspaceID`; `NewRouter` builds the `definitions` repository and the `lists.TypeSource` adapter (`listTypes`)
 - `IfMatchVersion(ctx) int`: version N of the validated `If-Match` in guarded handlers
 - `GET /healthz`: 200 `ok`, liveness only; `GET /readyz`: 200 `ready` or 503 (DB ping, DATA_DIR probe)
-- `GET/POST/PATCH/DELETE /api/v1/types...`: definition and custom-field management; see `api/openapi.yaml`
+- `/api/v1/types...`: type and custom-field routes are Huma operations in [definitions](definitions.md); see `api/openapi.yaml`
 - Delete folder/list/item: 204 with If-Match; trash supports list, restore, single purge and empty
 - `GET /api/v1/tmdb/suggestions`, `GET /api/v1/books/suggestions`, `GET /api/v1/store-providers`: suggestions and the fixed store list
 - `POST /api/v1/items/{id}/lookup` and item create (`source_id`): explicit lookup with item If-Match

@@ -11,6 +11,7 @@ package tree
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
@@ -201,6 +203,47 @@ func validate(errs []apperr.FieldError) error {
 		return nil
 	}
 	return apperr.Validation(errs...)
+}
+
+// requireActiveFolder reports DestinationUnavailable when id is set but is not
+// an active folder. A nil id (the root) always exists.
+func (s *Service) requireActiveFolder(ctx context.Context, q *sqlc.Queries, id *uuid.UUID) error {
+	if id == nil {
+		return nil
+	}
+	if _, err := q.GetFolder(ctx, sqlc.GetFolderParams{ID: *id, WorkspaceID: s.workspaceID}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return apperr.DestinationUnavailable()
+		}
+		return fmt.Errorf("get destination folder: %w", err)
+	}
+	return nil
+}
+
+func notFoundOr(err error, resource string) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return apperr.NotFound(resource)
+	}
+	return fmt.Errorf("get %s: %w", resource, err)
+}
+
+// sameSet reports whether got holds exactly the ids of want: same length, no
+// duplicates, nothing foreign or missing.
+func sameSet(want, got []uuid.UUID) bool {
+	if len(want) != len(got) {
+		return false
+	}
+	set := make(map[uuid.UUID]bool, len(want))
+	for _, id := range want {
+		set[id] = true
+	}
+	for _, id := range got {
+		if !set[id] {
+			return false
+		}
+		delete(set, id) // a repeated id finds nothing the second time
+	}
+	return len(set) == 0
 }
 
 // nullUUID converts the optional parent/folder id to its sqlc form.

@@ -13,6 +13,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/content"
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
+	"github.com/0xfederama/collections-app-backend/internal/folders"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
@@ -102,11 +103,22 @@ func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
 	// router: chi replaces the old handler of the same method and path, so Huma answers.
 	r.Group(func(r chi.Router) {
 		r.Use(scope.Middleware(d.WorkspaceID))
-		workspace.Register(httpserver.NewAPI(r), d.Logger, d.Settings, d.Settings, workspace.Availability{
+		api := httpserver.NewAPI(r)
+		workspace.Register(api, d.Logger, d.Settings, d.Settings, workspace.Availability{
 			Lookup:     d.LookupAvailable,
 			BookLookup: d.BookLookupAvailable,
 		})
+		folders.Register(api, d.Logger, folders.NewService(folders.NewPostgres(folderDB(d.DB)), d.Clock))
 	})
 
 	return httpserver.Wrap(r, d.Logger), nil
+}
+
+// folderDB is the database the folder repository runs on. Deps.DB is the pool in
+// production and in the router tests that reach folder routes. The Ping-only
+// fakes get a nil database: their folder requests answer before any query (the
+// If-Match check comes first), so nothing runs on it.
+func folderDB(db Pinger) folders.DB {
+	fdb, _ := db.(folders.DB)
+	return fdb
 }

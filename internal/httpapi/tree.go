@@ -147,5 +147,4 @@ func enumPtr[T ~string](v *T) *string {
 	return &s
 }
 
-func folderETag(f tree.Folder) string { return etag.Format(etag.Folder, f.Version) }
-func listETag(l tree.List) string     { return etag.Format(etag.List, l.Version) }
+func listETag(l tree.List) string { return etag.Format(etag.List, l.Version) }

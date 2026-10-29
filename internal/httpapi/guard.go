@@ -33,9 +33,7 @@ const (
 // prefix each expects (API.md §3 "Requires If-Match"). AT-10 checks it against
 // an independent list written from API.md.
 var ifMatchPrefix = map[string]string{
-	"UpdateFolder":          etag.Folder,
 	"DeleteFolder":          etag.Folder,
-	"MoveFolder":            etag.Folder,
 	"UpdateList":            etag.List,
 	"DeleteList":            etag.List,
 	"MoveList":              etag.List,

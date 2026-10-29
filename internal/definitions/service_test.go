@@ -10,7 +10,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
+	"github.com/0xfederama/collections-app-backend/internal/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
+	"github.com/0xfederama/collections-app-backend/internal/seed"
 	"github.com/0xfederama/collections-app-backend/internal/testdb"
 )
 
@@ -25,6 +27,9 @@ func newDefinitionsService(t *testing.T) (*definitions.Service, *definitionDB) {
 	pool := testdb.NewMigrated(t, testdb.AdminURL(t))
 	workspaceID := uuid.New()
 	if _, err := pool.Exec(t.Context(), "INSERT INTO workspaces (id, name) VALUES ($1, 'W')", workspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.BuiltinTypes(t.Context(), sqlc.New(pool), workspaceID); err != nil {
 		t.Fatal(err)
 	}
 	return definitions.New(pool, workspaceID), &definitionDB{pool: pool, workspaceID: workspaceID}

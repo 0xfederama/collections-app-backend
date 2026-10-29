@@ -1,9 +1,6 @@
 -- Type definitions are workspace scoped. B2/B3 use these reads and locks to
 -- replace the fixed in-process type registry.
 
--- name: SeedBuiltinTypeDefinitions :exec
-SELECT seed_builtin_type_definitions(@workspace_id);
-
 -- name: ListTypeDefinitions :many
 SELECT * FROM type_definitions
 WHERE workspace_id = @workspace_id

@@ -503,24 +503,3 @@ func TestRepo_FieldValuesAndDefaults(t *testing.T) {
 		return err
 	})
 }
-
-func TestRepo_ListStoresFields(t *testing.T) {
-	e := newRepoEnv(t)
-	e.insertType("gadgets")
-	var got []definitions.StoresField
-	e.do(func(r definitions.Repo) error {
-		var err error
-		got, err = r.ListStoresFields(e.ctx)
-		return err
-	})
-	found := false
-	for _, sf := range got {
-		found = found || (sf.TypeKey == "book" && sf.FieldKey == "stores")
-		if sf.TypeKey == "gadgets" {
-			t.Errorf("ListStoresFields lists a field of a type without stores fields: %+v", sf)
-		}
-	}
-	if !found {
-		t.Errorf("ListStoresFields = %+v, want book.stores", got)
-	}
-}

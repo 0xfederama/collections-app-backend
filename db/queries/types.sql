@@ -21,14 +21,6 @@ WHERE workspace_id = @workspace_id AND type_id = @type_id
 ORDER BY position, id
 FOR SHARE;
 
--- name: ListStoresFieldKeys :many
--- One row per stores field of every type, to build store_links for a page of rows.
-SELECT td.key AS type_key, tf.key AS field_key
-FROM type_fields tf
-JOIN type_definitions td ON td.id = tf.type_id AND td.workspace_id = tf.workspace_id
-WHERE tf.workspace_id = @workspace_id AND tf.field_type = 'stores'
-ORDER BY td.key, tf.position, tf.id;
-
 -- name: GetTypeFieldByKey :one
 SELECT * FROM type_fields
 WHERE workspace_id = @workspace_id AND type_id = @type_id AND key = @key;

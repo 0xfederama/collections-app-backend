@@ -123,18 +123,6 @@ func (r *repo) ListActiveListsByType(ctx context.Context, typeKey string) ([]Lis
 	return out, nil
 }
 
-func (r *repo) ListStoresFields(ctx context.Context) ([]StoresField, error) {
-	rows, err := r.q.ListStoresFieldKeys(ctx, scope.WorkspaceID(ctx))
-	if err != nil {
-		return nil, fmt.Errorf("list stores fields: %w", err)
-	}
-	out := make([]StoresField, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, StoresField{TypeKey: row.TypeKey, FieldKey: row.FieldKey})
-	}
-	return out, nil
-}
-
 func (r *repo) ListFields(ctx context.Context, typeID uuid.UUID) ([]Field, error) {
 	rows, err := r.q.ListTypeFields(ctx, sqlc.ListTypeFieldsParams{WorkspaceID: scope.WorkspaceID(ctx), TypeID: typeID})
 	if err != nil {

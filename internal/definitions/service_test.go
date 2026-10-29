@@ -507,8 +507,6 @@ func (r *fakeRepo) ListActiveListsByType(_ context.Context, typeKey string) ([]L
 	return out, nil
 }
 
-func (r *fakeRepo) ListStoresFields(context.Context) ([]StoresField, error) { return nil, nil }
-
 func (r *fakeRepo) ListFields(_ context.Context, typeID uuid.UUID) ([]Field, error) {
 	var out []Field
 	for _, field := range r.s.fields {

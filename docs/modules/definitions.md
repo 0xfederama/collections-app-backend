@@ -24,7 +24,7 @@ Owns workspace type definitions and their fields: list, create, update and delet
 ## Gotchas
 
 - Every write runs in one transaction that locks the type row (and the field row for field edits) before the version check, so a stale `If-Match` writes nothing.
-- Keys derive from names and labels (lowercase letters, digits, underscores). `store_links` is a reserved field key.
+- Keys derive from names and labels (lowercase letters, digits, underscores).
 - Locked types and fields cannot be changed. A type used by an active list cannot be deleted (422 names the first list). Delete removes the fields before the type row.
 - Reorder accepts exactly the custom-field keys (else 409 `order_stale`). It parks fields above the current maximum, then sets final positions, because the `(type, position)` unique constraint is not deferrable.
 - Default icon uses the list icon grammar (`lists.ValidIcon`), so this package imports `internal/lists`, not the reverse. `UpdateType` tells an omitted default from an explicit `null`.

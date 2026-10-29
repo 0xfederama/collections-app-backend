@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`api/openapi.yaml` is the canonical OpenAPI 3.0.3 contract (version 0.16.0). It defines generated Go models and strict-server stubs, including workspace type-definition management, book suggestions and store providers. Design context: `/Users/federico/Developer/collections-app/design-docs/`.
+`api/openapi.yaml` is the canonical OpenAPI 3.0.3 contract (version 0.17.0). It defines generated Go models and strict-server stubs, including workspace type-definition management, book suggestions and store providers. Design context: `/Users/federico/Developer/collections-app/design-docs/`.
 
 ## Key files
 
@@ -36,5 +36,4 @@
 - Type and field versions have independent ETag streams; all mutations except creation require If-Match.
 - Type create and update responses preserve `default_icon`; PATCH fields are optional and nullable defaults may be cleared with JSON `null`.
 - Item metadata is an object validated against its list type's definition; the item `type` is read-only and `null` (with `{}` metadata) for a list with no type; `List.type` is nullable and optional on create.
-- `metadata.store_links` is read-only and computed, never stored (also on item rows since 0.14.0); `streaming.link` is read-only, nullable, ignored when sent; item create accepts `source_id` for books.
-- `streaming.platform_links` (0.15.0) is read-only and computed on read (full item and rows), never stored; a client-sent one is ignored. Platforms outside the server's table have no entry (the web falls back to `streaming.link`).
+- No computed links since 0.17.0: `metadata.store_links` and `streaming.platform_links` were removed (the web builds them); sending `store_links` is `400 unknown_field`. `streaming.link` is read-only, nullable, ignored when sent; item create accepts `source_id` for books.

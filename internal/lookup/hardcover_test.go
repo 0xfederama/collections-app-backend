@@ -15,7 +15,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/0xfederama/collections-app-backend/internal/hardcover"
+	"github.com/0xfederama/collections-app-backend/internal/integrations/hardcover"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 )
 

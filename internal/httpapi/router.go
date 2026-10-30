@@ -26,6 +26,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/platform/httpserver"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/search"
+	"github.com/0xfederama/collections-app-backend/internal/stores"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
@@ -123,6 +124,8 @@ func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
 		images.Register(api, d.Logger, d.Images)
 		trash.Register(api, d.Logger, d.Trash)
 		search.Register(api, d.Logger, d.Search)
+		lookup.Register(api, d.Logger, d.Lookup, d.TMDB, d.Books, d.Settings)
+		stores.Register(api, d.Logger)
 	})
 
 	return httpserver.Wrap(r, d.Logger), nil

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/0xfederama/collections-app-backend/internal/integrations/openlibrary"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
-	"github.com/0xfederama/collections-app-backend/internal/openlibrary"
 )
 
 const (

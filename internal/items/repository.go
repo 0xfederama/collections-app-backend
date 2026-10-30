@@ -298,27 +298,6 @@ func readItem(r sqlc.ReadItemRow) Item {
 	return it
 }
 
-// PriceParts converts a price (or nil) to the three item columns. A single
-// amount (Amount) is stored as Min = Max. Values use the D-062 mapping (moneyToNumeric).
-// The lookup package writes a book's price in its own atomic create.
-func PriceParts(p *Price) (minV, maxV pgtype.Numeric, currency *string) {
-	if p == nil {
-		return pgtype.Numeric{}, pgtype.Numeric{}, nil
-	}
-	lo, hi := p.Min, p.Max
-	if p.Amount != nil {
-		lo, hi = p.Amount, p.Amount
-	}
-	if lo != nil {
-		minV = moneyToNumeric(*lo)
-	}
-	if hi != nil {
-		maxV = moneyToNumeric(*hi)
-	}
-	c := p.Currency
-	return minV, maxV, &c
-}
-
 // rowPrice is the price of a row; nil when both bounds are NULL.
 func rowPrice(minV, maxV pgtype.Numeric, currency *string) *Price {
 	lo, hi := numericToMoney(minV), numericToMoney(maxV)

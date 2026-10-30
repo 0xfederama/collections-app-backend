@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,8 +13,6 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5"
-
-	"github.com/0xfederama/collections-app-backend/internal/platform/etag"
 )
 
 // Body limits (API.md §6).
@@ -23,13 +20,6 @@ const (
 	jsonBodyLimit    = 64 << 10
 	contentBodyLimit = 2 << 20
 )
-
-// ifMatchPrefix lists the operations that require `If-Match` and the ETag
-// prefix each expects (API.md §3 "Requires If-Match"). AT-10 checks it against
-// an independent list written from API.md.
-var ifMatchPrefix = map[string]string{
-	"LookupItemMetadata": etag.Item,
-}
 
 // operation is what the guard needs to know about one spec operation.
 type operation struct {
@@ -39,7 +29,8 @@ type operation struct {
 }
 
 // guard enforces, once and centrally, the request rules the generated strict
-// server skips: query constraints, If-Match, body limits and unknown fields.
+// server skips: query constraints, body limits and unknown fields. Since every
+// other operation is on Huma, it only sees /healthz and /readyz, which have none.
 // It runs after routing and path binding, before the body is decoded.
 type guard struct{ ops map[string]*operation }
 
@@ -78,14 +69,6 @@ func (g *guard) middleware(next http.Handler) http.Handler {
 			writeProblem(w, p)
 			return
 		}
-		if prefix, required := ifMatchPrefix[op.id]; required {
-			version, ok := etag.Parse(singleHeader(r, "If-Match"), prefix)
-			if !ok {
-				writeProblem(w, preconditionRequired())
-				return
-			}
-			r = r.WithContext(context.WithValue(r.Context(), ctxIfMatchVersion, version))
-		}
 		if len(op.bodies) > 0 {
 			var p problem
 			if r, p = op.checkBody(w, r); p.Code != "" {
@@ -95,15 +78,6 @@ func (g *guard) middleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-// singleHeader returns the header value, or "" when it is absent or repeated.
-func singleHeader(r *http.Request, name string) string {
-	v := r.Header.Values(name)
-	if len(v) != 1 {
-		return ""
-	}
-	return v[0]
 }
 
 // checkQuery applies the spec's query parameter schemas (ranges, enums,

@@ -14,6 +14,7 @@ Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and 
 - `db/queries/trash.sql`, `search.sql`: trash batch and purge queries, search and recent reads (see [trash](trash.md), [search](search.md))
 - `db/queries/schema.sql`: smoke query, sqlc input
 - `db/queries/workspace.sql`: workspace bootstrap and settings queries (see `workspace` module)
+- `db/queries/lookup_imports.sql`: lookup provenance queries (see [lookup](lookup.md))
 - `internal/platform/testdb/testdb.go`: test-only shared testcontainers Postgres, `NewMigrated`, `Terminate`
 - `sqlc.yaml`: sqlc config (pgx/v5, uuid to google/uuid, timestamptz to time.Time)
 - `internal/platform/database/sqlc/`: generated code, never edit (`sqlc.yaml` output)
@@ -30,6 +31,7 @@ Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and 
 
 - `InTx` re-panics after rolling back. Rollback uses `context.WithoutCancel`, so a cancelled ctx still rolls back. A failed rollback is joined into the returned error.
 - Multi-statement writes must go through `InTx` (ARCHITECTURE §2).
+- Only a feature's `repository.go` may import sqlc (archtest `sqlc is imported only by repository.go`, with a short exempt list). Services reach the database through their own `Repo` interface.
 - Migration tests read `file://../../../db/migrations` (from `internal/platform/database`).
 - `make check-generate` fails if regenerated files differ from the committed ones; run `make generate` and commit.
 - sqlc errors on an empty `db/queries` dir (hence `schema.sql`). A recursive CTE filtering on a plain `@param` needs `sqlc.arg(x)::uuid`; none remain, trash walks run in Go (`internal/trash/walk.go`).

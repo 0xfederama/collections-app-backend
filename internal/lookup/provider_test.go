@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xfederama/collections-app-backend/internal/openlibrary"
-	"github.com/0xfederama/collections-app-backend/internal/tmdb"
+	"github.com/0xfederama/collections-app-backend/internal/integrations/openlibrary"
+	"github.com/0xfederama/collections-app-backend/internal/integrations/tmdb"
 )
 
 func openLibraryFixture(t *testing.T, name string) []byte {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("..", "openlibrary", "testdata", name))
+	b, err := os.ReadFile(filepath.Join("..", "integrations", "openlibrary", "testdata", name))
 	if err != nil {
 		t.Fatal(err)
 	}

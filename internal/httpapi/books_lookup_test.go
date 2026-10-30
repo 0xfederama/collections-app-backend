@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
+	"github.com/0xfederama/collections-app-backend/internal/integrations/openlibrary"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
-	"github.com/0xfederama/collections-app-backend/internal/openlibrary"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/search"
@@ -34,7 +34,7 @@ import (
 
 func olFixture(t *testing.T, name string) []byte {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("..", "openlibrary", "testdata", name))
+	b, err := os.ReadFile(filepath.Join("..", "integrations", "openlibrary", "testdata", name))
 	if err != nil {
 		t.Fatal(err)
 	}

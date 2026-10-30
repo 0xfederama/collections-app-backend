@@ -39,7 +39,10 @@ internal/storage       FileStore (local files)
 internal/trash         delete, list, restore, purge
 internal/search        search and recent items
 internal/workspace     bootstrap of the single workspace; settings (Huma)
-internal/httpapi       legacy router and handlers; oapi/ is GENERATED from api/openapi.yaml (never edit)
+internal/httpapi       HTTP composition root: /healthz and /readyz on the legacy server, Huma mounting; oapi/ is GENERATED from api/openapi.yaml (never edit)
+internal/lookup        metadata lookup (TMDB, Open Library, Hardcover gap-fill): merge rules, provenance, retention (Huma)
+internal/stores        fixed online store provider keys (Huma)
+internal/integrations  bounded upstream clients: tmdb, openlibrary, hardcover
 api/openapi.yaml       the canonical API contract (spec wins over design-docs/API.md)
 db/migrations          golang-migrate files: one baseline `000001_init` (up/down); later changes append as new numbered files
 db/queries             sqlc queries (generated into internal/platform/database/sqlc)

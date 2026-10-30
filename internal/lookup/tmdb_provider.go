@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/0xfederama/collections-app-backend/internal/tmdb"
+	"github.com/0xfederama/collections-app-backend/internal/integrations/tmdb"
 )
 
 // tmdbProvider adapts the TMDB client (movie and TV, retention D-089, streaming

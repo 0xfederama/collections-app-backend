@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/0xfederama/collections-app-backend/internal/content"
 	"github.com/0xfederama/collections-app-backend/internal/hardcover"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
@@ -101,7 +100,6 @@ func run() error {
 		LookupAvailable:     tmdbProvider.Enabled(),
 		BookLookupAvailable: bookProvider.Enabled(),
 		Items:               itemSvc,
-		Content:             content.New(pool, clock.System{}, workspaceID),
 		Search:              search.New(pool, workspaceID),
 		Images:              imageSvc,
 		Trash:               trashSvc,

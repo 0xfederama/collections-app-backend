@@ -121,14 +121,14 @@ func assertNoInternals(t *testing.T, body string) {
 	}
 }
 
-// failingServer returns canned results for GetItemContent (a legacy route) so tests can drive the error paths.
+// failingServer returns canned results for SearchItems (a legacy route: content and items are Huma's now) so tests can drive the error paths.
 type failingServer struct {
 	*Server
 	err   error
 	panic any
 }
 
-func (f failingServer) GetItemContent(context.Context, oapi.GetItemContentRequestObject) (oapi.GetItemContentResponseObject, error) {
+func (f failingServer) SearchItems(context.Context, oapi.SearchItemsRequestObject) (oapi.SearchItemsResponseObject, error) {
 	if f.panic != nil {
 		panic(f.panic)
 	}
@@ -156,7 +156,7 @@ func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
 
 func TestHandlerErrorsMapThroughResponseErrorHandler(t *testing.T) {
 	h, _ := injected(t, failingServer{err: apperr.VersionConflict(3)})
-	rec := get(t, h, "/api/v1/items/0192f4a0-1111-7000-8000-000000000001/content")
+	rec := get(t, h, "/api/v1/search?q=x")
 	if rec.Code != 412 || !strings.Contains(rec.Body.String(), `"current_version":3`) {
 		t.Fatalf("got %d %s", rec.Code, rec.Body)
 	}
@@ -164,7 +164,7 @@ func TestHandlerErrorsMapThroughResponseErrorHandler(t *testing.T) {
 
 func TestInternalErrorIsOpaqueAndLogged(t *testing.T) {
 	h, logs := injected(t, failingServer{err: errors.New(`pq: relation "items" does not exist /srv/app/x.go:1 SELECT secret`)})
-	rec := get(t, h, "/api/v1/items/0192f4a0-1111-7000-8000-000000000001/content")
+	rec := get(t, h, "/api/v1/search?q=x")
 	if rec.Code != 500 {
 		t.Fatalf("status = %d", rec.Code)
 	}
@@ -185,7 +185,7 @@ func TestInternalErrorIsOpaqueAndLogged(t *testing.T) {
 
 func TestPanicBecomes500Problem(t *testing.T) {
 	h, logs := injected(t, failingServer{panic: "kaboom: secret internals"})
-	rec := get(t, h, "/api/v1/items/0192f4a0-1111-7000-8000-000000000001/content")
+	rec := get(t, h, "/api/v1/search?q=x")
 	if rec.Code != 500 {
 		t.Fatalf("status = %d", rec.Code)
 	}
@@ -214,9 +214,9 @@ func assertHeaders(t *testing.T, rec *httptest.ResponseRecorder) {
 
 func TestAccessLogHasNoQueryOrBody(t *testing.T) {
 	h, logs := injected(t, failingServer{err: apperr.NotFound("list")})
-	get(t, h, "/api/v1/items/0192f4a0-1111-7000-8000-000000000001/content?q=private+words")
+	get(t, h, "/api/v1/search?q=private+words")
 	line := logs.String()
-	for _, want := range []string{`"method":"GET"`, `"route":"/api/v1/items/{id}/content"`, `"status":404`, `"duration_ms"`, `"request_id"`} {
+	for _, want := range []string{`"method":"GET"`, `"route":"/api/v1/search"`, `"status":404`, `"duration_ms"`, `"request_id"`} {
 		if !strings.Contains(line, want) {
 			t.Errorf("log lacks %s: %s", want, line)
 		}
@@ -282,7 +282,7 @@ func TestF016_ClientAbortIsNot500(t *testing.T) {
 			}
 			rec := httptest.NewRecorder()
 			h = httpserver.Wrap(h, d.Logger)
-			h.ServeHTTP(rec, httptest.NewRequestWithContext(tc.ctx(t), http.MethodGet, "/api/v1/items/0192f4a0-1111-7000-8000-000000000001/content", nil))
+			h.ServeHTTP(rec, httptest.NewRequestWithContext(tc.ctx(t), http.MethodGet, "/api/v1/search?q=x", nil))
 			if rec.Code != tc.wantStatus {
 				t.Fatalf("status = %d, want %d", rec.Code, tc.wantStatus)
 			}
@@ -290,7 +290,7 @@ func TestF016_ClientAbortIsNot500(t *testing.T) {
 			if got := strings.Contains(out, "unhandled error"); got != tc.wantError {
 				t.Errorf("unhandled error logged = %v, want %v: %s", got, tc.wantError, out)
 			}
-			wantAccess := fmt.Sprintf(`"msg":"request","method":"GET","route":"/api/v1/items/{id}/content","status":%d`, tc.wantStatus)
+			wantAccess := fmt.Sprintf(`"msg":"request","method":"GET","route":"/api/v1/search","status":%d`, tc.wantStatus)
 			if !strings.Contains(out, wantAccess) {
 				t.Errorf("access log lacks status %d: %s", tc.wantStatus, out)
 			}

@@ -59,8 +59,6 @@ type Deps struct {
 	Lookup *lookup.Service
 	// Items serves items (B-07).
 	Items *items.Service
-	// Content serves Markdown content and its versions (B-08).
-	Content *content.Service
 	// Search serves GET /search (B-11).
 	Search *search.Service
 	// Images serves item images and attachment files (B-09).
@@ -118,6 +116,7 @@ func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
 		tree.Register(api, d.Logger, folderRepo, listRepo)
 		definitions.Register(api, d.Logger, definitions.NewService(typeDefs, d.Clock))
 		items.Register(api, d.Logger, items.NewItems(items.NewPostgres(itemDB(d.DB)), itemTypes{typeDefs}, itemSettings{settingsService(d)}, d.Clock), importer(d))
+		content.Register(api, d.Logger, content.NewService(content.NewPostgres(contentDB(d.DB)), contentSettings{settingsService(d)}, d.Clock))
 	})
 
 	return httpserver.Wrap(r, d.Logger), nil
@@ -226,6 +225,23 @@ func (a itemSettings) PreferredStore(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return s.PreferredStore, nil
+}
+
+// contentDB is the database the content repository runs on, with the same rule as folderDB.
+func contentDB(db Pinger) content.DB {
+	cdb, _ := db.(content.DB)
+	return cdb
+}
+
+// contentSettings is the content.SettingsSource over the workspace settings.
+type contentSettings struct{ svc *workspace.Service }
+
+func (a contentSettings) MarkdownHistoryLimit(ctx context.Context) (int, error) {
+	s, err := a.svc.Get(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return s.MarkdownHistoryLimit, nil
 }
 
 // importer is the create path of the items operations when lookup is configured.

@@ -36,8 +36,7 @@ func newContentEnv(t *testing.T) *treeEnv {
 	}
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: ws,
-		Items:   items.New(pool, clock.System{}, ws),
-		Content: content.New(pool, clock.System{}, ws),
+		Items: items.New(pool, clock.System{}, ws),
 	})
 	return &treeEnv{t: t, h: h, pool: pool, ws: ws}
 }

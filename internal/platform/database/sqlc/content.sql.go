@@ -57,17 +57,6 @@ func (q *Queries) GetLatestContentVersion(ctx context.Context, itemID uuid.UUID)
 	return i, err
 }
 
-const getMarkdownHistoryLimit = `-- name: GetMarkdownHistoryLimit :one
-SELECT markdown_history_limit FROM workspace_settings WHERE workspace_id = $1
-`
-
-func (q *Queries) GetMarkdownHistoryLimit(ctx context.Context, workspaceID uuid.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, getMarkdownHistoryLimit, workspaceID)
-	var markdown_history_limit int32
-	err := row.Scan(&markdown_history_limit)
-	return markdown_history_limit, err
-}
-
 const insertContentVersion = `-- name: InsertContentVersion :exec
 INSERT INTO item_content_versions (item_id, version, body, size_bytes, sha256, created_at)
 VALUES ($1, $2, $3, $4, $5, $6)

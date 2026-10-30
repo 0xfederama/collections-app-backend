@@ -39,6 +39,3 @@ WHERE item_id = @item_id AND version <= @up_to;
 -- A content save bumps updated_at (recently-updated sort) but not items.version.
 UPDATE items SET updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;
-
--- name: GetMarkdownHistoryLimit :one
-SELECT markdown_history_limit FROM workspace_settings WHERE workspace_id = @workspace_id;

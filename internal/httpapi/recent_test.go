@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/0xfederama/collections-app-backend/internal/content"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
@@ -43,9 +42,9 @@ func newRecentEnv(t *testing.T) *treeEnv {
 	t.Cleanup(func() { _ = store.Close() })
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: dir, Logger: quietLogger(), WorkspaceID: ws,
-		Items:   items.New(pool, clock.System{}, ws),
-		Content: content.New(pool, clock.System{}, ws), Search: search.New(pool, ws),
-		Trash: trash.New(pool, store, clock.System{}, quietLogger(), ws),
+		Items:  items.New(pool, clock.System{}, ws),
+		Search: search.New(pool, ws),
+		Trash:  trash.New(pool, store, clock.System{}, quietLogger(), ws),
 	})
 	return &treeEnv{t: t, h: h, pool: pool, ws: ws}
 }

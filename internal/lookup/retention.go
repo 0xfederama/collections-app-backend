@@ -9,10 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 
-	"github.com/0xfederama/collections-app-backend/internal/platform/database"
-	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 )
 
 const (
@@ -36,12 +34,11 @@ type MaintenanceResult struct {
 // and its queries only see provider 'tmdb' rows. It first removes every expired owned value, then attempts one bounded
 // batch of due refreshes. Expiry never waits behind provider calls.
 func (s *DBStore) Maintain(ctx context.Context, refresh RefreshFunc) (MaintenanceResult, error) {
+	ctx = scope.With(ctx, s.workspaceID)
 	var result MaintenanceResult
 	for {
 		now := s.clock.Now()
-		ids, err := sqlc.New(s.db).ListExpiredTMDBImportIDs(ctx, sqlc.ListExpiredTMDBImportIDsParams{
-			WorkspaceID: s.workspaceID, Now: &now, BatchLimit: expiryBatchSize,
-		})
+		ids, err := s.repo.ExpiredImportIDs(ctx, now, expiryBatchSize)
 		if err != nil {
 			return result, fmt.Errorf("list expired TMDB imports: %w", err)
 		}
@@ -60,9 +57,7 @@ func (s *DBStore) Maintain(ctx context.Context, refresh RefreshFunc) (Maintenanc
 	}
 
 	now := s.clock.Now()
-	due, err := sqlc.New(s.db).ListDueTMDBImports(ctx, sqlc.ListDueTMDBImportsParams{
-		WorkspaceID: s.workspaceID, Now: &now, BatchLimit: refreshBatchSize,
-	})
+	due, err := s.repo.DueImports(ctx, now, refreshBatchSize)
 	if err != nil {
 		return result, fmt.Errorf("list due TMDB imports: %w", err)
 	}
@@ -79,7 +74,7 @@ func (s *DBStore) Maintain(ctx context.Context, refresh RefreshFunc) (Maintenanc
 			case <-timer.C:
 			}
 		}
-		if err := refresh(ctx, row.ItemID, int(row.ItemVersion)); err != nil {
+		if err := refresh(ctx, row.ItemID, row.ItemVersion); err != nil {
 			if ctx.Err() != nil {
 				return result, ctx.Err()
 			}
@@ -118,7 +113,7 @@ func (s *DBStore) Run(ctx context.Context, interval time.Duration, refresh Refre
 	}
 }
 
-func eligibleForRefresh(row sqlc.ListDueTMDBImportsRow) bool {
+func eligibleForRefresh(row dueImport) bool {
 	if row.DeletedAt != nil || typeKey(row.CurrentType) != row.Type {
 		return false
 	}
@@ -137,26 +132,29 @@ func (s *DBStore) expireOne(ctx context.Context, itemID uuid.UUID) (bool, error)
 	now := s.clock.Now()
 	var oldFiles []string
 	changed := false
-	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
-		if err := q.LockTree(ctx, s.workspaceID); err != nil {
+	err := s.repo.InTx(ctx, func(r Repo) error {
+		if err := r.LockTree(ctx); err != nil {
 			return fmt.Errorf("lock tree for TMDB expiry: %w", err)
 		}
-		cur, err := q.LockTMDBImportItem(ctx, sqlc.LockTMDBImportItemParams{ID: itemID, WorkspaceID: s.workspaceID})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
-		}
+		cur, ok, err := r.LockImportedItem(ctx, itemID)
 		if err != nil {
 			return fmt.Errorf("lock expired TMDB import: %w", err)
 		}
-		record, err := q.GetLookupImport(ctx, sqlc.GetLookupImportParams{ItemID: itemID, WorkspaceID: s.workspaceID})
+		if !ok {
+			return nil
+		}
+		dl, ok, err := r.ImportDeadlines(ctx, itemID)
 		if err != nil {
 			return fmt.Errorf("get expired TMDB import: %w", err)
 		}
-		if record.ExpiresAt == nil {
+		if !ok {
+			return errors.New("get expired TMDB import: no provenance row")
+		}
+		if dl.ExpiresAt == nil {
 			return nil // no retention deadline: not a TMDB import
 		}
-		metadataExpired := !record.ExpiresAt.After(now)
-		posterExpired := record.PosterExpiresAt != nil && !record.PosterExpiresAt.After(now)
+		metadataExpired := !dl.ExpiresAt.After(now)
+		posterExpired := dl.PosterExpiresAt != nil && !dl.PosterExpiresAt.After(now)
 		if !metadataExpired && !posterExpired {
 			return nil
 		}
@@ -181,7 +179,7 @@ func (s *DBStore) expireOne(ctx context.Context, itemID uuid.UUID) (bool, error)
 			title = cur.OriginalTitle
 		}
 		attachmentID := cur.ImageAttachmentID
-		imageURL := cur.ImageUrl
+		imageURL := cur.ImageURL
 		removePoster := posterExpired && cur.ImportedAttachmentID.Valid &&
 			attachmentID.Valid && attachmentID.UUID == cur.ImportedAttachmentID.UUID
 		if removePoster {
@@ -189,32 +187,31 @@ func (s *DBStore) expireOne(ctx context.Context, itemID uuid.UUID) (bool, error)
 			imageURL = nil
 		}
 		visible := title != cur.Title || !sameJSON(metaJSON, cur.Metadata) ||
-			attachmentID != cur.ImageAttachmentID || imageURLChanged(imageURL, cur.ImageUrl)
+			attachmentID != cur.ImageAttachmentID || imageURLChanged(imageURL, cur.ImageURL)
 		if visible {
-			if err := q.UpdateLookupItem(ctx, sqlc.UpdateLookupItemParams{
-				Title: title, Metadata: metaJSON, ImageUrl: imageURL, ImageAttachmentID: attachmentID,
-				Now: now, ID: itemID, WorkspaceID: s.workspaceID,
+			if err := r.UpdateItem(ctx, itemID, itemUpdate{
+				Title: title, Metadata: metaJSON, ImageURL: imageURL, ImageAttachmentID: attachmentID, Now: now,
 			}); err != nil {
 				return fmt.Errorf("expire TMDB item values: %w", err)
 			}
 		}
 		if removePoster {
-			old, err := q.DeleteAttachment(ctx, sqlc.DeleteAttachmentParams{ID: cur.ImportedAttachmentID.UUID, WorkspaceID: s.workspaceID})
+			old, err := r.DeleteAttachment(ctx, cur.ImportedAttachmentID.UUID)
 			if err != nil {
 				return fmt.Errorf("delete expired TMDB attachment: %w", err)
 			}
 			oldFiles = []string{old.StorageKey, old.ThumbnailStorageKey}
 		}
-		if metadataExpired && (posterExpired || record.PosterExpiresAt == nil) {
-			if _, err := q.DeleteLookupImport(ctx, sqlc.DeleteLookupImportParams{ItemID: itemID, WorkspaceID: s.workspaceID}); err != nil {
+		if metadataExpired && (posterExpired || dl.PosterExpiresAt == nil) {
+			if err := r.DeleteImport(ctx, itemID); err != nil {
 				return fmt.Errorf("delete expired TMDB provenance: %w", err)
 			}
 		} else if metadataExpired {
-			if err := q.RetainTMDBPosterAfterMetadataExpiry(ctx, sqlc.RetainTMDBPosterAfterMetadataExpiryParams{ItemID: itemID, WorkspaceID: s.workspaceID}); err != nil {
+			if err := r.RetainPosterAfterMetadataExpiry(ctx, itemID); err != nil {
 				return fmt.Errorf("retain TMDB poster provenance after metadata expiry: %w", err)
 			}
 		} else if posterExpired {
-			if err := q.ClearTMDBPosterProvenance(ctx, sqlc.ClearTMDBPosterProvenanceParams{ItemID: itemID, WorkspaceID: s.workspaceID}); err != nil {
+			if err := r.ClearPosterProvenance(ctx, itemID); err != nil {
 				return fmt.Errorf("clear expired TMDB poster provenance: %w", err)
 			}
 		}

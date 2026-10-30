@@ -3,38 +3,30 @@ package lookup
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 
-	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
-	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
-	"github.com/0xfederama/collections-app-backend/internal/platform/database"
-	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 )
 
-// DB is satisfied by *pgxpool.Pool.
-type DB interface {
-	database.TxBeginner
-	sqlc.DBTX
+// itemReader reads the item after a lookup commits (*items.Service in production).
+type itemReader interface {
+	Get(ctx context.Context, id uuid.UUID) (items.Item, error)
 }
 
 // DBStore applies one fetched lookup result to item data and its provenance.
+// Its methods scope the context to the workspace, so callers need not.
 type DBStore struct {
-	db          DB
+	repo        Repo
 	store       storage.FileStore
 	clock       clock.Clock
-	items       *items.Service
+	items       itemReader
 	log         *slog.Logger
 	workspaceID uuid.UUID
 }
@@ -43,416 +35,32 @@ var _ Store = (*DBStore)(nil)
 
 // NewStore returns a lookup store bound to one workspace.
 func NewStore(db DB, fileStore storage.FileStore, clk clock.Clock, itemSvc *items.Service, log *slog.Logger, workspaceID uuid.UUID) *DBStore {
-	return &DBStore{db: db, store: fileStore, clock: clk, items: itemSvc, log: log, workspaceID: workspaceID}
+	return newStore(NewPostgres(db), fileStore, clk, itemSvc, log, workspaceID)
+}
+
+func newStore(repo Repo, fileStore storage.FileStore, clk clock.Clock, itemSvc itemReader, log *slog.Logger, workspaceID uuid.UUID) *DBStore {
+	return &DBStore{repo: repo, store: fileStore, clock: clk, items: itemSvc, log: log, workspaceID: workspaceID}
 }
 
 // ListType returns the type of an active list, "" for a list with no type.
 func (s *DBStore) ListType(ctx context.Context, listID uuid.UUID) (string, error) {
-	typ, err := sqlc.New(s.db).GetLookupListType(ctx, sqlc.GetLookupListTypeParams{ID: listID, WorkspaceID: s.workspaceID})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", apperr.NotFound("list")
-	}
+	typ, err := s.repo.ListType(scope.With(ctx, s.workspaceID), listID)
 	if err != nil {
-		return "", fmt.Errorf("get lookup list type: %w", err)
+		return "", err
 	}
 	return typeKey(typ), nil
-}
-
-// priceAllowed is the 422 on price for a list type without a price (the type's
-// allows_price, or no type at all). It reads the definition inside the transaction q.
-func (s *DBStore) priceAllowed(ctx context.Context, q *sqlc.Queries, typ *string) error {
-	if typ == nil {
-		return items.PriceAllowed(false)
-	}
-	def, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: *typ})
-	if err != nil {
-		return fmt.Errorf("load list type definition: %w", err)
-	}
-	return items.PriceAllowed(def.AllowsPrice)
-}
-
-// typeFields loads the fields a metadata write is checked against, inside the
-// transaction q. A nil type (a list with no type) has none. A type that is not
-// defined is the 422 of the metadata rules.
-func (s *DBStore) typeFields(ctx context.Context, q *sqlc.Queries, typ *string) ([]types.Field, error) {
-	if typ == nil {
-		return nil, nil
-	}
-	def, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: *typ})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, apperr.Validation(apperr.FieldError{Field: "type", Message: "is not a known item type"})
-	}
-	if err != nil {
-		return nil, fmt.Errorf("get type definition: %w", err)
-	}
-	rows, err := q.ListTypeFields(ctx, sqlc.ListTypeFieldsParams{WorkspaceID: s.workspaceID, TypeID: def.ID})
-	if err != nil {
-		return nil, fmt.Errorf("list type fields: %w", err)
-	}
-	fields := make([]types.Field, len(rows))
-	for i, f := range rows {
-		fields[i] = types.Field{Key: f.Key, Type: f.FieldType, Special: f.IsLocked}
-	}
-	return fields, nil
 }
 
 // Read returns the current provenance record, including the item's current
 // version. A missing record is not an error.
 func (s *DBStore) Read(ctx context.Context, itemID uuid.UUID) (Record, bool, error) {
-	r, err := sqlc.New(s.db).GetLookupImport(ctx, sqlc.GetLookupImportParams{ItemID: itemID, WorkspaceID: s.workspaceID})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Record{}, false, nil
-	}
-	if err != nil {
-		return Record{}, false, fmt.Errorf("get lookup import: %w", err)
-	}
-	fields := map[string]any{}
-	if err := json.Unmarshal(r.ImportedFields, &fields); err != nil {
-		return Record{}, false, fmt.Errorf("decode lookup import fields: %w", err)
-	}
-	return Record{
-		ItemID: r.ItemID, ItemVersion: int(r.ItemVersion), Provider: r.Provider, SourceID: r.SourceID, Type: r.Type,
-		ImportedFields: fields, ImportedTitle: r.ImportedTitle, OriginalTitle: r.OriginalTitle,
-		AttachmentID: nullUUIDPtr(r.AttachmentID), PosterPath: valueOrEmpty(r.PosterPath),
-		PosterFetchedAt: r.PosterFetchedAt, FetchedAt: r.FetchedAt,
-	}, true, nil
+	return s.repo.Import(scope.With(ctx, s.workspaceID), itemID)
 }
 
 type preparedPoster struct {
 	id            uuid.UUID
 	key, thumbKey string
 	processed     *images.Processed
-}
-
-// Apply atomically changes the item, attachment row and lookup provenance.
-// Processed poster bytes are written before the transaction and old files are
-// removed only after commit.
-func (s *DBStore) Apply(ctx context.Context, p ApplyParams) (items.Item, error) {
-	if err := validateApply(p); err != nil {
-		return items.Item{}, err
-	}
-	prepared, err := s.preparePoster(p.Poster)
-	if err != nil {
-		return items.Item{}, err
-	}
-	usedPoster := false
-	var oldFiles []string
-	itemID := p.ItemID
-	err = database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
-		if err := q.LockTree(ctx, s.workspaceID); err != nil {
-			return fmt.Errorf("lock tree: %w", err)
-		}
-		if p.Mode == ModeCreate || p.Mode == ModeCreateUntracked {
-			var txErr error
-			itemID, usedPoster, txErr = s.applyCreate(ctx, q, p, prepared)
-			return txErr
-		}
-		var txErr error
-		usedPoster, oldFiles, txErr = s.applyExisting(ctx, q, p, prepared)
-		return txErr
-	})
-	if err != nil {
-		if prepared != nil {
-			s.discardPrepared(context.WithoutCancel(ctx), prepared)
-		}
-		return items.Item{}, err
-	}
-	if prepared != nil && !usedPoster {
-		s.deleteFiles(context.WithoutCancel(ctx), prepared.key, prepared.thumbKey)
-	}
-	s.deleteFiles(context.WithoutCancel(ctx), oldFiles...)
-	return s.items.Get(scope.With(ctx, s.workspaceID), itemID)
-}
-
-func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParams, poster *preparedPoster) (uuid.UUID, bool, error) {
-	typ, err := q.GetLookupListType(ctx, sqlc.GetLookupListTypeParams{ID: p.ListID, WorkspaceID: s.workspaceID})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return uuid.Nil, false, apperr.NotFound("list")
-	}
-	if err != nil {
-		return uuid.Nil, false, fmt.Errorf("get lookup list: %w", err)
-	}
-	if typeKey(typ) != p.Type {
-		return uuid.Nil, false, apperr.TypeMismatch()
-	}
-	if p.CreateInput.Price != nil {
-		if err := items.ValidatePrice(p.CreateInput.Price); err != nil {
-			return uuid.Nil, false, err
-		}
-		if err := s.priceAllowed(ctx, q, typ); err != nil {
-			return uuid.Nil, false, err
-		}
-	}
-	priceMin, priceMax, currency := items.PriceParts(p.CreateInput.Price)
-	original, err := cleanLookupTitle(p.OriginalTitle)
-	if p.OriginalTitle == "" {
-		original, err = cleanLookupTitle(p.CreateInput.Title)
-	}
-	if err != nil {
-		return uuid.Nil, false, err
-	}
-	title, _ := cleanLookupTitle(p.Title)
-	if typeKey(typ) == types.Book {
-		// Books keep the title the user typed (Italian stays Italian); only the
-		// movie/TV flow adopts the provider's title.
-		if typed, terr := cleanLookupTitle(p.CreateInput.Title); terr == nil {
-			title = typed
-		}
-	}
-	website, err := cleanLookupWebsite(p.CreateInput.Website)
-	if err != nil {
-		return uuid.Nil, false, err
-	}
-	untracked := p.Mode == ModeCreateUntracked
-	var idKey string
-	var idValue any
-	metadata := cloneLookupMap(p.Fields)
-	if !untracked {
-		idKey, idValue = identity(p.Provider, p.SourceID)
-		metadata[idKey] = idValue
-	}
-	for path, value := range flatten(p.CreateInput.Metadata) {
-		if path == "streaming.link" {
-			continue // server-managed: only the TMDB lookup sets it
-		}
-		setPath(metadata, path, value)
-	}
-	if !untracked {
-		metadata[idKey] = idValue
-	}
-	fillOnly(metadata, p.FillOnly, false)
-	fields, err := s.typeFields(ctx, q, typ)
-	if err != nil {
-		return uuid.Nil, false, err
-	}
-	metadata, err = items.ValidateImport(typ, fields, metadata)
-	if err != nil {
-		return uuid.Nil, false, err
-	}
-	metaJSON, err := json.Marshal(metadata)
-	if err != nil {
-		return uuid.Nil, false, fmt.Errorf("encode lookup metadata: %w", err)
-	}
-	next, err := q.NextItemSortOrder(ctx, sqlc.NextItemSortOrderParams{ListID: p.ListID, WorkspaceID: s.workspaceID})
-	if err != nil {
-		return uuid.Nil, false, fmt.Errorf("next item sort order: %w", err)
-	}
-	var attachmentID uuid.NullUUID
-	if poster != nil {
-		if err := s.insertAttachment(ctx, q, poster); err != nil {
-			return uuid.Nil, false, err
-		}
-		attachmentID = uuid.NullUUID{UUID: poster.id, Valid: true}
-	}
-	now := s.clock.Now()
-	id, err := q.InsertLookupItem(ctx, sqlc.InsertLookupItemParams{
-		WorkspaceID: s.workspaceID, ListID: p.ListID, Title: title, WebsiteUrl: website,
-		PriceMin: priceMin, PriceMax: priceMax, Currency: currency, Metadata: metaJSON, ImageAttachmentID: attachmentID, SortOrder: next, Now: now,
-	})
-	if err != nil {
-		return uuid.Nil, false, fmt.Errorf("insert lookup item: %w", err)
-	}
-	if untracked {
-		return id, poster != nil, nil
-	}
-	requested := flatten(p.Fields)
-	for path := range flatten(p.CreateInput.Metadata) {
-		if path != "streaming.link" {
-			delete(requested, path)
-		}
-	}
-	snapshots := snapshotPresent(metadata, requested)
-	snapshots[idKey] = metadata[idKey]
-	var posterFetchedAt *time.Time
-	if poster != nil {
-		posterFetchedAt = &now
-	}
-	if err := s.saveProvenance(ctx, q, id, p, original, snapshots, &title, attachmentID, now, poster != nil, p.PosterPath, posterFetchedAt); err != nil {
-		return uuid.Nil, false, err
-	}
-	return id, poster != nil, nil
-}
-
-func (s *DBStore) applyExisting(ctx context.Context, q *sqlc.Queries, p ApplyParams, poster *preparedPoster) (bool, []string, error) {
-	cur, err := q.LockLookupItem(ctx, sqlc.LockLookupItemParams{ID: p.ItemID, WorkspaceID: s.workspaceID})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil, apperr.NotFound("item")
-	}
-	if err != nil {
-		return false, nil, fmt.Errorf("lock lookup item: %w", err)
-	}
-	if int(cur.Version) != p.ExpectedVersion {
-		return false, nil, apperr.VersionConflict(int(cur.Version))
-	}
-	if typeKey(cur.Type) != p.Type {
-		return false, nil, apperr.TypeMismatch()
-	}
-
-	old, hasOld, err := readImportTx(ctx, q, p.ItemID, s.workspaceID)
-	if err != nil {
-		return false, nil, err
-	}
-	metadata := map[string]any{}
-	if err := json.Unmarshal(cur.Metadata, &metadata); err != nil {
-		return false, nil, fmt.Errorf("decode item metadata: %w", err)
-	}
-	idKey, idValue := identity(p.Provider, p.SourceID)
-	candidate := cloneLookupMap(p.Fields)
-	candidate[idKey] = idValue
-	merged, snapshots := mergeMetadata(p.Mode, metadata, candidate, old, hasOld, idKey)
-	if p.Mode == ModeFill || p.Mode == ModeRematch || p.Mode == ModeRefresh {
-		fillOnly(merged, p.FillOnly, true)
-	}
-	if p.Mode == ModeOwned && !p.RefreshFields && hasOld {
-		merged = cloneLookupMap(metadata)
-		snapshots = cloneLookupMap(old.ImportedFields)
-	}
-	fields, err := s.typeFields(ctx, q, cur.Type)
-	if err != nil {
-		return false, nil, err
-	}
-	merged, err = items.ValidateImport(cur.Type, fields, merged)
-	if err != nil {
-		return false, nil, err
-	}
-	snapshots = snapshotPresent(merged, snapshots)
-	metaJSON, err := json.Marshal(merged)
-	if err != nil {
-		return false, nil, fmt.Errorf("encode lookup metadata: %w", err)
-	}
-
-	title, importedTitle, originalTitle := mergeTitle(p, cur.Title, old, hasOld)
-	if p.Mode == ModeOwned && !p.RefreshFields && hasOld {
-		title, importedTitle, originalTitle = cur.Title, old.ImportedTitle, old.OriginalTitle
-	}
-	attachmentID := cur.ImageAttachmentID
-	imageURL := cur.ImageUrl
-	posterOwned := old.AttachmentID != nil && cur.ImageAttachmentID.Valid && cur.ImageAttachmentID.UUID == *old.AttachmentID
-	usedPoster := false
-	var oldAttachment uuid.NullUUID
-	posterFetchedAt := old.PosterFetchedAt
-	posterPath := old.PosterPath
-	if p.Mode == ModeOwned && posterOwned && p.RefreshPoster {
-		oldAttachment = cur.ImageAttachmentID
-		imageURL = nil
-		if poster != nil {
-			if err := s.insertAttachment(ctx, q, poster); err != nil {
-				return false, nil, err
-			}
-			attachmentID = uuid.NullUUID{UUID: poster.id, Valid: true}
-			usedPoster, posterPath = true, p.PosterPath
-			now := s.clock.Now()
-			posterFetchedAt = &now
-		} else {
-			attachmentID = uuid.NullUUID{}
-			posterFetchedAt, posterPath = nil, ""
-		}
-	} else if !cur.ImageAttachmentID.Valid && cur.ImageUrl == nil && poster != nil && (p.Mode != ModeOwned || old.AttachmentID == nil) {
-		if err := s.insertAttachment(ctx, q, poster); err != nil {
-			return false, nil, err
-		}
-		attachmentID = uuid.NullUUID{UUID: poster.id, Valid: true}
-		usedPoster, posterPath = true, p.PosterPath
-		now := s.clock.Now()
-		posterFetchedAt = &now
-	} else if !posterOwned {
-		posterFetchedAt, posterPath = nil, ""
-	}
-
-	visibleChanged := title != cur.Title || !sameJSON(metaJSON, cur.Metadata) || imageURLChanged(imageURL, cur.ImageUrl) || attachmentID != cur.ImageAttachmentID
-	now := s.clock.Now()
-	if visibleChanged {
-		if err := q.UpdateLookupItem(ctx, sqlc.UpdateLookupItemParams{
-			Title: title, Metadata: metaJSON, ImageUrl: imageURL, ImageAttachmentID: attachmentID,
-			Now: now, ID: p.ItemID, WorkspaceID: s.workspaceID,
-		}); err != nil {
-			return false, nil, fmt.Errorf("update lookup item: %w", err)
-		}
-	}
-	fetchedAt := now
-	if hasOld && (p.Mode == ModeFill || (p.Mode == ModeOwned && !p.RefreshFields)) {
-		// Fill does not replace nonempty values, so it cannot certify their
-		// freshness. New empty fields filled in this pass conservatively share
-		// the earlier deadline.
-		fetchedAt = old.FetchedAt
-	}
-	if err := s.saveProvenance(ctx, q, p.ItemID, p, originalTitle, snapshots, importedTitle, attachmentID, fetchedAt, usedPoster, posterPath, posterFetchedAt); err != nil {
-		return false, nil, err
-	}
-	var oldFiles []string
-	if oldAttachment.Valid && (!attachmentID.Valid || oldAttachment.UUID != attachmentID.UUID) {
-		row, err := q.DeleteAttachment(ctx, sqlc.DeleteAttachmentParams{ID: oldAttachment.UUID, WorkspaceID: s.workspaceID})
-		if err != nil {
-			return false, nil, fmt.Errorf("delete replaced lookup attachment: %w", err)
-		}
-		oldFiles = []string{row.StorageKey, row.ThumbnailStorageKey}
-	}
-	return usedPoster, oldFiles, nil
-}
-
-func (s *DBStore) saveProvenance(ctx context.Context, q *sqlc.Queries, itemID uuid.UUID, p ApplyParams, originalTitle string, snapshots map[string]any, importedTitle *string, attachmentID uuid.NullUUID, now time.Time, newPoster bool, retainedPosterPath string, posterFetchedAt *time.Time) error {
-	// streaming.country comes from workspace settings and is required whenever
-	// any streaming leaf remains. It is structural context rather than TMDB
-	// content, so retaining it lets a user-edited platform leaf survive expiry.
-	delete(snapshots, "streaming.country")
-	retention := retentionFor(p.Provider)
-	fieldsJSON, err := json.Marshal(snapshots)
-	if err != nil {
-		return fmt.Errorf("encode imported fields: %w", err)
-	}
-	var posterPath *string
-	var posterRefresh, posterExpiry *time.Time
-	if attachmentID.Valid && posterFetchedAt != nil {
-		path := retainedPosterPath
-		if newPoster {
-			path = p.PosterPath
-		}
-		posterPath = &path
-		if retention != nil {
-			refresh := addMonthsClamped(*posterFetchedAt, retention.RefreshMonths)
-			expires := addMonthsClamped(*posterFetchedAt, retention.ExpireMonths)
-			posterRefresh = &refresh
-			posterExpiry = &expires
-		}
-	} else {
-		attachmentID = uuid.NullUUID{}
-		posterFetchedAt = nil
-	}
-	// Open Library imports carry no retention duty (D-095): no deadlines at all.
-	var refreshAfter, expiresAt *time.Time
-	if retention != nil {
-		refresh := addMonthsClamped(now, retention.RefreshMonths)
-		expires := addMonthsClamped(now, retention.ExpireMonths)
-		refreshAfter, expiresAt = &refresh, &expires
-	}
-	if err := q.UpsertLookupImport(ctx, sqlc.UpsertLookupImportParams{
-		WorkspaceID: s.workspaceID, ItemID: itemID, Provider: p.Provider, SourceID: p.SourceID, Type: p.Type,
-		ImportedFields: fieldsJSON, ImportedTitle: importedTitle, OriginalTitle: originalTitle,
-		AttachmentID: attachmentID, PosterPath: posterPath, PosterFetchedAt: posterFetchedAt,
-		PosterRefreshAfter: posterRefresh, PosterExpiresAt: posterExpiry,
-		FetchedAt: now, RefreshAfter: refreshAfter, ExpiresAt: expiresAt,
-	}); err != nil {
-		return fmt.Errorf("save lookup import: %w", err)
-	}
-	return nil
-}
-
-func readImportTx(ctx context.Context, q *sqlc.Queries, itemID, workspaceID uuid.UUID) (Record, bool, error) {
-	r, err := q.GetLookupImport(ctx, sqlc.GetLookupImportParams{ItemID: itemID, WorkspaceID: workspaceID})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Record{}, false, nil
-	}
-	if err != nil {
-		return Record{}, false, fmt.Errorf("get lookup import: %w", err)
-	}
-	fields := map[string]any{}
-	if err := json.Unmarshal(r.ImportedFields, &fields); err != nil {
-		return Record{}, false, fmt.Errorf("decode lookup import fields: %w", err)
-	}
-	return Record{ItemID: r.ItemID, ItemVersion: int(r.ItemVersion), Provider: r.Provider, SourceID: r.SourceID, Type: r.Type,
-		ImportedFields: fields, ImportedTitle: r.ImportedTitle, OriginalTitle: r.OriginalTitle,
-		AttachmentID: nullUUIDPtr(r.AttachmentID), PosterPath: valueOrEmpty(r.PosterPath),
-		PosterFetchedAt: r.PosterFetchedAt, FetchedAt: r.FetchedAt}, true, nil
 }
 
 func (s *DBStore) preparePoster(p *images.Processed) (*preparedPoster, error) {
@@ -471,13 +79,14 @@ func (s *DBStore) preparePoster(p *images.Processed) (*preparedPoster, error) {
 	return &preparedPoster{id: id, key: key, thumbKey: thumb, processed: p}, nil
 }
 
-func (s *DBStore) insertAttachment(ctx context.Context, q *sqlc.Queries, p *preparedPoster) error {
+// insertAttachment writes the poster's attachment row inside the transaction.
+func (s *DBStore) insertAttachment(ctx context.Context, r Repo, p *preparedPoster) error {
 	img := p.processed
-	if err := q.InsertAttachment(ctx, sqlc.InsertAttachmentParams{
-		ID: p.id, WorkspaceID: s.workspaceID, StorageKey: p.key, ThumbnailStorageKey: p.thumbKey,
-		MediaType: img.MediaType, SizeBytes: int64(len(img.Original)), Width: int32(img.Width), Height: int32(img.Height), //nolint:gosec // Process enforces image bounds
-		Sha256: img.SHA256[:], Now: s.clock.Now(),
-	}); err != nil {
+	sum := img.SHA256
+	if err := r.InsertAttachment(ctx, images.Attachment{
+		ID: p.id, StorageKey: p.key, ThumbnailStorageKey: p.thumbKey, MediaType: img.MediaType,
+		SizeBytes: int64(len(img.Original)), Width: img.Width, Height: img.Height, SHA256: sum[:],
+	}, s.clock.Now()); err != nil {
 		return fmt.Errorf("insert lookup attachment: %w", err)
 	}
 	return nil
@@ -487,8 +96,8 @@ func (s *DBStore) insertAttachment(ctx context.Context, q *sqlc.Queries, p *prep
 // files after confirming no committed attachment row owns them. Any read error
 // leaves them for the orphan sweeper.
 func (s *DBStore) discardPrepared(ctx context.Context, p *preparedPoster) {
-	_, err := sqlc.New(s.db).GetAttachment(ctx, sqlc.GetAttachmentParams{ID: p.id, WorkspaceID: s.workspaceID})
-	if errors.Is(err, pgx.ErrNoRows) {
+	exists, err := s.repo.AttachmentExists(ctx, p.id)
+	if err == nil && !exists {
 		s.deleteFiles(ctx, p.key, p.thumbKey)
 	}
 }

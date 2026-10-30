@@ -7,12 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/url"
-	"reflect"
-	"slices"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -27,8 +22,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 )
-
-const maxLookupTitleRunes = 300
 
 // DB is satisfied by *pgxpool.Pool.
 type DB interface {
@@ -63,14 +56,6 @@ func (s *DBStore) ListType(ctx context.Context, listID uuid.UUID) (string, error
 		return "", fmt.Errorf("get lookup list type: %w", err)
 	}
 	return typeKey(typ), nil
-}
-
-// typeKey is the list type key, "" when the list has no type (which no provider serves).
-func typeKey(typ *string) string {
-	if typ == nil {
-		return ""
-	}
-	return *typ
 }
 
 // priceAllowed is the 422 on price for a list type without a price (the type's
@@ -177,37 +162,6 @@ func (s *DBStore) Apply(ctx context.Context, p ApplyParams) (items.Item, error) 
 	}
 	s.deleteFiles(context.WithoutCancel(ctx), oldFiles...)
 	return s.items.Get(scope.With(ctx, s.workspaceID), itemID)
-}
-
-func validateApply(p ApplyParams) error {
-	if p.Mode == ModeCreateUntracked {
-		// No provider, no source id: only a book create with the typed input.
-		if p.Type != types.Book || p.CreateInput == nil {
-			return fmt.Errorf("untracked lookup create needs a book and its input")
-		}
-		if _, err := cleanLookupTitle(p.Title); err != nil {
-			return err
-		}
-		return nil
-	}
-	if !slices.Contains(providerTypes[p.Provider], p.Type) {
-		return apperr.Validation(apperr.FieldError{Field: "type", Message: "lookup is available only for movie, tv_show and book"})
-	}
-	if err := ValidSourceID(p.Provider, p.SourceID); err != nil {
-		return err
-	}
-	switch p.Mode {
-	case ModeCreate, ModeFill, ModeRematch, ModeRefresh, ModeOwned:
-	default:
-		return fmt.Errorf("unknown lookup mode %q", p.Mode)
-	}
-	if _, err := cleanLookupTitle(p.Title); err != nil {
-		return err
-	}
-	if p.Mode == ModeCreate && p.CreateInput == nil {
-		return fmt.Errorf("lookup create input is missing")
-	}
-	return nil
 }
 
 func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParams, poster *preparedPoster) (uuid.UUID, bool, error) {
@@ -501,121 +455,6 @@ func readImportTx(ctx context.Context, q *sqlc.Queries, itemID, workspaceID uuid
 		PosterFetchedAt: r.PosterFetchedAt, FetchedAt: r.FetchedAt}, true, nil
 }
 
-func mergeMetadata(mode Mode, current, candidate map[string]any, old Record, hasOld bool, idKey string) (map[string]any, map[string]any) {
-	out := cloneLookupMap(current)
-	flatCandidate := flatten(candidate)
-	snapshots := map[string]any{}
-	switch mode {
-	case ModeRematch, ModeRefresh:
-		if hasOld {
-			removeUnchangedOwned(out, old.ImportedFields)
-		}
-		for path, value := range flatCandidate {
-			setPath(out, path, value)
-			snapshots[path] = value
-		}
-	case ModeOwned:
-		if hasOld {
-			for path, previous := range old.ImportedFields {
-				currentValue, present := getPath(out, path)
-				if !present || !equalValue(currentValue, previous) {
-					continue
-				}
-				if fresh, ok := flatCandidate[path]; ok {
-					setPath(out, path, fresh)
-					snapshots[path] = fresh
-				} else {
-					deletePath(out, path)
-				}
-			}
-		}
-		for path, value := range flatCandidate {
-			if _, alreadyOwned := snapshots[path]; alreadyOwned {
-				continue
-			}
-			if _, present := getPath(out, path); !present {
-				setPath(out, path, value)
-				snapshots[path] = value
-			}
-		}
-	default: // fill
-		if hasOld {
-			for path, previous := range old.ImportedFields {
-				if currentValue, present := getPath(out, path); present && equalValue(currentValue, previous) {
-					snapshots[path] = currentValue
-				}
-			}
-		}
-		for path, value := range flatCandidate {
-			if _, present := getPath(out, path); !present {
-				setPath(out, path, value)
-				snapshots[path] = value
-			}
-		}
-	}
-	// The provider identity is part of every successful match, including fill.
-	// Maintenance relies on this owned snapshot to detect user removal/opt-out.
-	setPath(out, idKey, flatCandidate[idKey])
-	snapshots[idKey] = flatCandidate[idKey]
-	return out, snapshots
-}
-
-// fillOnly sets provider values that are applied only where the item has none:
-// a missing (or null) key and, with emptyLists, an empty list. They are not
-// snapshots, so they are never treated as imported and never replaced or removed.
-func fillOnly(metadata, values map[string]any, emptyLists bool) {
-	for path, value := range flatten(values) {
-		current, present := getPath(metadata, path)
-		if present && current != nil {
-			if list, isList := current.([]any); !emptyLists || !isList || len(list) != 0 {
-				continue
-			}
-		}
-		setPath(metadata, path, normalizeValue(value))
-	}
-}
-
-func mergeTitle(p ApplyParams, current string, old Record, hasOld bool) (string, *string, string) {
-	title, _ := cleanLookupTitle(p.Title)
-	original := p.OriginalTitle
-	if original == "" {
-		original = current
-	}
-	if hasOld {
-		original = old.OriginalTitle
-	}
-	switch p.Mode {
-	case ModeOwned:
-		if hasOld && old.ImportedTitle != nil && current == *old.ImportedTitle {
-			return title, &title, original
-		}
-		return current, nil, original
-	case ModeFill:
-		if hasOld && old.ImportedTitle != nil && current == *old.ImportedTitle {
-			return current, old.ImportedTitle, original
-		}
-		return current, nil, original
-	case ModeRematch, ModeRefresh:
-		if hasOld && old.ImportedTitle != nil && current != *old.ImportedTitle {
-			original = p.OriginalTitle
-			if original == "" {
-				original = current
-			}
-		}
-		return title, &title, original
-	default:
-		return current, nil, original
-	}
-}
-
-func removeUnchangedOwned(metadata map[string]any, snapshots map[string]any) {
-	for path, previous := range snapshots {
-		if current, ok := getPath(metadata, path); ok && equalValue(current, previous) {
-			deletePath(metadata, path)
-		}
-	}
-}
-
 func (s *DBStore) preparePoster(p *images.Processed) (*preparedPoster, error) {
 	if p == nil {
 		return nil, nil
@@ -663,167 +502,4 @@ func (s *DBStore) deleteFiles(ctx context.Context, keys ...string) {
 			s.log.WarnContext(ctx, "lookup image cleanup failed; the sweeper will retry", "err", err)
 		}
 	}
-}
-
-func cleanLookupTitle(raw string) (string, error) {
-	title := strings.TrimSpace(raw)
-	if n := utf8.RuneCountInString(title); n < 1 || n > maxLookupTitleRunes {
-		return title, apperr.Validation(apperr.FieldError{Field: "title", Message: "must be 1 to 300 characters"})
-	}
-	return title, nil
-}
-
-func cleanLookupWebsite(raw *string) (*string, error) {
-	if raw == nil {
-		return nil, nil
-	}
-	s := strings.TrimSpace(*raw)
-	u, err := url.ParseRequestURI(s)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || len(s) > 2048 {
-		return nil, apperr.Validation(apperr.FieldError{Field: "website", Message: "must be an http or https URL of at most 2048 characters"})
-	}
-	return &s, nil
-}
-
-func lookupStorageKeys(id uuid.UUID, ext string) (string, string) {
-	s := id.String()
-	base := "images/" + s[:2] + "/" + s[2:4] + "/" + s
-	return base + "." + ext, base + ".thumb.jpg"
-}
-
-func flatten(in map[string]any) map[string]any {
-	out := map[string]any{}
-	var walk func(string, any)
-	walk = func(prefix string, value any) {
-		if nested, ok := value.(map[string]any); ok {
-			for key, child := range nested {
-				path := key
-				if prefix != "" {
-					path = prefix + "." + key
-				}
-				walk(path, child)
-			}
-			return
-		}
-		if prefix != "" {
-			out[prefix] = value
-		}
-	}
-	for key, value := range in {
-		walk(key, value)
-	}
-	return out
-}
-
-func getPath(in map[string]any, path string) (any, bool) {
-	parts := strings.Split(path, ".")
-	cur := in
-	for i, part := range parts {
-		value, ok := cur[part]
-		if !ok {
-			return nil, false
-		}
-		if i == len(parts)-1 {
-			return value, true
-		}
-		cur, ok = value.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-	}
-	return nil, false
-}
-
-func setPath(in map[string]any, path string, value any) {
-	parts := strings.Split(path, ".")
-	cur := in
-	for _, part := range parts[:len(parts)-1] {
-		next, ok := cur[part].(map[string]any)
-		if !ok {
-			next = map[string]any{}
-			cur[part] = next
-		}
-		cur = next
-	}
-	cur[parts[len(parts)-1]] = value
-}
-
-func deletePath(in map[string]any, path string) {
-	parts := strings.Split(path, ".")
-	parents := []map[string]any{in}
-	cur := in
-	for _, part := range parts[:len(parts)-1] {
-		next, ok := cur[part].(map[string]any)
-		if !ok {
-			return
-		}
-		cur = next
-		parents = append(parents, cur)
-	}
-	delete(cur, parts[len(parts)-1])
-	for i := len(parts) - 2; i >= 0; i-- {
-		child, ok := parents[i][parts[i]].(map[string]any)
-		if !ok || len(child) != 0 {
-			break
-		}
-		delete(parents[i], parts[i])
-	}
-}
-
-func snapshotPresent(metadata map[string]any, requested map[string]any) map[string]any {
-	out := map[string]any{}
-	for path := range requested {
-		if value, ok := getPath(metadata, path); ok {
-			out[path] = value
-		}
-	}
-	return out
-}
-
-func cloneLookupMap(in map[string]any) map[string]any {
-	if in == nil {
-		return map[string]any{}
-	}
-	b, _ := json.Marshal(in)
-	out := map[string]any{}
-	_ = json.Unmarshal(b, &out)
-	return out
-}
-
-func equalValue(a, b any) bool {
-	na, nb := normalizeValue(a), normalizeValue(b)
-	return reflect.DeepEqual(na, nb)
-}
-
-func normalizeValue(v any) any {
-	b, _ := json.Marshal(v)
-	var out any
-	_ = json.Unmarshal(b, &out)
-	return out
-}
-
-func sameJSON(a, b []byte) bool {
-	var av, bv any
-	return json.Unmarshal(a, &av) == nil && json.Unmarshal(b, &bv) == nil && reflect.DeepEqual(av, bv)
-}
-
-func imageURLChanged(a, b *string) bool {
-	if a == nil || b == nil {
-		return a != nil || b != nil
-	}
-	return *a != *b
-}
-
-func nullUUIDPtr(id uuid.NullUUID) *uuid.UUID {
-	if !id.Valid {
-		return nil
-	}
-	return &id.UUID
-}
-
-func valueOrEmpty(v *string) string {
-	if v == nil {
-		return ""
-	}
-	return *v
 }

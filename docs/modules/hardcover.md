@@ -6,7 +6,7 @@ An optional, bounded, server-side Hardcover GraphQL client used as a gap-filler 
 
 ## Key files
 
-- `internal/hardcover/client.go`: search by ISBN or title, cover download, pacing, retry, token handling
+- `internal/integrations/hardcover/client.go`: search by ISBN or title, cover download, pacing, retry, token handling
 - `internal/lookup/hardcover.go`: `BookGapFiller` interface, ISBN gap fill, title-only create, exact-title picker
 - `internal/lookup/store.go`: `ModeCreateUntracked` (create without provenance)
 - `cmd/api/main.go`: `lookupSvc.WithHardcover(hardcover.New(...))`

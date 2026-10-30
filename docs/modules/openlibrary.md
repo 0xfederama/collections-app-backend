@@ -6,7 +6,7 @@ Provides a bounded, server-side Open Library client for book search, work detail
 
 ## Key files
 
-- `internal/openlibrary/client.go`: search, work details, cover download, caching, pacing, User-Agent, fixture
+- `internal/integrations/openlibrary/client.go`: search, work details, cover download, caching, pacing, User-Agent, fixture
 - `internal/lookup/openlibrary_provider.go`: adapter onto the lookup `Provider` interface
 - `internal/httpapi/books.go`: `GET /books/suggestions` mapping
 - `cmd/api/main.go`: client construction

@@ -13,6 +13,7 @@
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping on upload, validation, thumbnails, serving, orphan sweeper
 - [items](modules/items.md): items create, get, list, patch, move and reorder (Huma); pure metadata, price and list-query rules; per-type rules in `items/types`
 - [lists](modules/lists.md): list create, get with path, update (type change, pure patch planner), move and reorder (Huma)
+- [logs](modules/logs.md): in-memory ring of the newest log records and the `LOGS_UI` viewer (`GET /admin/logs`, `GET /admin/logs/view`, hidden from the spec)
 - [lookup](modules/lookup.md): metadata provider lookup (TMDB, Open Library, Hardcover gap-fill): merge rules, provenance and retention (Huma)
 - [openlibrary](modules/openlibrary.md): bounded Open Library client for book search, work details and covers (`internal/integrations`)
 - [hardcover](modules/hardcover.md): optional bounded Hardcover client, book gap-filler for automatic lookup (`internal/integrations`)

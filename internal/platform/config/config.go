@@ -29,6 +29,8 @@ type Config struct {
 	HardcoverAPIKey string
 	LogLevel        slog.Level
 	LogFormat       string
+	// LogsUI serves the in-memory log buffer and its viewer (/admin/logs). Off by default in production.
+	LogsUI bool
 }
 
 // Load reads configuration through getenv (os.Getenv in production) and returns
@@ -63,6 +65,16 @@ func Load(getenv func(string) string) (Config, error) {
 
 	c.OpenLibraryContact = strings.TrimSpace(getenv("OPENLIBRARY_CONTACT"))
 	c.HardcoverAPIKey = strings.TrimSpace(getenv("HARDCOVER_API_KEY"))
+
+	c.LogsUI = c.AppEnv != "production"
+	if raw := strings.TrimSpace(getenv("LOGS_UI")); raw != "" {
+		on, err := strconv.ParseBool(raw)
+		if err != nil {
+			errs = append(errs, errors.New("LOGS_UI must be true or false"))
+		} else {
+			c.LogsUI = on
+		}
+	}
 
 	if c.AppEnv != "development" && c.AppEnv != "production" {
 		errs = append(errs, fmt.Errorf("APP_ENV must be development or production, got %q", c.AppEnv))

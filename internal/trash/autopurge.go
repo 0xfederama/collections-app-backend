@@ -10,7 +10,7 @@ import (
 // as PurgeAll. A NULL retention (the default, or no settings row) purges nothing
 // and returns 0. The retention is read on the pool before the transaction; the
 // batches are read under the tree lock. It returns the number of batches removed.
-func (t *Trash) PurgeExpired(ctx context.Context) (int, error) {
+func (t *Service) PurgeExpired(ctx context.Context) (int, error) {
 	days, err := t.store.RetentionDays(ctx)
 	if err != nil {
 		return 0, err
@@ -49,7 +49,7 @@ func (t *Trash) PurgeExpired(ctx context.Context) (int, error) {
 // RunAutoPurge runs PurgeExpired once at start-up and then every interval until
 // ctx is cancelled, logging the count of each run (the images sweeper's shape).
 // A failed run is logged and retried by the next one.
-func (t *Trash) RunAutoPurge(ctx context.Context, interval time.Duration) {
+func (t *Service) RunAutoPurge(ctx context.Context, interval time.Duration) {
 	run := func() {
 		n, err := t.PurgeExpired(ctx)
 		if err != nil {

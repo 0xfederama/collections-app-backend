@@ -730,12 +730,12 @@ type fixedClock struct{ t time.Time }
 
 func (c fixedClock) Now() time.Time { return c.t }
 
-// rig is a Trash over the fake store, a temp-dir file store and a fixed clock.
+// rig is a Service over the fake store, a temp-dir file store and a fixed clock.
 type rig struct {
 	ctx   context.Context
 	db    *fakeDB
 	local *storage.Local
-	svc   *trash.Trash
+	svc   *trash.Service
 	logs  *bytes.Buffer
 	now   time.Time
 }
@@ -749,7 +749,7 @@ func newRig(t *testing.T, failFiles bool) rig {
 	}
 	logs := &bytes.Buffer{}
 	now := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
-	svc := trash.NewTrash(
+	svc := trash.NewService(
 		fakeStore{db: db},
 		recordingFiles{FileStore: local, db: db, fail: failFiles},
 		fixedClock{t: now},

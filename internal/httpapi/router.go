@@ -64,7 +64,8 @@ type Deps struct {
 	// Images serves item images and attachment files (F-019-B3e). The composition root builds it with
 	// images.NewService and gives the same instance to the sweeper.
 	Images *images.Service
-	// Trash serves deletes, the trash list, restore and purge (B-10).
+	// Trash serves the deletes of folders, lists and items, the trash list, restore and purge (F-019-B3f).
+	// The composition root builds it with trash.NewService over the pool and the file store.
 	Trash *trash.Service
 }
 
@@ -119,6 +120,7 @@ func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
 		items.Register(api, d.Logger, d.Items, importer(d))
 		content.Register(api, d.Logger, content.NewService(content.NewPostgres(contentDB(d.DB)), contentSettings{settingsService(d)}, d.Clock))
 		images.Register(api, d.Logger, d.Images)
+		trash.Register(api, d.Logger, d.Trash)
 	})
 
 	return httpserver.Wrap(r, d.Logger), nil

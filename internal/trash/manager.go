@@ -29,24 +29,24 @@ type Store interface {
 
 var _ Store = (*Postgres)(nil)
 
-// Trash holds the trash rules of one workspace (the workspace comes from the
+// Service holds the trash rules of one workspace (the workspace comes from the
 // context). Every delete, restore and purge takes the tree lock first (D-060) and
 // does its reads and writes through the Repo of one transaction. Files are deleted
 // after the commit (ARCHITECTURE §4).
-type Trash struct {
+type Service struct {
 	store Store
 	files storage.FileStore
 	clock clock.Clock
 	log   *slog.Logger
 }
 
-// NewTrash returns the rules over store. files deletes the image files of purged
+// NewService returns the rules over store. files deletes the image files of purged
 // items after the commit.
-func NewTrash(store Store, files storage.FileStore, clk clock.Clock, log *slog.Logger) *Trash {
-	return &Trash{store: store, files: files, clock: clk, log: log}
+func NewService(store Store, files storage.FileStore, clk clock.Clock, log *slog.Logger) *Service {
+	return &Service{store: store, files: files, clock: clk, log: log}
 }
 
-func (t *Trash) now() time.Time { return t.clock.Now() }
+func (t *Service) now() time.Time { return t.clock.Now() }
 
 // isNotFound reports whether err is a missing or trashed resource.
 func isNotFound(err error) bool {
@@ -69,7 +69,7 @@ func ancestorPath(nodes []FolderNode, folder *uuid.UUID) []PathSegment {
 // trash as one batch. Order: the folders, then the lists directly in them, then
 // the items of those lists. Older batches nested below stay as they are. Errors
 // in order: NotFound, VersionConflict.
-func (t *Trash) DeleteFolder(ctx context.Context, id uuid.UUID, version int) error {
+func (t *Service) DeleteFolder(ctx context.Context, id uuid.UUID, version int) error {
 	return t.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return err
@@ -107,7 +107,7 @@ func (t *Trash) DeleteFolder(ctx context.Context, id uuid.UUID, version int) err
 
 // DeleteList moves an active list and its active items to the trash as one batch.
 // Errors in order: NotFound, VersionConflict.
-func (t *Trash) DeleteList(ctx context.Context, id uuid.UUID, version int) error {
+func (t *Service) DeleteList(ctx context.Context, id uuid.UUID, version int) error {
 	return t.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return err
@@ -138,7 +138,7 @@ func (t *Trash) DeleteList(ctx context.Context, id uuid.UUID, version int) error
 
 // DeleteItem moves an active item to the trash as one batch. Errors in order:
 // NotFound, VersionConflict.
-func (t *Trash) DeleteItem(ctx context.Context, id uuid.UUID, version int) error {
+func (t *Service) DeleteItem(ctx context.Context, id uuid.UUID, version int) error {
 	return t.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return err
@@ -173,7 +173,7 @@ func (t *Trash) DeleteItem(ctx context.Context, id uuid.UUID, version int) error
 }
 
 // trashItemsOf marks the active items of lists, which the batch has just trashed.
-func (t *Trash) trashItemsOf(ctx context.Context, r Repo, lists []uuid.UUID, batch uuid.UUID, now time.Time) error {
+func (t *Service) trashItemsOf(ctx context.Context, r Repo, lists []uuid.UUID, batch uuid.UUID, now time.Time) error {
 	items, err := r.ActiveItemIDsByLists(ctx, lists)
 	if err != nil {
 		return err
@@ -184,7 +184,7 @@ func (t *Trash) trashItemsOf(ctx context.Context, r Repo, lists []uuid.UUID, bat
 // ---- list ----
 
 // List returns the trash batches, newest first. limit 0 means the default.
-func (t *Trash) List(ctx context.Context, limit, offset int) (Page, error) {
+func (t *Service) List(ctx context.Context, limit, offset int) (Page, error) {
 	if limit <= 0 {
 		limit = DefaultLimit
 	}
@@ -209,7 +209,7 @@ func (t *Trash) List(ctx context.Context, limit, offset int) (Page, error) {
 // for a missing or trashed target, Cycle for a folder into its own subtree. The
 // root is appended last among its siblings and its version is bumped. The rest of
 // the batch is cleared, then the batch row is deleted last (D-051).
-func (t *Trash) Restore(ctx context.Context, id uuid.UUID, dest *Destination) (Restored, error) {
+func (t *Service) Restore(ctx context.Context, id uuid.UUID, dest *Destination) (Restored, error) {
 	var out Restored
 	err := t.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
@@ -250,7 +250,7 @@ func (t *Trash) Restore(ctx context.Context, id uuid.UUID, dest *Destination) (R
 	return out, err
 }
 
-func (t *Trash) restoreFolder(ctx context.Context, r Repo, b Batch, dest *Destination, now time.Time) error {
+func (t *Service) restoreFolder(ctx context.Context, r Repo, b Batch, dest *Destination, now time.Time) error {
 	root, err := r.GetTrashedFolder(ctx, b.RootID, b.ID)
 	if err != nil {
 		return err
@@ -266,7 +266,7 @@ func (t *Trash) restoreFolder(ctx context.Context, r Repo, b Batch, dest *Destin
 	return r.RestoreFolderRoot(ctx, b.RootID, b.ID, parent, next, now)
 }
 
-func (t *Trash) restoreList(ctx context.Context, r Repo, b Batch, dest *Destination, now time.Time) error {
+func (t *Service) restoreList(ctx context.Context, r Repo, b Batch, dest *Destination, now time.Time) error {
 	root, err := r.GetTrashedList(ctx, b.RootID, b.ID)
 	if err != nil {
 		return err
@@ -282,7 +282,7 @@ func (t *Trash) restoreList(ctx context.Context, r Repo, b Batch, dest *Destinat
 	return r.RestoreListRoot(ctx, b.RootID, b.ID, folder, next, now)
 }
 
-func (t *Trash) restoreItem(ctx context.Context, r Repo, b Batch, dest *Destination, now time.Time) error {
+func (t *Service) restoreItem(ctx context.Context, r Repo, b Batch, dest *Destination, now time.Time) error {
 	root, err := r.GetTrashedItem(ctx, b.RootID, b.ID)
 	if err != nil {
 		return err
@@ -315,7 +315,7 @@ func (t *Trash) restoreItem(ctx context.Context, r Repo, b Batch, dest *Destinat
 // folderTarget picks the parent folder (nil = workspace root) for a restored
 // folder or list. rootFolder is set for a folder root (cycle check). Without a
 // destination, the original parent must be active.
-func (t *Trash) folderTarget(ctx context.Context, r Repo, original *uuid.UUID, dest *Destination, rootFolder *uuid.UUID) (*uuid.UUID, error) {
+func (t *Service) folderTarget(ctx context.Context, r Repo, original *uuid.UUID, dest *Destination, rootFolder *uuid.UUID) (*uuid.UUID, error) {
 	if dest == nil {
 		if original == nil {
 			return nil, nil
@@ -362,7 +362,7 @@ func (t *Trash) folderTarget(ctx context.Context, r Repo, original *uuid.UUID, d
 // blockedBy builds the parent_in_trash conflict for an original parent that is
 // not active. A parent that no longer exists cannot be named (the foreign keys
 // make that unreachable: purging a parent purges its trashed children too).
-func (t *Trash) blockedBy(ctx context.Context, r Repo, typ string, id uuid.UUID) error {
+func (t *Service) blockedBy(ctx context.Context, r Repo, typ string, id uuid.UUID) error {
 	var (
 		state ParentState
 		err   error

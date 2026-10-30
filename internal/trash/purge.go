@@ -10,7 +10,7 @@ import (
 // Purge deletes batch id for good: the root with its whole subtree (every batch
 // inside it), the attachment rows of its items and, after the commit, their image
 // files. A file that cannot be deleted is logged; the images sweeper removes it later.
-func (t *Trash) Purge(ctx context.Context, id uuid.UUID) error {
+func (t *Service) Purge(ctx context.Context, id uuid.UUID) error {
 	var keys []string
 	err := t.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
@@ -35,7 +35,7 @@ func (t *Trash) Purge(ctx context.Context, id uuid.UUID) error {
 // number of batches removed (nested batches that went with a purged root count
 // too, as they do in the trash list). Files are deleted after the commit. An empty
 // trash returns 0 and no error.
-func (t *Trash) PurgeAll(ctx context.Context) (int, error) {
+func (t *Service) PurgeAll(ctx context.Context) (int, error) {
 	var (
 		keys    []string
 		removed int
@@ -65,7 +65,7 @@ func (t *Trash) PurgeAll(ctx context.Context) (int, error) {
 // purgeBatches purges each batch of ids in order, inside the caller's transaction.
 // A batch already removed with the root of an earlier one is skipped. It returns
 // the storage keys of every removed attachment.
-func (t *Trash) purgeBatches(ctx context.Context, r Repo, ids []uuid.UUID) ([]string, error) {
+func (t *Service) purgeBatches(ctx context.Context, r Repo, ids []uuid.UUID) ([]string, error) {
 	var keys []string
 	for _, id := range ids {
 		b, err := r.LockBatch(ctx, id)
@@ -90,7 +90,7 @@ func (t *Trash) purgeBatches(ctx context.Context, r Repo, ids []uuid.UUID) ([]st
 // that lost their root. Every row is deleted explicitly, children before parents,
 // so nothing depends on ON DELETE CASCADE. It returns the storage keys of the
 // removed attachments; the caller deletes those files after the commit.
-func (t *Trash) purgeBatch(ctx context.Context, r Repo, b Batch) ([]string, error) {
+func (t *Service) purgeBatch(ctx context.Context, r Repo, b Batch) ([]string, error) {
 	sub, err := t.purgeSubtree(ctx, r, b)
 	if err != nil {
 		return nil, err
@@ -143,7 +143,7 @@ type purgeSet struct {
 // purgeSubtree collects the ids a purge of batch b removes. A folder root reaches
 // its descendant folders, their lists and the items of those lists; a list root
 // its items; an item root only itself.
-func (t *Trash) purgeSubtree(ctx context.Context, r Repo, b Batch) (purgeSet, error) {
+func (t *Service) purgeSubtree(ctx context.Context, r Repo, b Batch) (purgeSet, error) {
 	var s purgeSet
 	switch b.RootType {
 	case TypeFolder:
@@ -174,7 +174,7 @@ func (t *Trash) purgeSubtree(ctx context.Context, r Repo, b Batch) (purgeSet, er
 
 // deleteFiles removes purged image files after the commit. A failure is logged
 // only: the images sweeper removes the orphan later.
-func (t *Trash) deleteFiles(ctx context.Context, keys []string) {
+func (t *Service) deleteFiles(ctx context.Context, keys []string) {
 	for _, k := range keys {
 		if err := t.files.Delete(k); err != nil {
 			t.log.WarnContext(context.WithoutCancel(ctx), "image file cleanup after purge failed; the sweeper will retry", "err", err)

@@ -71,8 +71,8 @@ func run() error {
 	itemSvc := httpapi.NewItems(pool, clock.System{}, settingsSvc)
 	imageSvc := images.NewService(images.NewPostgres(pool), store, itemSvc, clock.System{}, logger)
 	go imageSvc.RunSweeper(scope.With(ctx, workspaceID), images.SweepInterval) // stops when ctx is cancelled on shutdown
-	trashSvc := trash.New(pool, store, clock.System{}, logger, workspaceID)
-	go trashSvc.RunAutoPurge(ctx, 24*time.Hour) // stops when ctx is cancelled on shutdown
+	trashSvc := trash.NewService(trash.NewPostgres(pool), store, clock.System{}, logger)
+	go trashSvc.RunAutoPurge(scope.With(ctx, workspaceID), 24*time.Hour) // stops when ctx is cancelled on shutdown
 	tmdbClient := tmdb.NewWithOptions(cfg.TMDBAPIKey, tmdb.Options{MockFixture: cfg.TMDBMockFixture})
 	lookupStore := lookup.NewStore(pool, store, clock.System{}, itemSvc, logger, workspaceID)
 	tmdbProvider := lookup.NewTMDBProvider(tmdbClient)

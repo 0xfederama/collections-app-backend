@@ -4,6 +4,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/0xfederama/collections-app-backend/internal/items"
+)
+
+// Page sizes follow the other list endpoints.
+const (
+	DefaultLimit = items.DefaultLimit
+	MaxLimit     = items.MaxLimit
 )
 
 // Root types of a trash batch (the `root_type` column).

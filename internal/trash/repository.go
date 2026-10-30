@@ -119,6 +119,12 @@ type Repo interface {
 	DeleteAttachmentRows(ctx context.Context, ids []uuid.UUID) error
 }
 
+// DB is satisfied by *pgxpool.Pool.
+type DB interface {
+	database.TxBeginner
+	sqlc.DBTX
+}
+
 // Postgres implements the repository on a pool. The reads below run outside a
 // transaction, one query each on the pool, with the same mapping as the Repo
 // methods of the same name. Every other method runs inside InTx.

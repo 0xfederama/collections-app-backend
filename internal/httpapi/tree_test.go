@@ -816,7 +816,7 @@ func TestF007_ListDescriptionLimitIsBytes(t *testing.T) {
 		if got := decode(t, rec)["description"]; got != "# Title\n\n- one\n- two" {
 			t.Fatalf("description = %q", got)
 		}
-		// The 64 KiB JSON body limit of the guard applies first, so the 413 is the same either way.
+		// The request body limit applies first, so the 413 is the same either way.
 		cur = e.fetch("lists", l.ID.String())
 		wantProblem(t, e.call("PATCH", path, `{"description":"`+strings.Repeat("x", 65537)+`"}`, etagOf("l", cur)), 413, "payload_too_large")
 	})

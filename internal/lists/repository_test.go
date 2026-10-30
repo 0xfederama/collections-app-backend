@@ -493,7 +493,7 @@ func TestRepo_FolderExists(t *testing.T) {
 	}
 }
 
-// SEAM methods (moves to items in B3d): a type change clears the metadata and,
+// SEAM methods (move to items): a type change clears the metadata and,
 // when the new type has no price, the price of every item of the list, trashed ones included.
 func TestRepo_ClearItemsMetadataAndPrice(t *testing.T) {
 	e := newEnv(t)

@@ -262,8 +262,7 @@ WHERE workspace_id = $1
 ORDER BY is_locked DESC, name, key
 `
 
-// Type definitions are workspace scoped. B2/B3 use these reads and locks to
-// replace the fixed in-process type registry.
+// Type definitions are workspace scoped. Every query filters by workspace_id.
 func (q *Queries) ListTypeDefinitions(ctx context.Context, workspaceID uuid.UUID) ([]TypeDefinition, error) {
 	rows, err := q.db.Query(ctx, listTypeDefinitions, workspaceID)
 	if err != nil {

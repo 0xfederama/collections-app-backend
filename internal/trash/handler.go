@@ -79,7 +79,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 type handler struct{ svc *Service }
 
 // ifMatchFirst answers 428 for a missing or malformed If-Match before the body is
-// read, as the old guard did: a broken request must not hide the missing precondition.
+// read: a broken request must not hide the missing precondition.
 func ifMatchFirst(api huma.API, prefix string) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		if _, ok := etag.Parse(ctx.Header("If-Match"), prefix); !ok {

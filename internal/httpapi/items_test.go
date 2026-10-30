@@ -711,7 +711,7 @@ func TestListItemsFilter(t *testing.T) {
 			t.Fatalf("rows=%d page=%v", len(rows), page)
 		}
 	})
-	t.Run("blank q parameter is rejected by the guard", func(t *testing.T) {
+	t.Run("blank q parameter is rejected", func(t *testing.T) {
 		wantProblem(t, e.call("GET", "/api/v1/lists/"+lid+"/items?q=", "", ""), 400, "invalid_parameter")
 	})
 }

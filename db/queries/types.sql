@@ -1,5 +1,4 @@
--- Type definitions are workspace scoped. B2/B3 use these reads and locks to
--- replace the fixed in-process type registry.
+-- Type definitions are workspace scoped. Every query filters by workspace_id.
 
 -- name: ListTypeDefinitions :many
 SELECT * FROM type_definitions

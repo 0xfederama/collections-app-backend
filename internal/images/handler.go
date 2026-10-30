@@ -113,8 +113,8 @@ func ifMatchFirst(api huma.API) func(huma.Context, func(huma.Context)) {
 
 // uploadGuard runs before the body is read. A media type other than multipart or
 // JSON answers 400, a JSON body over 64 KiB answers 413 (by its Content-Length),
-// and an upload gets its own read and write deadlines, as the old request guard
-// set them. Huma then reads the body, capped at the operation's MaxBodyBytes.
+// and an upload gets its own read and write deadlines. Huma then reads the body,
+// capped at the operation's MaxBodyBytes.
 func uploadGuard(api huma.API) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		mt, _, err := mime.ParseMediaType(ctx.Header("Content-Type"))

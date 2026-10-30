@@ -6,7 +6,7 @@ import (
 
 // TestF019B3d_ContentRequiredFields pins the spec's required body fields on the Huma
 // content operations: a save without body or a restore without version is a 422
-// and creates no version (the old guard let an empty object save an empty body).
+// and creates no version (an empty object must not save an empty body).
 // Restore of version 0 keeps its 404: the spec's minimum is not enforced on the body.
 func TestF019B3d_ContentRequiredFields(t *testing.T) {
 	e := newContentEnv(t)

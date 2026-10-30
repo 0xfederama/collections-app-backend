@@ -12,8 +12,9 @@ linters:
     depguard:
       rules:
         # Layer rules: handler -> service -> repository -> database, one direction.
-        # Legacy services not yet migrated (B3b..f) are excluded by file below; the
-        # package list lives in internal/platform/archtest.
+        # These rules match by file name, in any package. The cross-file rules in
+        # internal/platform/archtest exempt the composition and platform packages
+        # (exemptPackages, with the reason for each); keep both in step.
         handler-is-http-only:
           files: ["**/handler.go"]
           deny:

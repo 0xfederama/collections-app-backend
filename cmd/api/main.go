@@ -115,8 +115,8 @@ func run() error {
 		return err
 	}
 
-	// ReadTimeout/WriteTimeout are the defaults; the request guard extends both
-	// for multipart image uploads (see internal/httpapi/guard.go).
+	// ReadTimeout/WriteTimeout are the defaults; multipart image uploads extend both
+	// per request (see internal/images/handler.go uploadGuard).
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           handler,

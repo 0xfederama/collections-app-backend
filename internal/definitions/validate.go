@@ -11,8 +11,7 @@ import (
 )
 
 // Pure rules of the type and field service: no I/O, so they are tested without
-// a database. The helpers are named apart from the old service.go (removed in
-// B3c T4); the rules are the same.
+// a database.
 
 const (
 	maxFieldLabelRunes = 100

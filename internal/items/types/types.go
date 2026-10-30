@@ -378,9 +378,8 @@ var builtinPinnableKeys = map[string][]string{
 func HasPrice(typ string) bool { return priceTypes[typ] }
 
 // PinnableKeys returns the field keys a list of this type can pin, sorted: the
-// type's metadata keys, plus "price" only on the types that have one. This is
-// retained temporarily for the pre-F014-B4 list APIs; item validation itself
-// is definition-backed.
+// type's metadata keys, plus "price" only on the types that have one. No
+// production code calls it (tests only): item validation is definition-backed.
 func PinnableKeys(typ string) []string {
 	fields, ok := builtinPinnableKeys[typ]
 	if !ok {

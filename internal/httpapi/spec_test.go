@@ -1,4 +1,4 @@
-package oapi_test
+package httpapi_test
 
 import (
 	"context"
@@ -66,7 +66,7 @@ var apiRoutes = []struct{ method, path string }{
 
 func loadSpec(t *testing.T) *openapi3.T {
 	t.Helper()
-	doc, err := openapi3.NewLoader().LoadFromFile("../../../api/openapi.yaml")
+	doc, err := openapi3.NewLoader().LoadFromFile("../../api/openapi.yaml")
 	if err != nil {
 		t.Fatalf("load spec: %v", err)
 	}

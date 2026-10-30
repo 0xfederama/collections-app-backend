@@ -146,16 +146,16 @@ func TestAT10_IfMatchRequired(t *testing.T) {
 			continue // implemented (B-05): settings_test.go covers a valid If-Match
 		}
 		t.Run(op.name+"/valid-reaches-handler", func(t *testing.T) {
-			// Every operation has a real handler, with no database behind the stub router: it got past the guard.
+			// Every operation has a real handler, with no database behind the stub router: it got past the request checks.
 			if rec := call(str(`"` + op.prefix + `-1"`)); rec.Code == 428 || rec.Code == 400 {
-				t.Fatalf("status = %d, the guard blocked a valid request; body=%s", rec.Code, rec.Body)
+				t.Fatalf("status = %d, a request check blocked a valid request; body=%s", rec.Code, rec.Body)
 			}
 		})
 	}
 }
 
 // TestIfMatchNotRequired checks the operations API.md §3 exempts (creates,
-// …/order, trash restore and purge) are not blocked by the guard.
+// …/order, trash restore and purge) are not blocked by a request check.
 func TestIfMatchNotRequired(t *testing.T) {
 	h := stubRouter(t)
 	// Creates, …/order and the tree have real handlers (see tree_test.go): none of them must answer 428.
@@ -174,7 +174,7 @@ func TestIfMatchNotRequired(t *testing.T) {
 	} {
 		t.Run(r.method+" "+r.path, func(t *testing.T) {
 			if rec := do(t, h, r); rec.Code == 428 || rec.Code == 400 {
-				t.Fatalf("status = %d, the guard blocked a request that needs no If-Match; body=%s", rec.Code, rec.Body)
+				t.Fatalf("status = %d, a request check blocked a request that needs no If-Match; body=%s", rec.Code, rec.Body)
 			}
 		})
 	}
@@ -222,21 +222,21 @@ func TestBadRequests(t *testing.T) {
 	}
 }
 
-func TestGuardLetsValidRequestsThrough(t *testing.T) {
+func TestValidRequestsAreNotBlocked(t *testing.T) {
 	h := stubRouter(t)
 	items := "/api/v1/lists/" + id1 + "/items"
-	// The handlers are real (no database behind the stub router): the guard must not answer for them.
+	// The handlers are real (no database behind the stub router): no request check may answer for them.
 	for _, r := range []req{
 		{method: "GET", path: items + "?limit=200&offset=0&sort=title&q=dune"},
 		{method: "GET", path: "/api/v1/trash?limit=1"},
 		{method: "GET", path: "/api/v1/recent-items?limit=50"},
-		// metadata is free-form to the guard; per-type validation is the items service's job
+		// metadata is free-form to the request checks; per-type validation is the items service's job
 		{method: "POST", path: items, body: `{"title":"t","metadata":{},"price":{"currency":"EUR","min":"1.00","max":null}}`, contentType: jsonCT},
 		{method: "POST", path: items, body: `{"title":"n"}`, contentType: "application/json; charset=utf-8"},
 	} {
 		t.Run(r.method+" "+r.path, func(t *testing.T) {
 			if rec := do(t, h, r); rec.Code == 400 || rec.Code == 413 || rec.Code == 415 || rec.Code == 428 {
-				t.Fatalf("status = %d, the guard blocked a valid request; body=%s", rec.Code, rec.Body)
+				t.Fatalf("status = %d, a request check blocked a valid request; body=%s", rec.Code, rec.Body)
 			}
 		})
 	}
@@ -274,9 +274,9 @@ func TestBodyLimits(t *testing.T) {
 			return req{method: "PUT", path: path, body: strings.Repeat(bigBody, n), contentType: "multipart/form-data; boundary=b", headers: ifMatch(`"i-1"`)}
 		}
 		// The image handler is real now and the stub router has no database: a request that
-		// passes the guard reaches it (any answer but the guard's 4xx).
+		// passes the request checks reaches it (any answer but their 4xx).
 		if rec := do(t, h, mp(1<<20)); rec.Code == 413 || rec.Code == 428 || rec.Code == 415 || rec.Code == 400 {
-			t.Fatalf("a 1 MiB upload was blocked by the guard: %d %s", rec.Code, rec.Body)
+			t.Fatalf("a 1 MiB upload was blocked by a request check: %d %s", rec.Code, rec.Body)
 		}
 		wantProblem(t, do(t, h, mp(10<<20+64<<10+1)), 413, "payload_too_large")
 		big := `{"url":"https://img.example/` + strings.Repeat("a", 64<<10) + `"}`

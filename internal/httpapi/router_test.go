@@ -106,6 +106,64 @@ func TestHealthz(t *testing.T) {
 	}
 }
 
+// TestProbeBodiesAreExact pins the probe answers: the body bytes and text/plain,
+// for the three outcomes (200, 503 database, 503 storage).
+func TestProbeBodiesAreExact(t *testing.T) {
+	ok := newRouter(t, httpapi.Deps{DB: fakePinger{}, DataDir: t.TempDir(), Logger: quietLogger()})
+	noDB := newRouter(t, httpapi.Deps{DB: fakePinger{err: errors.New("down")}, DataDir: t.TempDir(), Logger: quietLogger()})
+	noDir := newRouter(t, httpapi.Deps{DB: fakePinger{}, DataDir: filepath.Join(t.TempDir(), "missing"), Logger: quietLogger()})
+	for _, tt := range []struct {
+		name   string
+		h      http.Handler
+		path   string
+		status int
+		body   string
+	}{
+		{"healthz", noDB, "/healthz", http.StatusOK, "ok\n"}, // liveness ignores the database
+		{"readyz ready", ok, "/readyz", http.StatusOK, "ready\n"},
+		{"readyz database down", noDB, "/readyz", http.StatusServiceUnavailable, "database unavailable\n"},
+		{"readyz storage down", noDir, "/readyz", http.StatusServiceUnavailable, "storage unavailable\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			tt.h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, tt.path, nil))
+			if rec.Code != tt.status {
+				t.Fatalf("status = %d, want %d", rec.Code, tt.status)
+			}
+			if got := rec.Body.String(); got != tt.body {
+				t.Errorf("body = %q, want %q", got, tt.body)
+			}
+			if ct := rec.Header().Get("Content-Type"); ct != "text/plain" {
+				t.Errorf("Content-Type = %q, want text/plain", ct)
+			}
+		})
+	}
+}
+
+// TestAPIWithZeroDepsRegisters checks the spec generator's path: the whole API
+// registers from a zero Deps, nothing dereferences a dependency at registration.
+func TestAPIWithZeroDepsRegisters(t *testing.T) {
+	doc := httpapi.API(httpapi.Deps{}).OpenAPI()
+	for _, tt := range []struct{ path, opID string }{
+		{"/healthz", "checkHealth"},
+		{"/readyz", "checkReadiness"},
+		{"/api/v1/store-providers", "listStoreProviders"},
+		{"/api/v1/settings", "getSettings"},
+	} {
+		item := doc.Paths[tt.path]
+		if item == nil || item.Get == nil {
+			t.Errorf("GET %s: missing from the API", tt.path)
+			continue
+		}
+		if item.Get.OperationID != tt.opID {
+			t.Errorf("GET %s: operationId = %q, want %q", tt.path, item.Get.OperationID, tt.opID)
+		}
+	}
+	if tags := doc.Paths["/healthz"].Get.Tags; len(tags) != 1 || tags[0] != "health" {
+		t.Errorf("healthz tags = %v, want [health]", tags)
+	}
+}
+
 func TestReadyz_OKWithRealPostgres(t *testing.T) {
 	pool, err := pgxpool.New(context.Background(), sharedPostgres(t))
 	if err != nil {

@@ -55,13 +55,12 @@ migration: ## Create a migration pair: make migration name=create_items
 	@test -n "$(name)" || { echo "usage: make migration name=<snake_case>"; exit 1; }
 	docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR)/db/migrations:/migrations" $(MIGRATE_IMAGE) create -ext sql -dir /migrations -seq $(name)
 
-generate: ## Regenerate code: sqlc (db/queries) and oapi-codegen (api/openapi.yaml)
+generate: ## Regenerate code: sqlc (db/queries)
 	go tool sqlc generate
-	go tool oapi-codegen -config oapi-codegen.yaml api/openapi.yaml
 
 check-generate: ## Fail if regenerating changes (or adds) tracked generated files (D-019)
 	@$(MAKE) --no-print-directory generate
-	@out="$$(git status --porcelain -- internal/platform/database/sqlc db/queries sqlc.yaml internal/httpapi/oapi api oapi-codegen.yaml)"; \
+	@out="$$(git status --porcelain -- internal/platform/database/sqlc db/queries sqlc.yaml)"; \
 	if [ -n "$$out" ]; then echo "generated code is stale or uncommitted, run 'make generate' and commit:"; echo "$$out"; exit 1; fi
 
 reset-dev: ## Delete the dev containers and volumes (asks first, refuses in production)

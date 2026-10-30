@@ -38,7 +38,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,
 			http.StatusPreconditionRequired},
 		MaxBodyBytes: contentBodyBytes,
-		Middlewares:  huma.Middlewares{ifMatchFirst(api, etag.Content)},
+		Middlewares:  huma.Middlewares{httpserver.IfMatchFirst(api, etag.Content)},
 	}, httpserver.Op(log, h.update))
 	huma.Register(api, huma.Operation{
 		OperationID: "listContentVersions", Method: http.MethodGet, Path: "/api/v1/items/{id}/content/versions", Tags: tags,
@@ -60,23 +60,11 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,
 			http.StatusPreconditionRequired},
 		MaxBodyBytes: contentBodyBytes,
-		Middlewares:  huma.Middlewares{ifMatchFirst(api, etag.Content)},
+		Middlewares:  huma.Middlewares{httpserver.IfMatchFirst(api, etag.Content)},
 	}, httpserver.Op(log, h.restore))
 }
 
 type handler struct{ svc *Service }
-
-// ifMatchFirst answers 428 for a missing or malformed If-Match before the body is
-// read, so a broken body does not hide the missing precondition.
-func ifMatchFirst(api huma.API, prefix string) func(huma.Context, func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		if _, ok := etag.Parse(ctx.Header("If-Match"), prefix); !ok {
-			_ = huma.WriteErr(api, ctx, http.StatusPreconditionRequired, "", problem.PreconditionRequired())
-			return
-		}
-		next(ctx)
-	}
-}
 
 // ItemIDParam is the {id} path parameter of the content operations.
 type ItemIDParam struct {

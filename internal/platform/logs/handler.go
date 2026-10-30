@@ -50,7 +50,7 @@ func Register(api huma.API, log *slog.Logger, buf *Buffer) {
 		OperationID: "viewLogs", Method: http.MethodGet, Path: "/admin/logs/view", Tags: tags, Hidden: true,
 		Summary:     "Log viewer page",
 		Description: "A self-contained HTML page over /admin/logs.",
-	}, viewLogs)
+	}, httpserver.Op(log, viewLogs))
 }
 
 // ListLogsInput is the listLogs query.

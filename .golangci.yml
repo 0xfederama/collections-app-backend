@@ -13,7 +13,7 @@ linters:
       rules:
         # Layer rules: handler -> service -> repository -> database, one direction.
         # These rules match by file name, in any package. The cross-file rules in
-        # internal/platform/archtest exempt the composition and platform packages
+        # internal/platform/archtest exempt the composition packages and platform/database
         # (exemptPackages, with the reason for each); keep both in step.
         handler-is-http-only:
           files: ["**/handler.go"]

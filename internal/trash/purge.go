@@ -11,6 +11,9 @@ import (
 // inside it), the attachment rows of its items and, after the commit, their image
 // files. A file that cannot be deleted is logged; the images sweeper removes it later.
 func (t *Service) Purge(ctx context.Context, id uuid.UUID) error {
+	if err := requireWorkspace(ctx); err != nil {
+		return err
+	}
 	var keys []string
 	err := t.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
@@ -36,6 +39,9 @@ func (t *Service) Purge(ctx context.Context, id uuid.UUID) error {
 // too, as they do in the trash list). Files are deleted after the commit. An empty
 // trash returns 0 and no error.
 func (t *Service) PurgeAll(ctx context.Context) (int, error) {
+	if err := requireWorkspace(ctx); err != nil {
+		return 0, err
+	}
 	var (
 		keys    []string
 		removed int

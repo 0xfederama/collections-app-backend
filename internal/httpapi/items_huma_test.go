@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// TestF019B3d_ItemQueryEmptyValueIs400 pins the rule the Huma listItems keeps from
-// the old guard: a query parameter that is present but empty is invalid_parameter
+// TestF019B3d_ItemQueryEmptyValueIs400 pins the rule the Huma listItems keeps: a
+// query parameter that is present but empty is invalid_parameter
 // (Huma alone would read it as absent).
 func TestF019B3d_ItemQueryEmptyValueIs400(t *testing.T) {
 	e := newTreeEnv(t)

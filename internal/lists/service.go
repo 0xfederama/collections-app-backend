@@ -40,9 +40,9 @@ type Repo interface {
 	// FolderChain returns the ancestors of folderID and folderID itself, root first. A folder that is not active gives none.
 	FolderChain(ctx context.Context, folderID uuid.UUID) ([]PathFolder, error)
 	FolderExists(ctx context.Context, id uuid.UUID) (bool, error)
-	// SEAM: moves to items in B3d
+	// SEAM: moves to items (the item rows are written here until the items feature takes it).
 	ClearItemsMetadata(ctx context.Context, listID uuid.UUID, now time.Time) error
-	// SEAM: moves to items in B3d
+	// SEAM: moves to items.
 	ClearItemsPrice(ctx context.Context, listID uuid.UUID, now time.Time) error
 }
 

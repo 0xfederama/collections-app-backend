@@ -6,7 +6,7 @@ import (
 )
 
 // TestB3a_SettingsServedByHuma checks that the settings operations, now served
-// by Huma on the router, keep the request rules of the old guard: unknown keys,
+// by Huma on the router, keep the request rules: unknown keys,
 // Content-Type, If-Match, body limit and the trash retention null/absent cases.
 func TestB3a_SettingsServedByHuma(t *testing.T) {
 	t.Run("GET and PATCH answer through the router", func(t *testing.T) {

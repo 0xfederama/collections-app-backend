@@ -24,20 +24,20 @@ const (
 	humaPrefix = "github.com/danielgtaylor/huma"
 )
 
-// legacyPackages are not migrated to the layers yet. They are exempt from every
-// check (a prefix covers subpackages). B3b..f remove their entries as they migrate.
-var legacyPackages = []string{
-	"internal/httpapi", // migrates in B3b..f
-	"internal/seed",    // migrates in B3b..f
-	"cmd/api",          // migrates in B3b..f
-}
-
-// sqlcExemptPackages may import the sqlc package from any file: the database
-// plumbing itself, the seeding code and the test database helper.
-var sqlcExemptPackages = []string{
+// exemptPackages are the only packages outside the layer rules: composition and
+// shared plumbing, not features. Every other package under internal/ is checked.
+// A prefix covers subpackages. Keep the list tiny; a feature is never exempt.
+var exemptPackages = []string{
+	// httpapi is the composition root of the HTTP layer: it wires every feature's
+	// repository, service and handler into one router, so it must import them all.
+	"internal/httpapi",
+	// cmd/api is the process wiring (open the pool, build the services, start the server).
+	"cmd/api",
+	// seed writes the built-in type definitions with sqlc at workspace bootstrap, from Go data.
 	"internal/seed",
-	"internal/platform/testdb",
-	"internal/platform/database",
+	// platform is shared plumbing (database and sqlc, testdb, problem, scope, clock, logs, ...).
+	// It is no feature, and the database layer itself must be free to use sqlc.
+	"internal/platform",
 }
 
 // sqlcExemptFiles may import sqlc outside repository.go. bootstrap.go runs the
@@ -49,9 +49,12 @@ var sqlcExemptFiles = []string{
 }
 
 // crossFeatureExemptFiles may use another feature's repository identifiers. They
-// are the lookup store's end-to-end tests: they wire the real items, definitions
-// and workspace features over Postgres, as the composition root does. Remove an
-// entry when its test moves to the composition root (httpapi) or to fakes.
+// are the lookup Store's end-to-end tests (store_test.go, streaming_link_test.go):
+// they run the real lookup Store over Postgres next to the real items, definitions
+// and workspace services. That wiring is the composition root's job (httpapi), and
+// the Store's constructor and fixtures are unexported, so the tests cannot move
+// there without exporting the Store. They stay here, and each file is a reviewed
+// exception. Remove an entry when the test moves to httpapi or to fakes.
 var crossFeatureExemptFiles = []string{
 	"internal/lookup/store_test.go",
 	"internal/lookup/streaming_link_test.go",
@@ -91,14 +94,17 @@ func TestLayerRules(t *testing.T) {
 			t.Error(v)
 		}
 	})
-	t.Run("legacy allowlist names existing packages", func(t *testing.T) {
-		dirs := map[string]bool{}
-		for _, f := range mod.files {
-			dirs[f.pkg] = true
-		}
-		for _, p := range legacyPackages {
-			if !dirs[p] {
-				t.Errorf("legacy package %s has no Go files; remove its entry", p)
+	t.Run("exempt packages exist", func(t *testing.T) {
+		for _, p := range exemptPackages {
+			found := false
+			for _, f := range mod.files {
+				if underDir(f.pkg, p) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("exempt package %s has no Go files; remove its entry", p)
 			}
 		}
 	})
@@ -159,8 +165,8 @@ func underDir(pkg, dir string) bool {
 	return pkg == dir || strings.HasPrefix(pkg, dir+"/")
 }
 
-func isLegacy(pkg string) bool {
-	for _, p := range legacyPackages {
+func isExempt(pkg string) bool {
+	for _, p := range exemptPackages {
 		if underDir(pkg, p) {
 			return true
 		}
@@ -180,7 +186,7 @@ func importPath(spec *ast.ImportSpec) string {
 func sqlcViolations(mod loaded) []string {
 	var out []string
 	for _, f := range mod.files {
-		if isLegacy(f.pkg) || filepath.Base(f.path) == "repository.go" {
+		if isExempt(f.pkg) || filepath.Base(f.path) == "repository.go" {
 			continue
 		}
 		if exemptFromSQLC(f) {
@@ -200,7 +206,7 @@ func httpViolations(mod loaded) []string {
 	var out []string
 	for _, f := range mod.files {
 		base := filepath.Base(f.path)
-		if isLegacy(f.pkg) || (base != "service.go" && base != "model.go") {
+		if isExempt(f.pkg) || (base != "service.go" && base != "model.go") {
 			continue
 		}
 		for _, imp := range f.ast.Imports {
@@ -226,7 +232,7 @@ func crossFeatureViolations(mod loaded) []string {
 	features := map[string]*feature{}
 	for _, f := range mod.files {
 		base := filepath.Base(f.path)
-		if isLegacy(f.pkg) || (base != "handler.go" && base != "repository.go") {
+		if isExempt(f.pkg) || (base != "handler.go" && base != "repository.go") {
 			continue
 		}
 		ft := features[f.pkg]
@@ -257,7 +263,7 @@ func crossFeatureViolations(mod loaded) []string {
 
 	var out []string
 	for _, f := range mod.files {
-		if isLegacy(f.pkg) || slices.Contains(crossFeatureExemptFiles, f.path) {
+		if isExempt(f.pkg) || slices.Contains(crossFeatureExemptFiles, f.path) {
 			continue
 		}
 		for _, imp := range f.ast.Imports {
@@ -306,13 +312,5 @@ func internalPackage(imp string) (string, bool) {
 }
 
 func exemptFromSQLC(f sourceFile) bool {
-	if slices.Contains(sqlcExemptFiles, f.path) {
-		return true
-	}
-	for _, dir := range sqlcExemptPackages {
-		if underDir(f.pkg, dir) {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(sqlcExemptFiles, f.path)
 }

@@ -3,6 +3,7 @@
 - [api-contract](modules/api-contract.md): OpenAPI 3.1 contract generated from the Huma operations (`make spec`, `make check-spec`)
 - [api-notes](api-notes.md): what the generated OpenAPI contract leaves out (request constraints kept in services, error statuses the server does not return as listed)
 - [apperr](modules/apperr.md): typed domain errors, no HTTP imports
+- [architecture](architecture.md): layer map, package rules, tree lock and file ordering, how to add an endpoint
 - [backup](modules/backup.md): Postgres plus images backup, restore and verify scripts (`scripts/`)
 - [config](modules/config.md): env var parsing and startup validation
 - [content](modules/content.md): item Markdown content, versions, restore and retention

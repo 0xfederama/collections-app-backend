@@ -24,9 +24,9 @@ type ListDefs struct {
 }
 
 // Query filters, sorts and pages the active items of one list with the
-// semantics of the SQL it replaces (ListItems and CountItems before B3d). all
-// must be every active item of that list and typ its type. It returns the page
-// and the number of matches. Validation runs in the order of the old service:
+// semantics of the SQL it replaces. all must be every active item of that list
+// and typ its type. It returns the page and the number of matches. Validation
+// runs in this order:
 // price sort, sort field, filter field, filter value; the errors are
 // ErrInvalidSort and ErrInvalidFilter. A list whose type definition is missing
 // is the caller's to report as ErrInvalidSort before it calls Query.

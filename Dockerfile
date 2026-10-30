@@ -1,5 +1,5 @@
 # Keep the Go tag in step with go.mod (DECISIONS "Toolchain versions").
-FROM golang:1.27.2-alpine3.24 AS build
+FROM golang:1.27.3-alpine3.24 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

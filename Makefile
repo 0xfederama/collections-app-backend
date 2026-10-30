@@ -4,7 +4,7 @@ MIGRATE_IMAGE := migrate/migrate:v4.20.1
 REDOCLY_VERSION := 2.63.0
 SHELLCHECK_IMAGE := koalaman/shellcheck:v0.11.0
 
-.PHONY: run test lint lint-api spec check-spec fmt fmt-check check check-generate check-compose check-docker lint-scripts test-backup smoke audit migrate migration generate reset-dev
+.PHONY: run test lint lint-api spec check-spec fmt fmt-check check check-generate check-compose check-docker lint-scripts test-backup smoke audit deadcode migrate migration generate reset-dev
 
 run: ## Run the API on the host (needs `docker compose up -d db` + compose.override.yaml, see README)
 	@test -f .env || { echo "missing .env: cp .env.example .env"; exit 1; }
@@ -56,6 +56,9 @@ check: fmt-check lint check-spec lint-api lint-scripts check-generate test check
 
 audit: ## Vulnerability scan (needs network, not part of check)
 	go tool govulncheck ./...
+
+deadcode: ## Report unreachable functions, tests included (not part of check; unused types/consts are golangci's unused linter)
+	go tool deadcode -test ./...
 
 migrate: ## Apply migrations through the compose migrate service
 	docker compose run --rm migrate

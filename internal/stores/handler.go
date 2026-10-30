@@ -18,6 +18,7 @@ func Register(api huma.API, log *slog.Logger) {
 		Summary: "List the stores a `stores` field can name",
 		Description: "The fixed list of stores (F-016, D-096), in display order (Amazon first; Open Library is not a store since 0.13.0). " +
 			"It does not depend on the workspace.",
+		Errors: []int{http.StatusInternalServerError},
 	}, httpserver.Op(log, listProviders))
 }
 

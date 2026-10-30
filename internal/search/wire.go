@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/platform/httpserver"
 )
 
 // SearchPathSegmentJSON is one ancestor of a search result (published as
@@ -30,7 +31,7 @@ type SearchResultJSON struct {
 // SearchPageJSON is the searchItems answer (published as "SearchPage").
 type SearchPageJSON struct {
 	Data []SearchResultJSON `json:"data"`
-	Page items.PageJSON     `json:"page"`
+	Page httpserver.Page    `json:"page"`
 }
 
 // RecentItemsJSON is the listRecentItems answer (published as "RecentItems"). It is not paginated.

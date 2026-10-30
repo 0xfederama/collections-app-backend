@@ -8,7 +8,6 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/platform/httpserver"
 	"github.com/0xfederama/collections-app-backend/internal/platform/problem"
 )
@@ -79,7 +78,7 @@ func (h *handler) search(ctx context.Context, in *SearchInput) (*SearchOutput, e
 	if err != nil {
 		return nil, err
 	}
-	out := SearchPageJSON{Data: make([]SearchResultJSON, 0, len(page.Results)), Page: items.PageJSON{Limit: page.Limit, Offset: page.Offset, Total: page.Total}}
+	out := SearchPageJSON{Data: make([]SearchResultJSON, 0, len(page.Results)), Page: httpserver.Page{Limit: page.Limit, Offset: page.Offset, Total: page.Total}}
 	for _, r := range page.Results {
 		out.Data = append(out.Data, resultJSON(r))
 	}

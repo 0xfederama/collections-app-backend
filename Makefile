@@ -4,7 +4,7 @@ MIGRATE_IMAGE := migrate/migrate:v4.20.1
 REDOCLY_VERSION := 2.63.0
 SHELLCHECK_IMAGE := koalaman/shellcheck:v0.11.0
 
-.PHONY: run test lint lint-api fmt fmt-check check check-generate check-compose check-docker lint-scripts test-backup smoke audit migrate migration generate reset-dev
+.PHONY: run test lint lint-api spec check-spec fmt fmt-check check check-generate check-compose check-docker lint-scripts test-backup smoke audit migrate migration generate reset-dev
 
 run: ## Run the API on the host (needs `docker compose up -d db` + compose.override.yaml, see README)
 	@test -f .env || { echo "missing .env: cp .env.example .env"; exit 1; }
@@ -20,6 +20,15 @@ lint:
 
 lint-api: ## Lint api/openapi.yaml with Redocly (needs Node >= 24, see README); config in redocly.yaml
 	npx --yes @redocly/cli@$(REDOCLY_VERSION) lint api/openapi.yaml
+
+spec: ## Write api/openapi.yaml, generated from the Huma operations (cmd/specgen)
+	go run ./cmd/specgen > api/openapi.yaml.tmp && mv api/openapi.yaml.tmp api/openapi.yaml
+
+check-spec: ## Fail if api/openapi.yaml is not the generated spec (prints the diff)
+	@tmp="$$(mktemp)"; \
+	go run ./cmd/specgen > "$$tmp" || { rm -f "$$tmp"; exit 1; }; \
+	if ! diff -u api/openapi.yaml "$$tmp"; then rm -f "$$tmp"; echo "api/openapi.yaml is stale, run 'make spec' and commit it"; exit 1; fi; \
+	rm -f "$$tmp"; echo "spec ok"
 
 fmt:
 	gofmt -w .
@@ -43,7 +52,7 @@ test-backup: ## AT-17 backup/restore round trip on an isolated compose project (
 smoke: ## API smoke test over HTTP (curl, jq) against a running stack; API_URL defaults to http://localhost:8090 (./deploy/test up -d --fresh); not part of check
 	./scripts/smoke.sh
 
-check: fmt-check lint lint-api lint-scripts check-generate test check-compose check-docker ## All local gates
+check: fmt-check lint check-spec lint-api lint-scripts check-generate test check-compose check-docker ## All local gates
 
 audit: ## Vulnerability scan (needs network, not part of check)
 	go tool govulncheck ./...

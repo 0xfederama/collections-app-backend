@@ -27,34 +27,38 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 	huma.Register(api, huma.Operation{
 		OperationID: "getItemContent", Method: http.MethodGet, Path: "/api/v1/items/{id}/content", Tags: tags,
 		Summary: "Get the current Markdown content", Description: "Version 0 with an empty body if the item was never saved.",
-		Errors: []int{http.StatusNotFound},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound},
 	}, httpserver.Op(log, h.get))
 	huma.Register(api, huma.Operation{
 		OperationID: "updateItemContent", Method: http.MethodPut, Path: "/api/v1/items/{id}/content", Tags: tags,
 		Summary: "Save the Markdown content",
 		Description: "Requires `If-Match` (`\"c-N\"`, the current content version). The body is at most 1 MiB UTF-8. " +
 			"An identical body returns 200 with the same version. Bumps the item's `updated_at` but not its `version`.",
-		Errors:       []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired, http.StatusUnprocessableEntity, http.StatusRequestEntityTooLarge},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
+			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,
+			http.StatusPreconditionRequired},
 		MaxBodyBytes: contentBodyBytes,
 		Middlewares:  huma.Middlewares{ifMatchFirst(api, etag.Content)},
 	}, httpserver.Op(log, h.update))
 	huma.Register(api, huma.Operation{
 		OperationID: "listContentVersions", Method: http.MethodGet, Path: "/api/v1/items/{id}/content/versions", Tags: tags,
 		Summary: "List the saved content versions", Description: "Newest first, unpaginated (at most 201).",
-		Errors: []int{http.StatusNotFound},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound},
 	}, httpserver.Op(log, h.versions))
 	huma.Register(api, huma.Operation{
 		OperationID: "getContentVersion", Method: http.MethodGet, Path: "/api/v1/items/{id}/content/versions/{version}", Tags: tags,
 		Summary:     "Get one content version (for preview)",
 		Description: "Returns 404 if that version never existed or was pruned. The `ETag` is that version's (`\"c-N\"`).",
-		Errors:      []int{http.StatusNotFound},
+		Errors:      []int{http.StatusBadRequest, http.StatusNotFound},
 	}, httpserver.Op(log, h.version))
 	huma.Register(api, huma.Operation{
 		OperationID: "restoreContentVersion", Method: http.MethodPost, Path: "/api/v1/items/{id}/content/restore", Tags: tags,
 		Summary: "Restore an older content version",
 		Description: "Requires `If-Match` (`\"c-N\"`, the **current** version). Creates a new version with the body of `version` and returns it. " +
 			"404 if that version was pruned.",
-		Errors:       []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired, http.StatusUnprocessableEntity, http.StatusRequestEntityTooLarge},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
+			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,
+			http.StatusPreconditionRequired},
 		MaxBodyBytes: contentBodyBytes,
 		Middlewares:  huma.Middlewares{ifMatchFirst(api, etag.Content)},
 	}, httpserver.Op(log, h.restore))

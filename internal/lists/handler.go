@@ -29,52 +29,50 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		Summary: "Create a list", DefaultStatus: http.StatusCreated, MaxBodyBytes: contentBodyLimit,
 		Description: "Appended to the end of its siblings. `folder_id` absent or `null` creates it at the root. A missing or trashed folder " +
 			"returns `409 destination_unavailable`. `type` absent or `null` is a list with no type.",
-		Errors: []int{http.StatusConflict, http.StatusUnprocessableEntity},
+		Errors: []int{http.StatusBadRequest, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity},
 	}, httpserver.Op(log, h.create))
 	huma.Register(api, huma.Operation{
 		OperationID: "getList", Method: http.MethodGet, Path: "/api/v1/lists/{id}", Tags: tags,
-		Summary: "Get a list", Description: "Includes `path` (the ancestor folders).", Errors: []int{http.StatusNotFound},
+		Summary: "Get a list", Description: "Includes `path` (the ancestor folders).", Errors: []int{http.StatusBadRequest, http.StatusNotFound},
 	}, httpserver.Op(log, h.get))
 	huma.Register(api, huma.Operation{
 		OperationID: "updateList", Method: http.MethodPatch, Path: "/api/v1/lists/{id}", Tags: tags,
 		Summary: "Update a list", Description: "Requires `If-Match` (`\"l-N\"`). Send `description: null` to clear it. Changing `type` clears the " +
 			"`metadata` of all the list's items (and their `price` when the new type has none).",
 		MaxBodyBytes: contentBodyLimit,
-		Errors:       []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired, http.StatusUnprocessableEntity},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
+			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,
+			http.StatusPreconditionRequired},
 	}, httpserver.Op(log, h.update))
 	huma.Register(api, huma.Operation{
 		OperationID: "moveList", Method: http.MethodPost, Path: "/api/v1/lists/{id}/move", Tags: tags,
 		Summary: "Move a list to another folder", Description: "Requires `If-Match` (`\"l-N\"`). `folder_id: null` moves it to the root. " +
 			"Appended to the end of the new siblings.",
-		Errors: []int{http.StatusNotFound, http.StatusConflict, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict,
+			http.StatusPreconditionFailed, http.StatusRequestEntityTooLarge,
+			http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
 	}, httpserver.Op(log, h.move))
 	huma.Register(api, huma.Operation{
 		OperationID: "reorderLists", Method: http.MethodPut, Path: "/api/v1/lists/order", Tags: tags,
 		Summary: "Reorder the child lists of a folder", DefaultStatus: http.StatusNoContent,
 		Description: "`ids` must be all active child lists of `folder_id` (`null` = root), in the new order. No `If-Match`.",
-		Errors:      []int{http.StatusNotFound, http.StatusConflict},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict,
+			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity},
 	}, httpserver.Op(log, h.reorder))
 }
 
 type handler struct{ svc *Service }
 
-// PathSegmentJSON is one ancestor folder of a list (published as "PathSegment").
-type PathSegmentJSON struct {
-	Type string    `json:"type" enum:"folder,list"`
-	ID   uuid.UUID `json:"id" format:"uuid"`
-	Name string    `json:"name"`
-}
-
 // ListWithPathJSON is the getList answer: the list and its ancestor folders (published as "ListWithPath").
 type ListWithPathJSON struct {
 	ListJSON
-	Path []PathSegmentJSON `json:"path"`
+	Path []httpserver.PathSegment `json:"path"`
 }
 
-func toPathJSON(path []PathFolder) []PathSegmentJSON {
-	out := make([]PathSegmentJSON, 0, len(path))
+func toPathJSON(path []PathFolder) []httpserver.PathSegment {
+	out := make([]httpserver.PathSegment, 0, len(path))
 	for _, p := range path {
-		out = append(out, PathSegmentJSON{Type: "folder", ID: p.ID, Name: p.Name})
+		out = append(out, httpserver.PathSegment{Type: "folder", ID: p.ID, Name: p.Name})
 	}
 	return out
 }

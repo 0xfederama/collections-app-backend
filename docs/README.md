@@ -1,6 +1,7 @@
 # Docs index
 
 - [api-contract](modules/api-contract.md): OpenAPI contract and generated Go server stubs
+- [api-notes](api-notes.md): what the generated OpenAPI contract leaves out (request constraints kept in services, error statuses the server does not return as listed)
 - [apperr](modules/apperr.md): typed domain errors, no HTTP imports
 - [backup](modules/backup.md): Postgres plus images backup, restore and verify scripts (`scripts/`)
 - [config](modules/config.md): env var parsing and startup validation

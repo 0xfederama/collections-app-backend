@@ -24,27 +24,32 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		OperationID: "createFolder", Method: http.MethodPost, Path: "/api/v1/folders", Tags: tags,
 		Summary: "Create a folder", DefaultStatus: http.StatusCreated, MaxBodyBytes: 64 << 10,
 		Description: "Appended to the end of its siblings. `parent_folder_id` absent or `null` creates it at the root.",
-		Errors:      []int{http.StatusConflict, http.StatusUnprocessableEntity},
+		Errors:      []int{http.StatusBadRequest, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity},
 	}, httpserver.Op(log, h.create))
 	huma.Register(api, huma.Operation{
 		OperationID: "getFolder", Method: http.MethodGet, Path: "/api/v1/folders/{id}", Tags: tags,
-		Summary: "Get a folder", Errors: []int{http.StatusNotFound},
+		Summary: "Get a folder", Errors: []int{http.StatusBadRequest, http.StatusNotFound},
 	}, httpserver.Op(log, h.get))
 	huma.Register(api, huma.Operation{
 		OperationID: "updateFolder", Method: http.MethodPatch, Path: "/api/v1/folders/{id}", Tags: tags,
 		Summary: "Rename a folder", Description: "Requires `If-Match` (`\"f-N\"`).",
-		Errors: []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired, http.StatusUnprocessableEntity},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
+			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,
+			http.StatusPreconditionRequired},
 	}, httpserver.Op(log, h.update))
 	huma.Register(api, huma.Operation{
 		OperationID: "moveFolder", Method: http.MethodPost, Path: "/api/v1/folders/{id}/move", Tags: tags,
 		Summary: "Move a folder under another parent", Description: "Requires `If-Match`. `parent_folder_id: null` moves it to the root.",
-		Errors: []int{http.StatusNotFound, http.StatusConflict, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict,
+			http.StatusPreconditionFailed, http.StatusRequestEntityTooLarge,
+			http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
 	}, httpserver.Op(log, h.move))
 	huma.Register(api, huma.Operation{
 		OperationID: "reorderFolders", Method: http.MethodPut, Path: "/api/v1/folders/order", Tags: tags,
 		Summary: "Reorder the child folders of a parent", DefaultStatus: http.StatusNoContent,
 		Description: "`ids` must be all active child folders of `parent_folder_id` (`null` = root), in the new order.",
-		Errors:      []int{http.StatusNotFound, http.StatusConflict},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict,
+			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity},
 	}, httpserver.Op(log, h.reorder))
 }
 

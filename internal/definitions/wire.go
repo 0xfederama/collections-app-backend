@@ -26,9 +26,9 @@ type TypeDefinitionJSON struct {
 	Fields              []TypeFieldJSON `json:"fields"`
 }
 
-// FieldDeletePreviewJSON is the count of item values a field delete removes
+// TypeFieldDeletePreviewJSON is the count of item values a field delete removes
 // (published as "TypeFieldDeletePreview").
-type FieldDeletePreviewJSON struct {
+type TypeFieldDeletePreviewJSON struct {
 	PopulatedItemCount int `json:"populated_item_count" minimum:"0" doc:"Number of items, including trashed items, with a value for this field."`
 }
 

@@ -23,12 +23,31 @@ func registerHealth(api huma.API, d Deps) {
 		OperationID: "checkHealth", Method: http.MethodGet, Path: "/healthz", Tags: tags,
 		Summary:     "Liveness probe",
 		Description: "200 if the process is up.",
+		Responses:   probeResponses(map[string]string{"200": "The process is up."}),
+		Errors:      []int{http.StatusInternalServerError},
 	}, httpserver.Op(d.Logger, checkHealth))
 	huma.Register(api, huma.Operation{
 		OperationID: "checkReadiness", Method: http.MethodGet, Path: "/readyz", Tags: tags,
 		Summary:     "Readiness probe",
 		Description: "200 if the database is reachable and `DATA_DIR` is writable, else 503.",
+		Responses: probeResponses(map[string]string{
+			"200": "The database answers and `DATA_DIR` is writable.",
+			"503": "The database or `DATA_DIR` is unavailable.",
+		}),
+		Errors: []int{http.StatusInternalServerError},
 	}, httpserver.Op(d.Logger, checkReadiness(d)))
+}
+
+// probeResponses declares the probe answers (text/plain, not JSON) by status.
+func probeResponses(descriptions map[string]string) map[string]*huma.Response {
+	out := make(map[string]*huma.Response, len(descriptions))
+	for status, desc := range descriptions {
+		out[status] = &huma.Response{
+			Description: desc,
+			Content:     map[string]*huma.MediaType{"text/plain": {Schema: &huma.Schema{Type: huma.TypeString}}},
+		}
+	}
+	return out
 }
 
 func checkHealth(context.Context, *struct{}) (*huma.StreamResponse, error) {

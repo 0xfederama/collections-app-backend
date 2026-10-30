@@ -49,8 +49,9 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		Description: "Requires `If-Match` (`\"i-N\"`). Replaces any existing image of either source. Send either `multipart/form-data` with a `file` " +
 			"part (up to 10 MiB, JPEG, PNG or WebP detected by content sniffing, SVG always rejected) or `application/json` `{url}`. " +
 			"Returns the updated item.",
-		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed, http.StatusRequestEntityTooLarge,
-			http.StatusUnsupportedMediaType, http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
+			http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType,
+			http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
 		RequestBody: setImageRequestBody(),
 		// Huma must not parse the body as JSON: the handler picks the decoder by Content-Type.
 		SkipValidateBody: true,
@@ -61,20 +62,20 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		OperationID: "deleteItemImage", Method: http.MethodDelete, Path: "/api/v1/items/{id}/image", Tags: tags,
 		Summary:     "Remove the item image",
 		Description: "Requires `If-Match` (`\"i-N\"`). Returns the updated item.",
-		Errors:      []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
+		Errors:      []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
 		Middlewares: huma.Middlewares{ifMatchFirst(api)},
 	}, httpserver.Op(log, h.deleteItemImage))
 	huma.Register(api, huma.Operation{
 		OperationID: "getAttachmentFile", Method: http.MethodGet, Path: "/api/v1/attachments/{id}/file", Tags: tags,
 		Summary:     "Download the original image",
 		Description: "A replacement always creates a new attachment ID, so the response is cacheable forever.",
-		Errors:      []int{http.StatusNotFound},
+		Errors:      []int{http.StatusBadRequest, http.StatusNotFound},
 	}, httpserver.Op(log, h.attachmentFile))
 	huma.Register(api, huma.Operation{
 		OperationID: "getAttachmentThumbnail", Method: http.MethodGet, Path: "/api/v1/attachments/{id}/thumbnail", Tags: tags,
 		Summary:     "Download the JPEG thumbnail",
 		Description: "Longest side 640 px. Same caching as the original.",
-		Errors:      []int{http.StatusNotFound},
+		Errors:      []int{http.StatusBadRequest, http.StatusNotFound},
 	}, httpserver.Op(log, h.attachmentThumbnail))
 }
 

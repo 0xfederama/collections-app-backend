@@ -24,38 +24,47 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 	huma.Register(api, huma.Operation{
 		OperationID: "listTypes", Method: http.MethodGet, Path: "/api/v1/types", Tags: tags,
 		Summary: "List type definitions and fields",
+		Errors:  []int{http.StatusInternalServerError},
 	}, httpserver.Op(log, h.list))
 	huma.Register(api, huma.Operation{
 		OperationID: "createType", Method: http.MethodPost, Path: "/api/v1/types", Tags: tags,
 		Summary: "Create a custom type", DefaultStatus: http.StatusCreated,
-		Errors: []int{http.StatusBadRequest, http.StatusConflict, http.StatusUnprocessableEntity},
+		Errors: []int{http.StatusBadRequest, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity},
 	}, httpserver.Op(log, h.create))
 	huma.Register(api, huma.Operation{
 		OperationID: "updateType", Method: http.MethodPatch, Path: "/api/v1/types/{key}", Tags: tags,
 		Summary: "Update a custom type", Description: "Requires `If-Match` (`\"k-N\"`). Send `null` to clear a nullable default.",
-		Errors: []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired, http.StatusUnprocessableEntity},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
+			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,
+			http.StatusPreconditionRequired},
 	}, httpserver.Op(log, h.update))
 	huma.Register(api, huma.Operation{
 		OperationID: "deleteType", Method: http.MethodDelete, Path: "/api/v1/types/{key}", Tags: tags,
 		Summary: "Delete a custom type not used by any list", Description: "Requires `If-Match` (`\"k-N\"`).",
 		DefaultStatus: http.StatusNoContent,
-		Errors:        []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired, http.StatusUnprocessableEntity},
+		Errors:        []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
 	}, httpserver.Op(log, h.remove))
 	huma.Register(api, huma.Operation{
 		OperationID: "createTypeField", Method: http.MethodPost, Path: "/api/v1/types/{key}/fields", Tags: tags,
 		Summary: "Add a custom field", Description: "Requires `If-Match` on the type (`\"k-N\"`).", DefaultStatus: http.StatusCreated,
-		Errors: []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired, http.StatusUnprocessableEntity},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
+			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,
+			http.StatusPreconditionRequired},
 	}, httpserver.Op(log, h.createField))
 	huma.Register(api, huma.Operation{
 		OperationID: "reorderTypeFields", Method: http.MethodPut, Path: "/api/v1/types/{key}/fields/order", Tags: tags,
 		Summary: "Reorder custom fields", Description: "Requires `If-Match` on the type (`\"k-N\"`). `keys` must be the custom fields, in the new order.",
 		DefaultStatus: http.StatusNoContent,
-		Errors:        []int{http.StatusNotFound, http.StatusConflict, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict,
+			http.StatusPreconditionFailed, http.StatusRequestEntityTooLarge,
+			http.StatusPreconditionRequired},
 	}, httpserver.Op(log, h.reorderFields))
 	huma.Register(api, huma.Operation{
 		OperationID: "updateTypeField", Method: http.MethodPatch, Path: "/api/v1/types/{key}/fields/{fieldKey}", Tags: tags,
 		Summary: "Rename a custom field", Description: "Requires `If-Match` on the field (`\"kf-N\"`).",
-		Errors: []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired, http.StatusUnprocessableEntity},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
+			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,
+			http.StatusPreconditionRequired},
 	}, httpserver.Op(log, h.updateField))
 	huma.Register(api, huma.Operation{
 		OperationID: "previewDeleteTypeField", Method: http.MethodGet, Path: "/api/v1/types/{key}/fields/{fieldKey}", Tags: tags,
@@ -64,7 +73,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 	huma.Register(api, huma.Operation{
 		OperationID: "deleteTypeField", Method: http.MethodDelete, Path: "/api/v1/types/{key}/fields/{fieldKey}", Tags: tags,
 		Summary: "Delete a custom field and strip populated values", Description: "Requires `If-Match` on the field (`\"kf-N\"`).",
-		Errors: []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired, http.StatusUnprocessableEntity},
+		Errors: []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
 	}, httpserver.Op(log, h.removeField))
 }
 
@@ -279,17 +288,17 @@ func (h *handler) updateField(ctx context.Context, in *updateFieldInput) (*Field
 	return &FieldOutput{ETag: etag.Format(etag.Field, f.Version), Body: fieldJSON(f)}, nil
 }
 
-// FieldDeletePreviewOutput is the count of item values a field delete removes.
-type FieldDeletePreviewOutput struct {
-	Body FieldDeletePreviewJSON
+// TypeFieldDeletePreviewOutput is the count of item values a field delete removes.
+type TypeFieldDeletePreviewOutput struct {
+	Body TypeFieldDeletePreviewJSON
 }
 
-func (h *handler) previewField(ctx context.Context, in *FieldParam) (*FieldDeletePreviewOutput, error) {
+func (h *handler) previewField(ctx context.Context, in *FieldParam) (*TypeFieldDeletePreviewOutput, error) {
 	count, err := h.svc.FieldDeletePreview(ctx, in.Key, in.FieldKey)
 	if err != nil {
 		return nil, err
 	}
-	return &FieldDeletePreviewOutput{Body: FieldDeletePreviewJSON{PopulatedItemCount: count}}, nil
+	return &TypeFieldDeletePreviewOutput{Body: TypeFieldDeletePreviewJSON{PopulatedItemCount: count}}, nil
 }
 
 type removeFieldInput struct {
@@ -297,7 +306,7 @@ type removeFieldInput struct {
 	IfMatch string `header:"If-Match" doc:"Field ETag, \"kf-N\"."`
 }
 
-func (h *handler) removeField(ctx context.Context, in *removeFieldInput) (*FieldDeletePreviewOutput, error) {
+func (h *handler) removeField(ctx context.Context, in *removeFieldInput) (*TypeFieldDeletePreviewOutput, error) {
 	version, ok := etag.Parse(in.IfMatch, etag.Field)
 	if !ok {
 		return nil, problem.PreconditionRequired()
@@ -306,5 +315,5 @@ func (h *handler) removeField(ctx context.Context, in *removeFieldInput) (*Field
 	if err != nil {
 		return nil, err
 	}
-	return &FieldDeletePreviewOutput{Body: FieldDeletePreviewJSON{PopulatedItemCount: count}}, nil
+	return &TypeFieldDeletePreviewOutput{Body: TypeFieldDeletePreviewJSON{PopulatedItemCount: count}}, nil
 }

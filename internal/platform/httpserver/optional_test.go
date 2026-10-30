@@ -116,6 +116,25 @@ func TestOptional_SchemaIsNullableT(t *testing.T) {
 	}
 }
 
+// A struct T is inlined, never a $ref: its schema is a nullable object (type
+// [object, null] in 3.1), so the optional form needs no oneOf and no nullable $ref.
+func TestOptional_SchemaOfAStructIsAnInlineNullableObject(t *testing.T) {
+	type inner struct {
+		Amount string `json:"amount"`
+	}
+	reg := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	s := Optional[inner]{}.Schema(reg)
+	if s.Ref != "" || len(s.OneOf) != 0 {
+		t.Fatalf("schema = %+v, want an inline object", s)
+	}
+	if !s.Nullable || s.Type != huma.TypeObject {
+		t.Fatalf("schema = %+v, want a nullable object", s)
+	}
+	if _, ok := s.Properties["amount"]; !ok {
+		t.Errorf("properties = %v, want amount", s.Properties)
+	}
+}
+
 func samePtr(a, b *string) bool {
 	if a == nil || b == nil {
 		return a == b
@@ -128,4 +147,44 @@ func sameIntPtr(a, b *int) bool {
 		return a == b
 	}
 	return *a == *b
+}
+
+// A struct-valued Optional is validated at run time: an object and null are
+// accepted, and a wrong JSON type is the decoder's answer (400), as before.
+func TestOptional_StructValueAndNullValidate(t *testing.T) {
+	type inner struct {
+		Amount string `json:"amount"`
+	}
+	type structPatchIn struct {
+		Body struct {
+			Price Optional[inner] `json:"price,omitempty"`
+		}
+	}
+	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(problem.WithRequestID(req.Context(), "req-1")))
+		})
+	})
+	api := NewAPI(r)
+	huma.Register(api, huma.Operation{OperationID: "patchPrice", Method: http.MethodPatch, Path: "/price"},
+		func(_ context.Context, in *structPatchIn) (*struct{}, error) { return &struct{}{}, nil })
+
+	for _, tt := range []struct {
+		name   string
+		body   string
+		status int
+	}{
+		{"absent", `{}`, http.StatusNoContent},
+		{"null", `{"price":null}`, http.StatusNoContent},
+		{"object", `{"price":{"amount":"12.00"}}`, http.StatusNoContent},
+		{"a string is a wrong type (400)", `{"price":"12.00"}`, http.StatusBadRequest},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := request(t, r, http.MethodPatch, "/price", jsonCT, tt.body)
+			if rec.Code != tt.status {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.status, rec.Body)
+			}
+		})
+	}
 }

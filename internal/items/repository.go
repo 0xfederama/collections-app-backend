@@ -65,6 +65,31 @@ type Postgres struct{ db DB }
 
 func NewPostgres(db DB) *Postgres { return &Postgres{db: db} }
 
+// The reads below run outside a transaction: one plain query each on the pool,
+// with the same mapping as the Repo methods of the same name.
+
+func (p *Postgres) reads() *repo { return &repo{q: sqlc.New(p.db)} }
+
+func (p *Postgres) Get(ctx context.Context, id uuid.UUID) (core.Item, error) {
+	return p.reads().Get(ctx, id)
+}
+
+func (p *Postgres) ListByList(ctx context.Context, listID uuid.UUID) ([]core.Item, error) {
+	return p.reads().ListByList(ctx, listID)
+}
+
+func (p *Postgres) ListInfo(ctx context.Context, listID uuid.UUID) (ListInfo, error) {
+	return p.reads().ListInfo(ctx, listID)
+}
+
+func (p *Postgres) PathOf(ctx context.Context, listID uuid.UUID) ([]core.PathSegment, error) {
+	return p.reads().PathOf(ctx, listID)
+}
+
+func (p *Postgres) MaxContentVersions(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]int, error) {
+	return p.reads().MaxContentVersions(ctx, ids)
+}
+
 // InTx runs fn in one transaction: commit on nil, rollback on error.
 func (p *Postgres) InTx(ctx context.Context, fn func(Repo) error) error {
 	return database.InTx(ctx, p.db, func(q *sqlc.Queries) error {

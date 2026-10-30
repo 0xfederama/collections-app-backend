@@ -21,11 +21,9 @@ import (
 
 // Type names (also the `type` enum of the spec).
 const (
-	Movie    = "movie"
-	TVShow   = "tv_show"
-	Book     = "book"
-	Vehicle  = "vehicle"
-	Wishlist = "wishlist"
+	Movie  = "movie"
+	TVShow = "tv_show"
+	Book   = "book"
 )
 
 const (
@@ -59,12 +57,6 @@ type Field struct {
 	Key     string
 	Type    string
 	Special bool // locked built-in field with an established wire shape
-}
-
-// Known reports whether type is one of the five built-in types. Definition
-// backed callers must not use it to decide whether a workspace type exists.
-func Known(typ string) bool {
-	return slices.Contains([]string{Movie, TVShow, Book, Vehicle, Wishlist}, typ)
 }
 
 // Validate checks metadata against the supplied type fields and returns the
@@ -353,77 +345,4 @@ func platformList(path string, raw any) ([]string, []apperr.FieldError) {
 		out = append(out, s)
 	}
 	return out, nil
-}
-
-// maxPinned is the most field keys a list can pin (F009-B2, three since F-016):
-// the first is the primary field, the second the secondary, the third the tertiary.
-const maxPinned = 3
-
-// PriceKey is the item column that can be pinned next to a type's metadata fields.
-const PriceKey = "price"
-
-// priceTypes are the types whose items can carry a price (F009-B1, F-018): price
-// lives only on wishlist items among the built-ins. Movie, tv_show, book and vehicle items have none.
-var priceTypes = map[string]bool{Wishlist: true}
-
-var builtinPinnableKeys = map[string][]string{
-	Movie:    {"director", "imdb_url", "release_year", "runtime_minutes", "streaming"},
-	TVShow:   {"end_year", "episode_minutes", "episodes_per_season", "first_air_year", "imdb_url", "seasons", "streaming"},
-	Book:     {"author", "isbn", "pages", "stores"},
-	Vehicle:  {"displacement_cc", "make", "model", "model_year", "power_hp"},
-	Wishlist: {},
-}
-
-// HasPrice reports whether items of this type can carry a price (F009-B1).
-func HasPrice(typ string) bool { return priceTypes[typ] }
-
-// PinnableKeys returns the field keys a list of this type can pin, sorted: the
-// type's metadata keys, plus "price" only on the types that have one. No
-// production code calls it (tests only): item validation is definition-backed.
-func PinnableKeys(typ string) []string {
-	fields, ok := builtinPinnableKeys[typ]
-	if !ok {
-		return nil
-	}
-	if !HasPrice(typ) {
-		return append([]string{}, fields...)
-	}
-	out := append([]string{}, fields...)
-	out = append(out, PriceKey)
-	slices.Sort(out)
-	return out
-}
-
-// ValidatePinned checks the pinned fields of a list of this type (F009-B2): an
-// ordered list of at most 3 unique pinnable keys, the first the primary. Errors
-// are on "pinned_fields[i]". The result is never nil for an unknown type (which
-// errors) but is the empty list for "pins nothing". A key that is not (or no
-// longer) a field of the type is rejected: a list of a price-less type cannot
-// pin "price".
-func ValidatePinned(typ string, keys []string) ([]string, error) {
-	if !Known(typ) {
-		return nil, apperr.Validation(apperr.FieldError{Field: "type", Message: "is not a known item type"})
-	}
-	allowed := PinnableKeys(typ)
-	var errs []apperr.FieldError
-	if len(keys) > maxPinned {
-		errs = append(errs, apperr.FieldError{Field: "pinned_fields", Message: fmt.Sprintf("must have at most %d entries", maxPinned)})
-	}
-	seen := make(map[string]bool, len(keys))
-	for i, k := range keys {
-		field := fmt.Sprintf("pinned_fields[%d]", i)
-		switch {
-		case len(allowed) == 0:
-			errs = append(errs, apperr.FieldError{Field: field, Message: "lists of this type have no pinnable fields"})
-		case !slices.Contains(allowed, k):
-			errs = append(errs, apperr.FieldError{Field: field, Message: "must be one of " + strings.Join(allowed, ", ")})
-		case seen[k]:
-			errs = append(errs, apperr.FieldError{Field: field, Message: "is a duplicate key"})
-		}
-		seen[k] = true
-	}
-	if len(errs) > 0 {
-		return nil, apperr.Validation(errs...)
-	}
-	return append([]string{}, keys...), nil
 }

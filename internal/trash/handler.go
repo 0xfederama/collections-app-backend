@@ -26,7 +26,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		Description:   "Requires `If-Match` (`\"f-N\"`).",
 		DefaultStatus: http.StatusNoContent,
 		Errors:        []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
-		Middlewares:   huma.Middlewares{ifMatchFirst(api, etag.Folder)},
+		Middlewares:   huma.Middlewares{httpserver.IfMatchFirst(api, etag.Folder)},
 	}, httpserver.Op(log, h.deleteFolder))
 	huma.Register(api, huma.Operation{
 		OperationID: "deleteList", Method: http.MethodDelete, Path: "/api/v1/lists/{id}", Tags: []string{"lists"},
@@ -34,7 +34,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		Description:   "Requires `If-Match` (`\"l-N\"`).",
 		DefaultStatus: http.StatusNoContent,
 		Errors:        []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
-		Middlewares:   huma.Middlewares{ifMatchFirst(api, etag.List)},
+		Middlewares:   huma.Middlewares{httpserver.IfMatchFirst(api, etag.List)},
 	}, httpserver.Op(log, h.deleteList))
 	huma.Register(api, huma.Operation{
 		OperationID: "deleteItem", Method: http.MethodDelete, Path: "/api/v1/items/{id}", Tags: []string{"items"},
@@ -42,7 +42,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		Description:   "Requires `If-Match` (`\"i-N\"`).",
 		DefaultStatus: http.StatusNoContent,
 		Errors:        []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
-		Middlewares:   huma.Middlewares{ifMatchFirst(api, etag.Item)},
+		Middlewares:   huma.Middlewares{httpserver.IfMatchFirst(api, etag.Item)},
 	}, httpserver.Op(log, h.deleteItem))
 	huma.Register(api, huma.Operation{
 		OperationID: "listTrash", Method: http.MethodGet, Path: "/api/v1/trash", Tags: []string{"trash"},
@@ -77,18 +77,6 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 }
 
 type handler struct{ svc *Service }
-
-// ifMatchFirst answers 428 for a missing or malformed If-Match before the body is
-// read: a broken request must not hide the missing precondition.
-func ifMatchFirst(api huma.API, prefix string) func(huma.Context, func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		if _, ok := etag.Parse(ctx.Header("If-Match"), prefix); !ok {
-			_ = huma.WriteErr(api, ctx, http.StatusPreconditionRequired, "", problem.PreconditionRequired())
-			return
-		}
-		next(ctx)
-	}
-}
 
 // IDParam is the {id} path parameter of the delete operations.
 type IDParam struct {

@@ -56,14 +56,14 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		// Huma must not parse the body as JSON: the handler picks the decoder by Content-Type.
 		SkipValidateBody: true,
 		MaxBodyBytes:     multipartBodyBytes,
-		Middlewares:      huma.Middlewares{ifMatchFirst(api), uploadGuard(api)},
+		Middlewares:      huma.Middlewares{httpserver.IfMatchFirst(api, etag.Item), uploadGuard(api)},
 	}, httpserver.Op(log, h.setItemImage))
 	huma.Register(api, huma.Operation{
 		OperationID: "deleteItemImage", Method: http.MethodDelete, Path: "/api/v1/items/{id}/image", Tags: tags,
 		Summary:     "Remove the item image",
 		Description: "Requires `If-Match` (`\"i-N\"`). Returns the updated item.",
 		Errors:      []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
-		Middlewares: huma.Middlewares{ifMatchFirst(api)},
+		Middlewares: huma.Middlewares{httpserver.IfMatchFirst(api, etag.Item)},
 	}, httpserver.Op(log, h.deleteItemImage))
 	huma.Register(api, huma.Operation{
 		OperationID: "getAttachmentFile", Method: http.MethodGet, Path: "/api/v1/attachments/{id}/file", Tags: tags,
@@ -97,18 +97,6 @@ func setImageRequestBody() *huma.RequestBody {
 			},
 		}},
 	}}
-}
-
-// ifMatchFirst answers 428 for a missing or malformed If-Match before the body is
-// read, so a broken body does not hide the missing precondition.
-func ifMatchFirst(api huma.API) func(huma.Context, func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		if _, ok := etag.Parse(ctx.Header("If-Match"), etag.Item); !ok {
-			_ = huma.WriteErr(api, ctx, http.StatusPreconditionRequired, "", problem.PreconditionRequired())
-			return
-		}
-		next(ctx)
-	}
 }
 
 // uploadGuard runs before the body is read. A media type other than multipart or

@@ -67,7 +67,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service, lk Importer) {
 		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
 			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,
 			http.StatusPreconditionRequired},
-		Middlewares: huma.Middlewares{ifMatchFirst(api, etag.Item)},
+		Middlewares: huma.Middlewares{httpserver.IfMatchFirst(api, etag.Item)},
 	}, httpserver.Op(log, h.update))
 	huma.Register(api, huma.Operation{
 		OperationID: "moveItem", Method: http.MethodPost, Path: "/api/v1/items/{id}/move", Tags: tags,
@@ -77,7 +77,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service, lk Importer) {
 		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict,
 			http.StatusPreconditionFailed, http.StatusRequestEntityTooLarge,
 			http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
-		Middlewares: huma.Middlewares{ifMatchFirst(api, etag.Item)},
+		Middlewares: huma.Middlewares{httpserver.IfMatchFirst(api, etag.Item)},
 	}, httpserver.Op(log, h.move))
 	huma.Register(api, huma.Operation{
 		OperationID: "reorderListItems", Method: http.MethodPut, Path: "/api/v1/lists/{id}/items/order", Tags: tags,
@@ -91,18 +91,6 @@ func Register(api huma.API, log *slog.Logger, svc *Service, lk Importer) {
 type handler struct {
 	svc    *Service
 	lookup Importer
-}
-
-// ifMatchFirst answers 428 for a missing or malformed If-Match before the body is
-// read: a broken body must not hide the missing precondition.
-func ifMatchFirst(api huma.API, prefix string) func(huma.Context, func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		if _, ok := etag.Parse(ctx.Header("If-Match"), prefix); !ok {
-			_ = huma.WriteErr(api, ctx, http.StatusPreconditionRequired, "", problem.PreconditionRequired())
-			return
-		}
-		next(ctx)
-	}
 }
 
 // IDParam is the {id} path parameter.

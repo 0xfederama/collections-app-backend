@@ -66,9 +66,7 @@ components:
         results:
           items:
             $ref: "#/components/schemas/BookSuggestion"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - available
         - results
@@ -123,9 +121,7 @@ components:
         data:
           items:
             $ref: "#/components/schemas/ContentVersionInfo"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - data
       type: object
@@ -334,7 +330,9 @@ components:
             $ref: "#/components/schemas/PathSegment"
           type: array
         price:
-          $ref: "#/components/schemas/Price"
+          oneOf:
+            - $ref: "#/components/schemas/Price"
+            - type: "null"
         sort_order:
           format: int64
           type: integer
@@ -376,9 +374,7 @@ components:
         data:
           items:
             $ref: "#/components/schemas/ItemSummary"
-          type:
-            - array
-            - "null"
+          type: array
         page:
           $ref: "#/components/schemas/Page"
       required:
@@ -398,7 +394,9 @@ components:
           format: uuid
           type: string
         image:
-          $ref: "#/components/schemas/ImageSummary"
+          oneOf:
+            - $ref: "#/components/schemas/ImageSummary"
+            - type: "null"
         list_id:
           format: uuid
           type: string
@@ -406,7 +404,9 @@ components:
           additionalProperties: {}
           type: object
         price:
-          $ref: "#/components/schemas/Price"
+          oneOf:
+            - $ref: "#/components/schemas/Price"
+            - type: "null"
         sort_order:
           format: int64
           type: integer
@@ -578,9 +578,7 @@ components:
         path:
           items:
             $ref: "#/components/schemas/PathSegment"
-          type:
-            - array
-            - "null"
+          type: array
         pinned_fields:
           items:
             type: string
@@ -797,9 +795,7 @@ components:
         data:
           items:
             $ref: "#/components/schemas/SearchResult"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - data
       type: object
@@ -909,9 +905,7 @@ components:
         data:
           items:
             $ref: "#/components/schemas/SearchResult"
-          type:
-            - array
-            - "null"
+          type: array
         page:
           $ref: "#/components/schemas/Page"
       required:
@@ -965,9 +959,7 @@ components:
         path:
           items:
             $ref: "#/components/schemas/SearchPathSegment"
-          type:
-            - array
-            - "null"
+          type: array
         type_name:
           description: The display name from this workspace's type definition, null when the list has no type.
           type:
@@ -1101,9 +1093,7 @@ components:
         results:
           items:
             $ref: "#/components/schemas/TmdbSuggestion"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - available
         - results
@@ -1136,9 +1126,7 @@ components:
         former_path:
           items:
             $ref: "#/components/schemas/PathSegment"
-          type:
-            - array
-            - "null"
+          type: array
         id:
           description: The trash batch ID.
           format: uuid
@@ -1173,9 +1161,7 @@ components:
         data:
           items:
             $ref: "#/components/schemas/TrashEntry"
-          type:
-            - array
-            - "null"
+          type: array
         page:
           $ref: "#/components/schemas/Page"
       required:
@@ -1188,15 +1174,11 @@ components:
         folders:
           items:
             $ref: "#/components/schemas/Folder"
-          type:
-            - array
-            - "null"
+          type: array
         lists:
           items:
             $ref: "#/components/schemas/List"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - folders
         - lists
@@ -1225,9 +1207,7 @@ components:
         fields:
           items:
             $ref: "#/components/schemas/TypeField"
-          type:
-            - array
-            - "null"
+          type: array
         is_locked:
           type: boolean
         key:

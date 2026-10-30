@@ -24,7 +24,7 @@ type ItemJSON struct {
 	ID             uuid.UUID                 `json:"id" format:"uuid"`
 	Image          any                       `json:"image" nullable:"true" doc:"An item image, either an external URL or an uploaded attachment. null when the item has no image."`
 	ListID         uuid.UUID                 `json:"list_id" format:"uuid"`
-	Metadata       map[string]any            `json:"metadata" doc:"Validated against the list's type; its shape depends on the type."`
+	Metadata       map[string]any            `json:"metadata" nullable:"false" doc:"Validated against the list's type; its shape depends on the type."`
 	Path           *[]httpserver.PathSegment `json:"path,omitempty" doc:"Ancestor folders and the list. Present on getItem only."`
 	Price          *PriceJSON                `json:"price"`
 	SortOrder      int                       `json:"sort_order"`
@@ -46,6 +46,20 @@ func (ItemJSON) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
 			{Type: "null"},
 		},
 	}
+	s.Properties["price"] = nullableRef(r, reflect.TypeFor[PriceJSON]())
+	return s
+}
+
+// nullableRef is the schema of a pointer to a struct that is sent as null when
+// absent: Huma rejects the nullable tag on a referenced schema.
+func nullableRef(r huma.Registry, t reflect.Type) *huma.Schema {
+	return &huma.Schema{OneOf: []*huma.Schema{r.Schema(t, true, ""), {Type: "null"}}}
+}
+
+// TransformSchema marks price and image nullable, as the handler sends null.
+func (ItemSummaryJSON) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
+	s.Properties["price"] = nullableRef(r, reflect.TypeFor[PriceJSON]())
+	s.Properties["image"] = nullableRef(r, reflect.TypeFor[ImageSummaryJSON]())
 	return s
 }
 
@@ -57,7 +71,7 @@ type ItemSummaryJSON struct {
 	ID             uuid.UUID         `json:"id" format:"uuid"`
 	Image          *ImageSummaryJSON `json:"image"`
 	ListID         uuid.UUID         `json:"list_id" format:"uuid"`
-	Metadata       map[string]any    `json:"metadata"`
+	Metadata       map[string]any    `json:"metadata" nullable:"false"`
 	Price          *PriceJSON        `json:"price"`
 	SortOrder      int               `json:"sort_order"`
 	Title          string            `json:"title"`
@@ -69,7 +83,7 @@ type ItemSummaryJSON struct {
 
 // ItemPageJSON is the listItems answer (published as "ItemPage").
 type ItemPageJSON struct {
-	Data []ItemSummaryJSON `json:"data"`
+	Data []ItemSummaryJSON `json:"data" nullable:"false"`
 	Page httpserver.Page   `json:"page"`
 }
 

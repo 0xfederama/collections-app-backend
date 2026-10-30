@@ -66,7 +66,7 @@ type handler struct{ svc *Service }
 // ListWithPathJSON is the getList answer: the list and its ancestor folders (published as "ListWithPath").
 type ListWithPathJSON struct {
 	ListJSON
-	Path []httpserver.PathSegment `json:"path"`
+	Path []httpserver.PathSegment `json:"path" nullable:"false"`
 }
 
 func toPathJSON(path []PathFolder) []httpserver.PathSegment {

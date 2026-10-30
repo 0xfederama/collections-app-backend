@@ -24,19 +24,19 @@ type SearchPathSegmentJSON struct {
 // SearchResultJSON is one match with its path (published as "SearchResult").
 type SearchResultJSON struct {
 	Item     items.ItemSummaryJSON   `json:"item"`
-	Path     []SearchPathSegmentJSON `json:"path"`
+	Path     []SearchPathSegmentJSON `json:"path" nullable:"false"`
 	TypeName *string                 `json:"type_name" nullable:"true" doc:"The display name from this workspace's type definition, null when the list has no type."`
 }
 
 // SearchPageJSON is the searchItems answer (published as "SearchPage").
 type SearchPageJSON struct {
-	Data []SearchResultJSON `json:"data"`
+	Data []SearchResultJSON `json:"data" nullable:"false"`
 	Page httpserver.Page    `json:"page"`
 }
 
 // RecentItemsJSON is the listRecentItems answer (published as "RecentItems"). It is not paginated.
 type RecentItemsJSON struct {
-	Data []SearchResultJSON `json:"data"`
+	Data []SearchResultJSON `json:"data" nullable:"false"`
 }
 
 // resultJSON is the wire shape of one match.

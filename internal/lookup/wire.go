@@ -10,7 +10,7 @@ import "strconv"
 // Available is false when lookup is disabled; Results is then empty, never null.
 type TmdbSuggestionsJSON struct {
 	Available bool                 `json:"available"`
-	Results   []TmdbSuggestionJSON `json:"results"`
+	Results   []TmdbSuggestionJSON `json:"results" nullable:"false"`
 }
 
 // TmdbSuggestionJSON is one ranked TMDB match (published as "TmdbSuggestion").
@@ -26,7 +26,7 @@ type TmdbSuggestionJSON struct {
 // BookSuggestionsJSON is the searchBookSuggestions answer (published as "BookSuggestions").
 type BookSuggestionsJSON struct {
 	Available bool                 `json:"available"`
-	Results   []BookSuggestionJSON `json:"results"`
+	Results   []BookSuggestionJSON `json:"results" nullable:"false"`
 }
 
 // BookSuggestionJSON is one ranked Open Library work (published as "BookSuggestion").

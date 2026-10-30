@@ -100,7 +100,7 @@ func run() error {
 		LookupAvailable:     tmdbProvider.Enabled(),
 		BookLookupAvailable: bookProvider.Enabled(),
 		Items:               itemSvc,
-		Search:              search.New(pool, workspaceID),
+		Search:              search.NewService(search.NewPostgres(pool)),
 		Images:              imageSvc,
 		Trash:               trashSvc,
 	})

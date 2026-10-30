@@ -95,30 +95,3 @@ func itemBody(it items.Item) (oapi.Item, error) {
 	}
 	return out, nil
 }
-
-// itemSummaryBody is the item row of search and recent items (the list route moved to Huma).
-func itemSummaryBody(it items.Item) oapi.ItemSummary {
-	out := oapi.ItemSummary{
-		Id: it.ID, ListId: it.ListID, Title: it.Title, Type: nullableString(it.Type),
-		Price: priceBody(it.Price), Website: nullableString(it.Website), ContentVersion: it.ContentVersion,
-		SortOrder: it.SortOrder, Version: it.Version, CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt,
-		Image: nullable.NewNullNullable[oapi.ImageSummary](),
-	}
-	// The stored metadata is validated JSON written by this service; anything unreadable degrades to {}.
-	out.Metadata = map[string]any{}
-	if len(it.Metadata) > 0 {
-		var meta map[string]any
-		if err := json.Unmarshal(it.Metadata, &meta); err == nil && meta != nil {
-			out.Metadata = meta
-		}
-	}
-	if img := it.Image; img != nil {
-		sum := oapi.ImageSummary{Url: img.URL}
-		if img.Source == items.ImageSourceUpload {
-			thumb := img.ThumbnailURL
-			sum.ThumbnailUrl = &thumb
-		}
-		out.Image = nullable.NewNullableWithValue(sum)
-	}
-	return out
-}

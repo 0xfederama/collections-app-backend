@@ -28,7 +28,7 @@ func newPurgeEnv(t *testing.T) *imageEnv {
 	e.h = newRouter(t, httpapi.Deps{
 		DB: e.pool, DataDir: e.dir, Logger: quietLogger(), WorkspaceID: e.ws,
 		Items: newItems(e.pool, e.clk), Images: e.svc,
-		Search: search.New(e.pool, e.ws), Trash: trash.NewService(trash.NewPostgres(e.pool), e.store, e.clk, quietLogger()),
+		Search: search.NewService(search.NewPostgres(e.pool)), Trash: trash.NewService(trash.NewPostgres(e.pool), e.store, e.clk, quietLogger()),
 	})
 	return e
 }

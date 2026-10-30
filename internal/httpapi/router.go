@@ -59,7 +59,8 @@ type Deps struct {
 	// Items serves items (F-019-B3d). The composition root builds it with NewItems and
 	// gives the same instance to lookup and images.
 	Items *items.Service
-	// Search serves GET /search (B-11).
+	// Search serves GET /search and GET /recent-items (F-019-B3f). The composition root builds it
+	// with search.NewService over search.NewPostgres.
 	Search *search.Service
 	// Images serves item images and attachment files (F-019-B3e). The composition root builds it with
 	// images.NewService and gives the same instance to the sweeper.
@@ -121,6 +122,7 @@ func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
 		content.Register(api, d.Logger, content.NewService(content.NewPostgres(contentDB(d.DB)), contentSettings{settingsService(d)}, d.Clock))
 		images.Register(api, d.Logger, d.Images)
 		trash.Register(api, d.Logger, d.Trash)
+		search.Register(api, d.Logger, d.Search)
 	})
 
 	return httpserver.Wrap(r, d.Logger), nil

@@ -48,7 +48,7 @@ func newTreeEnv(t *testing.T) *treeEnv {
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: ws,
 		Items:  newItems(pool, clock.System{}),
-		Search: search.New(pool, ws),
+		Search: search.NewService(search.NewPostgres(pool)),
 	})
 	return &treeEnv{t: t, h: h, pool: pool, ws: ws}
 }

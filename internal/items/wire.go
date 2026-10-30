@@ -170,9 +170,10 @@ func ToItemJSON(it Item) (ItemJSON, error) {
 	return out, nil
 }
 
-// itemSummaryJSON is the wire shape of a list row. The stored metadata is validated
-// JSON written by this service; anything unreadable degrades to {}.
-func itemSummaryJSON(it Item) ItemSummaryJSON {
+// ToItemSummaryJSON is the wire shape of a list row, also used by the search and
+// recent-items rows. The stored metadata is validated JSON written by this service;
+// anything unreadable degrades to {}.
+func ToItemSummaryJSON(it Item) ItemSummaryJSON {
 	metadata, err := metadataOf(it.Metadata)
 	if err != nil {
 		metadata = map[string]any{}

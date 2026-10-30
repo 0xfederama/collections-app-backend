@@ -125,7 +125,7 @@ func newBookEnv(t *testing.T, o bookEnvOptions) *bookEnv {
 	deps := httpapi.Deps{
 		DB: pool, DataDir: dataDir, Logger: quietLogger(), WorkspaceID: ws, Settings: settingsSvc,
 		Items:  itemSvc,
-		Search: search.New(pool, ws), Lookup: svc, BookLookupAvailable: books.Enabled(),
+		Search: search.NewService(search.NewPostgres(pool)), Lookup: svc, BookLookupAvailable: books.Enabled(),
 	}
 	if !o.noBooks {
 		deps.Books = books

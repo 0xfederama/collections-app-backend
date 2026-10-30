@@ -39,8 +39,8 @@ func Register(api huma.API, log *slog.Logger, folders folderLister, lists listLi
 // Tree is the getTree answer (published as the schema "Tree"). Both arrays are
 // always present, empty rather than null.
 type Tree struct {
-	Folders []folders.FolderJSON `json:"folders"`
-	Lists   []lists.ListJSON     `json:"lists"`
+	Folders []folders.FolderJSON `json:"folders" nullable:"false"`
+	Lists   []lists.ListJSON     `json:"lists" nullable:"false"`
 }
 
 // TreeOutput is the getTree answer.

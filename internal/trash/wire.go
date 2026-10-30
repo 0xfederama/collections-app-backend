@@ -16,7 +16,7 @@ import (
 type TrashEntryJSON struct {
 	Counts            TrashCountsJSON          `json:"counts"`
 	DeletedAt         time.Time                `json:"deleted_at"`
-	FormerPath        []httpserver.PathSegment `json:"former_path"`
+	FormerPath        []httpserver.PathSegment `json:"former_path" nullable:"false"`
 	ID                uuid.UUID                `json:"id" format:"uuid" doc:"The trash batch ID."`
 	RestorableInPlace bool                     `json:"restorable_in_place" doc:"False when the original parent is trashed or gone."`
 	RootID            uuid.UUID                `json:"root_id" format:"uuid"`
@@ -33,7 +33,7 @@ type TrashCountsJSON struct {
 
 // TrashPageJSON is the listTrash answer (published as "TrashPage").
 type TrashPageJSON struct {
-	Data []TrashEntryJSON `json:"data"`
+	Data []TrashEntryJSON `json:"data" nullable:"false"`
 	Page httpserver.Page  `json:"page"`
 }
 

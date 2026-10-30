@@ -23,7 +23,7 @@ type TypeDefinitionJSON struct {
 	DefaultPinnedFields *[]string       `json:"default_pinned_fields" nullable:"true" maxItems:"3"`
 	IsLocked            bool            `json:"is_locked"`
 	Version             int             `json:"version"`
-	Fields              []TypeFieldJSON `json:"fields"`
+	Fields              []TypeFieldJSON `json:"fields" nullable:"false"`
 }
 
 // TypeFieldDeletePreviewJSON is the count of item values a field delete removes

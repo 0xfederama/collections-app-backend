@@ -40,7 +40,7 @@ type ContentVersionInfoJSON struct {
 
 // ContentVersionListJSON is the listContentVersions answer (published as "ContentVersionList").
 type ContentVersionListJSON struct {
-	Data []ContentVersionInfoJSON `json:"data"`
+	Data []ContentVersionInfoJSON `json:"data" nullable:"false"`
 }
 
 // contentJSON is the wire shape of c. The two structs have the same fields in the

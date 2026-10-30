@@ -10,7 +10,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/hardcover"
 	"github.com/0xfederama/collections-app-backend/internal/images"
-	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/items/core"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
@@ -116,18 +116,18 @@ func pickHardcover(title string, books []hardcover.Book) (hardcover.Book, bool) 
 // and gets author, pages, the first ISBN and the cover; no lookup_imports row and
 // no openlibrary_id are written (ModeCreateUntracked). ok is false whenever the
 // caller should do a plain create instead.
-func (s *Service) createFromHardcover(ctx context.Context, provider Provider, listID uuid.UUID, typ string, in items.CreateInput, settings workspace.Settings) (items.Item, bool) {
+func (s *Service) createFromHardcover(ctx context.Context, provider Provider, listID uuid.UUID, typ string, in core.CreateInput, settings workspace.Settings) (core.Item, bool) {
 	if typ != types.Book || provider.Name() != ProviderOpenLibrary || !s.hardcoverEnabled() || ctx.Err() != nil {
-		return items.Item{}, false
+		return core.Item{}, false
 	}
 	books, err := s.hardcover.SearchTitle(ctx, in.Title)
 	if err != nil {
 		logHardcover(ctx, "hardcover title lookup failed; creating without lookup", err)
-		return items.Item{}, false
+		return core.Item{}, false
 	}
 	book, ok := pickHardcover(in.Title, books)
 	if !ok {
-		return items.Item{}, false
+		return core.Item{}, false
 	}
 	fields := map[string]any{}
 	if author := joinAuthors(book.Authors); author != "" {
@@ -148,7 +148,7 @@ func (s *Service) createFromHardcover(ctx context.Context, provider Provider, li
 	})
 	if err != nil {
 		logHardcover(ctx, "hardcover create failed; creating without lookup", err)
-		return items.Item{}, false
+		return core.Item{}, false
 	}
 	return it, true
 }

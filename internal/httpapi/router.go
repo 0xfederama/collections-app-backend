@@ -57,8 +57,9 @@ type Deps struct {
 	Books lookup.Provider
 	// Lookup orchestrates item imports and refreshes (F013-B3).
 	Lookup *lookup.Service
-	// Items serves items (B-07).
-	Items *items.Service
+	// Items serves items (F-019-B3d). The composition root builds it with NewItems and
+	// gives the same instance to lookup and images.
+	Items *items.Items
 	// Search serves GET /search (B-11).
 	Search *search.Service
 	// Images serves item images and attachment files (B-09).
@@ -115,7 +116,7 @@ func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
 		lists.Register(api, d.Logger, lists.NewService(listRepo, listTypes{typeDefs}, d.Clock))
 		tree.Register(api, d.Logger, folderRepo, listRepo)
 		definitions.Register(api, d.Logger, definitions.NewService(typeDefs, d.Clock))
-		items.Register(api, d.Logger, items.NewItems(items.NewPostgres(itemDB(d.DB)), itemTypes{typeDefs}, itemSettings{settingsService(d)}, d.Clock), importer(d))
+		items.Register(api, d.Logger, d.Items, importer(d))
 		content.Register(api, d.Logger, content.NewService(content.NewPostgres(contentDB(d.DB)), contentSettings{settingsService(d)}, d.Clock))
 	})
 
@@ -166,10 +167,11 @@ func (a listTypes) TypeInfo(ctx context.Context, key *string) (lists.TypeInfo, [
 	return lists.TypeInfo{Key: typ.Key, AllowsPrice: typ.AllowsPrice, DefaultSortField: typ.DefaultSortField}, out, nil
 }
 
-// itemDB is the database the item repository runs on, with the same rule as folderDB.
-func itemDB(db Pinger) items.DB {
-	idb, _ := db.(items.DB)
-	return idb
+// NewItems builds the item rules over the pool: a list type is read from the type
+// definitions and the preferred store from the workspace settings. The composition
+// root builds one instance and gives it to lookup, images and Deps.Items.
+func NewItems(pool *pgxpool.Pool, clk clock.Clock, settings *workspace.Service) *items.Items {
+	return items.NewItems(items.NewPostgres(pool), itemTypes{definitions.NewPostgres(pool)}, itemSettings{settings}, clk)
 }
 
 // itemTypes is the items.TypeSource: it reads a list type from the type definitions
@@ -200,10 +202,9 @@ func (a itemTypes) TypeFields(ctx context.Context, key *string) (items.TypeDef, 
 	return items.TypeDef{Key: typ.Key, AllowsPrice: typ.AllowsPrice}, out, nil
 }
 
-// settingsService is the workspace settings the items rules read the preferred
-// store from: the one the composition root wired, or one over the same pool (the
-// old item service read the settings table directly, so a router without Settings
-// still seeds stores).
+// settingsService is the workspace settings the content rules read: the one the
+// composition root wired, or one over the same pool (a router without Settings still
+// reads the settings table directly).
 func settingsService(d Deps) *workspace.Service {
 	if d.Settings != nil {
 		return d.Settings
@@ -252,26 +253,9 @@ func importer(d Deps) items.Importer {
 	return importItems{d.Lookup}
 }
 
-// importItems is the items.Importer over internal/lookup. lookup still builds
-// items with the legacy service (it moves in a later task), so its items are
-// converted to the core model here. The conversions are plain field copies.
+// importItems is the items.Importer over internal/lookup.
 type importItems struct{ lk *lookup.Service }
 
 func (a importItems) Create(ctx context.Context, listID uuid.UUID, in core.CreateInput, o items.ImportOptions) (core.Item, error) {
-	it, err := a.lk.Create(ctx, listID, items.CreateInput{
-		Title: in.Title, Price: (*items.Price)(in.Price), Website: in.Website, Metadata: in.Metadata,
-	}, lookup.CreateOptions{Lookup: o.Lookup, TMDBID: o.TMDBID, SourceID: o.SourceID})
-	if err != nil {
-		return core.Item{}, err
-	}
-	out := core.Item{
-		ID: it.ID, ListID: it.ListID, Title: it.Title, Type: it.Type, Price: (*core.Price)(it.Price), Website: it.Website,
-		Metadata: it.Metadata, ContentVersion: it.ContentVersion, SortOrder: it.SortOrder, Version: it.Version,
-		CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt,
-	}
-	if it.Image != nil {
-		img := core.Image(*it.Image)
-		out.Image = &img
-	}
-	return out, nil
+	return a.lk.Create(ctx, listID, in, lookup.CreateOptions{Lookup: o.Lookup, TMDBID: o.TMDBID, SourceID: o.SourceID})
 }

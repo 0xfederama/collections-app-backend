@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/images"
-	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/items/core"
 )
 
 // Mode controls how imported values are merged with an item.
@@ -61,7 +61,7 @@ type ApplyParams struct {
 	ItemID          uuid.UUID // existing-item modes only
 	ExpectedVersion int       // existing-item modes only
 	Type            string
-	CreateInput     *items.CreateInput // create only; explicit user values win
+	CreateInput     *core.CreateInput // create only; explicit user values win
 
 	// Provider and SourceID identify the match. The provider decides the id's
 	// metadata key and its retention (only TMDB has one, D-089/D-095).
@@ -94,7 +94,7 @@ type ApplyParams struct {
 type Store interface {
 	ListType(ctx context.Context, listID uuid.UUID) (string, error)
 	Read(ctx context.Context, itemID uuid.UUID) (Record, bool, error)
-	Apply(ctx context.Context, p ApplyParams) (items.Item, error)
+	Apply(ctx context.Context, p ApplyParams) (core.Item, error)
 }
 
 // addMonthsClamped applies calendar-month retention without rolling a date at

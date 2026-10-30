@@ -16,12 +16,17 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
+	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/items/core"
+	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/seed"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
+	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
 var lookupAdminURL string
@@ -54,7 +59,7 @@ type lookupEnv struct {
 	db       DB
 	files    storage.FileStore
 	clock    *fakeClock
-	items    *items.Service
+	items    *items.Items
 	store    *DBStore
 	ws, list uuid.UUID
 }
@@ -84,14 +89,53 @@ func newLookupEnv(t *testing.T, now time.Time) *lookupEnv {
 	}
 	t.Cleanup(func() { _ = local.Close() })
 	clk := &fakeClock{now: now}
-	itemSvc := items.New(db, clk, ws)
+	itemSvc := items.NewItems(items.NewPostgres(db), envTypes{definitions.NewPostgres(db)}, envSettings{workspace.NewService(workspace.NewPostgres(db))}, clk)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return &lookupEnv{t: t, db: db, files: local, clock: clk, items: itemSvc, store: NewStore(db, local, clk, itemSvc, logger, ws), ws: ws, list: list}
 }
 
-func (e *lookupEnv) create(title string, metadata map[string]any) items.Item {
+// envTypes reads a list type from the seeded definitions, the way the composition
+// root wires the items type source (httpapi/router.go itemTypes).
+type envTypes struct{ defs *definitions.Postgres }
+
+func (a envTypes) TypeFields(ctx context.Context, key *string) (items.TypeDef, []types.Field, error) {
+	if key == nil {
+		return items.TypeDef{}, nil, nil
+	}
+	var typ definitions.Type
+	var fields []definitions.Field
+	err := a.defs.InTx(ctx, func(r definitions.Repo) error {
+		var err error
+		if typ, err = r.GetTypeByKey(ctx, *key); err != nil {
+			return err
+		}
+		fields, err = r.ListFields(ctx, typ.ID)
+		return err
+	})
+	if err != nil {
+		return items.TypeDef{}, nil, err
+	}
+	out := make([]types.Field, 0, len(fields))
+	for _, f := range fields {
+		out = append(out, types.Field{Key: f.Key, Type: f.Type, Special: f.Locked})
+	}
+	return items.TypeDef{Key: typ.Key, AllowsPrice: typ.AllowsPrice}, out, nil
+}
+
+// envSettings reads the preferred store from the workspace settings (httpapi itemSettings).
+type envSettings struct{ svc *workspace.Service }
+
+func (a envSettings) PreferredStore(ctx context.Context) (string, error) {
+	s, err := a.svc.Get(ctx)
+	if err != nil {
+		return "", err
+	}
+	return s.PreferredStore, nil
+}
+
+func (e *lookupEnv) create(title string, metadata map[string]any) core.Item {
 	e.t.Helper()
-	it, err := e.items.Create(e.t.Context(), e.list, items.CreateInput{Title: title, Metadata: metadata})
+	it, err := e.items.Create(scope.With(e.t.Context(), e.ws), e.list, core.CreateInput{Title: title, Metadata: metadata})
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -118,7 +162,7 @@ func TestF013B3_ApplyCreateTracksOnlyImportedLeaves(t *testing.T) {
 	it, err := e.store.Apply(t.Context(), ApplyParams{
 		Mode: ModeCreate, ListID: e.list, Type: "movie", Provider: ProviderTMDB, SourceID: "603",
 		Title: "The Matrix", OriginalTitle: "matrix",
-		CreateInput: &items.CreateInput{Title: "matrix", Metadata: map[string]any{"director": "My director"}},
+		CreateInput: &core.CreateInput{Title: "matrix", Metadata: map[string]any{"director": "My director"}},
 		Fields: map[string]any{
 			"release_year": 1999, "director": "The Wachowskis",
 			"streaming": map[string]any{"country": "IT", "platforms": []any{"Netflix"}},
@@ -203,7 +247,7 @@ func TestF013B3_OwnedRefreshPreservesUserEditedLeaf(t *testing.T) {
 	if _, err := e.db.Exec(t.Context(), `UPDATE items SET metadata = jsonb_set(metadata, '{runtime_minutes}', '140'), version = version + 1 WHERE id = $1`, it.ID); err != nil {
 		t.Fatal(err)
 	}
-	it, err = e.items.Get(t.Context(), it.ID)
+	it, err = e.items.Get(scope.With(t.Context(), e.ws), it.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +260,7 @@ func TestF013B3_OwnedRefreshPreservesUserEditedLeaf(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, _ := e.items.Get(t.Context(), it.ID)
+	got, _ := e.items.Get(scope.With(t.Context(), e.ws), it.ID)
 	metadata := decodeMetadata(t, got.Metadata)
 	if metadata["release_year"] != float64(2000) || metadata["runtime_minutes"] != float64(140) || metadata["director"] != "The Wachowskis" {
 		t.Errorf("metadata after owned refresh = %#v", metadata)
@@ -255,7 +299,7 @@ func TestF013B3_PosterOnlyRefreshDoesNotRenewMetadata(t *testing.T) {
 	if !record.FetchedAt.Equal(start) || record.PosterFetchedAt == nil || !record.PosterFetchedAt.Equal(e.clock.Now()) {
 		t.Errorf("field fetched=%s poster fetched=%v", record.FetchedAt, record.PosterFetchedAt)
 	}
-	got, err := e.items.Get(t.Context(), it.ID)
+	got, err := e.items.Get(scope.With(t.Context(), e.ws), it.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +342,7 @@ func TestF013B3_MaintenanceFailureBeforeExpiryThenPurgesAtBoundary(t *testing.T)
 	if calls != 1 {
 		t.Errorf("expired item was refreshed, calls=%d", calls)
 	}
-	got, err := e.items.Get(t.Context(), it.ID)
+	got, err := e.items.Get(scope.With(t.Context(), e.ws), it.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -390,7 +434,7 @@ func TestF013B3_MetadataExpiryPreservesYoungerPoster(t *testing.T) {
 	if err != nil || result.Expired != 1 {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
-	got, err := e.items.Get(t.Context(), it.ID)
+	got, err := e.items.Get(scope.With(t.Context(), e.ws), it.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

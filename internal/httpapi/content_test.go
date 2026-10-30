@@ -12,7 +12,6 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/content"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
-	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
@@ -36,7 +35,7 @@ func newContentEnv(t *testing.T) *treeEnv {
 	}
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: ws,
-		Items: items.New(pool, clock.System{}, ws),
+		Items: newItems(pool, clock.System{}),
 	})
 	return &treeEnv{t: t, h: h, pool: pool, ws: ws}
 }

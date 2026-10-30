@@ -140,7 +140,7 @@ func (r *repo) ListByList(ctx context.Context, listID uuid.UUID) ([]core.Item, e
 }
 
 func (r *repo) Insert(ctx context.Context, it core.Item, now time.Time) (uuid.UUID, error) {
-	minV, maxV, currency := priceParts(it.Price)
+	minV, maxV, currency := PriceParts(it.Price)
 	id, err := r.q.InsertItemRow(ctx, sqlc.InsertItemRowParams{
 		WorkspaceID: scope.WorkspaceID(ctx), ListID: it.ListID, Title: it.Title,
 		PriceMin: minV, PriceMax: maxV, Currency: currency, WebsiteUrl: it.Website,
@@ -153,7 +153,7 @@ func (r *repo) Insert(ctx context.Context, it core.Item, now time.Time) (uuid.UU
 }
 
 func (r *repo) Update(ctx context.Context, it core.Item, now time.Time) error {
-	minV, maxV, currency := priceParts(it.Price)
+	minV, maxV, currency := PriceParts(it.Price)
 	_, err := r.q.UpdateItemRow(ctx, sqlc.UpdateItemRowParams{
 		Title: it.Title, PriceMin: minV, PriceMax: maxV, Currency: currency, WebsiteUrl: it.Website,
 		Metadata: metadataJSON(it.Metadata), Now: now, ID: it.ID, WorkspaceID: scope.WorkspaceID(ctx),
@@ -290,9 +290,10 @@ func readItem(r sqlc.ReadItemRow) core.Item {
 	return it
 }
 
-// priceParts converts a price (or nil) to the three item columns. A single
+// PriceParts converts a price (or nil) to the three item columns. A single
 // amount (Amount) is stored as Min = Max. Values use the D-062 mapping (moneyToNumeric).
-func priceParts(p *core.Price) (minV, maxV pgtype.Numeric, currency *string) {
+// The lookup package writes a book's price in its own atomic create.
+func PriceParts(p *core.Price) (minV, maxV pgtype.Numeric, currency *string) {
 	if p == nil {
 		return pgtype.Numeric{}, pgtype.Numeric{}, nil
 	}

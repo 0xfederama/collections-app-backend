@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
-	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
 )
@@ -27,7 +26,7 @@ func newPurgeEnv(t *testing.T) *imageEnv {
 	}
 	e.h = newRouter(t, httpapi.Deps{
 		DB: e.pool, DataDir: e.dir, Logger: quietLogger(), WorkspaceID: e.ws,
-		Items: items.New(e.pool, e.clk, e.ws), Images: e.svc,
+		Items: newItems(e.pool, e.clk), Images: e.svc,
 		Search: search.New(e.pool, e.ws), Trash: trash.New(e.pool, e.store, e.clk, quietLogger(), e.ws),
 	})
 	return e

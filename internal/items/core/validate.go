@@ -66,6 +66,10 @@ func CleanPatch(p Patch) (Patch, error) {
 	return p, nil
 }
 
+// ValidatePrice checks a price like CleanCreate does (422 on price.*). The lookup
+// package writes a book's price in its own atomic create, so it needs the check alone.
+func ValidatePrice(p *Price) error { return validate(validatePrice(p)) }
+
 // validatePrice checks the D-015 rules plus the F-007 single price (amount).
 func validatePrice(p *Price) []apperr.FieldError {
 	var errs []apperr.FieldError

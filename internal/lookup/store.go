@@ -20,10 +20,12 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/items/core"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 )
 
@@ -40,7 +42,7 @@ type DBStore struct {
 	db          DB
 	store       storage.FileStore
 	clock       clock.Clock
-	items       *items.Service
+	items       *items.Items
 	log         *slog.Logger
 	workspaceID uuid.UUID
 }
@@ -48,7 +50,7 @@ type DBStore struct {
 var _ Store = (*DBStore)(nil)
 
 // NewStore returns a lookup store bound to one workspace.
-func NewStore(db DB, fileStore storage.FileStore, clk clock.Clock, itemSvc *items.Service, log *slog.Logger, workspaceID uuid.UUID) *DBStore {
+func NewStore(db DB, fileStore storage.FileStore, clk clock.Clock, itemSvc *items.Items, log *slog.Logger, workspaceID uuid.UUID) *DBStore {
 	return &DBStore{db: db, store: fileStore, clock: clk, items: itemSvc, log: log, workspaceID: workspaceID}
 }
 
@@ -70,6 +72,44 @@ func typeKey(typ *string) string {
 		return ""
 	}
 	return *typ
+}
+
+// priceAllowed is the 422 on price for a list type without a price (the type's
+// allows_price, or no type at all). It reads the definition inside the transaction q.
+func (s *DBStore) priceAllowed(ctx context.Context, q *sqlc.Queries, typ *string) error {
+	if typ == nil {
+		return core.PriceAllowed(false)
+	}
+	def, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: *typ})
+	if err != nil {
+		return fmt.Errorf("load list type definition: %w", err)
+	}
+	return core.PriceAllowed(def.AllowsPrice)
+}
+
+// typeFields loads the fields a metadata write is checked against, inside the
+// transaction q. A nil type (a list with no type) has none. A type that is not
+// defined is the 422 of the metadata rules.
+func (s *DBStore) typeFields(ctx context.Context, q *sqlc.Queries, typ *string) ([]types.Field, error) {
+	if typ == nil {
+		return nil, nil
+	}
+	def, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: *typ})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.Validation(apperr.FieldError{Field: "type", Message: "is not a known item type"})
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get type definition: %w", err)
+	}
+	rows, err := q.ListTypeFields(ctx, sqlc.ListTypeFieldsParams{WorkspaceID: s.workspaceID, TypeID: def.ID})
+	if err != nil {
+		return nil, fmt.Errorf("list type fields: %w", err)
+	}
+	fields := make([]types.Field, len(rows))
+	for i, f := range rows {
+		fields[i] = types.Field{Key: f.Key, Type: f.FieldType, Special: f.IsLocked}
+	}
+	return fields, nil
 }
 
 // Read returns the current provenance record, including the item's current
@@ -103,13 +143,13 @@ type preparedPoster struct {
 // Apply atomically changes the item, attachment row and lookup provenance.
 // Processed poster bytes are written before the transaction and old files are
 // removed only after commit.
-func (s *DBStore) Apply(ctx context.Context, p ApplyParams) (items.Item, error) {
+func (s *DBStore) Apply(ctx context.Context, p ApplyParams) (core.Item, error) {
 	if err := validateApply(p); err != nil {
-		return items.Item{}, err
+		return core.Item{}, err
 	}
 	prepared, err := s.preparePoster(p.Poster)
 	if err != nil {
-		return items.Item{}, err
+		return core.Item{}, err
 	}
 	usedPoster := false
 	var oldFiles []string
@@ -131,13 +171,13 @@ func (s *DBStore) Apply(ctx context.Context, p ApplyParams) (items.Item, error) 
 		if prepared != nil {
 			s.discardPrepared(context.WithoutCancel(ctx), prepared)
 		}
-		return items.Item{}, err
+		return core.Item{}, err
 	}
 	if prepared != nil && !usedPoster {
 		s.deleteFiles(context.WithoutCancel(ctx), prepared.key, prepared.thumbKey)
 	}
 	s.deleteFiles(context.WithoutCancel(ctx), oldFiles...)
-	return s.items.Get(ctx, itemID)
+	return s.items.Get(scope.With(ctx, s.workspaceID), itemID)
 }
 
 func validateApply(p ApplyParams) error {
@@ -183,14 +223,14 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 		return uuid.Nil, false, apperr.TypeMismatch()
 	}
 	if p.CreateInput.Price != nil {
-		if err := items.ValidatePrice(p.CreateInput.Price); err != nil {
+		if err := core.ValidatePrice(p.CreateInput.Price); err != nil {
 			return uuid.Nil, false, err
 		}
-		if err := s.items.CheckPriceAllowed(ctx, q, typ); err != nil {
+		if err := s.priceAllowed(ctx, q, typ); err != nil {
 			return uuid.Nil, false, err
 		}
 	}
-	priceMin, priceMax, currency := items.PriceColumns(p.CreateInput.Price)
+	priceMin, priceMax, currency := items.PriceParts(p.CreateInput.Price)
 	original, err := cleanLookupTitle(p.OriginalTitle)
 	if p.OriginalTitle == "" {
 		original, err = cleanLookupTitle(p.CreateInput.Title)
@@ -228,7 +268,11 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 		metadata[idKey] = idValue
 	}
 	fillOnly(metadata, p.FillOnly, false)
-	metadata, err = s.items.ValidateMetadata(ctx, q, typ, metadata)
+	fields, err := s.typeFields(ctx, q, typ)
+	if err != nil {
+		return uuid.Nil, false, err
+	}
+	metadata, err = core.ValidateImport(typ, fields, metadata)
 	if err != nil {
 		return uuid.Nil, false, err
 	}
@@ -310,7 +354,11 @@ func (s *DBStore) applyExisting(ctx context.Context, q *sqlc.Queries, p ApplyPar
 		merged = cloneLookupMap(metadata)
 		snapshots = cloneLookupMap(old.ImportedFields)
 	}
-	merged, err = s.items.ValidateMetadata(ctx, q, cur.Type, merged)
+	fields, err := s.typeFields(ctx, q, cur.Type)
+	if err != nil {
+		return false, nil, err
+	}
+	merged, err = core.ValidateImport(cur.Type, fields, merged)
 	if err != nil {
 		return false, nil, err
 	}

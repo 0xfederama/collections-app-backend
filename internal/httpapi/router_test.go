@@ -20,6 +20,9 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
+	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
+	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
 const postgresImage = "postgres:18.6-alpine3.24"
@@ -65,6 +68,12 @@ func TestMain(m *testing.M) {
 type fakePinger struct{ err error }
 
 func (f fakePinger) Ping(context.Context) error { return f.err }
+
+// newItems is the item service of a test router, built the way the composition root
+// builds it (httpapi.NewItems).
+func newItems(pool *pgxpool.Pool, clk clock.Clock) *items.Items {
+	return httpapi.NewItems(pool, clk, workspace.NewService(workspace.NewPostgres(pool)))
+}
 
 func newRouter(t *testing.T, d httpapi.Deps) http.Handler {
 	t.Helper()

@@ -13,17 +13,18 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/images"
-	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/items/core"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
-// ItemService is the item surface needed outside Store's atomic import writes.
+// ItemService is the item surface needed outside Store's atomic import writes. The
+// items rules read the workspace from ctx, so the entry points below scope it.
 type ItemService interface {
-	Get(ctx context.Context, id uuid.UUID) (items.Item, error)
-	Create(ctx context.Context, listID uuid.UUID, in items.CreateInput) (items.Item, error)
-	Update(ctx context.Context, id uuid.UUID, version int, p items.Patch) (items.Item, error)
+	Get(ctx context.Context, id uuid.UUID) (core.Item, error)
+	Create(ctx context.Context, listID uuid.UUID, in core.CreateInput) (core.Item, error)
+	Update(ctx context.Context, id uuid.UUID, version int, p core.Patch) (core.Item, error)
 }
 
 // SettingsReader supplies localization and streaming-region preferences for
@@ -87,10 +88,11 @@ func (s Selection) forProvider(provider string) *string {
 }
 
 // Create creates an item, enriching it from the list type's provider when requested.
-func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateInput, opts CreateOptions) (items.Item, error) {
+func (s *Service) Create(ctx context.Context, listID uuid.UUID, in core.CreateInput, opts CreateOptions) (core.Item, error) {
+	ctx = scope.With(ctx, s.workspaceID)
 	typ, err := s.store.ListType(ctx, listID)
 	if err != nil {
-		return items.Item{}, err
+		return core.Item{}, err
 	}
 	provider := s.providers[typ]
 	if provider == nil {
@@ -113,18 +115,18 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 	}
 	if !provider.Enabled() {
 		if explicit {
-			return items.Item{}, apperr.LookupDisabled()
+			return core.Item{}, apperr.LookupDisabled()
 		}
 		return s.items.Create(ctx, listID, in)
 	}
 	settings, err := s.settings.Get(scope.With(ctx, s.workspaceID))
 	if err != nil {
-		return items.Item{}, err
+		return core.Item{}, err
 	}
 	candidate, err := s.resolve(ctx, provider, typ, in.Title, selectedID, settings, !explicit)
 	if err != nil {
 		if explicit {
-			return items.Item{}, err
+			return core.Item{}, err
 		}
 		if it, ok := s.createFromHardcover(ctx, provider, listID, typ, in, settings); ok {
 			return it, nil
@@ -133,7 +135,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 	}
 	if candidate == nil {
 		if selectedID != nil {
-			return items.Item{}, apperr.UpstreamUnavailable()
+			return core.Item{}, apperr.UpstreamUnavailable()
 		}
 		if !explicit {
 			if it, ok := s.createFromHardcover(ctx, provider, listID, typ, in, settings); ok {
@@ -145,7 +147,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 	poster, err := s.poster(ctx, provider, candidate.details.ImagePath)
 	if err != nil {
 		if explicit {
-			return items.Item{}, err
+			return core.Item{}, err
 		}
 		return s.items.Create(ctx, listID, in)
 	}
@@ -162,31 +164,32 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 // Apply enriches an existing item from its list type's provider. Network work
 // happens against an initial snapshot; Store rechecks ExpectedVersion under lock
 // before writing.
-func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion int, mode Mode, selection Selection) (items.Item, error) {
+func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion int, mode Mode, selection Selection) (core.Item, error) {
+	ctx = scope.With(ctx, s.workspaceID)
 	if mode != ModeFill && mode != ModeRematch && mode != ModeRefresh {
-		return items.Item{}, apperr.Validation(apperr.FieldError{Field: "mode", Message: "must be fill, rematch, or refresh"})
+		return core.Item{}, apperr.Validation(apperr.FieldError{Field: "mode", Message: "must be fill, rematch, or refresh"})
 	}
 	if !s.anyEnabled() {
-		return items.Item{}, apperr.LookupDisabled()
+		return core.Item{}, apperr.LookupDisabled()
 	}
 	it, err := s.items.Get(ctx, itemID)
 	if err != nil {
-		return items.Item{}, err
+		return core.Item{}, err
 	}
 	if it.Version != expectedVersion {
-		return items.Item{}, apperr.VersionConflict(it.Version)
+		return core.Item{}, apperr.VersionConflict(it.Version)
 	}
 	itemType := typeKey(it.Type)
 	provider := s.providers[itemType]
 	if provider == nil {
-		return items.Item{}, apperr.Validation(apperr.FieldError{Field: "item", Message: "lookup is available only for movie, TV and book items"})
+		return core.Item{}, apperr.Validation(apperr.FieldError{Field: "item", Message: "lookup is available only for movie, TV and book items"})
 	}
 	if !provider.Enabled() {
-		return items.Item{}, apperr.LookupDisabled()
+		return core.Item{}, apperr.LookupDisabled()
 	}
 	settings, err := s.settings.Get(scope.With(ctx, s.workspaceID))
 	if err != nil {
-		return items.Item{}, err
+		return core.Item{}, err
 	}
 
 	selectedID := selection.forProvider(provider.Name())
@@ -196,25 +199,25 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 		if id := metadataSourceID(name, it.Metadata); id != "" {
 			lookupID = &id
 		} else if record, ok, rerr := s.store.Read(ctx, itemID); rerr != nil {
-			return items.Item{}, rerr
+			return core.Item{}, rerr
 		} else if ok && record.Provider == name && record.SourceID != "" {
 			lookupID = &record.SourceID
 		} else {
-			return items.Item{}, apperr.Validation(apperr.FieldError{
+			return core.Item{}, apperr.Validation(apperr.FieldError{
 				Field: sourceIDField(name), Message: fmt.Sprintf("is required when the item has no previous %s match", providerLabel(name)),
 			})
 		}
 	}
 	candidate, err := s.resolve(ctx, provider, itemType, it.Title, lookupID, settings, lookupID == nil)
 	if err != nil {
-		return items.Item{}, err
+		return core.Item{}, err
 	}
 	if candidate == nil {
 		if selectedID != nil {
-			return items.Item{}, apperr.UpstreamUnavailable()
+			return core.Item{}, apperr.UpstreamUnavailable()
 		}
 		// Recheck the ETag even though no fields matched and no write is needed.
-		return s.items.Update(ctx, itemID, expectedVersion, items.Patch{})
+		return s.items.Update(ctx, itemID, expectedVersion, core.Patch{})
 	}
 
 	refreshPoster := it.Image == nil
@@ -222,7 +225,7 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 	if refreshPoster {
 		poster, err = s.poster(ctx, provider, candidate.details.ImagePath)
 		if err != nil {
-			return items.Item{}, err
+			return core.Item{}, err
 		}
 	}
 	return s.store.Apply(ctx, ApplyParams{
@@ -239,6 +242,7 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 // expiry; this method only attempts a safe refresh of still-owned values. Only
 // providers with a retention are ever scheduled (D-095: Open Library has none).
 func (s *Service) RefreshOwned(ctx context.Context, itemID uuid.UUID, expectedVersion int) error {
+	ctx = scope.With(ctx, s.workspaceID)
 	record, ok, err := s.store.Read(ctx, itemID)
 	if err != nil || !ok {
 		return err

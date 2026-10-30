@@ -23,6 +23,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 	"github.com/0xfederama/collections-app-backend/internal/platform/config"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database"
+	"github.com/0xfederama/collections-app-backend/internal/platform/logs"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
@@ -45,7 +46,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	logger := newLogger(cfg)
+	// The log buffer exists only when the viewer is on: otherwise nothing is recorded.
+	var logBuf *logs.Buffer
+	if cfg.LogsUI {
+		logBuf = logs.NewBuffer(logs.DefaultSize)
+	}
+	logger := newLogger(cfg, logBuf)
 	slog.SetDefault(logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -103,6 +109,7 @@ func run() error {
 		Search:              search.NewService(search.NewPostgres(pool)),
 		Images:              imageSvc,
 		Trash:               trashSvc,
+		Logs:                logBuf,
 	})
 	if err != nil {
 		return err
@@ -142,12 +149,18 @@ func run() error {
 	return nil
 }
 
-func newLogger(cfg config.Config) *slog.Logger {
+// newLogger writes to stderr in the configured format. With a buffer (LOGS_UI) every
+// record is also kept for the log viewer.
+func newLogger(cfg config.Config, buf *logs.Buffer) *slog.Logger {
 	opts := &slog.HandlerOptions{Level: cfg.LogLevel}
+	var h slog.Handler = slog.NewJSONHandler(os.Stderr, opts)
 	if cfg.LogFormat == "text" {
-		return slog.New(slog.NewTextHandler(os.Stderr, opts))
+		h = slog.NewTextHandler(os.Stderr, opts)
 	}
-	return slog.New(slog.NewJSONHandler(os.Stderr, opts))
+	if buf != nil {
+		h = logs.NewHandler(h, buf)
+	}
+	return slog.New(h)
 }
 
 // healthcheck probes /readyz on the local listener. The distroless runtime image has

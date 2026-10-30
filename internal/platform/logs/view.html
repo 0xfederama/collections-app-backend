@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Collection App logs</title>
+<style nonce="__NONCE__">
+body { margin: 0; font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; background: #111; color: #ddd; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .5rem; position: sticky; top: 0; background: #1b1b1b; border-bottom: 1px solid #333; }
+input, select, button { font: inherit; background: #222; color: #ddd; border: 1px solid #444; padding: .2rem .4rem; }
+#statusLine { margin-left: auto; color: #888; }
+table { width: 100%; border-collapse: collapse; }
+td { padding: .15rem .5rem; vertical-align: top; border-bottom: 1px solid #222; white-space: pre-wrap; word-break: break-word; }
+td.time, td.level { white-space: nowrap; color: #888; }
+td.level { width: 4.5rem; }
+tr.warn td.level { color: #e0b000; }
+tr.error td.level { color: #ff6b6b; }
+td.attrs { color: #9ab; }
+</style>
+</head>
+<body>
+<header>
+  <label>Level <select id="level">
+    <option value="debug" selected>debug</option>
+    <option value="info">info</option>
+    <option value="warn">warn</option>
+    <option value="error">error</option>
+  </select></label>
+  <input id="text" type="search" placeholder="Filter text">
+  <label><input id="auto" type="checkbox" checked> Auto-refresh every 3 s</label>
+  <button id="refresh" type="button">Refresh</button>
+  <span id="statusLine"></span>
+</header>
+<table><tbody id="rows"></tbody></table>
+<script nonce="__NONCE__">
+(function () {
+  'use strict';
+  var rows = document.getElementById('rows');
+  var statusLine = document.getElementById('statusLine');
+  var level = document.getElementById('level');
+  var text = document.getElementById('text');
+  var auto = document.getElementById('auto');
+  var last = [];
+  var timer = null;
+
+  function cell(className, value) {
+    var td = document.createElement('td');
+    td.className = className;
+    td.textContent = value;
+    return td;
+  }
+
+  function attrsText(attrs) {
+    return Object.keys(attrs).map(function (k) {
+      return k + '=' + JSON.stringify(attrs[k]);
+    }).join(' ');
+  }
+
+  function render() {
+    var needle = text.value.trim().toLowerCase();
+    var shown = last.filter(function (e) {
+      return !needle || (e.msg + ' ' + attrsText(e.attrs)).toLowerCase().indexOf(needle) !== -1;
+    });
+    rows.textContent = '';
+    shown.forEach(function (e) {
+      var tr = document.createElement('tr');
+      tr.className = e.level;
+      tr.appendChild(cell('time', e.time));
+      tr.appendChild(cell('level', e.level));
+      tr.appendChild(cell('msg', e.msg));
+      tr.appendChild(cell('attrs', attrsText(e.attrs)));
+      rows.appendChild(tr);
+    });
+    return shown.length;
+  }
+
+  function load() {
+    var params = new URLSearchParams({ level: level.value, limit: '500' });
+    fetch('../logs?' + params.toString(), { cache: 'no-store', headers: { Accept: 'application/json' } })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (body) {
+        last = body.data;
+        var shown = render();
+        statusLine.textContent = shown + ' shown of ' + body.total + ' matching, updated ' + new Date().toLocaleTimeString();
+      })
+      .catch(function (err) {
+        statusLine.textContent = 'error: ' + err.message;
+      });
+  }
+
+  function schedule() {
+    clearInterval(timer);
+    if (auto.checked) timer = setInterval(load, 3000);
+  }
+
+  level.addEventListener('change', load);
+  text.addEventListener('input', render);
+  auto.addEventListener('change', schedule);
+  document.getElementById('refresh').addEventListener('click', load);
+  load();
+  schedule();
+})();
+</script>
+</body>
+</html>

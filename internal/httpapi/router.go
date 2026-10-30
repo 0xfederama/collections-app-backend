@@ -23,6 +23,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 	"github.com/0xfederama/collections-app-backend/internal/platform/httpserver"
+	"github.com/0xfederama/collections-app-backend/internal/platform/logs"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/stores"
@@ -68,6 +69,9 @@ type Deps struct {
 	// Trash serves the deletes of folders, lists and items, the trash list, restore and purge (F-019-B3f).
 	// The composition root builds it with trash.NewService over the pool and the file store.
 	Trash *trash.Service
+	// Logs serves the in-memory log buffer and its viewer (LOGS_UI). Nil leaves the routes
+	// unregistered, so a disabled instance answers the normal 404 problem.
+	Logs *logs.Buffer
 }
 
 // NewRouter builds the HTTP handler: the Huma API on chi, behind request id,
@@ -125,6 +129,9 @@ func register(api huma.API, d Deps) {
 	search.Register(api, d.Logger, d.Search)
 	lookup.Register(api, d.Logger, d.Lookup, d.TMDB, d.Books, d.Settings)
 	stores.Register(api, d.Logger)
+	if d.Logs != nil {
+		logs.Register(api, d.Logger, d.Logs)
+	}
 }
 
 // folderDB is the database the folder repository runs on. Deps.DB is the pool in

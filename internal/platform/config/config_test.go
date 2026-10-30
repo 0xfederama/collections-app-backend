@@ -244,6 +244,45 @@ func TestLoad_HardcoverAPIKeyIsOptional(t *testing.T) {
 	}
 }
 
+// TestLoad_LogsUI: the log viewer is on in development and off in production unless
+// LOGS_UI says otherwise; an invalid value is a startup error.
+func TestLoad_LogsUI(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     map[string]string
+		want    bool
+		wantErr string
+	}{
+		{"development default on", map[string]string{"APP_ENV": "development"}, true, ""},
+		{"production default off", map[string]string{"APP_ENV": "production"}, false, ""},
+		{"production explicit on", map[string]string{"APP_ENV": "production", "LOGS_UI": "true"}, true, ""},
+		{"development explicit off", map[string]string{"LOGS_UI": "false"}, false, ""},
+		{"blank falls back to default", map[string]string{"APP_ENV": "production", "LOGS_UI": "  "}, false, ""},
+		{"invalid value", map[string]string{"LOGS_UI": "sometimes"}, false, "LOGS_UI must be true or false"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := map[string]string{"DATABASE_URL": validDB, "DATA_DIR": t.TempDir()}
+			for k, v := range tt.env {
+				m[k] = v
+			}
+			c, err := config.Load(env(m))
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error = %v, want containing %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if c.LogsUI != tt.want {
+				t.Errorf("LogsUI = %v, want %v", c.LogsUI, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoad_TMDBMockFixtureDoesNotEnableHardcover(t *testing.T) {
 	c, err := config.Load(env(map[string]string{
 		"DATABASE_URL": validDB, "DATA_DIR": t.TempDir(), "TMDB_MOCK_FIXTURE": "true",

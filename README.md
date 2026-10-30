@@ -19,6 +19,7 @@ The whole API in `api/openapi.yaml` is implemented (spec `1.0.0`, generated):
 | Data | Settings, tree, folders, lists, items (six types), Markdown content with versions, one image per item, search, recent items, trash with restore and purge |
 | Cross-cutting | Request IDs, access log, panic recovery, security headers, Huma request validation (`If-Match`, body limits, unknown fields), problem+json errors |
 | Operations | Config validated at startup, `log/slog`, migrations, backup/restore/verify scripts |
+| Log viewer | `LOGS_UI` (on unless `APP_ENV=production`): `GET /admin/logs/view` (HTML) and `GET /admin/logs` (JSON) over the newest 2000 log records in memory; hidden from the spec, no auth, keep it on the private address (see [docs/modules/logs.md](docs/modules/logs.md)) |
 
 There is no authentication, so the API is published on `127.0.0.1` only. See the parent README, "Security boundary".
 

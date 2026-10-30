@@ -12,7 +12,7 @@ Parses and validates the API's environment configuration once at startup. Every 
 ## Interfaces
 
 - `Load(getenv func(string) string) (Config, error)`: pass `os.Getenv` in production
-- `Config`: `AppEnv`, `HTTPAddr`, `DatabaseURL`, `DBMaxConns`, `DataDir`, `WorkspaceName`, optional `TMDBAPIKey`, `TMDBMockFixture`, optional `OpenLibraryContact`, optional `HardcoverAPIKey`, `LogLevel`, `LogFormat`
+- `Config`: `AppEnv`, `HTTPAddr`, `DatabaseURL`, `DBMaxConns`, `DataDir`, `WorkspaceName`, optional `TMDBAPIKey`, `TMDBMockFixture`, optional `OpenLibraryContact`, optional `HardcoverAPIKey`, `LogLevel`, `LogFormat`, `LogsUI`
 - `APP_ENV`: `development` (default) or `production`, case-sensitive
 - `HTTP_ADDR`: `host:port` listen address, default `:8080`
 - `DATABASE_URL`: required; `postgres://` or `postgresql://` with a host
@@ -24,6 +24,7 @@ Parses and validates the API's environment configuration once at startup. Every 
 - `HARDCOVER_API_KEY`: optional Hardcover token (gap-filler of the automatic book lookup); blank disables it, never required, never logged
 - `LOG_LEVEL`: `debug`, `info` (default), `warn`, `error`
 - `LOG_FORMAT`: `json` (default) or `text`
+- `LOGS_UI`: `true`/`false`; default on unless `APP_ENV=production`. Serves the in-memory log viewer (see [logs](logs.md)); no auth, keep it on the private address
 
 ## Gotchas
 

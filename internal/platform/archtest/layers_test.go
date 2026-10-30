@@ -35,9 +35,10 @@ var exemptPackages = []string{
 	"cmd/api",
 	// seed writes the built-in type definitions with sqlc at workspace bootstrap, from Go data.
 	"internal/seed",
-	// platform is shared plumbing (database and sqlc, testdb, problem, scope, clock, logs, ...).
-	// It is no feature, and the database layer itself must be free to use sqlc.
-	"internal/platform",
+	// platform/database is the sqlc plumbing (pool, transactions, generated code): the
+	// database layer itself must be free to use sqlc. The other platform packages
+	// (httpserver, problem, scope, clock, logs, ...) are checked like features.
+	"internal/platform/database",
 }
 
 // sqlcExemptFiles may import sqlc outside repository.go. bootstrap.go runs the

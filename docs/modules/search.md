@@ -7,6 +7,7 @@ Finds active items by title and returns their folder/list path and list type nam
 ## Key files
 
 - `internal/search/search.go`: `Service`, `Search`, path building from folders and lists (`tree`, `of`)
+- `internal/search/rows.go`: `itemOf`, maps search rows to `items.Item` (own mapper, not items' repository)
 - `db/queries/search.sql`: `SearchItems`, `CountSearchItems`, `ListRecentItems`, `ListSearchFolders`, `ListSearchLists`
 - `internal/httpapi/search.go`: `SearchItems` and `ListRecentItems` handlers, 400 mapping, path body
 - `internal/httpapi/search_test.go`: `TestAT12_*` tests; `recent_test.go`: `TestB12_*` tests
@@ -23,7 +24,7 @@ Finds active items by title and returns their folder/list path and list type nam
 
 ## Gotchas
 
-- Matches titles only. `%`, `_` and `\` are escaped in Go with `items.EscapeLike`.
+- Matches titles only. `%`, `_` and `\` are escaped in Go with `items.EscapeLike`. Search uses the `items` model types, not the items service.
 - Order: exact title match (case-insensitive) first, then `lower(title)`, then id.
 - Only active items. Batch cascade (D-004) trashes children with their list or folder, so there is no ancestor check and no join with lists.
 - Paths and list type names come from all active folders and lists loaded once per request. Root folder is first; list is last.

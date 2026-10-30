@@ -29,7 +29,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 	huma.Register(api, huma.Operation{
 		OperationID: "createType", Method: http.MethodPost, Path: "/api/v1/types", Tags: tags,
 		Summary: "Create a custom type", DefaultStatus: http.StatusCreated,
-		Errors: []int{http.StatusBadRequest, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity},
+		Errors: []int{http.StatusBadRequest, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity, http.StatusConflict},
 	}, httpserver.Op(log, h.create))
 	huma.Register(api, huma.Operation{
 		OperationID: "updateType", Method: http.MethodPatch, Path: "/api/v1/types/{key}", Tags: tags,

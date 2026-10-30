@@ -27,6 +27,7 @@ type Repo interface {
 	ListTypes(ctx context.Context) ([]Type, error)
 	GetTypeByKey(ctx context.Context, key string) (Type, error)
 	GetTypeForUpdate(ctx context.Context, id uuid.UUID) (Type, error)
+	// InsertType returns apperr.TypeKeyTaken when the workspace already has the key.
 	InsertType(ctx context.Context, t Type, now time.Time) (Type, error)
 	// UpdateType writes every editable column of t (ID addresses the row); the
 	// caller merges the patch first and holds the row lock.
@@ -92,7 +93,8 @@ func (s *Service) List(ctx context.Context) ([]Type, error) {
 }
 
 // Create adds a custom type. Its key comes from the name; a key that already
-// exists is refused by the store (the built-in keys are taken, see the migrations).
+// exists is refused by the store with apperr.TypeKeyTaken (409). The built-in
+// keys are taken too.
 func (s *Service) Create(ctx context.Context, in CreateType) (Type, error) {
 	name, err := normalizeTypeName(in.Name)
 	if err != nil {

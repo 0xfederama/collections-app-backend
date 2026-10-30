@@ -175,6 +175,8 @@ func conflictProblem(c *apperr.ConflictError) *Problem {
 	case apperr.CodeTypeMismatch:
 		return New(http.StatusConflict, string(c.Code), "Type mismatch",
 			"The destination list has a different type than the item.")
+	case apperr.CodeTypeKeyTaken:
+		return New(http.StatusConflict, string(c.Code), "Type key taken", "A type with this key already exists.")
 	case apperr.CodeOrderStale:
 		return New(http.StatusConflict, string(c.Code), "Order is stale",
 			"The items changed. Reload and try again.")

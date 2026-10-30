@@ -31,6 +31,7 @@ var Codes = []Code{
 	{"parent_in_trash", "A restore without a destination whose parent is trashed (409). `blocking_parent` names it."},
 	{"destination_unavailable", "A move, restore or create targets a folder or list that is missing or trashed (409)."},
 	{"type_mismatch", "An item would move to a list of another type (409)."},
+	{"type_key_taken", "A type would take a key that another type of the workspace already has (409)."},
 	{"order_stale", "A reorder names an id set that no longer matches the stored one (409)."},
 	{"lookup_disabled", "A lookup was requested but its integration is not configured on this server (503)."},
 	{"upstream_unavailable", "A lookup provider could not be reached or answered in time (503)."},

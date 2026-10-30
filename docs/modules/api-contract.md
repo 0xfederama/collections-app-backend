@@ -2,38 +2,28 @@
 
 ## Purpose
 
-`api/openapi.yaml` is the canonical OpenAPI 3.0.3 contract (version 0.17.0). It defines generated Go models and strict-server stubs, including workspace type-definition management, book suggestions and store providers. Design context: `/Users/federico/Developer/collections-app/design-docs/`.
+`api/openapi.yaml` (OpenAPI 3.1.0, `info.version` 1.0.0) is generated from the Huma operations, not written by hand: the handler input and output types and their registrations are the contract. `make spec` renders it, `make check-spec` fails when the committed file is stale. Design context: `/Users/federico/Developer/collections-app/design-docs/`.
 
 ## Key files
 
-- `api/openapi.yaml`: contract, type and field schemas, examples
-- `oapi-codegen.yaml`: generator config (models, chi-server, strict-server, nullable-type)
-- `internal/httpapi/oapi/oapi.gen.go`: generated code, committed, never edit
-- `internal/httpapi/oapi/spec_test.go`: spec validity and route coverage tests (kin-openapi)
-- `redocly.yaml`: Redocly lint rules (examples must be valid)
+- `api/openapi.yaml`: generated contract, never edit by hand
+- `cmd/specgen/main.go`: prints `httpapi.Spec()`
+- `internal/httpapi/spec.go`: info description (conventions, ETags, errors, limits) and tags
+- `internal/platform/problem/codes.go`: error code list, rendered into the `Problem` schema
+- `docs/api-notes.md`: constraints and error statuses the generated spec leaves out
+- `redocly.yaml`: Redocly lint config
 
 ## Interfaces
 
-- `make generate`: runs sqlc, then oapi-codegen (`go tool oapi-codegen`)
-- `make lint-api`: Redocly CLI 2.63.0 via npx (needs Node >= 24)
-- `make check-generate`: fails if regenerating changes tracked generated files
-- `StrictServerInterface`: one method per operationId, generated in `oapi.gen.go`
-- `GET/POST /api/v1/types`: list definitions; create a custom type
-- `PATCH /api/v1/types/{key}`: update supplied custom-type name, `default_icon`, `allows_price`, default sort, or default pins (If-Match)
-- `DELETE /api/v1/types/{key}`: delete an unused custom type (If-Match)
-- `POST /api/v1/types/{key}/fields`, `PUT .../fields/order`: add or reorder custom fields (If-Match)
-- `PATCH/GET/DELETE .../fields/{fieldKey}`: rename, preview deletion, or delete a custom field
-- `GET /api/v1/lists/{id}/items`: sort by a type field and filter with `filter_field`, `filter_value`, `filter_min`, `filter_max`
-- `GET /api/v1/store-providers`, `GET /api/v1/books/suggestions`: store list and book suggestions; settings carry `preferred_store` (one key); Open Library is not a store
-- `TestSpecIsValid`: loads and validates `api/openapi.yaml`
-- `TestSpecCoversAllAPIRoutes`: every API.md §5 route exists with a unique operationId
+- `make spec`: rewrites `api/openapi.yaml` from `cmd/specgen`
+- `make check-spec`: fails with a diff when the committed spec is stale (in `make check`)
+- `make lint-api`: Redocly CLI 2.63.0 via `npx` (Node >= 24), in `make check`
+- `TestSpecIsValid`, `TestSpecMatchesRegistrations`, `TestSpecCoversAllAPIRoutes`: `internal/httpapi/spec_test.go`
 
 ## Gotchas
 
-- `If-Match` is `required: false` so a missing header reaches the handler, which returns 428.
-- An unset `nullable.Nullable` in a response marshals as a zero value, not `null`.
-- `nullable: true` must sit on the schema itself, not next to `allOf`.
-- Type and field versions have independent ETag streams; all mutations except creation require If-Match.
-- Type create and update responses preserve `default_icon`; PATCH fields are optional and nullable defaults may be cleared with JSON `null`.
-- Item metadata is an object validated against its list type's definition; the item `type` is read-only and `null` (with `{}` metadata) for a list with no type; `List.type` is nullable and optional on create.
-- No computed links since 0.17.0: `metadata.store_links` and `streaming.platform_links` were removed (the web builds them); sending `store_links` is `400 unknown_field`. `streaming.link` is read-only, nullable, ignored when sent; item create accepts `source_id` for books.
+- To change the contract, change the handler types or registration, run `make spec`, and commit the handler and the spec together.
+- Keep `operationId`s stable across changes.
+- Constraints such as `maxLength`, `pattern` or `maxItems` are enforced in services, not in the spec (see `docs/api-notes.md`).
+- The document declares no `servers`; the Redocly rule `no-empty-servers` is off for that reason.
+- The generated spec has no examples.

@@ -1,6 +1,6 @@
 # Docs index
 
-- [api-contract](modules/api-contract.md): OpenAPI contract and generated Go server stubs
+- [api-contract](modules/api-contract.md): OpenAPI 3.1 contract generated from the Huma operations (`make spec`, `make check-spec`)
 - [api-notes](api-notes.md): what the generated OpenAPI contract leaves out (request constraints kept in services, error statuses the server does not return as listed)
 - [apperr](modules/apperr.md): typed domain errors, no HTTP imports
 - [backup](modules/backup.md): Postgres plus images backup, restore and verify scripts (`scripts/`)
@@ -9,14 +9,14 @@
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
 - [definitions](modules/definitions.md): workspace type and custom-field definitions (Huma `/api/v1/types...`), locked built-ins excluded
 - [folders](modules/folders.md): folder create, get, rename, move (cycle check) and reorder (Huma)
-- [httpapi](modules/httpapi.md): HTTP composition root: `/healthz` and `/readyz` on the legacy server, Huma mounting of every feature package
+- [httpapi](modules/httpapi.md): HTTP composition root: router build, Huma registration of every feature package, health probes, `Spec()`
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping on upload, validation, thumbnails, serving, orphan sweeper
 - [items](modules/items.md): items create, get, list, patch, move and reorder (Huma); pure metadata, price and list-query rules; per-type rules in `items/types`
 - [lists](modules/lists.md): list create, get with path, update (type change, pure patch planner), move and reorder (Huma)
 - [lookup](modules/lookup.md): metadata provider lookup (TMDB, Open Library, Hardcover gap-fill): merge rules, provenance and retention (Huma)
 - [openlibrary](modules/openlibrary.md): bounded Open Library client for book search, work details and covers (`internal/integrations`)
 - [hardcover](modules/hardcover.md): optional bounded Hardcover client, book gap-filler for automatic lookup (`internal/integrations`)
-- [platform](modules/platform.md): shared infrastructure (Huma on chi, problem+json, scope, etag, clock, testdb, layer archtest)
+- [platform](modules/platform.md): shared infrastructure (Huma on chi, problem+json and its code list, scope, etag, clock, shared wire types, testdb, layer archtest)
 - [seed](modules/seed.md): idempotent Go seed of the five built-in types and their locked fields, run at every bootstrap
 - [search](modules/search.md): item title search with folder and list paths and recent items (Huma: `GET /api/v1/search`, `GET /api/v1/recent-items`)
 - [smoke](modules/smoke.md): HTTP smoke test over a running stack (`scripts/smoke.sh`, `make smoke`)

@@ -43,6 +43,12 @@ type Repo interface {
 	ClearItemImage(ctx context.Context, itemID uuid.UUID, now time.Time) error
 }
 
+// DB is satisfied by *pgxpool.Pool.
+type DB interface {
+	database.TxBeginner
+	sqlc.DBTX
+}
+
 // Postgres implements the repository on a pool.
 type Postgres struct{ db DB }
 

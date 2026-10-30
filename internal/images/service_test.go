@@ -221,14 +221,14 @@ func (f *faultyFiles) Delete(key string) error {
 	return f.FileStore.Delete(key)
 }
 
-// harness wires Images over the fake store, a temp-dir FileStore and a fake clock.
+// harness wires Service over the fake store, a temp-dir FileStore and a fake clock.
 type harness struct {
 	t     *testing.T
 	ctx   context.Context
 	store *fakeStore
 	files *faultyFiles
 	clock *fakeClock
-	svc   *images.Images
+	svc   *images.Service
 }
 
 func newHarness(t *testing.T) *harness {
@@ -246,7 +246,7 @@ func newHarness(t *testing.T) *harness {
 		// The walk compares real file times, so the fake clock starts from the real one.
 		clock: &fakeClock{now: time.Now().UTC()},
 	}
-	h.svc = images.NewImages(h.store, h.files, fakeItems{}, h.clock, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	h.svc = images.NewService(h.store, h.files, fakeItems{}, h.clock, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	return h
 }
 

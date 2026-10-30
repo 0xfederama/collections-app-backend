@@ -8,16 +8,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// graceAge is how old a file or an unreferenced attachment must be before the
+// orphanAge is how old a file or an unreferenced attachment must be before the
 // sweeper touches it. It keeps the sweeper away from an upload that is still
 // between "files written" and "transaction committed".
-const graceAge = time.Hour
+const orphanAge = time.Hour
 
-// SweepPeriod is the pause between two sweeper runs (a run also happens at startup).
-const SweepPeriod = 24 * time.Hour
+// SweepInterval is the pause between two sweeper runs (a run also happens at startup).
+const SweepInterval = 24 * time.Hour
 
-// SweepReport counts what a run removed.
-type SweepReport struct {
+// SweepResult counts what a run removed.
+type SweepResult struct {
 	Files       int // files with no attachment row
 	Attachments int // attachment rows nothing references (their files go too)
 }
@@ -32,9 +32,9 @@ type SweepReport struct {
 //
 // A deletion that fails is logged and retried by the next run. Each pass
 // returns the first error after trying everything.
-func (s *Images) Sweep(ctx context.Context) (SweepReport, error) {
-	var res SweepReport
-	cutoff := s.clock.Now().Add(-graceAge)
+func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
+	var res SweepResult
+	cutoff := s.clock.Now().Add(-orphanAge)
 
 	ids, err := s.store.ListUnreferencedAttachments(ctx, cutoff)
 	if err != nil {
@@ -85,7 +85,7 @@ func (s *Images) Sweep(ctx context.Context) (SweepReport, error) {
 // A file that cannot be deleted becomes an orphan file for the second pass.
 // Any error from the row delete means "referenced again or already gone" and is
 // skipped, as before the repository split.
-func (s *Images) sweepAttachment(ctx context.Context, id uuid.UUID) (int, error) {
+func (s *Service) sweepAttachment(ctx context.Context, id uuid.UUID) (int, error) {
 	keys, err := s.store.DeleteAttachment(ctx, id)
 	if err != nil {
 		return 0, nil //nolint:nilerr // no row: referenced again or already gone
@@ -96,7 +96,7 @@ func (s *Images) sweepAttachment(ctx context.Context, id uuid.UUID) (int, error)
 
 // RunSweeper sweeps once now and then every interval until ctx is cancelled.
 // It logs counts only, never paths. ctx must carry the workspace.
-func (s *Images) RunSweeper(ctx context.Context, interval time.Duration) {
+func (s *Service) RunSweeper(ctx context.Context, interval time.Duration) {
 	run := func() {
 		res, err := s.Sweep(ctx)
 		if err != nil && ctx.Err() == nil {

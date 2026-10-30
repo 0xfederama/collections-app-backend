@@ -28,6 +28,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/seed"
@@ -47,6 +48,26 @@ func (c *testClock) Advance(d time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.t = c.t.Add(d)
+}
+
+// boundStore binds the test workspace to the sweeper's store calls. The sweeper reads
+// the workspace from its context, and these tests call Sweep with a plain context (cmd/api
+// scopes the real sweeper).
+type boundStore struct {
+	images.Store
+	ws uuid.UUID
+}
+
+func (b boundStore) ListAttachmentKeys(ctx context.Context) ([]string, error) {
+	return b.Store.ListAttachmentKeys(scope.With(ctx, b.ws))
+}
+
+func (b boundStore) ListUnreferencedAttachments(ctx context.Context, cutoff time.Time) ([]uuid.UUID, error) {
+	return b.Store.ListUnreferencedAttachments(scope.With(ctx, b.ws), cutoff)
+}
+
+func (b boundStore) DeleteAttachment(ctx context.Context, id uuid.UUID) (images.FileKeys, error) {
+	return b.Store.DeleteAttachment(scope.With(ctx, b.ws), id)
 }
 
 // flakyStore fails every Delete while failDelete is set (a disk error after a
@@ -94,7 +115,7 @@ func newImageEnv(t *testing.T) *imageEnv {
 	store := &flakyStore{Local: local}
 	clk := &testClock{t: time.Now().UTC()}
 	itemSvc := newItems(pool, clk)
-	svc := images.New(pool, store, clk, itemSvc, quietLogger(), ws)
+	svc := images.NewService(boundStore{images.NewPostgres(pool), ws}, store, itemSvc, clk, quietLogger())
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: dir, Logger: quietLogger(), WorkspaceID: ws,
 		Items: itemSvc, Images: svc,

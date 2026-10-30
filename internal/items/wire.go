@@ -148,8 +148,9 @@ func pageOf(p ItemPage) PageJSON {
 	return PageJSON{Limit: p.Limit, Offset: p.Offset, Total: p.Total}
 }
 
-// itemJSON is the wire shape of it. Path is set only when the item has one (getItem).
-func itemJSON(it Item) (ItemJSON, error) {
+// ToItemJSON is the wire shape of it, also used by the image operations. Path is set
+// only when the item has one (getItem).
+func ToItemJSON(it Item) (ItemJSON, error) {
 	metadata, err := metadataOf(it.Metadata)
 	if err != nil {
 		return ItemJSON{}, err

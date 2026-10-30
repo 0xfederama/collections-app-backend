@@ -22,6 +22,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 	"github.com/0xfederama/collections-app-backend/internal/platform/config"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 	"github.com/0xfederama/collections-app-backend/internal/tmdb"
@@ -68,8 +69,8 @@ func run() error {
 	defer func() { _ = store.Close() }()
 	settingsSvc := workspace.NewService(workspace.NewPostgres(pool))
 	itemSvc := httpapi.NewItems(pool, clock.System{}, settingsSvc)
-	imageSvc := images.New(pool, store, clock.System{}, itemSvc, logger, workspaceID)
-	go imageSvc.RunSweeper(ctx, images.SweepInterval) // stops when ctx is cancelled on shutdown
+	imageSvc := images.NewService(images.NewPostgres(pool), store, itemSvc, clock.System{}, logger)
+	go imageSvc.RunSweeper(scope.With(ctx, workspaceID), images.SweepInterval) // stops when ctx is cancelled on shutdown
 	trashSvc := trash.New(pool, store, clock.System{}, logger, workspaceID)
 	go trashSvc.RunAutoPurge(ctx, 24*time.Hour) // stops when ctx is cancelled on shutdown
 	tmdbClient := tmdb.NewWithOptions(cfg.TMDBAPIKey, tmdb.Options{MockFixture: cfg.TMDBMockFixture})

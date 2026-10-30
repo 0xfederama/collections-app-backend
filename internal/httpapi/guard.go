@@ -10,7 +10,6 @@ import (
 	"mime"
 	"net/http"
 	"slices"
-	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -21,12 +20,8 @@ import (
 
 // Body limits (API.md §6).
 const (
-	jsonBodyLimit      = 64 << 10
-	contentBodyLimit   = 2 << 20
-	multipartBodyLimit = 10<<20 + 64<<10
-
-	// uploadTimeout replaces the server-wide read/write deadline for multipart uploads.
-	uploadTimeout = 2 * time.Minute
+	jsonBodyLimit    = 64 << 10
+	contentBodyLimit = 2 << 20
 )
 
 // ifMatchPrefix lists the operations that require `If-Match` and the ETag
@@ -36,8 +31,6 @@ var ifMatchPrefix = map[string]string{
 	"DeleteFolder":       etag.Folder,
 	"DeleteList":         etag.List,
 	"DeleteItem":         etag.Item,
-	"SetItemImage":       etag.Item,
-	"DeleteItemImage":    etag.Item,
 	"LookupItemMetadata": etag.Item,
 }
 
@@ -132,11 +125,9 @@ func (o *operation) checkQuery(r *http.Request) (problem, bool) {
 }
 
 // bodyLimit returns the byte limit for a request body (API.md §6).
-func bodyLimit(opID, mediaType string) int64 {
-	switch {
-	case mediaType == "multipart/form-data":
-		return multipartBodyLimit
-	case opID == "CreateList", opID == "UpdateList":
+func bodyLimit(opID string) int64 {
+	switch opID {
+	case "CreateList", "UpdateList":
 		return contentBodyLimit
 	default:
 		return jsonBodyLimit
@@ -155,18 +146,11 @@ func (o *operation) checkBody(w http.ResponseWriter, r *http.Request) (*http.Req
 		return r, malformedRequest("Unsupported Content-Type.")
 	}
 
-	limit := bodyLimit(o.id, mediaType)
+	limit := bodyLimit(o.id)
 	if r.ContentLength > limit {
 		return r, payloadTooLarge()
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, limit)
-
-	if mediaType == "multipart/form-data" {
-		rc := http.NewResponseController(w)
-		_ = rc.SetReadDeadline(time.Now().Add(uploadTimeout)) // ErrNotSupported on test recorders: ignore
-		_ = rc.SetWriteDeadline(time.Now().Add(uploadTimeout))
-		return r, problem{}
-	}
 
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {

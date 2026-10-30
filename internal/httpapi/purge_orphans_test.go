@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
 )
@@ -27,7 +28,7 @@ func newPurgeEnv(t *testing.T) *imageEnv {
 	e.h = newRouter(t, httpapi.Deps{
 		DB: e.pool, DataDir: e.dir, Logger: quietLogger(), WorkspaceID: e.ws,
 		Items: newItems(e.pool, e.clk), Images: e.svc,
-		Search: search.New(e.pool, e.ws), Trash: trash.New(e.pool, e.store, e.clk, quietLogger(), e.ws),
+		Search: search.NewService(search.NewPostgres(e.pool)), Trash: trash.NewService(trash.NewPostgres(e.pool), e.store, e.clk, quietLogger()),
 	})
 	return e
 }
@@ -104,8 +105,8 @@ func TestB2_PurgeLeavesNoOrphans(t *testing.T) {
 		e.mustDel("folders", "f", pt.folder)
 		e.clk.Advance(2 * 24 * time.Hour)
 		e.exec(`UPDATE workspace_settings SET trash_retention_days = 1 WHERE workspace_id = $1`, e.ws)
-		svc := trash.New(e.pool, e.store, e.clk, quietLogger(), e.ws)
-		if n, err := svc.PurgeExpired(t.Context()); err != nil || n != 1 {
+		svc := trash.NewService(trash.NewPostgres(e.pool), e.store, e.clk, quietLogger())
+		if n, err := svc.PurgeExpired(scope.With(t.Context(), e.ws)); err != nil || n != 1 {
 			t.Fatalf("PurgeExpired = %d, %v; want 1, nil", n, err)
 		}
 		e.wantNoPurgeLeftovers()

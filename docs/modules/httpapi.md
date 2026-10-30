@@ -8,8 +8,8 @@ Serves the legacy generated strict-server routes on chi, with a per-operation gu
 
 - `internal/httpapi/router.go`: `NewRouter`, `Deps`, route order, scope and `workspace.Register` mounting
 - `internal/httpapi/server.go`: `Server`, `/healthz` and `/readyz` handlers, DATA_DIR probe
-- `internal/httpapi/trash.go`: trash handlers (folder/list routes are Huma in [folders](folders.md), [lists](lists.md), [tree](tree.md); types in [definitions](definitions.md))
-- `internal/httpapi/items.go`: `LookupItemMetadata` only (items and content are Huma, see [items](items.md), [content](content.md)); `search.go`, `tmdb.go`, `books.go`, `stores.go`: search, TMDB, book and store handlers (images are Huma, see [images](images.md))
+- `internal/httpapi/items.go`: `LookupItemMetadata` only (items and content are Huma, see [items](items.md), [content](content.md)); `tmdb.go`, `books.go`, `stores.go`: TMDB, book and store handlers (images are Huma, see [images](images.md))
+- Trash and search routes are Huma in [trash](trash.md) and [search](search.md); folders, lists, tree and types are in [folders](folders.md), [lists](lists.md), [tree](tree.md), [definitions](definitions.md)
 - `internal/httpapi/middleware.go`: `IfMatchVersion` only
 - `internal/httpapi/guard.go`: query schemas, If-Match, media type, body limits, unknown fields
 - `internal/httpapi/problem.go`, `paramerr.go`: legacy problem writer and `toProblem` mapper
@@ -22,7 +22,7 @@ Serves the legacy generated strict-server routes on chi, with a per-operation gu
 - `IfMatchVersion(ctx) int`: version N of the validated `If-Match` in guarded handlers
 - `GET /healthz`: 200 `ok`, liveness only; `GET /readyz`: 200 `ready` or 503 (DB ping, DATA_DIR probe)
 - `/api/v1/types...`: type and custom-field routes are Huma operations in [definitions](definitions.md); see `api/openapi.yaml`
-- Delete folder/list/item: 204 with If-Match; trash supports list, restore, single purge and empty
+- Delete folder/list/item, `/api/v1/trash...` and `/api/v1/search`, `/api/v1/recent-items`: Huma, see [trash](trash.md) and [search](search.md)
 - `GET /api/v1/tmdb/suggestions`, `GET /api/v1/books/suggestions`, `GET /api/v1/store-providers`: suggestions and the fixed store list
 - `POST /api/v1/items/{id}/lookup` and item create (`source_id`): explicit lookup with item If-Match
 - `NewRouter` mounts `items.Register` over `Deps.Items` (built by `NewItems`) and `content.Register`; `importer(d)` is nil when lookup is off

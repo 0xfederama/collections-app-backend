@@ -12,49 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const folderPath = `-- name: FolderPath :many
-WITH RECURSIVE chain(id, parent_folder_id, name, depth) AS (
-    SELECT f.id, f.parent_folder_id, f.name, 1 AS depth FROM folders f
-    WHERE f.id = $1 AND f.workspace_id = $2 AND f.deleted_at IS NULL
-  UNION ALL
-    SELECT p.id, p.parent_folder_id, p.name, c.depth + 1 FROM folders p
-    JOIN chain c ON p.id = c.parent_folder_id
-    WHERE p.workspace_id = $2 AND p.deleted_at IS NULL AND c.depth < 10000
-)
-SELECT id, name FROM chain ORDER BY depth DESC
-`
-
-type FolderPathParams struct {
-	FolderID    uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-type FolderPathRow struct {
-	ID   uuid.UUID
-	Name string
-}
-
-// Ancestor folders of a folder, root first, including the folder itself.
-func (q *Queries) FolderPath(ctx context.Context, arg FolderPathParams) ([]FolderPathRow, error) {
-	rows, err := q.db.Query(ctx, folderPath, arg.FolderID, arg.WorkspaceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []FolderPathRow{}
-	for rows.Next() {
-		var i FolderPathRow
-		if err := rows.Scan(&i.ID, &i.Name); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getList = `-- name: GetList :one
 
 SELECT l.id, l.workspace_id, l.folder_id, l.name, l.description, l.display_mode, l.sort_mode, l.sort_order, l.version, l.created_at, l.updated_at, l.deleted_at, l.trash_batch_id, l.type, l.pinned_fields, l.icon, l.icon_color,

@@ -12,51 +12,12 @@ import (
 	"github.com/google/uuid"
 )
 
-const activeFolderSubtreeIDs = `-- name: ActiveFolderSubtreeIDs :many
-WITH RECURSIVE sub(id) AS (
-    SELECT f.id FROM folders f
-    WHERE f.id = $1 AND f.workspace_id = $2 AND f.deleted_at IS NULL
-  UNION
-    SELECT c.id FROM folders c
-    JOIN sub s ON c.parent_folder_id = s.id
-    WHERE c.workspace_id = $2 AND c.deleted_at IS NULL
-)
-SELECT id FROM sub
-`
-
-type ActiveFolderSubtreeIDsParams struct {
-	RootID      uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-// The folder and its active descendant folders. UNION (not UNION ALL) so corrupt
-// data with a cycle still terminates.
-func (q *Queries) ActiveFolderSubtreeIDs(ctx context.Context, arg ActiveFolderSubtreeIDsParams) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, activeFolderSubtreeIDs, arg.RootID, arg.WorkspaceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []uuid.UUID{}
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const countTrashBatches = `-- name: CountTrashBatches :one
+const countBatches = `-- name: CountBatches :one
 SELECT count(*)::int AS total FROM trash_batches WHERE workspace_id = $1
 `
 
-func (q *Queries) CountTrashBatches(ctx context.Context, workspaceID uuid.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, countTrashBatches, workspaceID)
+func (q *Queries) CountBatches(ctx context.Context, workspaceID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countBatches, workspaceID)
 	var total int32
 	err := row.Scan(&total)
 	return total, err
@@ -155,34 +116,6 @@ type DeleteTrashBatchParams struct {
 func (q *Queries) DeleteTrashBatch(ctx context.Context, arg DeleteTrashBatchParams) error {
 	_, err := q.db.Exec(ctx, deleteTrashBatch, arg.ID, arg.WorkspaceID)
 	return err
-}
-
-const folderIsInSubtreeOf = `-- name: FolderIsInSubtreeOf :one
-WITH RECURSIVE chain(id, parent_folder_id) AS (
-    SELECT f.id, f.parent_folder_id FROM folders f
-    WHERE f.id = $2 AND f.workspace_id = $3
-  UNION
-    SELECT p.id, p.parent_folder_id FROM folders p
-    JOIN chain c ON p.id = c.parent_folder_id
-    WHERE p.workspace_id = $3
-)
-SELECT count(*)::int AS matches FROM chain WHERE chain.id = $1::uuid
-`
-
-type FolderIsInSubtreeOfParams struct {
-	FolderID    uuid.UUID
-	CandidateID uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-// Counts 1 when folder_id is the folder candidate_id itself or one of its
-// ancestors, whatever their state: the walk goes up from the candidate. A trash
-// restore uses it to tell "into its own subtree" (cycle) from "unavailable".
-func (q *Queries) FolderIsInSubtreeOf(ctx context.Context, arg FolderIsInSubtreeOfParams) (int32, error) {
-	row := q.db.QueryRow(ctx, folderIsInSubtreeOf, arg.FolderID, arg.CandidateID, arg.WorkspaceID)
-	var matches int32
-	err := row.Scan(&matches)
-	return matches, err
 }
 
 const getAnyFolderState = `-- name: GetAnyFolderState :one
@@ -371,6 +304,68 @@ func (q *Queries) InsertTrashBatch(ctx context.Context, arg InsertTrashBatchPara
 	return id, err
 }
 
+const listActiveItemIDsByLists = `-- name: ListActiveItemIDsByLists :many
+SELECT id FROM items
+WHERE workspace_id = $1 AND deleted_at IS NULL AND list_id = ANY($2::uuid[])
+`
+
+type ListActiveItemIDsByListsParams struct {
+	WorkspaceID uuid.UUID
+	ListIds     []uuid.UUID
+}
+
+// SEAM: moves to items. The active items of the given lists.
+func (q *Queries) ListActiveItemIDsByLists(ctx context.Context, arg ListActiveItemIDsByListsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listActiveItemIDsByLists, arg.WorkspaceID, arg.ListIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listActiveListIDsByFolders = `-- name: ListActiveListIDsByFolders :many
+SELECT id FROM lists
+WHERE workspace_id = $1 AND deleted_at IS NULL AND folder_id = ANY($2::uuid[])
+`
+
+type ListActiveListIDsByFoldersParams struct {
+	WorkspaceID uuid.UUID
+	FolderIds   []uuid.UUID
+}
+
+// SEAM: moves to lists. The active lists directly in the given folders.
+func (q *Queries) ListActiveListIDsByFolders(ctx context.Context, arg ListActiveListIDsByFoldersParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listActiveListIDsByFolders, arg.WorkspaceID, arg.FolderIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAttachmentKeysByItems = `-- name: ListAttachmentKeysByItems :many
 SELECT a.id, a.storage_key, a.thumbnail_storage_key
 FROM attachments a
@@ -413,6 +408,86 @@ func (q *Queries) ListAttachmentKeysByItems(ctx context.Context, arg ListAttachm
 	return items, nil
 }
 
+const listBatches = `-- name: ListBatches :many
+
+SELECT b.id, b.root_type, b.root_id, b.root_name, b.former_path, b.deleted_at,
+       (SELECT count(*) FROM folders f WHERE f.trash_batch_id = b.id)::int AS folder_count,
+       (SELECT count(*) FROM lists l WHERE l.trash_batch_id = b.id)::int AS list_count,
+       (SELECT count(*) FROM items i WHERE i.trash_batch_id = b.id)::int AS item_count,
+       EXISTS (
+         SELECT 1 FROM (
+             SELECT f.parent_folder_id AS pid, 'folder'::text AS ptype FROM folders f WHERE b.root_type = 'folder' AND f.id = b.root_id
+           UNION ALL
+             SELECT l.folder_id, 'folder'::text FROM lists l WHERE b.root_type = 'list' AND l.id = b.root_id
+           UNION ALL
+             SELECT i.list_id, 'list'::text FROM items i WHERE b.root_type = 'item' AND i.id = b.root_id
+         ) rp
+         WHERE rp.pid IS NULL
+            OR (rp.ptype = 'folder' AND EXISTS (SELECT 1 FROM folders pf WHERE pf.id = rp.pid AND pf.deleted_at IS NULL))
+            OR (rp.ptype = 'list' AND EXISTS (SELECT 1 FROM lists pl WHERE pl.id = rp.pid AND pl.deleted_at IS NULL))
+       ) AS restorable_in_place
+FROM trash_batches b
+WHERE b.workspace_id = $1
+ORDER BY b.deleted_at DESC, b.id DESC
+LIMIT $3 OFFSET $2
+`
+
+type ListBatchesParams struct {
+	WorkspaceID uuid.UUID
+	PageOffset  int32
+	PageLimit   int32
+}
+
+type ListBatchesRow struct {
+	ID                uuid.UUID
+	RootType          string
+	RootID            uuid.UUID
+	RootName          string
+	FormerPath        []byte
+	DeletedAt         time.Time
+	FolderCount       int32
+	ListCount         int32
+	ItemCount         int32
+	RestorableInPlace bool
+}
+
+// ---- Trash queries (F019-B3f) ----
+// They serve internal/trash/repository.go. No recursive CTE: the subtree and path
+// walks run in Go over ListFolderStates (walk.go).
+// One page of trash batches, newest first. The counts include the root.
+// restorable_in_place is true when the root's original parent is the workspace root
+// or still active. The EXISTS subquery is plain SQL, no recursion.
+func (q *Queries) ListBatches(ctx context.Context, arg ListBatchesParams) ([]ListBatchesRow, error) {
+	rows, err := q.db.Query(ctx, listBatches, arg.WorkspaceID, arg.PageOffset, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBatchesRow{}
+	for rows.Next() {
+		var i ListBatchesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RootType,
+			&i.RootID,
+			&i.RootName,
+			&i.FormerPath,
+			&i.DeletedAt,
+			&i.FolderCount,
+			&i.ListCount,
+			&i.ItemCount,
+			&i.RestorableInPlace,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listExpiredTrashBatchIDs = `-- name: ListExpiredTrashBatchIDs :many
 SELECT id FROM trash_batches WHERE workspace_id = $1 AND deleted_at < $2
 `
@@ -443,29 +518,36 @@ func (q *Queries) ListExpiredTrashBatchIDs(ctx context.Context, arg ListExpiredT
 	return items, nil
 }
 
-const listFolderParents = `-- name: ListFolderParents :many
-SELECT id, parent_folder_id FROM folders
+const listFolderStates = `-- name: ListFolderStates :many
+SELECT id, parent_folder_id, name, (deleted_at IS NOT NULL)::bool AS trashed
+FROM folders
 WHERE workspace_id = $1
 `
 
-type ListFolderParentsRow struct {
+type ListFolderStatesRow struct {
 	ID             uuid.UUID
 	ParentFolderID uuid.NullUUID
+	Name           string
+	Trashed        bool
 }
 
-// Every folder of the workspace with its parent, trashed or not. The purge walks
-// the root's subtree over these rows in Go (cycle-safe). The purge queries below
-// read lists and items in any state, under any batch.
-func (q *Queries) ListFolderParents(ctx context.Context, workspaceID uuid.UUID) ([]ListFolderParentsRow, error) {
-	rows, err := q.db.Query(ctx, listFolderParents, workspaceID)
+// Every folder of the workspace in any state, with its name and trashed flag. The
+// subtree and path walks (walk.go) run over these rows.
+func (q *Queries) ListFolderStates(ctx context.Context, workspaceID uuid.UUID) ([]ListFolderStatesRow, error) {
+	rows, err := q.db.Query(ctx, listFolderStates, workspaceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListFolderParentsRow{}
+	items := []ListFolderStatesRow{}
 	for rows.Next() {
-		var i ListFolderParentsRow
-		if err := rows.Scan(&i.ID, &i.ParentFolderID); err != nil {
+		var i ListFolderStatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParentFolderID,
+			&i.Name,
+			&i.Trashed,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -561,81 +643,6 @@ func (q *Queries) ListTrashBatchIDs(ctx context.Context, workspaceID uuid.UUID) 
 	return items, nil
 }
 
-const listTrashBatches = `-- name: ListTrashBatches :many
-SELECT b.id, b.root_type, b.root_id, b.root_name, b.former_path, b.deleted_at,
-       (SELECT count(*) FROM folders f WHERE f.trash_batch_id = b.id)::int AS folder_count,
-       (SELECT count(*) FROM lists l WHERE l.trash_batch_id = b.id)::int AS list_count,
-       (SELECT count(*) FROM items i WHERE i.trash_batch_id = b.id)::int AS item_count,
-       EXISTS (
-         SELECT 1 FROM (
-             SELECT f.parent_folder_id AS pid, 'folder'::text AS ptype FROM folders f WHERE b.root_type = 'folder' AND f.id = b.root_id
-           UNION ALL
-             SELECT l.folder_id, 'folder'::text FROM lists l WHERE b.root_type = 'list' AND l.id = b.root_id
-           UNION ALL
-             SELECT i.list_id, 'list'::text FROM items i WHERE b.root_type = 'item' AND i.id = b.root_id
-         ) rp
-         WHERE rp.pid IS NULL
-            OR (rp.ptype = 'folder' AND EXISTS (SELECT 1 FROM folders pf WHERE pf.id = rp.pid AND pf.deleted_at IS NULL))
-            OR (rp.ptype = 'list' AND EXISTS (SELECT 1 FROM lists pl WHERE pl.id = rp.pid AND pl.deleted_at IS NULL))
-       ) AS restorable_in_place
-FROM trash_batches b
-WHERE b.workspace_id = $1
-ORDER BY b.deleted_at DESC, b.id DESC
-LIMIT $3 OFFSET $2
-`
-
-type ListTrashBatchesParams struct {
-	WorkspaceID uuid.UUID
-	PageOffset  int32
-	PageLimit   int32
-}
-
-type ListTrashBatchesRow struct {
-	ID                uuid.UUID
-	RootType          string
-	RootID            uuid.UUID
-	RootName          string
-	FormerPath        []byte
-	DeletedAt         time.Time
-	FolderCount       int32
-	ListCount         int32
-	ItemCount         int32
-	RestorableInPlace bool
-}
-
-// Newest first. The counts include the root. restorable_in_place is true when
-// the root's original parent is the workspace root or still active.
-func (q *Queries) ListTrashBatches(ctx context.Context, arg ListTrashBatchesParams) ([]ListTrashBatchesRow, error) {
-	rows, err := q.db.Query(ctx, listTrashBatches, arg.WorkspaceID, arg.PageOffset, arg.PageLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListTrashBatchesRow{}
-	for rows.Next() {
-		var i ListTrashBatchesRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.RootType,
-			&i.RootID,
-			&i.RootName,
-			&i.FormerPath,
-			&i.DeletedAt,
-			&i.FolderCount,
-			&i.ListCount,
-			&i.ItemCount,
-			&i.RestorableInPlace,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const lockTrashBatch = `-- name: LockTrashBatch :one
 SELECT id, workspace_id, root_type, root_id, root_name, former_path, deleted_at FROM trash_batches
 WHERE id = $1 AND workspace_id = $2
@@ -660,6 +667,78 @@ func (q *Queries) LockTrashBatch(ctx context.Context, arg LockTrashBatchParams) 
 		&i.DeletedAt,
 	)
 	return i, err
+}
+
+const markFoldersTrashed = `-- name: MarkFoldersTrashed :exec
+UPDATE folders
+SET deleted_at = $1, trash_batch_id = $2, updated_at = $1
+WHERE workspace_id = $3 AND deleted_at IS NULL AND id = ANY($4::uuid[])
+`
+
+type MarkFoldersTrashedParams struct {
+	Now         *time.Time
+	BatchID     uuid.NullUUID
+	WorkspaceID uuid.UUID
+	Ids         []uuid.UUID
+}
+
+// SEAM: moves to folders. Marks the given active folders as part of a batch. The version stays.
+func (q *Queries) MarkFoldersTrashed(ctx context.Context, arg MarkFoldersTrashedParams) error {
+	_, err := q.db.Exec(ctx, markFoldersTrashed,
+		arg.Now,
+		arg.BatchID,
+		arg.WorkspaceID,
+		arg.Ids,
+	)
+	return err
+}
+
+const markItemsTrashed = `-- name: MarkItemsTrashed :exec
+UPDATE items
+SET deleted_at = $1, trash_batch_id = $2, updated_at = $1
+WHERE workspace_id = $3 AND deleted_at IS NULL AND id = ANY($4::uuid[])
+`
+
+type MarkItemsTrashedParams struct {
+	Now         *time.Time
+	BatchID     uuid.NullUUID
+	WorkspaceID uuid.UUID
+	Ids         []uuid.UUID
+}
+
+// SEAM: moves to items. Marks the given active items as part of a batch. The version stays.
+func (q *Queries) MarkItemsTrashed(ctx context.Context, arg MarkItemsTrashedParams) error {
+	_, err := q.db.Exec(ctx, markItemsTrashed,
+		arg.Now,
+		arg.BatchID,
+		arg.WorkspaceID,
+		arg.Ids,
+	)
+	return err
+}
+
+const markListsTrashed = `-- name: MarkListsTrashed :exec
+UPDATE lists
+SET deleted_at = $1, trash_batch_id = $2, updated_at = $1
+WHERE workspace_id = $3 AND deleted_at IS NULL AND id = ANY($4::uuid[])
+`
+
+type MarkListsTrashedParams struct {
+	Now         *time.Time
+	BatchID     uuid.NullUUID
+	WorkspaceID uuid.UUID
+	Ids         []uuid.UUID
+}
+
+// SEAM: moves to lists. Marks the given active lists as part of a batch. The version stays.
+func (q *Queries) MarkListsTrashed(ctx context.Context, arg MarkListsTrashedParams) error {
+	_, err := q.db.Exec(ctx, markListsTrashed,
+		arg.Now,
+		arg.BatchID,
+		arg.WorkspaceID,
+		arg.Ids,
+	)
+	return err
 }
 
 const purgeAttachmentRows = `-- name: PurgeAttachmentRows :exec
@@ -805,117 +884,6 @@ func (q *Queries) RestoreListRoot(ctx context.Context, arg RestoreListRootParams
 		arg.ID,
 		arg.WorkspaceID,
 		arg.BatchID,
-	)
-	return err
-}
-
-const trashFolders = `-- name: TrashFolders :exec
-UPDATE folders
-SET deleted_at = $1, trash_batch_id = $2, updated_at = $1
-WHERE folders.workspace_id = $3 AND folders.deleted_at IS NULL AND folders.id = ANY($4::uuid[])
-`
-
-type TrashFoldersParams struct {
-	Now         *time.Time
-	BatchID     uuid.NullUUID
-	WorkspaceID uuid.UUID
-	Ids         []uuid.UUID
-}
-
-func (q *Queries) TrashFolders(ctx context.Context, arg TrashFoldersParams) error {
-	_, err := q.db.Exec(ctx, trashFolders,
-		arg.Now,
-		arg.BatchID,
-		arg.WorkspaceID,
-		arg.Ids,
-	)
-	return err
-}
-
-const trashItem = `-- name: TrashItem :exec
-UPDATE items
-SET deleted_at = $1, trash_batch_id = $2, updated_at = $1
-WHERE id = $3 AND workspace_id = $4 AND deleted_at IS NULL
-`
-
-type TrashItemParams struct {
-	Now         *time.Time
-	BatchID     uuid.NullUUID
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-func (q *Queries) TrashItem(ctx context.Context, arg TrashItemParams) error {
-	_, err := q.db.Exec(ctx, trashItem,
-		arg.Now,
-		arg.BatchID,
-		arg.ID,
-		arg.WorkspaceID,
-	)
-	return err
-}
-
-const trashItemsOfBatchLists = `-- name: TrashItemsOfBatchLists :exec
-UPDATE items
-SET deleted_at = $1, trash_batch_id = $2, updated_at = $1
-WHERE items.workspace_id = $3 AND items.deleted_at IS NULL
-  AND items.list_id IN (SELECT l.id FROM lists l WHERE l.workspace_id = $3 AND l.trash_batch_id = $2)
-`
-
-type TrashItemsOfBatchListsParams struct {
-	Now         *time.Time
-	BatchID     uuid.NullUUID
-	WorkspaceID uuid.UUID
-}
-
-// Active items of every list this batch has just trashed.
-func (q *Queries) TrashItemsOfBatchLists(ctx context.Context, arg TrashItemsOfBatchListsParams) error {
-	_, err := q.db.Exec(ctx, trashItemsOfBatchLists, arg.Now, arg.BatchID, arg.WorkspaceID)
-	return err
-}
-
-const trashList = `-- name: TrashList :exec
-UPDATE lists
-SET deleted_at = $1, trash_batch_id = $2, updated_at = $1
-WHERE id = $3 AND workspace_id = $4 AND deleted_at IS NULL
-`
-
-type TrashListParams struct {
-	Now         *time.Time
-	BatchID     uuid.NullUUID
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-func (q *Queries) TrashList(ctx context.Context, arg TrashListParams) error {
-	_, err := q.db.Exec(ctx, trashList,
-		arg.Now,
-		arg.BatchID,
-		arg.ID,
-		arg.WorkspaceID,
-	)
-	return err
-}
-
-const trashListsInFolders = `-- name: TrashListsInFolders :exec
-UPDATE lists
-SET deleted_at = $1, trash_batch_id = $2, updated_at = $1
-WHERE workspace_id = $3 AND deleted_at IS NULL AND folder_id = ANY($4::uuid[])
-`
-
-type TrashListsInFoldersParams struct {
-	Now         *time.Time
-	BatchID     uuid.NullUUID
-	WorkspaceID uuid.UUID
-	FolderIds   []uuid.UUID
-}
-
-func (q *Queries) TrashListsInFolders(ctx context.Context, arg TrashListsInFoldersParams) error {
-	_, err := q.db.Exec(ctx, trashListsInFolders,
-		arg.Now,
-		arg.BatchID,
-		arg.WorkspaceID,
-		arg.FolderIds,
 	)
 	return err
 }

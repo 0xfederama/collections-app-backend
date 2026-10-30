@@ -35,73 +35,6 @@ WHERE b.workspace_id = @workspace_id
   AND NOT EXISTS (SELECT 1 FROM lists l WHERE b.root_type = 'list' AND l.id = b.root_id)
   AND NOT EXISTS (SELECT 1 FROM items i WHERE b.root_type = 'item' AND i.id = b.root_id);
 
--- name: ActiveFolderSubtreeIDs :many
--- The folder and its active descendant folders. UNION (not UNION ALL) so corrupt
--- data with a cycle still terminates.
-WITH RECURSIVE sub(id) AS (
-    SELECT f.id FROM folders f
-    WHERE f.id = @root_id AND f.workspace_id = @workspace_id AND f.deleted_at IS NULL
-  UNION
-    SELECT c.id FROM folders c
-    JOIN sub s ON c.parent_folder_id = s.id
-    WHERE c.workspace_id = @workspace_id AND c.deleted_at IS NULL
-)
-SELECT id FROM sub;
-
--- name: TrashFolders :exec
-UPDATE folders
-SET deleted_at = @now, trash_batch_id = @batch_id, updated_at = @now
-WHERE folders.workspace_id = @workspace_id AND folders.deleted_at IS NULL AND folders.id = ANY(@ids::uuid[]);
-
--- name: TrashListsInFolders :exec
-UPDATE lists
-SET deleted_at = @now, trash_batch_id = @batch_id, updated_at = @now
-WHERE workspace_id = @workspace_id AND deleted_at IS NULL AND folder_id = ANY(@folder_ids::uuid[]);
-
--- name: TrashList :exec
-UPDATE lists
-SET deleted_at = @now, trash_batch_id = @batch_id, updated_at = @now
-WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;
-
--- name: TrashItemsOfBatchLists :exec
--- Active items of every list this batch has just trashed.
-UPDATE items
-SET deleted_at = @now, trash_batch_id = @batch_id, updated_at = @now
-WHERE items.workspace_id = @workspace_id AND items.deleted_at IS NULL
-  AND items.list_id IN (SELECT l.id FROM lists l WHERE l.workspace_id = @workspace_id AND l.trash_batch_id = @batch_id);
-
--- name: TrashItem :exec
-UPDATE items
-SET deleted_at = @now, trash_batch_id = @batch_id, updated_at = @now
-WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;
-
--- name: ListTrashBatches :many
--- Newest first. The counts include the root. restorable_in_place is true when
--- the root's original parent is the workspace root or still active.
-SELECT b.id, b.root_type, b.root_id, b.root_name, b.former_path, b.deleted_at,
-       (SELECT count(*) FROM folders f WHERE f.trash_batch_id = b.id)::int AS folder_count,
-       (SELECT count(*) FROM lists l WHERE l.trash_batch_id = b.id)::int AS list_count,
-       (SELECT count(*) FROM items i WHERE i.trash_batch_id = b.id)::int AS item_count,
-       EXISTS (
-         SELECT 1 FROM (
-             SELECT f.parent_folder_id AS pid, 'folder'::text AS ptype FROM folders f WHERE b.root_type = 'folder' AND f.id = b.root_id
-           UNION ALL
-             SELECT l.folder_id, 'folder'::text FROM lists l WHERE b.root_type = 'list' AND l.id = b.root_id
-           UNION ALL
-             SELECT i.list_id, 'list'::text FROM items i WHERE b.root_type = 'item' AND i.id = b.root_id
-         ) rp
-         WHERE rp.pid IS NULL
-            OR (rp.ptype = 'folder' AND EXISTS (SELECT 1 FROM folders pf WHERE pf.id = rp.pid AND pf.deleted_at IS NULL))
-            OR (rp.ptype = 'list' AND EXISTS (SELECT 1 FROM lists pl WHERE pl.id = rp.pid AND pl.deleted_at IS NULL))
-       ) AS restorable_in_place
-FROM trash_batches b
-WHERE b.workspace_id = @workspace_id
-ORDER BY b.deleted_at DESC, b.id DESC
-LIMIT @page_limit OFFSET @page_offset;
-
--- name: CountTrashBatches :one
-SELECT count(*)::int AS total FROM trash_batches WHERE workspace_id = @workspace_id;
-
 -- name: GetTrashedFolder :one
 -- The batch's folder root, whatever its state (a restore reads it while trashed).
 SELECT * FROM folders WHERE id = @id AND workspace_id = @workspace_id AND trash_batch_id = @batch_id FOR UPDATE;
@@ -118,20 +51,6 @@ SELECT name, (deleted_at IS NOT NULL)::bool AS trashed FROM folders WHERE id = @
 
 -- name: GetAnyListState :one
 SELECT name, (deleted_at IS NOT NULL)::bool AS trashed FROM lists WHERE id = @id AND workspace_id = @workspace_id;
-
--- name: FolderIsInSubtreeOf :one
--- Counts 1 when folder_id is the folder candidate_id itself or one of its
--- ancestors, whatever their state: the walk goes up from the candidate. A trash
--- restore uses it to tell "into its own subtree" (cycle) from "unavailable".
-WITH RECURSIVE chain(id, parent_folder_id) AS (
-    SELECT f.id, f.parent_folder_id FROM folders f
-    WHERE f.id = @candidate_id AND f.workspace_id = @workspace_id
-  UNION
-    SELECT p.id, p.parent_folder_id FROM folders p
-    JOIN chain c ON p.id = c.parent_folder_id
-    WHERE p.workspace_id = @workspace_id
-)
-SELECT count(*)::int AS matches FROM chain WHERE chain.id = sqlc.arg(folder_id)::uuid;
 
 -- name: RestoreFolderRoot :exec
 UPDATE folders
@@ -163,13 +82,6 @@ WHERE workspace_id = @workspace_id AND trash_batch_id = @batch_id;
 -- name: RestoreBatchItems :exec
 UPDATE items SET deleted_at = NULL, trash_batch_id = NULL, updated_at = @now
 WHERE workspace_id = @workspace_id AND trash_batch_id = @batch_id;
-
--- name: ListFolderParents :many
--- Every folder of the workspace with its parent, trashed or not. The purge walks
--- the root's subtree over these rows in Go (cycle-safe). The purge queries below
--- read lists and items in any state, under any batch.
-SELECT id, parent_folder_id FROM folders
-WHERE workspace_id = @workspace_id;
 
 -- name: ListListIDsByFolders :many
 SELECT id FROM lists
@@ -207,3 +119,70 @@ DELETE FROM folders WHERE workspace_id = @workspace_id AND id = ANY(@folder_ids:
 
 -- name: PurgeAttachmentRows :exec
 DELETE FROM attachments WHERE workspace_id = @workspace_id AND id = ANY(@ids::uuid[]);
+
+-- ---- Trash queries (F019-B3f) ----
+-- They serve internal/trash/repository.go. No recursive CTE: the subtree and path
+-- walks run in Go over ListFolderStates (walk.go).
+
+-- name: ListBatches :many
+-- One page of trash batches, newest first. The counts include the root.
+-- restorable_in_place is true when the root's original parent is the workspace root
+-- or still active. The EXISTS subquery is plain SQL, no recursion.
+SELECT b.id, b.root_type, b.root_id, b.root_name, b.former_path, b.deleted_at,
+       (SELECT count(*) FROM folders f WHERE f.trash_batch_id = b.id)::int AS folder_count,
+       (SELECT count(*) FROM lists l WHERE l.trash_batch_id = b.id)::int AS list_count,
+       (SELECT count(*) FROM items i WHERE i.trash_batch_id = b.id)::int AS item_count,
+       EXISTS (
+         SELECT 1 FROM (
+             SELECT f.parent_folder_id AS pid, 'folder'::text AS ptype FROM folders f WHERE b.root_type = 'folder' AND f.id = b.root_id
+           UNION ALL
+             SELECT l.folder_id, 'folder'::text FROM lists l WHERE b.root_type = 'list' AND l.id = b.root_id
+           UNION ALL
+             SELECT i.list_id, 'list'::text FROM items i WHERE b.root_type = 'item' AND i.id = b.root_id
+         ) rp
+         WHERE rp.pid IS NULL
+            OR (rp.ptype = 'folder' AND EXISTS (SELECT 1 FROM folders pf WHERE pf.id = rp.pid AND pf.deleted_at IS NULL))
+            OR (rp.ptype = 'list' AND EXISTS (SELECT 1 FROM lists pl WHERE pl.id = rp.pid AND pl.deleted_at IS NULL))
+       ) AS restorable_in_place
+FROM trash_batches b
+WHERE b.workspace_id = @workspace_id
+ORDER BY b.deleted_at DESC, b.id DESC
+LIMIT @page_limit OFFSET @page_offset;
+
+-- name: CountBatches :one
+SELECT count(*)::int AS total FROM trash_batches WHERE workspace_id = @workspace_id;
+
+-- name: ListFolderStates :many
+-- Every folder of the workspace in any state, with its name and trashed flag. The
+-- subtree and path walks (walk.go) run over these rows.
+SELECT id, parent_folder_id, name, (deleted_at IS NOT NULL)::bool AS trashed
+FROM folders
+WHERE workspace_id = @workspace_id;
+
+-- name: MarkFoldersTrashed :exec
+-- SEAM: moves to folders. Marks the given active folders as part of a batch. The version stays.
+UPDATE folders
+SET deleted_at = @now, trash_batch_id = @batch_id, updated_at = @now
+WHERE workspace_id = @workspace_id AND deleted_at IS NULL AND id = ANY(@ids::uuid[]);
+
+-- name: MarkListsTrashed :exec
+-- SEAM: moves to lists. Marks the given active lists as part of a batch. The version stays.
+UPDATE lists
+SET deleted_at = @now, trash_batch_id = @batch_id, updated_at = @now
+WHERE workspace_id = @workspace_id AND deleted_at IS NULL AND id = ANY(@ids::uuid[]);
+
+-- name: MarkItemsTrashed :exec
+-- SEAM: moves to items. Marks the given active items as part of a batch. The version stays.
+UPDATE items
+SET deleted_at = @now, trash_batch_id = @batch_id, updated_at = @now
+WHERE workspace_id = @workspace_id AND deleted_at IS NULL AND id = ANY(@ids::uuid[]);
+
+-- name: ListActiveListIDsByFolders :many
+-- SEAM: moves to lists. The active lists directly in the given folders.
+SELECT id FROM lists
+WHERE workspace_id = @workspace_id AND deleted_at IS NULL AND folder_id = ANY(@folder_ids::uuid[]);
+
+-- name: ListActiveItemIDsByLists :many
+-- SEAM: moves to items. The active items of the given lists.
+SELECT id FROM items
+WHERE workspace_id = @workspace_id AND deleted_at IS NULL AND list_id = ANY(@list_ids::uuid[]);

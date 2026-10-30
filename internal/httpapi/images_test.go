@@ -99,7 +99,7 @@ func newImageEnv(t *testing.T) *imageEnv {
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: dir, Logger: quietLogger(), WorkspaceID: ws,
 		Items: itemSvc, Images: svc,
-		Search: search.New(pool, ws), Trash: trash.New(pool, store, clk, quietLogger(), ws),
+		Search: search.NewService(search.NewPostgres(pool)), Trash: trash.NewService(trash.NewPostgres(pool), store, clk, quietLogger()),
 	})
 	return &imageEnv{treeEnv: &treeEnv{t: t, h: h, pool: pool, ws: ws}, dir: dir, clk: clk, store: store, svc: svc}
 }

@@ -42,8 +42,8 @@ func newRecentEnv(t *testing.T) *treeEnv {
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: dir, Logger: quietLogger(), WorkspaceID: ws,
 		Items:  newItems(pool, clock.System{}),
-		Search: search.New(pool, ws),
-		Trash:  trash.New(pool, store, clock.System{}, quietLogger(), ws),
+		Search: search.NewService(search.NewPostgres(pool)),
+		Trash:  trash.NewService(trash.NewPostgres(pool), store, clock.System{}, quietLogger()),
 	})
 	return &treeEnv{t: t, h: h, pool: pool, ws: ws}
 }

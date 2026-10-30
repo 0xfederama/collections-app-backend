@@ -249,8 +249,8 @@ type SearchItemsRow struct {
 }
 
 // Search (DATA_MODEL §6). Items of trashed lists and folders are trashed too (batch cascade, D-004),
-// so deleted_at IS NULL on the item is the whole visibility rule. The columns match ListItems, so
-// internal/items maps both with the same function.
+// so deleted_at IS NULL on the item is the whole visibility rule. The columns match ListItems;
+// internal/search/repository.go maps the rows.
 // @like_q is the escaped LIKE fragment (\, %, _ escaped in Go); @q is the raw text, used for the exact-match rank.
 func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]SearchItemsRow, error) {
 	rows, err := q.db.Query(ctx, searchItems,

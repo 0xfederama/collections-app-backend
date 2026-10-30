@@ -547,7 +547,7 @@ func TestF012_EmptyTrash(t *testing.T) {
 func TestF012_AutoPurge(t *testing.T) {
 	e := newImageEnv(t)
 	e.exec(`INSERT INTO workspace_settings (workspace_id) VALUES ($1)`, e.ws)
-	svc := trash.New(e.pool, e.store, e.clk, quietLogger(), e.ws)
+	svc := trash.NewService(trash.NewPostgres(e.pool), e.store, e.clk, quietLogger())
 
 	old := e.upload(e.newItemInNewList("Old"), "old.png", pngFixture(t, 10, 10))
 	e.mustDel("items", "i", old) // trashed 8 days before the run
@@ -560,7 +560,7 @@ func TestF012_AutoPurge(t *testing.T) {
 	}
 
 	// Off (the default, NULL): nothing is purged however old the batches are.
-	if n, err := svc.PurgeExpired(t.Context()); err != nil || n != 0 {
+	if n, err := svc.PurgeExpired(scope.With(t.Context(), e.ws)); err != nil || n != 0 {
 		t.Fatalf("off: PurgeExpired = %d, %v; want 0, nil", n, err)
 	}
 	if n := e.count(`SELECT count(*) FROM trash_batches`); n != 2 {
@@ -569,7 +569,7 @@ func TestF012_AutoPurge(t *testing.T) {
 
 	// Retention 7 days: the 8-day-old batch goes with its file, the 6-day-old stays.
 	e.exec(`UPDATE workspace_settings SET trash_retention_days = 7 WHERE workspace_id = $1`, e.ws)
-	n, err := svc.PurgeExpired(t.Context())
+	n, err := svc.PurgeExpired(scope.With(t.Context(), e.ws))
 	if err != nil || n != 1 {
 		t.Fatalf("retention 7: PurgeExpired = %d, %v; want 1, nil", n, err)
 	}
@@ -590,7 +590,7 @@ func TestF012_AutoPurge(t *testing.T) {
 	e.wantConsistent()
 
 	// A second run finds nothing left to purge.
-	if n, err := svc.PurgeExpired(t.Context()); err != nil || n != 0 {
+	if n, err := svc.PurgeExpired(scope.With(t.Context(), e.ws)); err != nil || n != 0 {
 		t.Fatalf("second run: PurgeExpired = %d, %v; want 0, nil", n, err)
 	}
 }

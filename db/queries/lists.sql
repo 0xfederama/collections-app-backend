@@ -65,14 +65,3 @@ UPDATE lists
 SET sort_order = @sort_order, updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;
 
--- name: FolderPath :many
--- Ancestor folders of a folder, root first, including the folder itself.
-WITH RECURSIVE chain(id, parent_folder_id, name, depth) AS (
-    SELECT f.id, f.parent_folder_id, f.name, 1 AS depth FROM folders f
-    WHERE f.id = @folder_id AND f.workspace_id = @workspace_id AND f.deleted_at IS NULL
-  UNION ALL
-    SELECT p.id, p.parent_folder_id, p.name, c.depth + 1 FROM folders p
-    JOIN chain c ON p.id = c.parent_folder_id
-    WHERE p.workspace_id = @workspace_id AND p.deleted_at IS NULL AND c.depth < 10000
-)
-SELECT id, name FROM chain ORDER BY depth DESC;

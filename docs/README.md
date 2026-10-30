@@ -8,7 +8,7 @@
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
 - [definitions](modules/definitions.md): workspace type and custom-field definitions (Huma `/api/v1/types...`), locked built-ins excluded
 - [folders](modules/folders.md): folder create, get, rename, move (cycle check) and reorder (Huma)
-- [httpapi](modules/httpapi.md): legacy HTTP router, probes, trash and item-lookup handlers, book suggestions and store providers; Huma mounting
+- [httpapi](modules/httpapi.md): legacy HTTP router, probes, item-lookup handlers, book suggestions and store providers; Huma mounting
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping on upload, validation, thumbnails, serving, orphan sweeper
 - [items](modules/items.md): items create, get, list, patch, move and reorder (Huma); pure metadata, price and list-query rules; per-type rules in `items/types`
 - [lists](modules/lists.md): list create, get with path, update (type change, pure patch planner), move and reorder (Huma)
@@ -16,11 +16,11 @@
 - [openlibrary](modules/openlibrary.md): bounded Open Library client for book search, work details and covers
 - [platform](modules/platform.md): shared infrastructure (Huma on chi, problem+json, scope, etag, clock, testdb, layer archtest)
 - [seed](modules/seed.md): idempotent Go seed of the five built-in types and their locked fields, run at every bootstrap
-- [search](modules/search.md): item title search with folder and list paths (`GET /api/v1/search`) and recent items (`GET /api/v1/recent-items`)
+- [search](modules/search.md): item title search with folder and list paths and recent items (Huma: `GET /api/v1/search`, `GET /api/v1/recent-items`)
 - [smoke](modules/smoke.md): HTTP smoke test over a running stack (`scripts/smoke.sh`, `make smoke`)
 - [stores](modules/stores.md): fixed online store provider keys for `stores` fields and `preferred_store`
 - [storage](modules/storage.md): local file store under DATA_DIR (`os.Root`, generated keys)
-- [trash](modules/trash.md): delete into trash batches, trash list, restore, purge, empty trash, retention auto-purge
+- [trash](modules/trash.md): folder, list and item deletes into trash batches (Huma), trash list, restore, purge, empty trash, retention auto-purge
 - [tree](modules/tree.md): `GET /api/v1/tree`, the flat read of active folders and lists for the sidebar (handler only)
 - [tmdb](modules/tmdb.md): bounded server-side TMDB client for movie and TV suggestions/details
 - [workspace](modules/workspace.md): single-workspace bootstrap and settings service (Huma `GET`/`PATCH /api/v1/settings`)

@@ -28,9 +28,6 @@ const (
 // prefix each expects (API.md §3 "Requires If-Match"). AT-10 checks it against
 // an independent list written from API.md.
 var ifMatchPrefix = map[string]string{
-	"DeleteFolder":       etag.Folder,
-	"DeleteList":         etag.List,
-	"DeleteItem":         etag.Item,
 	"LookupItemMetadata": etag.Item,
 }
 

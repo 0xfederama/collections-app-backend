@@ -164,7 +164,7 @@ func (h *handler) list(ctx context.Context, in *ListItemsInput) (*ItemPageOutput
 	}
 	out := ItemPageJSON{Data: make([]ItemSummaryJSON, 0, len(page.Items)), Page: pageOf(page)}
 	for _, it := range page.Items {
-		out.Data = append(out.Data, itemSummaryJSON(it))
+		out.Data = append(out.Data, ToItemSummaryJSON(it))
 	}
 	return &ItemPageOutput{Body: out}, nil
 }

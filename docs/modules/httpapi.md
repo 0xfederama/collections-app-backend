@@ -27,4 +27,4 @@ Composition root of the HTTP layer. `NewRouter` builds the Huma API over chi, re
 - `/readyz` creates and deletes a `.readyz-*` file in `DATA_DIR` on every call.
 - `folderDB`, `typeDB` and `contentDB` type-assert `Deps.DB` to the pool; a Ping-only fake gets a nil database, so routes that query need a real DB in tests.
 - `importer(d)` is nil when lookup is off, so item create takes no lookup path.
-- `internal/httpapi` is still in archtest `legacyPackages`.
+- `internal/httpapi` is in archtest `exemptPackages` (composition root), so it may import every feature.

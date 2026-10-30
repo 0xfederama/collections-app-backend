@@ -27,7 +27,7 @@ There is no authentication, so the API is published on `127.0.0.1` only. See the
 
 ```text
 cmd/api/main.go        wiring only: config → logger → pgx pool → services → chi router → http.Server (graceful shutdown)
-internal/platform      shared infra: config, database (sqlc/ GENERATED, never edit), clock, etag, httpserver (Huma on chi), problem, scope, testdb, archtest
+internal/platform      shared infra: config, database (sqlc/ GENERATED, never edit), clock, etag, httpserver (Huma on chi), problem, scope, logs, testdb, archtest
 internal/apperr        typed domain errors (no HTTP)
 internal/folders       folders: create, get, rename, move, reorder (Huma)
 internal/lists         lists: create, get with path, update, move, reorder (Huma)
@@ -40,6 +40,7 @@ internal/storage       FileStore (local files)
 internal/trash         delete, list, restore, purge
 internal/search        search and recent items
 internal/workspace     bootstrap of the single workspace; settings (Huma)
+internal/seed          idempotent Go seed of the built-in types and their locked fields, run at bootstrap
 internal/httpapi       HTTP composition root: Huma router, probes, Spec() for cmd/specgen (the spec is generated from it)
 cmd/specgen            prints the OpenAPI document for `make spec`
 internal/lookup        metadata lookup (TMDB, Open Library, Hardcover gap-fill): merge rules, provenance, retention (Huma)
@@ -59,7 +60,7 @@ distroless runtime image has no shell or curl.
 
 | Tool | Version |
 |---|---|
-| Go | 1.27.2 |
+| Go | 1.27.3 |
 | Docker with Compose v2 | any recent (Docker Desktop 28 tested) |
 | Node | 24+ (for `make lint-api`, which runs Redocly through `npx`; `make check` includes it, so it is needed for the gate) |
 | Git, `gh` | for PRs |
@@ -84,18 +85,19 @@ This starts `db`, runs `migrate` once, then starts `api` on `http://127.0.0.1:80
 | Health | `curl -fsS http://127.0.0.1:8080/healthz` (liveness), `curl -fsS http://127.0.0.1:8080/readyz` (DB + data dir) |
 | Migrate | `make migrate` |
 | New migration | `make migration name=<snake_case>` |
-| Test / lint / format | `make test` / `make lint` / `make fmt` |
+| Tests / lint / format check / format | `make test` / `make lint` / `make fmt-check` / `make fmt` |
 | Regenerate the API spec | `make spec` (writes `api/openapi.yaml` from the Huma operations); `make check-spec` fails if it is stale |
 | Lint the API spec | `make lint-api` (Redocly, config in `redocly.yaml`) |
 | Regenerate code | `make generate` (sqlc) |
 | All gates | `make check` (needs Docker running) |
 | Vulnerability scan | `make audit` |
+| Dead code report | `make deadcode` (not part of `make check`) |
 | Safe reset (deletes DB + uploads) | `make reset-dev` (asks first, refuses when `APP_ENV=production`) |
 | Backup / restore / verify | `scripts/backup.sh`, `scripts/restore.sh`, `scripts/verify-restore.sh` (see [Backup and restore](#backup-and-restore)) |
 | Backup round-trip test (AT-17) | `make test-backup` (about a minute, not part of `make check`) |
 | API smoke test | `make smoke` (curl + jq against a running stack, `API_URL` defaults to `http://localhost:8090`, not part of `make check`) |
 
-`make check` = gofmt check, golangci-lint (including goimports), the Redocly spec lint, shellcheck on `scripts/` (pinned Docker image), generated-code and API-spec drift checks, `go test ./...` (testcontainers Postgres), a check that compose publishes ports on `127.0.0.1` only, and a Docker image build.
+`make check` = gofmt check, golangci-lint (including goimports and the depguard layer rules), the Redocly spec lint, shellcheck on `scripts/` (pinned Docker image), generated-code and API-spec drift checks, `go test ./...` (testcontainers Postgres, including the architecture test), a check that compose publishes ports on `127.0.0.1` only, and a Docker image build.
 
 Run `make smoke` after a deploy, a compose change or a migration change, and before a release. It walks one end-to-end flow over HTTP (folder, list, item, image, sort, search, trash, restore, purge) and removes what it created. Point it at the test stack, never at dev data: `./deploy/test up -d --fresh`, then `make smoke` (or `API_URL=http://host:port make smoke`).
 

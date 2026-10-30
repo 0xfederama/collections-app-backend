@@ -37,4 +37,4 @@ Shared infrastructure under `internal/platform/`, used by feature packages and n
 - The schema namer strips the `JSON` suffix (`SettingsJSON` becomes `Settings`).
 - Huma's own default body size (1 MiB) is mapped to 64 KiB; declaring exactly 1 MiB gets 64 KiB too.
 - Shared wire type names are global in the spec: two types with one name panic at registration.
-- `archtest` exempts `legacyPackages`; remove an entry when its package migrates and keep `.golangci.yml` depguard in step.
+- `archtest` exempts `exemptPackages` (composition and shared plumbing, one reason each); keep `.golangci.yml` depguard in step.

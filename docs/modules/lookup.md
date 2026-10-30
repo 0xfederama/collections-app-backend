@@ -35,7 +35,6 @@ Merges values imported from a metadata provider (TMDB for movie and TV, Open Lib
 - Automatic book lookup (no `source_id`) uses `pickBest`: exact normalised title first, then author and pages, ties in upstream order. TMDB takes the first result.
 - Hardcover is used only by the automatic book path. `ModeCreateUntracked` creates without a provenance row or `openlibrary_id`. Failures are swallowed.
 - `streaming.link` is an ordinary imported leaf. Clients never send it, and a streaming-country change clears it (see [workspace](workspace.md)) without bumping item `version`.
-- User edits survive refresh and expiry, including on trashed items. An unchanged imported title reverts to the typed title on expiry.
-- Books keep the typed title on create; only movies and TV adopt the provider title, which stays in `imported_title`.
+- User edits survive refresh and expiry, including on trashed items. Books keep the typed title on create; movies and TV adopt the provider title (kept in `imported_title`) and revert to the typed one on expiry if unchanged.
 - A provider with no cover still applies the match, without an image. Manual lookup modes keep the existing image.
 - TMDB backups must be retired within six months under [TMDB API terms](https://www.themoviedb.org/api-terms-of-use).

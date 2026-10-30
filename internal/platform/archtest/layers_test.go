@@ -27,7 +27,6 @@ const (
 // legacyPackages are not migrated to the layers yet. They are exempt from every
 // check (a prefix covers subpackages). B3b..f remove their entries as they migrate.
 var legacyPackages = []string{
-	"internal/lookup",  // migrates in B3b..f
 	"internal/httpapi", // migrates in B3b..f
 	"internal/seed",    // migrates in B3b..f
 	"cmd/api",          // migrates in B3b..f
@@ -43,8 +42,19 @@ var sqlcExemptPackages = []string{
 
 // sqlcExemptFiles may import sqlc outside repository.go. bootstrap.go runs the
 // startup seeding of a new workspace in one transaction (see workspace.Bootstrap).
+// lookup/store_test.go seeds the built-in types of its test workspace (seed.BuiltinTypes).
 var sqlcExemptFiles = []string{
 	"internal/workspace/bootstrap.go",
+	"internal/lookup/store_test.go",
+}
+
+// crossFeatureExemptFiles may use another feature's repository identifiers. They
+// are the lookup store's end-to-end tests: they wire the real items, definitions
+// and workspace features over Postgres, as the composition root does. Remove an
+// entry when its test moves to the composition root (httpapi) or to fakes.
+var crossFeatureExemptFiles = []string{
+	"internal/lookup/store_test.go",
+	"internal/lookup/streaming_link_test.go",
 }
 
 type sourceFile struct {
@@ -247,7 +257,7 @@ func crossFeatureViolations(mod loaded) []string {
 
 	var out []string
 	for _, f := range mod.files {
-		if isLegacy(f.pkg) {
+		if isLegacy(f.pkg) || slices.Contains(crossFeatureExemptFiles, f.path) {
 			continue
 		}
 		for _, imp := range f.ast.Imports {

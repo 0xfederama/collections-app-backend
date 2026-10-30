@@ -69,11 +69,6 @@ func unknownField(path string) problem {
 	return newProblem(http.StatusBadRequest, "unknown_field", "Unknown field", "Unknown field "+`"`+path+`".`)
 }
 
-func preconditionRequired() problem {
-	return newProblem(http.StatusPreconditionRequired, "precondition_required", "Precondition required",
-		"Send the resource ETag in the If-Match header.")
-}
-
 func payloadTooLarge() problem {
 	return newProblem(http.StatusRequestEntityTooLarge, "payload_too_large", "Payload too large",
 		"The request body exceeds the limit for this route.")

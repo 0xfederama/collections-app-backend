@@ -11,6 +11,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 )
 
@@ -48,6 +49,19 @@ func NewService(store Store, files storage.FileStore, clk clock.Clock, log *slog
 
 func (t *Service) now() time.Time { return t.clock.Now() }
 
+// errUnscopedTrash is returned when the context carries no workspace. The queries
+// would match no row for it, but a delete or purge must not depend on that: the
+// trash refuses to run before any read or write.
+var errUnscopedTrash = errors.New("trash: operation needs a workspace in the context")
+
+// requireWorkspace returns errUnscopedTrash for a context with no workspace.
+func requireWorkspace(ctx context.Context) error {
+	if scope.WorkspaceID(ctx) == uuid.Nil {
+		return errUnscopedTrash
+	}
+	return nil
+}
+
 // isNotFound reports whether err is a missing or trashed resource.
 func isNotFound(err error) bool {
 	var nf *apperr.NotFoundError
@@ -70,6 +84,9 @@ func ancestorPath(nodes []FolderNode, folder *uuid.UUID) []PathSegment {
 // the items of those lists. Older batches nested below stay as they are. Errors
 // in order: NotFound, VersionConflict.
 func (t *Service) DeleteFolder(ctx context.Context, id uuid.UUID, version int) error {
+	if err := requireWorkspace(ctx); err != nil {
+		return err
+	}
 	return t.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return err
@@ -108,6 +125,9 @@ func (t *Service) DeleteFolder(ctx context.Context, id uuid.UUID, version int) e
 // DeleteList moves an active list and its active items to the trash as one batch.
 // Errors in order: NotFound, VersionConflict.
 func (t *Service) DeleteList(ctx context.Context, id uuid.UUID, version int) error {
+	if err := requireWorkspace(ctx); err != nil {
+		return err
+	}
 	return t.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return err
@@ -139,6 +159,9 @@ func (t *Service) DeleteList(ctx context.Context, id uuid.UUID, version int) err
 // DeleteItem moves an active item to the trash as one batch. Errors in order:
 // NotFound, VersionConflict.
 func (t *Service) DeleteItem(ctx context.Context, id uuid.UUID, version int) error {
+	if err := requireWorkspace(ctx); err != nil {
+		return err
+	}
 	return t.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return err
@@ -210,6 +233,9 @@ func (t *Service) List(ctx context.Context, limit, offset int) (Page, error) {
 // root is appended last among its siblings and its version is bumped. The rest of
 // the batch is cleared, then the batch row is deleted last (D-051).
 func (t *Service) Restore(ctx context.Context, id uuid.UUID, dest *Destination) (Restored, error) {
+	if err := requireWorkspace(ctx); err != nil {
+		return Restored{}, err
+	}
 	var out Restored
 	err := t.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {

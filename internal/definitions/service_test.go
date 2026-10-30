@@ -449,10 +449,12 @@ func (r *fakeRepo) GetTypeForUpdate(_ context.Context, id uuid.UUID) (Type, erro
 	return r.s.types[i], nil
 }
 
+// InsertType refuses a key the workspace already has, as the repository does on
+// the (workspace_id, key) constraint.
 func (r *fakeRepo) InsertType(_ context.Context, t Type, _ time.Time) (Type, error) {
 	for _, typ := range r.s.types {
 		if typ.Key == t.Key {
-			return Type{}, errDuplicateKey
+			return Type{}, apperr.TypeKeyTaken()
 		}
 	}
 	t.ID, t.Version = uuid.New(), 1
@@ -1047,18 +1049,23 @@ func TestService_CreateValidatesBeforeWriting(t *testing.T) {
 	}
 }
 
-// The key comes from the name. A name that gives a key already in use is refused
-// by the store, as before B3c: there is no runtime `_custom` rename, the built-in
-// keys are only renamed by the migrations.
-func TestService_CreateKeyCollisionIsTheStoreError(t *testing.T) {
-	store := gadgetStore()
-	before := store.state.clone()
-	_, err := newService(store).Create(t.Context(), CreateType{Name: "Movie"})
-	if !errors.Is(err, errDuplicateKey) {
-		t.Fatalf("Create() = %v, want the store's duplicate key error", err)
-	}
-	if !reflect.DeepEqual(before, store.state) {
-		t.Errorf("refused create changed the store")
+// The key comes from the name. A name that gives a key already in use (a built-in
+// key too) is refused with a 409 type_key_taken; there is no runtime `_custom`
+// rename, the built-in keys are only renamed by the migrations.
+func TestService_CreateKeyCollisionIsTypeKeyTaken(t *testing.T) {
+	for _, name := range []string{"Movie", "Gadget"} {
+		t.Run(name, func(t *testing.T) {
+			store := gadgetStore()
+			before := store.state.clone()
+			_, err := newService(store).Create(t.Context(), CreateType{Name: name})
+			var c *apperr.ConflictError
+			if !errors.As(err, &c) || c.Code != apperr.CodeTypeKeyTaken {
+				t.Fatalf("Create() = %v, want type_key_taken", err)
+			}
+			if !reflect.DeepEqual(before, store.state) {
+				t.Errorf("refused create changed the store")
+			}
+		})
 	}
 }
 

@@ -3,8 +3,10 @@ package items
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/platform/httpserver"
@@ -17,20 +19,34 @@ import (
 // ItemJSON is the wire shape of an item (published as the schema "Item"). Path is
 // present on getItem only.
 type ItemJSON struct {
-	ContentVersion int                    `json:"content_version"`
-	CreatedAt      time.Time              `json:"created_at"`
-	ID             uuid.UUID              `json:"id" format:"uuid"`
-	Image          any                    `json:"image" nullable:"true" doc:"An item image, either an external URL or an uploaded attachment. null when the item has no image."`
-	ListID         uuid.UUID              `json:"list_id" format:"uuid"`
-	Metadata       map[string]any         `json:"metadata" doc:"Validated against the list's type; its shape depends on the type."`
-	Path           *[]ItemPathSegmentJSON `json:"path,omitempty" doc:"Ancestor folders and the list. Present on getItem only."`
-	Price          *PriceJSON             `json:"price"`
-	SortOrder      int                    `json:"sort_order"`
-	Title          string                 `json:"title"`
-	Type           *string                `json:"type" nullable:"true" doc:"null when the list has no type."`
-	UpdatedAt      time.Time              `json:"updated_at"`
-	Version        int                    `json:"version"`
-	Website        *string                `json:"website" nullable:"true"`
+	ContentVersion int                       `json:"content_version"`
+	CreatedAt      time.Time                 `json:"created_at"`
+	ID             uuid.UUID                 `json:"id" format:"uuid"`
+	Image          any                       `json:"image" nullable:"true" doc:"An item image, either an external URL or an uploaded attachment. null when the item has no image."`
+	ListID         uuid.UUID                 `json:"list_id" format:"uuid"`
+	Metadata       map[string]any            `json:"metadata" doc:"Validated against the list's type; its shape depends on the type."`
+	Path           *[]httpserver.PathSegment `json:"path,omitempty" doc:"Ancestor folders and the list. Present on getItem only."`
+	Price          *PriceJSON                `json:"price"`
+	SortOrder      int                       `json:"sort_order"`
+	Title          string                    `json:"title"`
+	Type           *string                   `json:"type" nullable:"true" doc:"null when the list has no type."`
+	UpdatedAt      time.Time                 `json:"updated_at"`
+	Version        int                       `json:"version"`
+	Website        *string                   `json:"website" nullable:"true"`
+}
+
+// TransformSchema gives image the schema of its union: an upload, a URL or null.
+// Huma derives no schema from an `any`, so the branches are spelled out here.
+func (ItemJSON) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
+	s.Properties["image"] = &huma.Schema{
+		Description: "An item image, either an external URL or an uploaded attachment. null when the item has no image.",
+		OneOf: []*huma.Schema{
+			r.Schema(reflect.TypeFor[UploadImageJSON](), true, ""),
+			r.Schema(reflect.TypeFor[UrlImageJSON](), true, ""),
+			{Type: "null"},
+		},
+	}
+	return s
 }
 
 // ItemSummaryJSON is an item row of listItems (published as "ItemSummary"): the
@@ -54,22 +70,7 @@ type ItemSummaryJSON struct {
 // ItemPageJSON is the listItems answer (published as "ItemPage").
 type ItemPageJSON struct {
 	Data []ItemSummaryJSON `json:"data"`
-	Page PageJSON          `json:"page"`
-}
-
-// PageJSON is the paging of a list answer (published as "Page").
-type PageJSON struct {
-	Limit  int `json:"limit"`
-	Offset int `json:"offset"`
-	Total  int `json:"total" doc:"Total rows matching, ignoring limit and offset."`
-}
-
-// ItemPathSegmentJSON is one ancestor of an item (published as "ItemPathSegment": the
-// lists package publishes "PathSegment" with the same shape, and the registry needs unique names).
-type ItemPathSegmentJSON struct {
-	ID   uuid.UUID `json:"id" format:"uuid"`
-	Name string    `json:"name"`
-	Type string    `json:"type" enum:"folder,list"`
+	Page httpserver.Page   `json:"page"`
 }
 
 // PriceJSON is a price in responses: always min, max and currency (published as "Price").
@@ -105,8 +106,8 @@ type UploadImageJSON struct {
 	Width            int       `json:"width"`
 }
 
-// URLImageJSON is an image given by its URL (published as "UrlImage").
-type URLImageJSON struct {
+// UrlImageJSON is an image given by its URL (published as "UrlImage").
+type UrlImageJSON struct {
 	Source string `json:"source" enum:"url"`
 	URL    string `json:"url"`
 }
@@ -144,8 +145,8 @@ type ReorderItemsRequest struct {
 }
 
 // pageOf is the paging of a page of rows.
-func pageOf(p ItemPage) PageJSON {
-	return PageJSON{Limit: p.Limit, Offset: p.Offset, Total: p.Total}
+func pageOf(p ItemPage) httpserver.Page {
+	return httpserver.Page{Limit: p.Limit, Offset: p.Offset, Total: p.Total}
 }
 
 // ToItemJSON is the wire shape of it, also used by the image operations. Path is set
@@ -161,9 +162,9 @@ func ToItemJSON(it Item) (ItemJSON, error) {
 		Title: it.Title, Type: it.Type, UpdatedAt: it.UpdatedAt, Version: it.Version, Website: it.Website,
 	}
 	if it.Path != nil {
-		path := make([]ItemPathSegmentJSON, 0, len(it.Path))
+		path := make([]httpserver.PathSegment, 0, len(it.Path))
 		for _, p := range it.Path {
-			path = append(path, ItemPathSegmentJSON{ID: p.ID, Name: p.Name, Type: p.Type})
+			path = append(path, httpserver.PathSegment{ID: p.ID, Name: p.Name, Type: p.Type})
 		}
 		out.Path = &path
 	}
@@ -212,7 +213,7 @@ func imageJSON(img *Image) any {
 			Source: ImageSourceUpload, ThumbnailURL: img.ThumbnailURL, URL: img.URL, Width: img.Width,
 		}
 	}
-	return URLImageJSON{Source: ImageSourceURL, URL: img.URL}
+	return UrlImageJSON{Source: ImageSourceURL, URL: img.URL}
 }
 
 // imageSummaryJSON is the reduced image of a list row, nil when there is none.

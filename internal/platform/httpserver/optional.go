@@ -31,8 +31,10 @@ func (o *Optional[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Schema is T's schema, nullable. T must be a primitive or enum type: a struct
-// would be a $ref, which OpenAPI 3.0 cannot mark nullable.
+// Schema is T's schema, nullable. A struct T is inlined by Huma (not a $ref), so
+// its type is [object, null], which OpenAPI 3.1 allows. Do not wrap it in a oneOf
+// with a `null` branch: Huma's validator ignores the type null, so an object would
+// match both branches and a wrong type would answer 422 instead of 400.
 func (Optional[T]) Schema(r huma.Registry) *huma.Schema {
 	s := huma.SchemaFromType(r, reflect.TypeFor[T]())
 	s.Nullable = true

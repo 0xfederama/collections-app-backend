@@ -139,6 +139,34 @@ func TestHandlerTypes_UnknownBodyKeyIs400(t *testing.T) {
 	wantProblemCode(t, e.call(http.MethodPost, "/api/v1/types/board_game/fields", `{"label":"Rating","type":"number","x":1}`, `"k-1"`), http.StatusBadRequest, "unknown_field")
 }
 
+// A key the workspace already has (here a custom type, and a built-in key) answers
+// 409 type_key_taken from the database, and writes nothing.
+func TestHandlerTypes_DuplicateTypeKeyIs409(t *testing.T) {
+	e := newHandlerEnv(t)
+	wantStatus := func(rec *httptest.ResponseRecorder, status int) {
+		t.Helper()
+		if rec.Code != status {
+			t.Fatalf("status = %d, want %d; body=%s", rec.Code, status, rec.Body)
+		}
+	}
+	wantStatus(e.call(http.MethodPost, "/api/v1/types", `{"name":"Movies"}`, ""), http.StatusCreated)
+
+	p := wantProblemCode(t, e.call(http.MethodPost, "/api/v1/types", `{"name":"Movies"}`, ""), http.StatusConflict, "type_key_taken")
+	if p["detail"] != "A type with this key already exists." {
+		t.Fatalf("detail = %v", p["detail"])
+	}
+	// "Movie" makes the built-in key movie.
+	wantProblemCode(t, e.call(http.MethodPost, "/api/v1/types", `{"name":"Movie"}`, ""), http.StatusConflict, "type_key_taken")
+
+	var count int
+	if err := e.pool.QueryRow(t.Context(), `SELECT count(*) FROM type_definitions WHERE workspace_id = (SELECT id FROM workspaces LIMIT 1) AND key = 'movies'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("movies rows = %d, want 1", count)
+	}
+}
+
 func TestHandlerTypes_NewTypeHasEmptyFieldsArray(t *testing.T) {
 	e := newHandlerEnv(t)
 	rec := e.call(http.MethodPost, "/api/v1/types", `{"name":"Board game","default_pinned_fields":null}`, "")

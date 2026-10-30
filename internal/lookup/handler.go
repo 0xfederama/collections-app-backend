@@ -64,8 +64,9 @@ func Register(api huma.API, log *slog.Logger, svc *Service, tmdb, books Provider
 			"metadata age. An item's `lookup_disabled` flag stops automatic refresh and lets its owned values expire under the same rules. Open " +
 			"Library data has no retention duty: it is kept until the user changes it.",
 		DefaultStatus: http.StatusOK,
-		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired,
-			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity, http.StatusServiceUnavailable},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
+			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,
+			http.StatusPreconditionRequired, http.StatusServiceUnavailable},
 		Middlewares: huma.Middlewares{ifMatchFirst(api, etag.Item)},
 	}, httpserver.Op(log, h.lookupItem))
 }

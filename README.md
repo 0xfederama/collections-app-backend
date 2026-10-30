@@ -1,7 +1,7 @@
 # collections-app-backend
 
 Go REST API + PostgreSQL for the Collection App (private, two-person collection manager). It owns the canonical API
-contract (`api/openapi.yaml`, OpenAPI 3.0.3). Design docs: `/Users/federico/Developer/collections-app/design-docs/`.
+contract (`api/openapi.yaml`, OpenAPI 3.1, generated from the Huma handlers with `make spec`). Design docs: `/Users/federico/Developer/collections-app/design-docs/`.
 
 This repo is the `backend/` submodule of the parent repo [collections-app](https://github.com/0xfederama/collections-app),
 next to `frontend-web/` (the React app, repo `collections-app-frontend-web`). From the parent folder,
@@ -11,13 +11,13 @@ There is no CI. Quality gates run locally with `make check` (see below).
 
 ## What exists today
 
-The whole API in `api/openapi.yaml` is implemented (spec `0.3.0`, tag `api-v0.3.0`):
+The whole API in `api/openapi.yaml` is implemented (spec `1.0.0`, generated):
 
 | Area | State |
 |---|---|
 | Health | `GET /healthz` liveness (`200 ok`), `GET /readyz` readiness (`200 ready` only if the DB answers and `DATA_DIR` is writable, else a terse `503`, no paths or SQL) |
 | Data | Settings, tree, folders, lists, items (six types), Markdown content with versions, one image per item, search, recent items, trash with restore and purge |
-| Cross-cutting | Request IDs, access log, panic recovery, security headers, request guard (`If-Match`, body limits, unknown fields), problem+json errors |
+| Cross-cutting | Request IDs, access log, panic recovery, security headers, Huma request validation (`If-Match`, body limits, unknown fields), problem+json errors |
 | Operations | Config validated at startup, `log/slog`, migrations, backup/restore/verify scripts |
 
 There is no authentication, so the API is published on `127.0.0.1` only. See the parent README, "Security boundary".
@@ -39,7 +39,8 @@ internal/storage       FileStore (local files)
 internal/trash         delete, list, restore, purge
 internal/search        search and recent items
 internal/workspace     bootstrap of the single workspace; settings (Huma)
-internal/httpapi       HTTP composition root: /healthz and /readyz on the legacy server, Huma mounting; oapi/ is GENERATED from api/openapi.yaml (never edit)
+internal/httpapi       HTTP composition root: Huma router, probes, Spec() for cmd/specgen (the spec is generated from it)
+cmd/specgen            prints the OpenAPI document for `make spec`
 internal/lookup        metadata lookup (TMDB, Open Library, Hardcover gap-fill): merge rules, provenance, retention (Huma)
 internal/stores        fixed online store provider keys (Huma)
 internal/integrations  bounded upstream clients: tmdb, openlibrary, hardcover
@@ -83,8 +84,9 @@ This starts `db`, runs `migrate` once, then starts `api` on `http://127.0.0.1:80
 | Migrate | `make migrate` |
 | New migration | `make migration name=<snake_case>` |
 | Test / lint / format | `make test` / `make lint` / `make fmt` |
+| Regenerate the API spec | `make spec` (writes `api/openapi.yaml` from the Huma operations); `make check-spec` fails if it is stale |
 | Lint the API spec | `make lint-api` (Redocly, config in `redocly.yaml`) |
-| Regenerate code | `make generate` (sqlc + oapi-codegen) |
+| Regenerate code | `make generate` (sqlc) |
 | All gates | `make check` (needs Docker running) |
 | Vulnerability scan | `make audit` |
 | Safe reset (deletes DB + uploads) | `make reset-dev` (asks first, refuses when `APP_ENV=production`) |
@@ -92,7 +94,7 @@ This starts `db`, runs `migrate` once, then starts `api` on `http://127.0.0.1:80
 | Backup round-trip test (AT-17) | `make test-backup` (about a minute, not part of `make check`) |
 | API smoke test | `make smoke` (curl + jq against a running stack, `API_URL` defaults to `http://localhost:8090`, not part of `make check`) |
 
-`make check` = gofmt check, golangci-lint (including goimports), the Redocly spec lint, shellcheck on `scripts/` (pinned Docker image), a generated-code drift check, `go test ./...` (testcontainers Postgres), a check that compose publishes ports on `127.0.0.1` only, and a Docker image build.
+`make check` = gofmt check, golangci-lint (including goimports), the Redocly spec lint, shellcheck on `scripts/` (pinned Docker image), generated-code and API-spec drift checks, `go test ./...` (testcontainers Postgres), a check that compose publishes ports on `127.0.0.1` only, and a Docker image build.
 
 Run `make smoke` after a deploy, a compose change or a migration change, and before a release. It walks one end-to-end flow over HTTP (folder, list, item, image, sort, search, trash, restore, purge) and removes what it created. Point it at the test stack, never at dev data: `./deploy/test up -d --fresh`, then `make smoke` (or `API_URL=http://host:port make smoke`).
 
@@ -129,10 +131,10 @@ make run                                                 # uses .env, DATA_DIR=.
 
 ## API contract
 
-`api/openapi.yaml` is the source of truth for every endpoint, schema, header and error. Change the spec first, then run
-`make generate` to refresh `internal/httpapi/oapi/oapi.gen.go` (committed, never hand-edited), and commit both. `make check` lints the
-spec with Redocly and fails if the generated code is out of date. The web repo vendors a pinned copy of the spec
-(`api/openapi.lock.json` there); contract changes follow `design-docs/AGENT_WORKFLOW.md` §6.
+`api/openapi.yaml` is generated from the Huma operations and is the published contract for every endpoint, schema, header and
+error. To change it, change the handler types or registration, run `make spec`, and commit both. `make check` fails if the
+committed spec is stale (`check-spec`) and lints it with Redocly. Constraints the spec does not carry are listed in
+`docs/api-notes.md`. Contract changes follow `design-docs/AGENT_WORKFLOW.md` §6.
 
 ## Configuration
 
@@ -147,4 +149,4 @@ Environment variables are validated at startup. See `.env.example` and `design-d
 - **Migrations not applied:** `make migrate`, then `docker compose logs migrate`. `docker compose up --build` applies 000001 on a fresh database.
 - **Storage permissions:** `DATA_DIR` must exist and be writable (the container uses UID 65532 and the `appdata` volume). `/readyz` returns 503 if it isn't.
 - **`make check` fails on tests:** Docker must be running. The first lint run compiles golangci-lint and is slow once.
-- **Stale generated code:** run `make generate` (sqlc and oapi-codegen) and commit the result. `make check` fails on drift.
+- **Stale generated code:** run `make generate` (sqlc) or `make spec` (API spec) and commit the result. `make check` fails on drift.

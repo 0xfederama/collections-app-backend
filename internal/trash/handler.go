@@ -25,7 +25,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		Summary:       "Move a folder and its subtree to the trash",
 		Description:   "Requires `If-Match` (`\"f-N\"`).",
 		DefaultStatus: http.StatusNoContent,
-		Errors:        []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
+		Errors:        []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
 		Middlewares:   huma.Middlewares{ifMatchFirst(api, etag.Folder)},
 	}, httpserver.Op(log, h.deleteFolder))
 	huma.Register(api, huma.Operation{
@@ -33,7 +33,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		Summary:       "Move a list and its items to the trash",
 		Description:   "Requires `If-Match` (`\"l-N\"`).",
 		DefaultStatus: http.StatusNoContent,
-		Errors:        []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
+		Errors:        []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
 		Middlewares:   huma.Middlewares{ifMatchFirst(api, etag.List)},
 	}, httpserver.Op(log, h.deleteList))
 	huma.Register(api, huma.Operation{
@@ -41,7 +41,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		Summary:       "Move an item to the trash",
 		Description:   "Requires `If-Match` (`\"i-N\"`).",
 		DefaultStatus: http.StatusNoContent,
-		Errors:        []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
+		Errors:        []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired},
 		Middlewares:   huma.Middlewares{ifMatchFirst(api, etag.Item)},
 	}, httpserver.Op(log, h.deleteItem))
 	huma.Register(api, huma.Operation{
@@ -56,8 +56,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		Description: "No `If-Match`. The body is optional. Without a destination the root returns to its original parent; if that parent is " +
 			"trashed or gone the call returns `409 parent_in_trash` (with `blocking_parent`). With a destination the root is re-parented and " +
 			"appended to the end: `destination.folder_id` for folders and lists (`null` = root), `destination.list_id` for items.",
-		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusRequestEntityTooLarge,
-			http.StatusUnprocessableEntity},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity},
 	}, httpserver.Op(log, h.restore))
 	huma.Register(api, huma.Operation{
 		OperationID: "purgeTrashBatch", Method: http.MethodDelete, Path: "/api/v1/trash/{batch_id}", Tags: []string{"trash"},
@@ -73,6 +72,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		Description: "Permanently deletes every trash batch and their files, the same as purging each batch. No `If-Match`.\n" +
 			"Idempotent: an empty trash also answers 204.",
 		DefaultStatus: http.StatusNoContent,
+		Errors:        []int{http.StatusInternalServerError},
 	}, httpserver.Op(log, h.purgeAll))
 }
 
@@ -179,7 +179,7 @@ func (h *handler) list(ctx context.Context, in *ListTrashInput) (*TrashPageOutpu
 	if err != nil {
 		return nil, err
 	}
-	out := TrashPageJSON{Data: make([]TrashEntryJSON, 0, len(page.Entries)), Page: PagingJSON{Limit: page.Limit, Offset: page.Offset, Total: page.Total}}
+	out := TrashPageJSON{Data: make([]TrashEntryJSON, 0, len(page.Entries)), Page: httpserver.Page{Limit: page.Limit, Offset: page.Offset, Total: page.Total}}
 	for _, e := range page.Entries {
 		out.Data = append(out.Data, entryJSON(e))
 	}
@@ -232,9 +232,9 @@ func (h *handler) purgeAll(ctx context.Context, _ *struct{}) (*struct{}, error) 
 
 // entryJSON is the wire shape of one trash batch. The former path is never null.
 func entryJSON(e Entry) TrashEntryJSON {
-	path := make([]TrashPathSegmentJSON, 0, len(e.FormerPath))
+	path := make([]httpserver.PathSegment, 0, len(e.FormerPath))
 	for _, seg := range e.FormerPath {
-		path = append(path, TrashPathSegmentJSON{ID: seg.ID, Name: seg.Name, Type: seg.Type})
+		path = append(path, httpserver.PathSegment{ID: seg.ID, Name: seg.Name, Type: seg.Type})
 	}
 	out := TrashEntryJSON{
 		DeletedAt: e.DeletedAt, FormerPath: path, ID: e.ID, RestorableInPlace: e.RestorableInPlace,

@@ -1,13 +1,13 @@
-// Package httpapi holds the HTTP router, middleware, problem+json mapping and
-// the handlers behind the generated strict server.
+// Package httpapi is the composition root of the HTTP layer: it builds the Huma
+// API over chi and registers every feature's operations, plus the health probes.
 package httpapi
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,7 +16,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/content"
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/folders"
-	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
@@ -71,64 +70,61 @@ type Deps struct {
 	Trash *trash.Service
 }
 
-// NewRouter builds the HTTP handler: the generated strict server mounted on
-// chi, behind request id, security headers, access log and panic recovery.
+// NewRouter builds the HTTP handler: the Huma API on chi, behind request id,
+// security headers, access log and panic recovery.
 func NewRouter(d Deps) (http.Handler, error) {
+	r, _ := build(d)
+	return httpserver.Wrap(r, d.Logger), nil
+}
+
+// API returns the Huma API with every operation registered. The OpenAPI spec is
+// generated from it (cmd/specgen runs it with a zero Deps), so registration must
+// not dereference a dependency: the handlers only use Deps when a request runs.
+func API(d Deps) huma.API {
+	_, api := build(d)
+	return api
+}
+
+// build assembles the chi router and the Huma API over it. The Huma operations
+// are the whole HTTP surface: unknown paths and wrong methods answer problems.
+func build(d Deps) (chi.Router, huma.API) {
 	if d.Clock == nil {
 		d.Clock = clock.System{}
 	}
-	return newHandler(newServer(d), d)
-}
-
-// newHandler mounts any strict server implementation; tests use it to inject
-// handlers that fail or panic.
-func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
-	doc, err := oapi.GetSpec()
-	if err != nil {
-		return nil, fmt.Errorf("load embedded openapi spec: %w", err)
-	}
-
-	errs := handlerErrors{log: d.Logger}
-	strict := oapi.NewStrictHandlerWithOptions(si, nil, oapi.StrictHTTPServerOptions{
-		RequestErrorHandlerFunc:  errs.request,
-		ResponseErrorHandlerFunc: errs.response,
-	})
-
 	r := chi.NewRouter()
 	r.NotFound(httpserver.NotFound)
 	r.MethodNotAllowed(httpserver.MethodNotAllowed)
-	oapi.HandlerWithOptions(strict, oapi.ChiServerOptions{
-		BaseRouter:       r,
-		Middlewares:      []oapi.MiddlewareFunc{newGuard(doc).middleware},
-		ErrorHandlerFunc: errs.parameter,
-	})
+	// The workspace scope is a context value set before any route runs, so it is
+	// the same for every operation, the probes included (they never read it).
+	r.Use(scope.Middleware(d.WorkspaceID))
+	api := httpserver.NewAPI(r)
+	register(api, d)
+	return r, api
+}
 
-	// Operations migrated to Huma are registered after the old routes on the same
-	// router: chi replaces the old handler of the same method and path, so Huma answers.
-	r.Group(func(r chi.Router) {
-		r.Use(scope.Middleware(d.WorkspaceID))
-		api := httpserver.NewAPI(r)
-		workspace.Register(api, d.Logger, d.Settings, d.Settings, workspace.Availability{
-			Lookup:     d.LookupAvailable,
-			BookLookup: d.BookLookupAvailable,
-		})
-		folderRepo := folders.NewPostgres(folderDB(d.DB))
-		listRepo := lists.NewPostgres(folderDB(d.DB))
-		typeDefs := definitions.NewPostgres(typeDB(d.DB))
-		folders.Register(api, d.Logger, folders.NewService(folderRepo, d.Clock))
-		lists.Register(api, d.Logger, lists.NewService(listRepo, listTypes{typeDefs}, d.Clock))
-		tree.Register(api, d.Logger, folderRepo, listRepo)
-		definitions.Register(api, d.Logger, definitions.NewService(typeDefs, d.Clock))
-		items.Register(api, d.Logger, d.Items, importer(d))
-		content.Register(api, d.Logger, content.NewService(content.NewPostgres(contentDB(d.DB)), contentSettings{settingsService(d)}, d.Clock))
-		images.Register(api, d.Logger, d.Images)
-		trash.Register(api, d.Logger, d.Trash)
-		search.Register(api, d.Logger, d.Search)
-		lookup.Register(api, d.Logger, d.Lookup, d.TMDB, d.Books, d.Settings)
-		stores.Register(api, d.Logger)
+// register adds every operation of the API: the probes and each feature's
+// Register call. Feature services are built here, from the Deps the composition
+// root gives.
+func register(api huma.API, d Deps) {
+	registerHealth(api, d)
+	workspace.Register(api, d.Logger, d.Settings, d.Settings, workspace.Availability{
+		Lookup:     d.LookupAvailable,
+		BookLookup: d.BookLookupAvailable,
 	})
-
-	return httpserver.Wrap(r, d.Logger), nil
+	folderRepo := folders.NewPostgres(folderDB(d.DB))
+	listRepo := lists.NewPostgres(folderDB(d.DB))
+	typeDefs := definitions.NewPostgres(typeDB(d.DB))
+	folders.Register(api, d.Logger, folders.NewService(folderRepo, d.Clock))
+	lists.Register(api, d.Logger, lists.NewService(listRepo, listTypes{typeDefs}, d.Clock))
+	tree.Register(api, d.Logger, folderRepo, listRepo)
+	definitions.Register(api, d.Logger, definitions.NewService(typeDefs, d.Clock))
+	items.Register(api, d.Logger, d.Items, importer(d))
+	content.Register(api, d.Logger, content.NewService(content.NewPostgres(contentDB(d.DB)), contentSettings{settingsService(d)}, d.Clock))
+	images.Register(api, d.Logger, d.Images)
+	trash.Register(api, d.Logger, d.Trash)
+	search.Register(api, d.Logger, d.Search)
+	lookup.Register(api, d.Logger, d.Lookup, d.TMDB, d.Books, d.Settings)
+	stores.Register(api, d.Logger)
 }
 
 // folderDB is the database the folder repository runs on. Deps.DB is the pool in

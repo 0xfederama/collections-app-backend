@@ -13,3 +13,6 @@ rules:
   info-license: off
   # Probes, settings GET and tree GET have no client-error case in API.md §4.
   operation-4xx-response: off
+  # The spec is generated and declares no servers (cmd/specgen): OpenAPI 3.1 then
+  # means the origin the document is served from, the same origin everywhere (D-033).
+  no-empty-servers: off

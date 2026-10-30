@@ -37,6 +37,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service, reader settingsReade
 		OperationID: "getSettings", Method: http.MethodGet, Path: "/api/v1/settings", Tags: tags,
 		Summary:     "Get workspace settings",
 		Description: "The settings, including the workspace name.",
+		Errors:      []int{http.StatusInternalServerError},
 	}, httpserver.Op(log, h.get))
 	huma.Register(api, huma.Operation{
 		OperationID: "updateSettings", Method: http.MethodPatch, Path: "/api/v1/settings", Tags: tags,
@@ -44,8 +45,8 @@ func Register(api huma.API, log *slog.Logger, svc *Service, reader settingsReade
 		Description: "Requires `If-Match` (`\"s-N\"`). Lowering `markdown_history_limit` prunes on the next save per item, not immediately. " +
 			"`trash_retention_days`: absent = unchanged, `null` = off, otherwise 1 to 365. " +
 			"`preferred_store` is the one default store of the workspace, never null.",
-		Errors: []int{http.StatusBadRequest, http.StatusPreconditionFailed, http.StatusPreconditionRequired,
-			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity},
+		Errors: []int{http.StatusBadRequest, http.StatusPreconditionFailed, http.StatusRequestEntityTooLarge,
+			http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
 	}, httpserver.Op(log, h.update))
 }
 

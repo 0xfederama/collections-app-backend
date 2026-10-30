@@ -1,9 +1,8 @@
-package httpapi
+package httpapi_test
 
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,103 +11,41 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
+
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
-	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/platform/httpserver"
 )
 
-func TestToProblem(t *testing.T) {
-	tests := []struct {
-		name       string
-		err        error
-		wantStatus int
-		wantCode   string
-		check      func(t *testing.T, p problem)
-	}{
-		{"not found", apperr.NotFound("item"), 404, "not_found", func(t *testing.T, p problem) {
-			if p.Detail != "Item not found." {
-				t.Errorf("detail = %q", p.Detail)
-			}
-		}},
-		{"version conflict", apperr.VersionConflict(8), 412, "version_conflict", func(t *testing.T, p problem) {
-			if p.CurrentVersion == nil || *p.CurrentVersion != 8 {
-				t.Errorf("current_version = %v, want 8", p.CurrentVersion)
-			}
-		}},
-		{"version conflict at 0 still reports the version", apperr.VersionConflict(0), 412, "version_conflict", func(t *testing.T, p problem) {
-			if p.CurrentVersion == nil || *p.CurrentVersion != 0 {
-				t.Errorf("current_version = %v, want 0", p.CurrentVersion)
-			}
-		}},
-		{"validation", apperr.Validation(apperr.FieldError{Field: "price.max", Message: "must be >= min"}, apperr.FieldError{Field: "title", Message: "required"}), 422, "validation_failed", func(t *testing.T, p problem) {
-			if len(p.Errors) != 2 || p.Errors[0].Field != "price.max" || p.Errors[1].Message != "required" {
-				t.Errorf("errors = %+v", p.Errors)
-			}
-		}},
-		{"cycle", apperr.Cycle(), 409, "cycle_detected", nil},
-		{"parent in trash", apperr.ParentInTrash(apperr.BlockingParent{Type: "folder", ID: "f1", Name: "Movies"}), 409, "parent_in_trash", func(t *testing.T, p problem) {
-			if p.BlockingParent == nil || *p.BlockingParent != (blockingParent{Type: "folder", ID: "f1", Name: "Movies"}) {
-				t.Errorf("blocking_parent = %+v", p.BlockingParent)
-			}
-		}},
-		{"destination unavailable", apperr.DestinationUnavailable(), 409, "destination_unavailable", nil},
-		{"order stale", apperr.OrderStale(), 409, "order_stale", nil},
-		{"payload too large", apperr.PayloadTooLarge(1), 413, "payload_too_large", nil},
-		{"MaxBytesError from the reader", &http.MaxBytesError{Limit: 1}, 413, "payload_too_large", nil},
-		{"unsupported media type", apperr.UnsupportedMediaType("image/svg+xml"), 415, "unsupported_media_type", nil},
-		{"lookup disabled", apperr.LookupDisabled(), 503, "lookup_disabled", nil},
-		{"upstream unavailable", apperr.UpstreamUnavailable(), 503, "upstream_unavailable", nil},
-		{"wrapped domain error", fmt.Errorf("move: %w", apperr.Cycle()), 409, "cycle_detected", nil},
-		{"joined domain error", errors.Join(errors.New("ctx"), apperr.NotFound("list")), 404, "not_found", nil},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p, unexpected := toProblem(tt.err, "rid")
-			if unexpected {
-				t.Fatal("reported as unexpected")
-			}
-			if p.Status != tt.wantStatus || p.Code != tt.wantCode {
-				t.Fatalf("got %d %s, want %d %s", p.Status, p.Code, tt.wantStatus, tt.wantCode)
-			}
-			if p.RequestID != "" {
-				t.Errorf("request_id %q set on a non-500 problem", p.RequestID)
-			}
-			if want := problemTypeBase + strings.ReplaceAll(tt.wantCode, "_", "-"); p.Type != want {
-				t.Errorf("type = %q, want %q", p.Type, want)
-			}
-			if tt.check != nil {
-				tt.check(t, p)
-			}
-
-			rec := httptest.NewRecorder()
-			writeProblem(rec, p)
-			if ct := rec.Header().Get("Content-Type"); ct != "application/problem+json" {
-				t.Errorf("Content-Type = %q", ct)
-			}
-			var back map[string]any
-			if err := json.Unmarshal(rec.Body.Bytes(), &back); err != nil {
-				t.Fatal(err)
-			}
-			for _, k := range []string{"type", "title", "status", "code"} {
-				if _, ok := back[k]; !ok {
-					t.Errorf("body lacks %q: %s", k, rec.Body)
-				}
-			}
-		})
-	}
+// probe builds the middleware stack of the real router (httpserver.NewAPI and
+// httpserver.Wrap) around one test-only operation, GET /probe. fail runs in the
+// handler: it returns the error to answer with, or panics. Unknown errors, panics
+// and client aborts are answered and logged here, as they are for every route.
+func probe(log *slog.Logger, fail func(ctx context.Context) error) http.Handler {
+	r := chi.NewRouter()
+	api := httpserver.NewAPI(r)
+	huma.Register(api, huma.Operation{OperationID: "probe", Method: http.MethodGet, Path: "/probe"},
+		httpserver.Op(log, func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+			return nil, fail(ctx)
+		}))
+	return httpserver.Wrap(r, log)
 }
 
-func TestToProblem_UnknownErrorIsOpaque(t *testing.T) {
-	secret := errors.New(`pq: relation "items" does not exist at /srv/app/internal/items/repo.go:42 SELECT * FROM items`)
-	p, unexpected := toProblem(secret, "req-1")
-	if !unexpected || p.Status != 500 || p.Code != "internal" || p.RequestID != "req-1" {
-		t.Fatalf("got %+v unexpected=%v", p, unexpected)
-	}
+// probeGet sends a GET and returns the recorder. The probe ignores its query.
+func probeGet(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
+	t.Helper()
 	rec := httptest.NewRecorder()
-	writeProblem(rec, p)
-	assertNoInternals(t, rec.Body.String())
+	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
+	return rec
 }
 
+// debugLogger logs everything into buf, so the tests can read the access log and the errors.
+func debugLogger(buf *bytes.Buffer) *slog.Logger {
+	return slog.New(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+}
+
+// assertNoInternals checks a body leaks neither driver/SQL text nor stack traces.
 func assertNoInternals(t *testing.T, body string) {
 	t.Helper()
 	for _, bad := range []string{"pq:", "relation", "SELECT", "/srv/", ".go", "goroutine", "panic", "kaboom", "secret", "runtime"} {
@@ -118,85 +55,45 @@ func assertNoInternals(t *testing.T, body string) {
 	}
 }
 
-// failingServer returns canned results for CheckHealth (the one route the generated server still serves: every other operation is Huma's) so tests can drive the error paths.
-type failingServer struct {
-	*Server
-	err   error
-	panic any
-}
-
-func (f failingServer) CheckHealth(context.Context, oapi.CheckHealthRequestObject) (oapi.CheckHealthResponseObject, error) {
-	if f.panic != nil {
-		panic(f.panic)
-	}
-	return nil, f.err
-}
-
-func injected(t *testing.T, s failingServer) (http.Handler, *bytes.Buffer) {
-	t.Helper()
-	var logs bytes.Buffer
-	// DEBUG too: the probe routes (/healthz) log their access line at DEBUG.
-	d := Deps{Logger: slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))}
-	s.Server = newServer(d)
-	h, err := newHandler(s, d)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return httpserver.Wrap(h, d.Logger), &logs
-}
-
-func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
-	t.Helper()
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
-	return rec
-}
-
-func TestHandlerErrorsMapThroughResponseErrorHandler(t *testing.T) {
-	h, _ := injected(t, failingServer{err: apperr.VersionConflict(3)})
-	rec := get(t, h, "/healthz?q=x")
-	if rec.Code != 412 || !strings.Contains(rec.Body.String(), `"current_version":3`) {
-		t.Fatalf("got %d %s", rec.Code, rec.Body)
+func TestHandlerErrorsBecomeProblems(t *testing.T) {
+	h := probe(quietLogger(), func(context.Context) error { return apperr.VersionConflict(3) })
+	rec := probeGet(t, h, "/probe?q=x")
+	p := wantProblem(t, rec, 412, "version_conflict")
+	if p.CurrentVersion == nil || *p.CurrentVersion != 3 {
+		t.Fatalf("current_version = %v, want 3", p.CurrentVersion)
 	}
 }
 
 func TestInternalErrorIsOpaqueAndLogged(t *testing.T) {
-	h, logs := injected(t, failingServer{err: errors.New(`pq: relation "items" does not exist /srv/app/x.go:1 SELECT secret`)})
-	rec := get(t, h, "/healthz?q=x")
-	if rec.Code != 500 {
-		t.Fatalf("status = %d", rec.Code)
-	}
+	var logs bytes.Buffer
+	h := probe(debugLogger(&logs), func(context.Context) error {
+		return errors.New(`pq: relation "items" does not exist /srv/app/x.go:1 SELECT secret`)
+	})
+	rec := probeGet(t, h, "/probe?q=x")
 	assertNoInternals(t, rec.Body.String())
-	var p problem
-	if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
-		t.Fatal(err)
-	}
+	p := wantProblem(t, rec, 500, "internal")
 	rid := rec.Header().Get("X-Request-Id")
-	if p.Code != "internal" || p.RequestID == "" || p.RequestID != rid {
-		t.Errorf("problem = %+v, header id %q", p, rid)
+	if p.RequestID == "" || p.RequestID != rid {
+		t.Errorf("problem request_id = %q, header id %q", p.RequestID, rid)
 	}
 	if !strings.Contains(logs.String(), "SELECT secret") || !strings.Contains(logs.String(), rid) {
-		t.Errorf("server log should keep the detail and the request id: %s", logs)
+		t.Errorf("server log should keep the detail and the request id: %s", logs.String())
 	}
 	assertHeaders(t, rec)
 }
 
 func TestPanicBecomes500Problem(t *testing.T) {
-	h, logs := injected(t, failingServer{panic: "kaboom: secret internals"})
-	rec := get(t, h, "/healthz?q=x")
-	if rec.Code != 500 {
-		t.Fatalf("status = %d", rec.Code)
-	}
+	var logs bytes.Buffer
+	h := probe(debugLogger(&logs), func(context.Context) error { panic("kaboom: secret internals") })
+	rec := probeGet(t, h, "/probe?q=x")
 	assertNoInternals(t, rec.Body.String())
-	if ct := rec.Header().Get("Content-Type"); ct != "application/problem+json" {
-		t.Errorf("Content-Type = %q", ct)
-	}
+	wantProblem(t, rec, 500, "internal")
 	assertHeaders(t, rec)
 	if !strings.Contains(logs.String(), "kaboom") || !strings.Contains(logs.String(), `"status":500`) {
-		t.Errorf("panic and the 500 access-log line should be logged: %s", logs)
+		t.Errorf("panic and the 500 access-log line should be logged: %s", logs.String())
 	}
-	// The server survives: the next request works (healthz panics too, so use an unknown path).
-	if rec := get(t, h, "/no-such-path"); rec.Code != 404 {
+	// The server survives: the next request works.
+	if rec := probeGet(t, h, "/no-such-path"); rec.Code != http.StatusNotFound {
 		t.Errorf("after panic: unknown path = %d", rec.Code)
 	}
 }
@@ -211,10 +108,11 @@ func assertHeaders(t *testing.T, rec *httptest.ResponseRecorder) {
 }
 
 func TestAccessLogHasNoQueryOrBody(t *testing.T) {
-	h, logs := injected(t, failingServer{err: apperr.NotFound("list")})
-	get(t, h, "/healthz?q=private+words")
+	var logs bytes.Buffer
+	h := probe(debugLogger(&logs), func(context.Context) error { return apperr.NotFound("list") })
+	probeGet(t, h, "/probe?q=private+words")
 	line := logs.String()
-	for _, want := range []string{`"method":"GET"`, `"route":"/healthz"`, `"status":404`, `"duration_ms"`, `"request_id"`} {
+	for _, want := range []string{`"method":"GET"`, `"route":"/probe"`, `"status":404`, `"duration_ms"`, `"request_id"`} {
 		if !strings.Contains(line, want) {
 			t.Errorf("log lacks %s: %s", want, line)
 		}
@@ -245,16 +143,9 @@ func TestF016_ClientAbortIsNot500(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var logs bytes.Buffer
-			d := Deps{Logger: slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))}
-			s := failingServer{err: tc.err}
-			s.Server = newServer(d)
-			h, err := newHandler(s, d)
-			if err != nil {
-				t.Fatal(err)
-			}
+			h := probe(debugLogger(&logs), func(context.Context) error { return tc.err })
 			rec := httptest.NewRecorder()
-			h = httpserver.Wrap(h, d.Logger)
-			h.ServeHTTP(rec, httptest.NewRequestWithContext(tc.ctx(t), http.MethodGet, "/healthz?q=x", nil))
+			h.ServeHTTP(rec, httptest.NewRequestWithContext(tc.ctx(t), http.MethodGet, "/probe?q=x", nil))
 			if rec.Code != tc.wantStatus {
 				t.Fatalf("status = %d, want %d", rec.Code, tc.wantStatus)
 			}
@@ -262,7 +153,7 @@ func TestF016_ClientAbortIsNot500(t *testing.T) {
 			if got := strings.Contains(out, "unhandled error"); got != tc.wantError {
 				t.Errorf("unhandled error logged = %v, want %v: %s", got, tc.wantError, out)
 			}
-			wantAccess := fmt.Sprintf(`"msg":"request","method":"GET","route":"/healthz","status":%d`, tc.wantStatus)
+			wantAccess := fmt.Sprintf(`"msg":"request","method":"GET","route":"/probe","status":%d`, tc.wantStatus)
 			if !strings.Contains(out, wantAccess) {
 				t.Errorf("access log lacks status %d: %s", tc.wantStatus, out)
 			}

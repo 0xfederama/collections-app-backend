@@ -32,6 +32,7 @@ func Register(api huma.API, log *slog.Logger, folders folderLister, lists listLi
 		OperationID: "getTree", Method: http.MethodGet, Path: "/api/v1/tree", Tags: []string{"tree"},
 		Summary:     "Get the sidebar tree",
 		Description: "All **active** folders and lists, flat and unpaginated. The client builds the tree.",
+		Errors:      []int{http.StatusInternalServerError},
 	}, httpserver.Op(log, h.get))
 }
 

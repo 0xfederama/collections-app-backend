@@ -44,26 +44,29 @@ func Register(api huma.API, log *slog.Logger, svc *Service, lk Importer) {
 		Summary: "List the items of a list",
 		Description: "Sorted by `sort` (default: the list's `sort_mode`), tie-break `id`. `q` filters by title and, on movie lists, director. " +
 			"`price` sorts by `price.min` and is available only when the type allows price. Field filters combine with `q`.",
-		Errors: []int{http.StatusNotFound},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound},
 	}, httpserver.Op(log, h.list))
 	huma.Register(api, huma.Operation{
 		OperationID: "createItem", Method: http.MethodPost, Path: "/api/v1/lists/{id}/items", Tags: tags,
 		Summary: "Create an item", DefaultStatus: http.StatusCreated,
 		Description: "Appended to the end of the list. The item's `type` is the list's type (read-only, not accepted in the body). " +
 			"`metadata` is validated against the list's type. A `price` on a type without a price is `422 validation_failed`.",
-		Errors: []int{http.StatusNotFound, http.StatusUnprocessableEntity, http.StatusServiceUnavailable},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusRequestEntityTooLarge,
+			http.StatusUnprocessableEntity, http.StatusServiceUnavailable},
 	}, httpserver.Op(log, h.create))
 	huma.Register(api, huma.Operation{
 		OperationID: "getItem", Method: http.MethodGet, Path: "/api/v1/items/{id}", Tags: tags,
 		Summary: "Get an item", Description: "Includes `path` (the ancestor folders and the list).",
-		Errors: []int{http.StatusNotFound},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound},
 	}, httpserver.Op(log, h.get))
 	huma.Register(api, huma.Operation{
 		OperationID: "updateItem", Method: http.MethodPatch, Path: "/api/v1/items/{id}", Tags: tags,
 		Summary: "Update an item",
 		Description: "Requires `If-Match` (`\"i-N\"`). Any of `title, price, website, metadata`; send `null` to clear a nullable field. " +
 			"`metadata` is validated against the list's type and replaces the stored one. The type cannot be changed here.",
-		Errors:      []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusPreconditionRequired, http.StatusUnprocessableEntity},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
+			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,
+			http.StatusPreconditionRequired},
 		Middlewares: huma.Middlewares{ifMatchFirst(api, etag.Item)},
 	}, httpserver.Op(log, h.update))
 	huma.Register(api, huma.Operation{
@@ -71,14 +74,17 @@ func Register(api huma.API, log *slog.Logger, svc *Service, lk Importer) {
 		Summary: "Move an item to another list",
 		Description: "Requires `If-Match` (`\"i-N\"`). Appended to the end of the destination list. A missing or trashed list returns " +
 			"`409 destination_unavailable`. A destination list of another type returns `409 type_mismatch`.",
-		Errors:      []int{http.StatusNotFound, http.StatusConflict, http.StatusPreconditionFailed, http.StatusPreconditionRequired, http.StatusUnprocessableEntity},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict,
+			http.StatusPreconditionFailed, http.StatusRequestEntityTooLarge,
+			http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
 		Middlewares: huma.Middlewares{ifMatchFirst(api, etag.Item)},
 	}, httpserver.Op(log, h.move))
 	huma.Register(api, huma.Operation{
 		OperationID: "reorderListItems", Method: http.MethodPut, Path: "/api/v1/lists/{id}/items/order", Tags: tags,
 		Summary: "Reorder the items of a list", DefaultStatus: http.StatusNoContent,
 		Description: "`ids` must be all active items of the list, in the new order. Allowed regardless of `sort_mode`. No `If-Match`.",
-		Errors:      []int{http.StatusNotFound, http.StatusConflict},
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict,
+			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity},
 	}, httpserver.Op(log, h.reorder))
 }
 

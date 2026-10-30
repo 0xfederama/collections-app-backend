@@ -14,41 +14,27 @@ import (
 
 // TrashEntryJSON is one trash batch (published as "TrashEntry").
 type TrashEntryJSON struct {
-	Counts struct {
-		Folders int `json:"folders"`
-		Items   int `json:"items"`
-		Lists   int `json:"lists"`
-	} `json:"counts"`
-	DeletedAt         time.Time              `json:"deleted_at"`
-	FormerPath        []TrashPathSegmentJSON `json:"former_path"`
-	ID                uuid.UUID              `json:"id" format:"uuid" doc:"The trash batch ID."`
-	RestorableInPlace bool                   `json:"restorable_in_place" doc:"False when the original parent is trashed or gone."`
-	RootID            uuid.UUID              `json:"root_id" format:"uuid"`
-	RootName          string                 `json:"root_name"`
-	RootType          string                 `json:"root_type" enum:"folder,list,item"`
+	Counts            TrashCountsJSON          `json:"counts"`
+	DeletedAt         time.Time                `json:"deleted_at"`
+	FormerPath        []httpserver.PathSegment `json:"former_path"`
+	ID                uuid.UUID                `json:"id" format:"uuid" doc:"The trash batch ID."`
+	RestorableInPlace bool                     `json:"restorable_in_place" doc:"False when the original parent is trashed or gone."`
+	RootID            uuid.UUID                `json:"root_id" format:"uuid"`
+	RootName          string                   `json:"root_name"`
+	RootType          string                   `json:"root_type" enum:"folder,list,item"`
 }
 
-// TrashPathSegmentJSON is one ancestor of a trashed root as it was when deleted
-// (published as "TrashPathSegment": the other features publish their own path
-// segments, and the registry needs unique names).
-type TrashPathSegmentJSON struct {
-	ID   uuid.UUID `json:"id" format:"uuid"`
-	Name string    `json:"name"`
-	Type string    `json:"type" enum:"folder,list"`
-}
-
-// PagingJSON is the paging of a trash page (published as "Paging"; the item list
-// publishes "Page" with the same shape).
-type PagingJSON struct {
-	Limit  int `json:"limit"`
-	Offset int `json:"offset"`
-	Total  int `json:"total" doc:"Total rows matching, ignoring limit and offset."`
+// TrashCountsJSON is what a trash batch holds (published as "TrashCounts").
+type TrashCountsJSON struct {
+	Folders int `json:"folders"`
+	Items   int `json:"items"`
+	Lists   int `json:"lists"`
 }
 
 // TrashPageJSON is the listTrash answer (published as "TrashPage").
 type TrashPageJSON struct {
 	Data []TrashEntryJSON `json:"data"`
-	Page PagingJSON       `json:"page"`
+	Page httpserver.Page  `json:"page"`
 }
 
 // RestoreTrashRequest is the optional body of restoreTrashBatch (published as "RestoreTrashRequest").

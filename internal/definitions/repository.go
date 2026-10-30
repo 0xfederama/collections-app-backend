@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database"
@@ -79,6 +80,9 @@ func (r *repo) InsertType(ctx context.Context, t Type, now time.Time) (Type, err
 		AllowsPrice: t.AllowsPrice, DefaultSortField: t.DefaultSortField, DefaultPinnedFields: pins, Now: now,
 	})
 	if err != nil {
+		if isTypeKeyTaken(err) {
+			return Type{}, apperr.TypeKeyTaken()
+		}
 		return Type{}, fmt.Errorf("insert type: %w", err)
 	}
 	return typeFromRow(row), nil
@@ -256,6 +260,18 @@ func pinsToJSON(pins *[]string) ([]byte, error) {
 	}
 	return b, nil
 }
+
+// typeKeyConstraint is the (workspace_id, key) unique constraint of type_definitions.
+const typeKeyConstraint = "type_definitions_workspace_id_key_key"
+
+// isTypeKeyTaken reports a unique violation on the type key of the workspace.
+func isTypeKeyTaken(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == uniqueViolation && pgErr.ConstraintName == typeKeyConstraint
+}
+
+// uniqueViolation is the SQLSTATE of a unique_violation (23505).
+const uniqueViolation = "23505"
 
 // notFound turns "no rows" into the domain error for resource; other errors pass through.
 func notFound(err error, resource string) error {

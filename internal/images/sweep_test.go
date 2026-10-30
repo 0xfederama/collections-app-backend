@@ -1,9 +1,14 @@
 package images_test
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/0xfederama/collections-app-backend/internal/images"
 )
 
 // An unreferenced attachment (its item was purged) is removed with its files
@@ -108,6 +113,56 @@ func TestSweepRemovesFilesThatFailedToDeleteEarlier(t *testing.T) {
 	}
 	if got := len(h.fileKeys()); got != 2 {
 		t.Errorf("files after the retry = %d, want 2 (the current image)", got)
+	}
+}
+
+// Without a workspace the store would list nothing, so the walk would take every
+// file for an orphan. Sweep refuses first: the old orphan file, the old
+// unreferenced attachment and its row all survive.
+func TestSweepRefusesUnscopedContext(t *testing.T) {
+	h := newHarness(t)
+	const orphan = "images/cc/dd/crashed-upload.jpg"
+	h.putFile(orphan)
+	stale := h.unattached(h.clock.now)
+	h.clock.now = h.clock.now.Add(2 * time.Hour)
+
+	res, err := h.svc.Sweep(context.Background())
+	if err == nil {
+		t.Fatal("Sweep with an unscoped context returned no error")
+	}
+	if res != (images.SweepResult{}) {
+		t.Errorf("report = %+v, want zero", res)
+	}
+	if !h.exists(orphan) {
+		t.Error("orphan file deleted by an unscoped sweep")
+	}
+	if !h.exists(stale.StorageKey) || !h.exists(stale.ThumbnailStorageKey) {
+		t.Error("files of an unreferenced attachment deleted by an unscoped sweep")
+	}
+	if _, ok := h.store.cur.attachments[stale.ID]; !ok {
+		t.Error("attachment row deleted by an unscoped sweep")
+	}
+}
+
+// RunSweeper logs the refusal at ERROR and deletes nothing. The context is
+// cancelled up front so the single run before the first tick is the only one.
+func TestRunSweeperLogsUnscopedContextAndDeletesNothing(t *testing.T) {
+	h := newHarness(t)
+	const orphan = "images/cc/dd/crashed-upload.jpg"
+	h.putFile(orphan)
+	h.clock.now = h.clock.now.Add(2 * time.Hour)
+
+	var logs bytes.Buffer
+	svc := images.NewService(h.store, h.files, fakeItems{}, h.clock, slog.New(slog.NewTextHandler(&logs, nil)))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	svc.RunSweeper(ctx, time.Hour)
+
+	if !strings.Contains(logs.String(), "level=ERROR") {
+		t.Errorf("no ERROR logged for an unscoped sweeper run: %q", logs.String())
+	}
+	if !h.exists(orphan) {
+		t.Error("orphan file deleted by an unscoped sweeper run")
 	}
 }
 

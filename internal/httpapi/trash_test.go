@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
 )
 
@@ -384,7 +385,7 @@ func TestAT11_PurgeSurvivesFailingFileDeleteAndSweeperCleansUp(t *testing.T) {
 
 	e.store.setFail(false)
 	e.clk.Advance(2 * time.Hour)
-	res, err := e.svc.Sweep(t.Context())
+	res, err := e.svc.Sweep(scope.With(t.Context(), e.ws))
 	if err != nil || res.Files != 2 {
 		t.Fatalf("sweep = %+v, %v", res, err)
 	}

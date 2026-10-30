@@ -16,7 +16,7 @@ Owns item pictures: validates uploads by magic bytes, strips embedded metadata f
 
 - `Process(r io.Reader) (*Processed, error)`: JPEG, PNG or WebP only; 413, 415 or 422 on failure
 - `Strip(data []byte, mediaType string) ([]byte, error)`: removes EXIF, GPS, XMP, IPTC, comments; keeps ICC, JFIF, Adobe APP14
-- `New(db, store, clk, items *items.Service, log, workspaceID) *Service`
+- `New(db, store, clk, items *items.Service, log, workspaceID) *Service`: `items.Get` re-reads the item after each write
 - `(*Service).SetUpload`, `SetURL`, `Delete`, `Open(ctx, attachmentID, thumbnail bool)`, `Sweep`, `RunSweeper(ctx, interval)`
 - Limits: `MaxUploadBytes` (10 MiB), `MaxPixels` (40 000 000), `ThumbnailMaxSide` (640), `SweepInterval` (24h)
 

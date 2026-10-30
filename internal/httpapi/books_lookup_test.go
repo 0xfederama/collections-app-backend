@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
-	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
 	"github.com/0xfederama/collections-app-backend/internal/openlibrary"
@@ -119,7 +118,7 @@ func newBookEnv(t *testing.T, o bookEnvOptions) *bookEnv {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = files.Close() })
-	itemSvc := items.New(pool, clock.System{}, ws)
+	itemSvc := newItems(pool, clock.System{})
 	settingsSvc := workspace.NewService(workspace.NewPostgres(pool))
 	store := lookup.NewStore(pool, files, clock.System{}, itemSvc, quietLogger(), ws)
 	svc := lookup.New(lookup.Providers{types.Book: books}, store, itemSvc, settingsSvc, clock.System{}, ws)

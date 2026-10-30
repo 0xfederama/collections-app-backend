@@ -10,6 +10,7 @@ Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and 
 - `internal/platform/database/intx_test.go`: commit, rollback, panic and `NewPool` tests
 - `db/migrations/000001_init.{up,down}.sql`: the baseline schema (pg_trgm, all tables, no logic); down drops everything. Later changes append as new numbered files
 - `db/queries/types.sql`: definition reads, locks, writes and cleanup queries
+- `db/queries/items.sql`, `content.sql`: item row reads and writes (one query per repository method, list filtering in Go) and content locks
 - `db/queries/schema.sql`: smoke query, sqlc input
 - `db/queries/workspace.sql`: workspace bootstrap and settings queries (see `workspace` module)
 - `internal/platform/testdb/testdb.go`: test-only shared testcontainers Postgres, `NewMigrated`, `Terminate`

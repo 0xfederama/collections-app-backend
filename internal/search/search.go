@@ -108,7 +108,7 @@ func (s *Service) Search(ctx context.Context, p Params) (Page, error) {
 		return Page{}, err
 	}
 	for _, r := range rows {
-		it := items.FromSearchRow(r)
+		it := itemOf(r)
 		path, ok := paths.of(it.ListID)
 		if !ok {
 			// The list was trashed or created between the two reads: leave the
@@ -144,7 +144,7 @@ func (s *Service) Recent(ctx context.Context, limit int) ([]Result, error) {
 		return nil, err
 	}
 	for _, r := range rows {
-		it := items.FromRecentRow(r)
+		it := itemOf(sqlc.SearchItemsRow(r))
 		if path, ok := paths.of(it.ListID); ok {
 			results = append(results, Result{Item: it, TypeName: paths.typeName(it.ListID), Path: path})
 		}

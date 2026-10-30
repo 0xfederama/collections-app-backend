@@ -48,7 +48,7 @@ func TestStreamingLink_TrackedKeptOnPlatformEditAndClientCannotWriteIt(t *testin
 	}
 
 	// Editing only the platforms keeps the link; a link sent by the client is ignored.
-	it, err = e.items.Update(t.Context(), it.ID, it.Version, items.Patch{Metadata: map[string]any{
+	it, err = e.items.Update(scope.With(t.Context(), e.ws), it.ID, it.Version, items.Patch{Metadata: map[string]any{
 		"release_year": 1999,
 		"streaming":    map[string]any{"country": "IT", "platforms": []any{"Netflix", "Prime Video"}},
 	}})
@@ -58,7 +58,7 @@ func TestStreamingLink_TrackedKeptOnPlatformEditAndClientCannotWriteIt(t *testin
 	if got := linkOf(t, it.Metadata); got != matrixLink {
 		t.Errorf("link after platform edit = %v, want kept", got)
 	}
-	it, err = e.items.Update(t.Context(), it.ID, it.Version, items.Patch{Metadata: map[string]any{
+	it, err = e.items.Update(scope.With(t.Context(), e.ws), it.ID, it.Version, items.Patch{Metadata: map[string]any{
 		"streaming": map[string]any{"country": "IT", "platforms": []any{"Netflix"}, "link": "https://evil.example/"},
 	}})
 	if err != nil {
@@ -68,7 +68,7 @@ func TestStreamingLink_TrackedKeptOnPlatformEditAndClientCannotWriteIt(t *testin
 		t.Errorf("link after client-sent link = %v, want the stored one", got)
 	}
 	// Another country is another page: the stored link does not carry over.
-	it, err = e.items.Update(t.Context(), it.ID, it.Version, items.Patch{Metadata: map[string]any{
+	it, err = e.items.Update(scope.With(t.Context(), e.ws), it.ID, it.Version, items.Patch{Metadata: map[string]any{
 		"streaming": map[string]any{"country": "GB", "platforms": []any{"Netflix"}},
 	}})
 	if err != nil {
@@ -79,7 +79,7 @@ func TestStreamingLink_TrackedKeptOnPlatformEditAndClientCannotWriteIt(t *testin
 	}
 
 	// A client cannot plant a link on create either.
-	c, err := e.items.Create(t.Context(), e.list, items.CreateInput{Title: "Other", Metadata: map[string]any{
+	c, err := e.items.Create(scope.With(t.Context(), e.ws), e.list, items.CreateInput{Title: "Other", Metadata: map[string]any{
 		"streaming": map[string]any{"country": "IT", "link": matrixLink},
 	}})
 	if err != nil {
@@ -137,7 +137,7 @@ func TestStreamingLink_RefreshReplacesAndExpiryDropsItWithTheImportedValues(t *t
 	if err != nil || result.Expired != 1 {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
-	got, _ := e.items.Get(t.Context(), it.ID)
+	got, _ := e.items.Get(scope.With(t.Context(), e.ws), it.ID)
 	s, _ := decodeMetadata(t, got.Metadata)["streaming"].(map[string]any)
 	if _, has := s["link"]; has || s["country"] != "IT" {
 		t.Errorf("streaming after expiry = %v, want the link gone and the country kept", s)
@@ -160,7 +160,7 @@ func TestStreamingLink_CountryChangeClearsItemsAndSnapshots(t *testing.T) {
 	if _, err := svc.Update(scope.With(t.Context(), e.ws), 1, workspace.SettingsPatch{WorkspaceName: &name}); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := e.items.Get(t.Context(), it.ID)
+	got, _ := e.items.Get(scope.With(t.Context(), e.ws), it.ID)
 	if linkOf(t, got.Metadata) != matrixLink {
 		t.Fatal("link cleared by a change of the name")
 	}
@@ -168,7 +168,7 @@ func TestStreamingLink_CountryChangeClearsItemsAndSnapshots(t *testing.T) {
 	if _, err := svc.Update(scope.With(t.Context(), e.ws), 2, workspace.SettingsPatch{StreamingCountryCode: &gb}); err != nil {
 		t.Fatal(err)
 	}
-	got, _ = e.items.Get(t.Context(), it.ID)
+	got, _ = e.items.Get(scope.With(t.Context(), e.ws), it.ID)
 	s, _ := decodeMetadata(t, got.Metadata)["streaming"].(map[string]any)
 	if _, has := s["link"]; has || s["platforms"] == nil {
 		t.Errorf("streaming after country change = %v, want the link gone and the platforms kept", s)

@@ -14,7 +14,7 @@ import (
 
 // The body rules run before any query, so a nil database is enough: reaching it would panic.
 func TestAT08_SaveRejectsBadBodiesBeforeTheDatabase(t *testing.T) {
-	svc := content.New(nil, clock.System{}, uuid.New())
+	svc := content.NewService(nil, nil, clock.System{})
 
 	var tooLarge *apperr.PayloadTooLargeError
 	if _, err := svc.Save(t.Context(), uuid.New(), 0, strings.Repeat("a", content.MaxBodyBytes+1)); !errors.As(err, &tooLarge) {

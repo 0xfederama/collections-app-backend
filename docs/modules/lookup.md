@@ -18,10 +18,10 @@ Merges values imported from a metadata provider (TMDB for movie and TV, Open Lib
 
 - `Provider`: `Name`, `Enabled`, `ValidateSourceID`, `Search`, `Details`, `DownloadImage`
 - `Mode`: `create`, `fill`, `rematch`, `refresh`, plus automatic owned refresh
-- `Store.ListType`, `Store.Read`, `Store.Apply`: list type check, provenance read, atomic item/image/provenance write
+- `NewStore(db, fileStore, clk, items *items.Service, log, workspaceID)`; `Store.ListType`, `Store.Read`, `Store.Apply`: list type check, provenance read, atomic item/image/provenance write
 - `GET /api/v1/tmdb/suggestions`, `GET /api/v1/books/suggestions`: provider search (see [tmdb](tmdb.md), [openlibrary](openlibrary.md))
 - `POST /api/v1/items/{id}/lookup`: explicit fill/rematch/refresh with item `If-Match`; `source_id` selects a match
-- Item create may request lookup (`tmdb_id` or `source_id`); a disabled provider creates the typed original item
+- Item create may request lookup (`tmdb_id` or `source_id`) through `items.Importer`; a disabled provider creates the typed original item
 
 ## Gotchas
 

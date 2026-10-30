@@ -27,7 +27,6 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
-	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/search"
@@ -94,7 +93,7 @@ func newImageEnv(t *testing.T) *imageEnv {
 	t.Cleanup(func() { _ = local.Close() })
 	store := &flakyStore{Local: local}
 	clk := &testClock{t: time.Now().UTC()}
-	itemSvc := items.New(pool, clk, ws)
+	itemSvc := newItems(pool, clk)
 	svc := images.New(pool, store, clk, itemSvc, quietLogger(), ws)
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: dir, Logger: quietLogger(), WorkspaceID: ws,

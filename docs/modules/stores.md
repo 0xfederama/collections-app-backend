@@ -8,7 +8,7 @@ Owns the fixed list of online store provider keys a `stores` field on books can 
 
 - `internal/stores/stores.go`: provider list (`Provider`), key validation
 - `internal/items/types/types.go`: `stores` field value check via `ValidateKeys`
-- `internal/items/stores.go`: default store on item create (`applyPreferredStores`)
+- `internal/items/service.go`: default store on item create (`seedPreferredStores`)
 - `internal/httpapi/stores.go`: `GET /store-providers` handler
 - `db/migrations/000001_init.up.sql`: the `stores` field type and `workspace_settings.preferred_store`
 

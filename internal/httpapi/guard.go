@@ -33,16 +33,12 @@ const (
 // prefix each expects (API.md §3 "Requires If-Match"). AT-10 checks it against
 // an independent list written from API.md.
 var ifMatchPrefix = map[string]string{
-	"DeleteFolder":          etag.Folder,
-	"DeleteList":            etag.List,
-	"UpdateItem":            etag.Item,
-	"DeleteItem":            etag.Item,
-	"MoveItem":              etag.Item,
-	"SetItemImage":          etag.Item,
-	"DeleteItemImage":       etag.Item,
-	"LookupItemMetadata":    etag.Item,
-	"UpdateItemContent":     etag.Content,
-	"RestoreContentVersion": etag.Content,
+	"DeleteFolder":       etag.Folder,
+	"DeleteList":         etag.List,
+	"DeleteItem":         etag.Item,
+	"SetItemImage":       etag.Item,
+	"DeleteItemImage":    etag.Item,
+	"LookupItemMetadata": etag.Item,
 }
 
 // operation is what the guard needs to know about one spec operation.
@@ -140,7 +136,7 @@ func bodyLimit(opID, mediaType string) int64 {
 	switch {
 	case mediaType == "multipart/form-data":
 		return multipartBodyLimit
-	case opID == "UpdateItemContent", opID == "CreateList", opID == "UpdateList":
+	case opID == "CreateList", opID == "UpdateList":
 		return contentBodyLimit
 	default:
 		return jsonBodyLimit

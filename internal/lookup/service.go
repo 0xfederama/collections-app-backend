@@ -19,7 +19,8 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
-// ItemService is the item surface needed outside Store's atomic import writes.
+// ItemService is the item surface needed outside Store's atomic import writes. The
+// items rules read the workspace from ctx, so the entry points below scope it.
 type ItemService interface {
 	Get(ctx context.Context, id uuid.UUID) (items.Item, error)
 	Create(ctx context.Context, listID uuid.UUID, in items.CreateInput) (items.Item, error)
@@ -88,6 +89,7 @@ func (s Selection) forProvider(provider string) *string {
 
 // Create creates an item, enriching it from the list type's provider when requested.
 func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateInput, opts CreateOptions) (items.Item, error) {
+	ctx = scope.With(ctx, s.workspaceID)
 	typ, err := s.store.ListType(ctx, listID)
 	if err != nil {
 		return items.Item{}, err
@@ -163,6 +165,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 // happens against an initial snapshot; Store rechecks ExpectedVersion under lock
 // before writing.
 func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion int, mode Mode, selection Selection) (items.Item, error) {
+	ctx = scope.With(ctx, s.workspaceID)
 	if mode != ModeFill && mode != ModeRematch && mode != ModeRefresh {
 		return items.Item{}, apperr.Validation(apperr.FieldError{Field: "mode", Message: "must be fill, rematch, or refresh"})
 	}
@@ -239,6 +242,7 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 // expiry; this method only attempts a safe refresh of still-owned values. Only
 // providers with a retention are ever scheduled (D-095: Open Library has none).
 func (s *Service) RefreshOwned(ctx context.Context, itemID uuid.UUID, expectedVersion int) error {
+	ctx = scope.With(ctx, s.workspaceID)
 	record, ok, err := s.store.Read(ctx, itemID)
 	if err != nil || !ok {
 		return err

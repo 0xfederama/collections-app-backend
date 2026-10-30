@@ -27,6 +27,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 )
 
@@ -102,7 +103,7 @@ func (s *Service) SetUpload(ctx context.Context, itemID uuid.UUID, version int, 
 		return items.Item{}, err
 	}
 	s.deleteOld(ctx, old)
-	return s.items.Get(ctx, itemID)
+	return s.items.Get(scope.With(ctx, s.workspaceID), itemID)
 }
 
 // SetURL points an item at an external image, replacing any existing image.
@@ -131,7 +132,7 @@ func (s *Service) SetURL(ctx context.Context, itemID uuid.UUID, version int, raw
 		return items.Item{}, err
 	}
 	s.deleteOld(ctx, old)
-	return s.items.Get(ctx, itemID)
+	return s.items.Get(scope.With(ctx, s.workspaceID), itemID)
 }
 
 // Delete removes the image of an item. An item without an image is returned
@@ -156,7 +157,7 @@ func (s *Service) Delete(ctx context.Context, itemID uuid.UUID, version int) (it
 		return items.Item{}, err
 	}
 	s.deleteOld(ctx, old)
-	return s.items.Get(ctx, itemID)
+	return s.items.Get(scope.With(ctx, s.workspaceID), itemID)
 }
 
 // lock loads the active item under a row lock and checks the If-Match version.

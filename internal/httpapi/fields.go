@@ -5,7 +5,6 @@ import (
 	"github.com/oapi-codegen/nullable"
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
-	"github.com/0xfederama/collections-app-backend/internal/lists"
 )
 
 func nullableString(s *string) nullable.Nullable[string] {
@@ -29,23 +28,4 @@ func optionalUUID(n nullable.Nullable[uuid.UUID]) *uuid.UUID {
 		return &v
 	}
 	return nil
-}
-
-// optionalString turns a nullable PATCH field into a lists.Optional.
-func optionalString(n nullable.Nullable[string]) lists.Optional[string] {
-	if !n.IsSpecified() {
-		return lists.Optional[string]{}
-	}
-	if v, err := n.Get(); err == nil {
-		return lists.Optional[string]{Set: true, Value: &v}
-	}
-	return lists.Optional[string]{Set: true}
-}
-
-// derefOr returns the string a pointer holds, or "" when it is nil.
-func derefOr(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }

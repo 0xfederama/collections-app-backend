@@ -11,6 +11,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 )
 
 // F016-B3: book (Open Library) provenance. Open Library imports have no retention
@@ -27,7 +28,7 @@ func (e *lookupEnv) bookList() uuid.UUID {
 
 func (e *lookupEnv) createBook(list uuid.UUID, title string, metadata map[string]any) items.Item {
 	e.t.Helper()
-	it, err := e.items.Create(e.t.Context(), list, items.CreateInput{Title: title, Metadata: metadata})
+	it, err := e.items.Create(scope.With(e.t.Context(), e.ws), list, items.CreateInput{Title: title, Metadata: metadata})
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -134,7 +135,7 @@ func TestF016B3_BookFillSetsOnlyEmptyValuesAndTheStoreLinkOnlyWhenEmpty(t *testi
 	if _, err := e.db.Exec(t.Context(), `UPDATE items SET metadata = jsonb_set(metadata, '{stores}', '["kobo"]'), version = version + 1 WHERE id = $1`, it.ID); err != nil {
 		t.Fatal(err)
 	}
-	it, err := e.items.Get(t.Context(), it.ID)
+	it, err := e.items.Get(scope.With(t.Context(), e.ws), it.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +160,7 @@ func TestF016B3_BookRematchReplacesFetchedFieldsAndKeepsStoreChoices(t *testing.
 	if _, err := e.db.Exec(t.Context(), `UPDATE items SET metadata = jsonb_set(metadata, '{isbn}', '"9781111111111"'), version = version + 1 WHERE id = $1`, it.ID); err != nil {
 		t.Fatal(err)
 	}
-	it, _ = e.items.Get(t.Context(), it.ID)
+	it, _ = e.items.Get(scope.With(t.Context(), e.ws), it.ID)
 	it, err = e.store.Apply(t.Context(), ApplyParams{
 		Mode: ModeRematch, ItemID: it.ID, ExpectedVersion: it.Version, Type: "book", Provider: ProviderOpenLibrary, SourceID: "OL2W",
 		Title: "Another Dune", OriginalTitle: it.Title,
@@ -229,7 +230,7 @@ func TestF016B3_MaintenanceNeverTouchesBookImports(t *testing.T) {
 	if err != nil || result != (MaintenanceResult{}) {
 		t.Fatalf("result = %+v err = %v", result, err)
 	}
-	got, err := e.items.Get(t.Context(), it.ID)
+	got, err := e.items.Get(scope.With(t.Context(), e.ws), it.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

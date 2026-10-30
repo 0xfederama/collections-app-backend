@@ -59,13 +59,6 @@ WHERE workspace_id = @workspace_id AND deleted_at IS NULL
   AND folder_id IS NOT DISTINCT FROM sqlc.narg(folder_id)::uuid
 ORDER BY sort_order, id;
 
--- name: ReorderLists :exec
--- Rewrites sort_order to the position in ids (0..n-1). Versions stay (DATA_MODEL §7).
-UPDATE lists l
-SET sort_order = (o.ord - 1)::int, updated_at = @now
-FROM unnest(@ids::uuid[]) WITH ORDINALITY AS o(id, ord)
-WHERE l.id = o.id AND l.workspace_id = @workspace_id AND l.deleted_at IS NULL;
-
 -- name: SetListSortOrder :exec
 -- Sets one list's position. The version stays (DATA_MODEL §7).
 UPDATE lists

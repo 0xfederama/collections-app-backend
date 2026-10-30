@@ -8,9 +8,9 @@
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
 - [definitions](modules/definitions.md): workspace type and custom-field definitions (Huma `/api/v1/types...`), locked built-ins excluded
 - [folders](modules/folders.md): folder create, get, rename, move (cycle check) and reorder (Huma)
-- [httpapi](modules/httpapi.md): legacy HTTP router, probes, trash/item/content handlers, book suggestions and store providers; Huma mounting
+- [httpapi](modules/httpapi.md): legacy HTTP router, probes, trash and item-lookup handlers, book suggestions and store providers; Huma mounting
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping on upload, validation, thumbnails, serving, orphan sweeper
-- [items](modules/items.md): items CRUD, move and reorder, per-type metadata validation (`items/types`)
+- [items](modules/items.md): items create, get, list, patch, move and reorder (Huma); pure metadata, price and list-query rules; per-type rules in `items/types`
 - [lists](modules/lists.md): list create, get with path, update (type change, pure patch planner), move and reorder (Huma)
 - [lookup](modules/lookup.md): metadata provider lookup (TMDB, Open Library) merge rules and imported-field provenance/retention
 - [openlibrary](modules/openlibrary.md): bounded Open Library client for book search, work details and covers

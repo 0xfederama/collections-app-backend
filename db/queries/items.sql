@@ -1,80 +1,12 @@
--- Item read model: GetItem and ListItems return the same columns, so one mapper
--- (internal/items) serves both. type is not stored on the item: it comes from its list (F-007). The image columns come from the attachment the
--- item points to (NULL for no image or an external URL). content_version is the
--- highest saved Markdown version, 0 when there is none (D-052).
-
--- name: GetItem :one
-SELECT i.*,
-       l.type              AS type,
-       a.width             AS image_width,
-       a.height            AS image_height,
-       a.original_filename AS image_original_filename,
-       COALESCE((SELECT max(v.version) FROM item_content_versions v WHERE v.item_id = i.id), 0)::int AS content_version
-FROM items i
-LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
-JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-WHERE i.id = @id AND i.workspace_id = @workspace_id AND i.deleted_at IS NULL;
+-- Item queries (internal/items/repository.go and the callers that lock or clear items). type is not
+-- stored on the item: it comes from its list (F-007). The image columns come from the attachment the
+-- item points to (NULL for no image or an external URL). The read queries do not read the content
+-- versions: MaxItemContentVersions does that, in one query per page (D-052).
 
 -- name: LockItem :one
 SELECT * FROM items
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 FOR UPDATE;
-
--- name: ListItems :many
--- A streaming field filters and sorts on its object without the server-managed link.
--- @sort is manual, title, updated, price or a metadata field key. Field sorting is driven by its definition type.
-SELECT i.*,
-       l.type              AS type,
-       a.width             AS image_width,
-       a.height            AS image_height,
-       a.original_filename AS image_original_filename,
-       COALESCE((SELECT max(v.version) FROM item_content_versions v WHERE v.item_id = i.id), 0)::int AS content_version
-FROM items i
-LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
-JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-WHERE i.list_id = @list_id AND i.workspace_id = @workspace_id AND i.deleted_at IS NULL
-  AND (lower(i.title) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'
-       OR (l.type = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'))
-  AND (@filter_key::text = '' OR CASE @filter_type::text
-       WHEN 'text' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
-       WHEN 'link' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
-       WHEN 'number' THEN (NOT @filter_min_set::boolean OR (i.metadata ->> @filter_key::text)::numeric >= NULLIF(@filter_min::text, '')::numeric)
-                        AND (NOT @filter_max_set::boolean OR (i.metadata ->> @filter_key::text)::numeric <= NULLIF(@filter_max::text, '')::numeric)
-       WHEN 'date' THEN (NOT @filter_min_set::boolean OR i.metadata ->> @filter_key::text >= @filter_min::text)
-                      AND (NOT @filter_max_set::boolean OR i.metadata ->> @filter_key::text <= @filter_max::text)
-       WHEN 'boolean' THEN i.metadata -> @filter_key::text = @filter_value::jsonb
-       WHEN 'streaming' THEN lower(COALESCE((CASE WHEN jsonb_typeof(i.metadata -> @filter_key::text) = 'object' THEN ((i.metadata -> @filter_key::text) - 'link')::text ELSE i.metadata ->> @filter_key::text END), '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
-       ELSE false END)
-ORDER BY
-  CASE WHEN @sort::text = 'manual' THEN i.sort_order END ASC,
-  CASE WHEN @sort::text = 'title' THEN lower(i.title) END ASC,
-  CASE WHEN @sort::text = 'updated' THEN i.updated_at END DESC,
-  CASE WHEN @sort::text = 'price' THEN i.price_min END ASC NULLS LAST,
-  CASE WHEN @sort::text = 'price' THEN lower(i.title) END ASC,
-  CASE WHEN @sort_type::text = 'number' THEN (i.metadata ->> @sort_key::text)::numeric END ASC NULLS LAST,
-  CASE WHEN @sort_type::text = 'date' THEN i.metadata ->> @sort_key::text END ASC NULLS LAST,
-  CASE WHEN @sort_type::text IN ('text', 'link') THEN lower(NULLIF(i.metadata ->> @sort_key::text, '')) END ASC NULLS LAST,
-  CASE WHEN @sort_type::text = 'streaming' THEN lower((CASE WHEN jsonb_typeof(i.metadata -> @sort_key::text) = 'object' THEN ((i.metadata -> @sort_key::text) - 'link')::text ELSE i.metadata ->> @sort_key::text END)) END ASC NULLS LAST,
-  CASE WHEN @sort_type::text = 'boolean' THEN (i.metadata ->> @sort_key::text)::boolean END ASC NULLS LAST,
-  i.id
-LIMIT @page_limit OFFSET @page_offset;
-
--- name: CountItems :one
-SELECT count(*)::int AS total FROM items i
-JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-WHERE i.list_id = @list_id AND i.workspace_id = @workspace_id AND i.deleted_at IS NULL
-  AND (lower(i.title) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'
-       OR (l.type = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower(@q::text) || '%' ESCAPE '\'))
-  AND (@filter_key::text = '' OR CASE @filter_type::text
-       WHEN 'text' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
-       WHEN 'link' THEN lower(COALESCE(i.metadata ->> @filter_key::text, '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
-       WHEN 'number' THEN (NOT @filter_min_set::boolean OR (i.metadata ->> @filter_key::text)::numeric >= NULLIF(@filter_min::text, '')::numeric)
-                        AND (NOT @filter_max_set::boolean OR (i.metadata ->> @filter_key::text)::numeric <= NULLIF(@filter_max::text, '')::numeric)
-       WHEN 'date' THEN (NOT @filter_min_set::boolean OR i.metadata ->> @filter_key::text >= @filter_min::text)
-                      AND (NOT @filter_max_set::boolean OR i.metadata ->> @filter_key::text <= @filter_max::text)
-       WHEN 'boolean' THEN i.metadata -> @filter_key::text = @filter_value::jsonb
-       WHEN 'streaming' THEN lower(COALESCE((CASE WHEN jsonb_typeof(i.metadata -> @filter_key::text) = 'object' THEN ((i.metadata -> @filter_key::text) - 'link')::text ELSE i.metadata ->> @filter_key::text END), '')) LIKE '%' || lower(@filter_value::text) || '%' ESCAPE '\'
-       ELSE false END);
 
 -- name: GetActiveListForItems :one
 SELECT id, name, folder_id, sort_mode, type FROM lists
@@ -85,52 +17,6 @@ SELECT (COALESCE(MAX(sort_order) + 1, 0))::int AS next_order
 FROM items
 WHERE list_id = @list_id AND workspace_id = @workspace_id AND deleted_at IS NULL;
 
--- name: InsertItem :one
-INSERT INTO items (workspace_id, list_id, title, price_min, price_max, currency,
-                   website_url, metadata, sort_order, created_at, updated_at)
-VALUES (@workspace_id, @list_id, @title, sqlc.narg(price_min),
-        sqlc.narg(price_max), sqlc.narg(currency), sqlc.narg(website_url), @metadata, @sort_order, @now, @now)
-RETURNING id;
-
--- name: UpdateItem :one
--- A full replacement of the editable fields: the service merges the PATCH into the locked row first.
--- Image columns are not touched here (B-09 owns them).
-UPDATE items
-SET title = @title,
-    price_min = sqlc.narg(price_min), price_max = sqlc.narg(price_max), currency = sqlc.narg(currency),
-    website_url = sqlc.narg(website_url), metadata = @metadata,
-    version = version + 1, updated_at = @now
-WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
-RETURNING id;
-
--- name: MoveItem :one
-UPDATE items
-SET list_id = @list_id, sort_order = @sort_order, version = version + 1, updated_at = @now
-WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
-RETURNING id;
-
--- name: ListActiveItemIDsByList :many
-SELECT id FROM items
-WHERE list_id = @list_id AND workspace_id = @workspace_id AND deleted_at IS NULL
-ORDER BY sort_order, id;
-
--- name: ReorderItems :exec
--- Rewrites sort_order to the position in ids (0..n-1). Versions stay (DATA_MODEL §7).
-UPDATE items i
-SET sort_order = (o.ord - 1)::int, updated_at = @now
-FROM unnest(@ids::uuid[]) WITH ORDINALITY AS o(id, ord)
-WHERE i.id = o.id AND i.workspace_id = @workspace_id AND i.list_id = @list_id AND i.deleted_at IS NULL;
-
--- name: CountListItems :one
--- All items of a list, trashed ones included (a type change clears all of them).
-SELECT count(*)::int AS total FROM items
-WHERE list_id = @list_id AND workspace_id = @workspace_id;
-
--- name: ListItemIDsOfList :many
-SELECT id FROM items
-WHERE list_id = @list_id AND workspace_id = @workspace_id
-ORDER BY sort_order, id;
-
 -- name: ClearListItemsPrice :execrows
 -- A type change to a type without a price (or to no type) removes the price of every item of the list (trashed ones too; F008-B1).
 UPDATE items SET price_min = NULL, price_max = NULL, currency = NULL, version = version + 1, updated_at = @now
@@ -140,3 +26,83 @@ WHERE list_id = @list_id AND workspace_id = @workspace_id AND (price_min IS NOT 
 -- A type change empties the type fields of every item of the list (trashed ones too).
 UPDATE items SET metadata = '{}', version = version + 1, updated_at = @now
 WHERE list_id = @list_id AND workspace_id = @workspace_id AND metadata <> '{}';
+
+-- name: ReadItem :one
+-- One active item with its list type and attachment dimensions.
+SELECT i.*,
+       l.type              AS type,
+       a.width             AS image_width,
+       a.height            AS image_height,
+       a.original_filename AS image_original_filename
+FROM items i
+LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
+WHERE i.id = @id AND i.workspace_id = @workspace_id AND i.deleted_at IS NULL;
+
+-- name: ReadListItems :many
+-- The active items of one list (trashed lists included), in sort_order, id order.
+SELECT i.*,
+       l.type              AS type,
+       a.width             AS image_width,
+       a.height            AS image_height,
+       a.original_filename AS image_original_filename
+FROM items i
+LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
+WHERE i.list_id = @list_id AND i.workspace_id = @workspace_id AND i.deleted_at IS NULL
+ORDER BY i.sort_order, i.id;
+
+-- name: LockItemRow :one
+-- The bare item row under FOR UPDATE. No joins: a joined row would lock the list and attachment too.
+SELECT * FROM items
+WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
+FOR UPDATE;
+
+-- name: InsertItemRow :one
+-- The editable columns only; the image columns are B-09's.
+INSERT INTO items (workspace_id, list_id, title, price_min, price_max, currency,
+                   website_url, metadata, sort_order, created_at, updated_at)
+VALUES (@workspace_id, @list_id, @title, sqlc.narg(price_min),
+        sqlc.narg(price_max), sqlc.narg(currency), sqlc.narg(website_url), @metadata, @sort_order, @now, @now)
+RETURNING id;
+
+-- name: UpdateItemRow :one
+-- A full replacement of the editable columns; the caller merges the patch first. Image columns are not touched.
+UPDATE items
+SET title = @title,
+    price_min = sqlc.narg(price_min), price_max = sqlc.narg(price_max), currency = sqlc.narg(currency),
+    website_url = sqlc.narg(website_url), metadata = @metadata,
+    version = version + 1, updated_at = @now
+WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
+RETURNING id;
+
+-- name: MoveItemRow :one
+UPDATE items
+SET list_id = @list_id, sort_order = @sort_order, version = version + 1, updated_at = @now
+WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
+RETURNING id;
+
+-- name: SetItemRowSortOrder :exec
+-- Sets one item's position. The version stays (DATA_MODEL §7).
+UPDATE items
+SET sort_order = @sort_order, updated_at = @now
+WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;
+
+-- name: NextItemSortOrderRow :one
+SELECT (COALESCE(MAX(sort_order) + 1, 0))::int AS next_order
+FROM items
+WHERE list_id = @list_id AND workspace_id = @workspace_id AND deleted_at IS NULL;
+
+-- name: MaxItemContentVersions :many
+-- The highest saved version of each listed item; an item with no versions has no row.
+-- The workspace is checked through items, which content versions do not carry.
+SELECT v.item_id, max(v.version)::int AS max_version
+FROM item_content_versions v
+JOIN items i ON i.id = v.item_id AND i.workspace_id = @workspace_id
+WHERE v.item_id = ANY(@item_ids::uuid[])
+GROUP BY v.item_id;
+
+-- name: ReadItemListInfo :one
+-- An active list's name, folder, sort mode, type and icon, for an item's path and sorts.
+SELECT id, name, folder_id, sort_mode, type, icon, icon_color FROM lists
+WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;

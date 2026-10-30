@@ -268,6 +268,46 @@ func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) (uuid.UU
 	return id, err
 }
 
+const insertItemRow = `-- name: InsertItemRow :one
+INSERT INTO items (workspace_id, list_id, title, price_min, price_max, currency,
+                   website_url, metadata, sort_order, created_at, updated_at)
+VALUES ($1, $2, $3, $4,
+        $5, $6, $7, $8, $9, $10, $10)
+RETURNING id
+`
+
+type InsertItemRowParams struct {
+	WorkspaceID uuid.UUID
+	ListID      uuid.UUID
+	Title       string
+	PriceMin    pgtype.Numeric
+	PriceMax    pgtype.Numeric
+	Currency    *string
+	WebsiteUrl  *string
+	Metadata    []byte
+	SortOrder   int32
+	Now         time.Time
+}
+
+// The editable columns only; the image columns are B-09's.
+func (q *Queries) InsertItemRow(ctx context.Context, arg InsertItemRowParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, insertItemRow,
+		arg.WorkspaceID,
+		arg.ListID,
+		arg.Title,
+		arg.PriceMin,
+		arg.PriceMax,
+		arg.Currency,
+		arg.WebsiteUrl,
+		arg.Metadata,
+		arg.SortOrder,
+		arg.Now,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const listActiveItemIDsByList = `-- name: ListActiveItemIDsByList :many
 SELECT id FROM items
 WHERE list_id = $1 AND workspace_id = $2 AND deleted_at IS NULL
@@ -508,6 +548,83 @@ func (q *Queries) LockItem(ctx context.Context, arg LockItemParams) (Item, error
 	return i, err
 }
 
+const lockItemRow = `-- name: LockItemRow :one
+SELECT id, workspace_id, list_id, title, image_url, image_attachment_id, price_min, price_max, currency, website_url, metadata, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM items
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+FOR UPDATE
+`
+
+type LockItemRowParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+// The bare item row under FOR UPDATE. No joins: a joined row would lock the list and attachment too.
+func (q *Queries) LockItemRow(ctx context.Context, arg LockItemRowParams) (Item, error) {
+	row := q.db.QueryRow(ctx, lockItemRow, arg.ID, arg.WorkspaceID)
+	var i Item
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ListID,
+		&i.Title,
+		&i.ImageUrl,
+		&i.ImageAttachmentID,
+		&i.PriceMin,
+		&i.PriceMax,
+		&i.Currency,
+		&i.WebsiteUrl,
+		&i.Metadata,
+		&i.SortOrder,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.TrashBatchID,
+	)
+	return i, err
+}
+
+const maxItemContentVersions = `-- name: MaxItemContentVersions :many
+SELECT v.item_id, max(v.version)::int AS max_version
+FROM item_content_versions v
+JOIN items i ON i.id = v.item_id AND i.workspace_id = $1
+WHERE v.item_id = ANY($2::uuid[])
+GROUP BY v.item_id
+`
+
+type MaxItemContentVersionsParams struct {
+	WorkspaceID uuid.UUID
+	ItemIds     []uuid.UUID
+}
+
+type MaxItemContentVersionsRow struct {
+	ItemID     uuid.UUID
+	MaxVersion int32
+}
+
+// The highest saved version of each listed item; an item with no versions has no row.
+// The workspace is checked through items, which content versions do not carry.
+func (q *Queries) MaxItemContentVersions(ctx context.Context, arg MaxItemContentVersionsParams) ([]MaxItemContentVersionsRow, error) {
+	rows, err := q.db.Query(ctx, maxItemContentVersions, arg.WorkspaceID, arg.ItemIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MaxItemContentVersionsRow{}
+	for rows.Next() {
+		var i MaxItemContentVersionsRow
+		if err := rows.Scan(&i.ItemID, &i.MaxVersion); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const moveItem = `-- name: MoveItem :one
 UPDATE items
 SET list_id = $1, sort_order = $2, version = version + 1, updated_at = $3
@@ -525,6 +642,34 @@ type MoveItemParams struct {
 
 func (q *Queries) MoveItem(ctx context.Context, arg MoveItemParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, moveItem,
+		arg.ListID,
+		arg.SortOrder,
+		arg.Now,
+		arg.ID,
+		arg.WorkspaceID,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const moveItemRow = `-- name: MoveItemRow :one
+UPDATE items
+SET list_id = $1, sort_order = $2, version = version + 1, updated_at = $3
+WHERE id = $4 AND workspace_id = $5 AND deleted_at IS NULL
+RETURNING id
+`
+
+type MoveItemRowParams struct {
+	ListID      uuid.UUID
+	SortOrder   int32
+	Now         time.Time
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) MoveItemRow(ctx context.Context, arg MoveItemRowParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, moveItemRow,
 		arg.ListID,
 		arg.SortOrder,
 		arg.Now,
@@ -554,6 +699,221 @@ func (q *Queries) NextItemSortOrder(ctx context.Context, arg NextItemSortOrderPa
 	return next_order, err
 }
 
+const nextItemSortOrderRow = `-- name: NextItemSortOrderRow :one
+SELECT (COALESCE(MAX(sort_order) + 1, 0))::int AS next_order
+FROM items
+WHERE list_id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+`
+
+type NextItemSortOrderRowParams struct {
+	ListID      uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) NextItemSortOrderRow(ctx context.Context, arg NextItemSortOrderRowParams) (int32, error) {
+	row := q.db.QueryRow(ctx, nextItemSortOrderRow, arg.ListID, arg.WorkspaceID)
+	var next_order int32
+	err := row.Scan(&next_order)
+	return next_order, err
+}
+
+const readItem = `-- name: ReadItem :one
+
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+       l.type              AS type,
+       a.width             AS image_width,
+       a.height            AS image_height,
+       a.original_filename AS image_original_filename
+FROM items i
+LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
+WHERE i.id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
+`
+
+type ReadItemParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+type ReadItemRow struct {
+	ID                    uuid.UUID
+	WorkspaceID           uuid.UUID
+	ListID                uuid.UUID
+	Title                 string
+	ImageUrl              *string
+	ImageAttachmentID     uuid.NullUUID
+	PriceMin              pgtype.Numeric
+	PriceMax              pgtype.Numeric
+	Currency              *string
+	WebsiteUrl            *string
+	Metadata              []byte
+	SortOrder             int32
+	Version               int32
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	DeletedAt             *time.Time
+	TrashBatchID          uuid.NullUUID
+	Type                  *string
+	ImageWidth            *int32
+	ImageHeight           *int32
+	ImageOriginalFilename *string
+}
+
+// Plain item queries of the F-019-B3d repository (internal/items/repository.go). They sit
+// beside the queries above, which stay until the old service is removed. The read
+// queries join the list (type) and the attachment (image dimensions) and do not read
+// the content versions: MaxItemContentVersions does that, in one query per page.
+// One active item with its list type and attachment dimensions.
+func (q *Queries) ReadItem(ctx context.Context, arg ReadItemParams) (ReadItemRow, error) {
+	row := q.db.QueryRow(ctx, readItem, arg.ID, arg.WorkspaceID)
+	var i ReadItemRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ListID,
+		&i.Title,
+		&i.ImageUrl,
+		&i.ImageAttachmentID,
+		&i.PriceMin,
+		&i.PriceMax,
+		&i.Currency,
+		&i.WebsiteUrl,
+		&i.Metadata,
+		&i.SortOrder,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.TrashBatchID,
+		&i.Type,
+		&i.ImageWidth,
+		&i.ImageHeight,
+		&i.ImageOriginalFilename,
+	)
+	return i, err
+}
+
+const readItemListInfo = `-- name: ReadItemListInfo :one
+SELECT id, name, folder_id, sort_mode, type, icon, icon_color FROM lists
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+`
+
+type ReadItemListInfoParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+type ReadItemListInfoRow struct {
+	ID        uuid.UUID
+	Name      string
+	FolderID  uuid.NullUUID
+	SortMode  string
+	Type      *string
+	Icon      *string
+	IconColor *string
+}
+
+// An active list's name, folder, sort mode, type and icon, for an item's path and sorts.
+func (q *Queries) ReadItemListInfo(ctx context.Context, arg ReadItemListInfoParams) (ReadItemListInfoRow, error) {
+	row := q.db.QueryRow(ctx, readItemListInfo, arg.ID, arg.WorkspaceID)
+	var i ReadItemListInfoRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.FolderID,
+		&i.SortMode,
+		&i.Type,
+		&i.Icon,
+		&i.IconColor,
+	)
+	return i, err
+}
+
+const readListItems = `-- name: ReadListItems :many
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+       l.type              AS type,
+       a.width             AS image_width,
+       a.height            AS image_height,
+       a.original_filename AS image_original_filename
+FROM items i
+LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
+WHERE i.list_id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
+ORDER BY i.sort_order, i.id
+`
+
+type ReadListItemsParams struct {
+	ListID      uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+type ReadListItemsRow struct {
+	ID                    uuid.UUID
+	WorkspaceID           uuid.UUID
+	ListID                uuid.UUID
+	Title                 string
+	ImageUrl              *string
+	ImageAttachmentID     uuid.NullUUID
+	PriceMin              pgtype.Numeric
+	PriceMax              pgtype.Numeric
+	Currency              *string
+	WebsiteUrl            *string
+	Metadata              []byte
+	SortOrder             int32
+	Version               int32
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	DeletedAt             *time.Time
+	TrashBatchID          uuid.NullUUID
+	Type                  *string
+	ImageWidth            *int32
+	ImageHeight           *int32
+	ImageOriginalFilename *string
+}
+
+// The active items of one list (trashed lists included), in sort_order, id order.
+func (q *Queries) ReadListItems(ctx context.Context, arg ReadListItemsParams) ([]ReadListItemsRow, error) {
+	rows, err := q.db.Query(ctx, readListItems, arg.ListID, arg.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReadListItemsRow{}
+	for rows.Next() {
+		var i ReadListItemsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ListID,
+			&i.Title,
+			&i.ImageUrl,
+			&i.ImageAttachmentID,
+			&i.PriceMin,
+			&i.PriceMax,
+			&i.Currency,
+			&i.WebsiteUrl,
+			&i.Metadata,
+			&i.SortOrder,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.TrashBatchID,
+			&i.Type,
+			&i.ImageWidth,
+			&i.ImageHeight,
+			&i.ImageOriginalFilename,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const reorderItems = `-- name: ReorderItems :exec
 UPDATE items i
 SET sort_order = (o.ord - 1)::int, updated_at = $1
@@ -575,6 +935,30 @@ func (q *Queries) ReorderItems(ctx context.Context, arg ReorderItemsParams) erro
 		arg.WorkspaceID,
 		arg.ListID,
 		arg.Ids,
+	)
+	return err
+}
+
+const setItemRowSortOrder = `-- name: SetItemRowSortOrder :exec
+UPDATE items
+SET sort_order = $1, updated_at = $2
+WHERE id = $3 AND workspace_id = $4 AND deleted_at IS NULL
+`
+
+type SetItemRowSortOrderParams struct {
+	SortOrder   int32
+	Now         time.Time
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+// Sets one item's position. The version stays (DATA_MODEL §7).
+func (q *Queries) SetItemRowSortOrder(ctx context.Context, arg SetItemRowSortOrderParams) error {
+	_, err := q.db.Exec(ctx, setItemRowSortOrder,
+		arg.SortOrder,
+		arg.Now,
+		arg.ID,
+		arg.WorkspaceID,
 	)
 	return err
 }
@@ -605,6 +989,46 @@ type UpdateItemParams struct {
 // Image columns are not touched here (B-09 owns them).
 func (q *Queries) UpdateItem(ctx context.Context, arg UpdateItemParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, updateItem,
+		arg.Title,
+		arg.PriceMin,
+		arg.PriceMax,
+		arg.Currency,
+		arg.WebsiteUrl,
+		arg.Metadata,
+		arg.Now,
+		arg.ID,
+		arg.WorkspaceID,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const updateItemRow = `-- name: UpdateItemRow :one
+UPDATE items
+SET title = $1,
+    price_min = $2, price_max = $3, currency = $4,
+    website_url = $5, metadata = $6,
+    version = version + 1, updated_at = $7
+WHERE id = $8 AND workspace_id = $9 AND deleted_at IS NULL
+RETURNING id
+`
+
+type UpdateItemRowParams struct {
+	Title       string
+	PriceMin    pgtype.Numeric
+	PriceMax    pgtype.Numeric
+	Currency    *string
+	WebsiteUrl  *string
+	Metadata    []byte
+	Now         time.Time
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+// A full replacement of the editable columns; the caller merges the patch first. Image columns are not touched.
+func (q *Queries) UpdateItemRow(ctx context.Context, arg UpdateItemRowParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, updateItemRow,
 		arg.Title,
 		arg.PriceMin,
 		arg.PriceMax,

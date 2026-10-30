@@ -29,13 +29,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 )
 
-// Root types of a trash batch (the `root_type` column).
-const (
-	TypeFolder = "folder"
-	TypeList   = "list"
-	TypeItem   = "item"
-)
-
 // Page sizes follow the other list endpoints.
 const (
 	DefaultLimit = items.DefaultLimit
@@ -61,49 +54,6 @@ type Service struct {
 // by Purge to delete image files.
 func New(db DB, store storage.FileStore, clk clock.Clock, log *slog.Logger, workspaceID uuid.UUID) *Service {
 	return &Service{db: db, store: store, clock: clk, log: log, workspaceID: workspaceID}
-}
-
-// PathSegment is one ancestor of a trashed root as it was when deleted.
-type PathSegment struct {
-	Type string    `json:"type"` // "folder" or "list"
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
-}
-
-// Entry is one trash batch as the API shows it.
-type Entry struct {
-	ID                uuid.UUID
-	RootType          string
-	RootID            uuid.UUID
-	RootName          string
-	FormerPath        []PathSegment
-	DeletedAt         time.Time
-	Folders           int
-	Lists             int
-	Items             int
-	RestorableInPlace bool
-}
-
-// Page is one page of trash entries, newest first.
-type Page struct {
-	Entries       []Entry
-	Limit, Offset int
-	Total         int
-}
-
-// Destination is the optional body of a restore. A folder or list root takes
-// FolderID (nil = the workspace root; FolderSet tells absent from null), an
-// item root takes ListID.
-type Destination struct {
-	FolderSet bool
-	FolderID  *uuid.UUID
-	ListID    *uuid.UUID
-}
-
-// Restored names the root that came back.
-type Restored struct {
-	RootType string
-	RootID   uuid.UUID
 }
 
 func (s *Service) now() time.Time { return s.clock.Now() }

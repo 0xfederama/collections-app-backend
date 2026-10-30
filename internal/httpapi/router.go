@@ -10,13 +10,17 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/content"
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/folders"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/items/core"
+	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/lists"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
@@ -113,6 +117,7 @@ func newHandler(si oapi.StrictServerInterface, d Deps) (http.Handler, error) {
 		lists.Register(api, d.Logger, lists.NewService(listRepo, listTypes{typeDefs}, d.Clock))
 		tree.Register(api, d.Logger, folderRepo, listRepo)
 		definitions.Register(api, d.Logger, definitions.NewService(typeDefs, d.Clock))
+		items.Register(api, d.Logger, items.NewItems(items.NewPostgres(itemDB(d.DB)), itemTypes{typeDefs}, itemSettings{settingsService(d)}, d.Clock), importer(d))
 	})
 
 	return httpserver.Wrap(r, d.Logger), nil
@@ -160,4 +165,97 @@ func (a listTypes) TypeInfo(ctx context.Context, key *string) (lists.TypeInfo, [
 		out = append(out, lists.FieldInfo{Key: f.Key, FieldType: f.Type})
 	}
 	return lists.TypeInfo{Key: typ.Key, AllowsPrice: typ.AllowsPrice, DefaultSortField: typ.DefaultSortField}, out, nil
+}
+
+// itemDB is the database the item repository runs on, with the same rule as folderDB.
+func itemDB(db Pinger) items.DB {
+	idb, _ := db.(items.DB)
+	return idb
+}
+
+// itemTypes is the items.TypeSource: it reads a list type from the type definitions
+// and converts it to the items rules' view, so items does not import definitions.
+type itemTypes struct{ defs *definitions.Postgres }
+
+func (a itemTypes) TypeFields(ctx context.Context, key *string) (items.TypeDef, []types.Field, error) {
+	if key == nil {
+		return items.TypeDef{}, nil, nil
+	}
+	var typ definitions.Type
+	var fields []definitions.Field
+	err := a.defs.InTx(ctx, func(r definitions.Repo) error {
+		var err error
+		if typ, err = r.GetTypeByKey(ctx, *key); err != nil {
+			return err
+		}
+		fields, err = r.ListFields(ctx, typ.ID)
+		return err
+	})
+	if err != nil {
+		return items.TypeDef{}, nil, err
+	}
+	out := make([]types.Field, 0, len(fields))
+	for _, f := range fields {
+		out = append(out, types.Field{Key: f.Key, Type: f.Type, Special: f.Locked})
+	}
+	return items.TypeDef{Key: typ.Key, AllowsPrice: typ.AllowsPrice}, out, nil
+}
+
+// settingsService is the workspace settings the items rules read the preferred
+// store from: the one the composition root wired, or one over the same pool (the
+// old item service read the settings table directly, so a router without Settings
+// still seeds stores).
+func settingsService(d Deps) *workspace.Service {
+	if d.Settings != nil {
+		return d.Settings
+	}
+	pool, _ := d.DB.(*pgxpool.Pool)
+	return workspace.NewService(workspace.NewPostgres(pool))
+}
+
+// itemSettings is the items.SettingsSource over the workspace settings. A workspace
+// without a settings row answers NotFound, which the items rules treat as no default.
+type itemSettings struct{ svc *workspace.Service }
+
+func (a itemSettings) PreferredStore(ctx context.Context) (string, error) {
+	if a.svc == nil {
+		return "", apperr.NotFound("settings")
+	}
+	s, err := a.svc.Get(ctx)
+	if err != nil {
+		return "", err
+	}
+	return s.PreferredStore, nil
+}
+
+// importer is the create path of the items operations when lookup is configured.
+func importer(d Deps) items.Importer {
+	if d.Lookup == nil {
+		return nil
+	}
+	return importItems{d.Lookup}
+}
+
+// importItems is the items.Importer over internal/lookup. lookup still builds
+// items with the legacy service (it moves in a later task), so its items are
+// converted to the core model here. The conversions are plain field copies.
+type importItems struct{ lk *lookup.Service }
+
+func (a importItems) Create(ctx context.Context, listID uuid.UUID, in core.CreateInput, o items.ImportOptions) (core.Item, error) {
+	it, err := a.lk.Create(ctx, listID, items.CreateInput{
+		Title: in.Title, Price: (*items.Price)(in.Price), Website: in.Website, Metadata: in.Metadata,
+	}, lookup.CreateOptions{Lookup: o.Lookup, TMDBID: o.TMDBID, SourceID: o.SourceID})
+	if err != nil {
+		return core.Item{}, err
+	}
+	out := core.Item{
+		ID: it.ID, ListID: it.ListID, Title: it.Title, Type: it.Type, Price: (*core.Price)(it.Price), Website: it.Website,
+		Metadata: it.Metadata, ContentVersion: it.ContentVersion, SortOrder: it.SortOrder, Version: it.Version,
+		CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt,
+	}
+	if it.Image != nil {
+		img := core.Image(*it.Image)
+		out.Image = &img
+	}
+	return out, nil
 }

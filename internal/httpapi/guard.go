@@ -35,9 +35,7 @@ const (
 var ifMatchPrefix = map[string]string{
 	"DeleteFolder":          etag.Folder,
 	"DeleteList":            etag.List,
-	"UpdateItem":            etag.Item,
 	"DeleteItem":            etag.Item,
-	"MoveItem":              etag.Item,
 	"SetItemImage":          etag.Item,
 	"DeleteItemImage":       etag.Item,
 	"LookupItemMetadata":    etag.Item,

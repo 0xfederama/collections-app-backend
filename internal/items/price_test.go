@@ -45,64 +45,10 @@ func TestNumericToMoneyNormalizesExponent(t *testing.T) {
 	}
 }
 
-func TestValidatePrice(t *testing.T) {
-	s := func(v string) *string { return &v }
-	tests := []struct {
-		name  string
-		price Price
-		bad   []string
-	}{
-		{"ok min only", Price{Min: s("1.00"), Currency: "EUR"}, nil},
-		{"ok equal", Price{Min: s("2.00"), Max: s("2.00"), Currency: "EUR"}, nil},
-		{"min above max", Price{Min: s("2.01"), Max: s("2.00"), Currency: "EUR"}, []string{"price.max"}},
-		{"numeric not lexical order", Price{Min: s("10.00"), Max: s("9.00"), Currency: "EUR"}, []string{"price.max"}},
-		{"neither", Price{Currency: "EUR"}, []string{"price"}},
-		{"bad currency", Price{Min: s("1.00"), Currency: "eur"}, []string{"price.currency"}},
-		{"all bad", Price{Min: s("1"), Max: s("x"), Currency: ""}, []string{"price.min", "price.max", "price.currency"}},
-		{"TestF007 ok amount", Price{Amount: s("1299.00"), Currency: "EUR"}, nil},
-		{"TestF007 amount bad format", Price{Amount: s("12.5"), Currency: "EUR"}, []string{"price.amount"}},
-		{"TestF007 amount bad currency", Price{Amount: s("12.50"), Currency: "eur"}, []string{"price.currency"}},
-		{"TestF007 amount with min", Price{Amount: s("12.50"), Min: s("10.00"), Currency: "EUR"}, []string{"price"}},
-		{"TestF007 amount with max", Price{Amount: s("12.50"), Max: s("15.00"), Currency: "EUR"}, []string{"price"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			errs := validatePrice(&tt.price)
-			if len(errs) != len(tt.bad) {
-				t.Fatalf("errs = %v, want fields %v", errs, tt.bad)
-			}
-			for i, fe := range errs {
-				if fe.Field != tt.bad[i] {
-					t.Errorf("errs[%d].Field = %s, want %s", i, fe.Field, tt.bad[i])
-				}
-			}
-		})
-	}
-}
-
-func TestEscapeLike(t *testing.T) {
-	if got := escapeLike(`50%_\x`); got != `50\%\_\\x` {
-		t.Fatalf("got %s", got)
-	}
-}
-
-func TestCleanWebsite(t *testing.T) {
-	for _, ok := range []string{"http://a.b", "https://a.b/c?d=e#f", " HTTPS://A.B "} {
-		if _, fe := cleanWebsite(ok); fe != nil {
-			t.Errorf("%q rejected", ok)
-		}
-	}
-	for _, bad := range []string{"javascript:alert(1)", "JavaScript:alert(1)", "data:text/html,x", "file:///etc/passwd", "ftp://a.b", "//a.b", "a.b", "https://", "https:///x", "", "http://a b.c"} {
-		if _, fe := cleanWebsite(bad); fe == nil {
-			t.Errorf("%q accepted", bad)
-		}
-	}
-}
-
 func TestF007_AmountIsStoredAsMinEqualsMax(t *testing.T) {
 	amount := "1200.00"
 	p := Price{Amount: &amount, Currency: "EUR"}
-	minV, maxV, cur := priceColumns(&p)
+	minV, maxV, cur := PriceParts(&p)
 	for name, n := range map[string]pgtype.Numeric{"min": minV, "max": maxV} {
 		if got := numericToMoney(n); got == nil || *got != amount {
 			t.Errorf("%s = %v, want %s", name, got, amount)
@@ -112,7 +58,7 @@ func TestF007_AmountIsStoredAsMinEqualsMax(t *testing.T) {
 		t.Errorf("currency = %v", cur)
 	}
 	// What is read back never carries an amount: min and max are equal, and the same price compares equal.
-	back := priceFromRow(minV, maxV, cur)
+	back := rowPrice(minV, maxV, cur)
 	if back.Amount != nil || back.Min == nil || back.Max == nil || *back.Min != *back.Max {
 		t.Fatalf("read back %+v", back)
 	}

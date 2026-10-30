@@ -378,25 +378,6 @@ func (q *Queries) NextListSortOrder(ctx context.Context, arg NextListSortOrderPa
 	return next_order, err
 }
 
-const reorderLists = `-- name: ReorderLists :exec
-UPDATE lists l
-SET sort_order = (o.ord - 1)::int, updated_at = $1
-FROM unnest($3::uuid[]) WITH ORDINALITY AS o(id, ord)
-WHERE l.id = o.id AND l.workspace_id = $2 AND l.deleted_at IS NULL
-`
-
-type ReorderListsParams struct {
-	Now         time.Time
-	WorkspaceID uuid.UUID
-	Ids         []uuid.UUID
-}
-
-// Rewrites sort_order to the position in ids (0..n-1). Versions stay (DATA_MODEL §7).
-func (q *Queries) ReorderLists(ctx context.Context, arg ReorderListsParams) error {
-	_, err := q.db.Exec(ctx, reorderLists, arg.Now, arg.WorkspaceID, arg.Ids)
-	return err
-}
-
 const setListSortOrder = `-- name: SetListSortOrder :exec
 UPDATE lists
 SET sort_order = $1, updated_at = $2

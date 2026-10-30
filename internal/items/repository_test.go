@@ -17,7 +17,6 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/items"
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
@@ -86,7 +85,7 @@ func (e env) insertList(folder *uuid.UUID, typ *string, name string) uuid.UUID {
 	return id
 }
 
-func (e env) insert(it core.Item) uuid.UUID {
+func (e env) insert(it items.Item) uuid.UUID {
 	e.t.Helper()
 	var id uuid.UUID
 	e.tx(func(r items.Repo) error {
@@ -97,9 +96,9 @@ func (e env) insert(it core.Item) uuid.UUID {
 	return id
 }
 
-func (e env) get(id uuid.UUID) core.Item {
+func (e env) get(id uuid.UUID) items.Item {
 	e.t.Helper()
-	var it core.Item
+	var it items.Item
 	e.tx(func(r items.Repo) error {
 		var err error
 		it, err = r.Get(e.ctx, id)
@@ -194,9 +193,9 @@ func TestRepoInsertGetRoundTrip(t *testing.T) {
 	list := e.insertList(nil, ptr("vehicle"), "Garage")
 	site := "https://example.com/bike"
 	meta := json.RawMessage(`{"make":"Ducati","model_year":2020,"tags":["a","b"],"nested":{"x":1.5}}`)
-	id := e.insert(core.Item{
+	id := e.insert(items.Item{
 		ListID: list, Title: "Panigale", SortOrder: 3, Website: &site, Metadata: meta,
-		Price: &core.Price{Min: ptr("1299.00"), Max: ptr("1499.00"), Currency: "EUR"},
+		Price: &items.Price{Min: ptr("1299.00"), Max: ptr("1499.00"), Currency: "EUR"},
 	})
 
 	got := e.get(id)
@@ -225,20 +224,20 @@ func TestRepoPriceRoundTripExactDecimals(t *testing.T) {
 	list := e.insertList(nil, ptr("wishlist"), "Wish")
 	cases := []struct {
 		name  string
-		price *core.Price
-		want  *core.Price
+		price *items.Price
+		want  *items.Price
 	}{
 		{"nil price stays nil", nil, nil},
-		{"min and max with leading zero", &core.Price{Min: ptr("0.05"), Max: ptr("10.10"), Currency: "USD"},
-			&core.Price{Min: ptr("0.05"), Max: ptr("10.10"), Currency: "USD"}},
-		{"min only", &core.Price{Min: ptr("5.00"), Currency: "GBP"}, &core.Price{Min: ptr("5.00"), Currency: "GBP"}},
-		{"max only", &core.Price{Max: ptr("99999999.99"), Currency: "EUR"}, &core.Price{Max: ptr("99999999.99"), Currency: "EUR"}},
-		{"single amount is min and max", &core.Price{Amount: ptr("12.00"), Currency: "EUR"},
-			&core.Price{Min: ptr("12.00"), Max: ptr("12.00"), Currency: "EUR"}},
+		{"min and max with leading zero", &items.Price{Min: ptr("0.05"), Max: ptr("10.10"), Currency: "USD"},
+			&items.Price{Min: ptr("0.05"), Max: ptr("10.10"), Currency: "USD"}},
+		{"min only", &items.Price{Min: ptr("5.00"), Currency: "GBP"}, &items.Price{Min: ptr("5.00"), Currency: "GBP"}},
+		{"max only", &items.Price{Max: ptr("99999999.99"), Currency: "EUR"}, &items.Price{Max: ptr("99999999.99"), Currency: "EUR"}},
+		{"single amount is min and max", &items.Price{Amount: ptr("12.00"), Currency: "EUR"},
+			&items.Price{Min: ptr("12.00"), Max: ptr("12.00"), Currency: "EUR"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			id := e.insert(core.Item{ListID: list, Title: "P", Price: c.price, Metadata: json.RawMessage(`{}`)})
+			id := e.insert(items.Item{ListID: list, Title: "P", Price: c.price, Metadata: json.RawMessage(`{}`)})
 			got := e.get(id).Price
 			if (got == nil) != (c.want == nil) {
 				t.Fatalf("price = %+v, want %+v", got, c.want)
@@ -263,7 +262,7 @@ func equalPtrs(a, b *string) bool {
 func TestRepoInsertNilMetadataIsEmptyObject(t *testing.T) {
 	e := newEnv(t)
 	list := e.insertList(nil, nil, "Untyped")
-	id := e.insert(core.Item{ListID: list, Title: "No type"})
+	id := e.insert(items.Item{ListID: list, Title: "No type"})
 	got := e.get(id)
 	if string(got.Metadata) != "{}" {
 		t.Errorf("metadata = %s, want {}", got.Metadata)
@@ -295,7 +294,7 @@ func TestRepoGetNotFoundForMissingAndTrashed(t *testing.T) {
 func TestRepoAttachmentDimensions(t *testing.T) {
 	e := newEnv(t)
 	list := e.insertList(nil, nil, "Pics")
-	id := e.insert(core.Item{ListID: list, Title: "Photo", Metadata: json.RawMessage(`{}`)})
+	id := e.insert(items.Item{ListID: list, Title: "Photo", Metadata: json.RawMessage(`{}`)})
 	att := e.attachment(800, 600, ptr("pic.jpg"))
 	e.setImageAttachment(id, att)
 
@@ -303,8 +302,8 @@ func TestRepoAttachmentDimensions(t *testing.T) {
 	if img == nil {
 		t.Fatal("image is nil")
 	}
-	want := core.Image{
-		Source: core.ImageSourceUpload, URL: "/api/v1/attachments/" + att.String() + "/file",
+	want := items.Image{
+		Source: items.ImageSourceUpload, URL: "/api/v1/attachments/" + att.String() + "/file",
 		AttachmentID: att, ThumbnailURL: "/api/v1/attachments/" + att.String() + "/thumbnail",
 		Width: 800, Height: 600, OriginalFilename: ptr("pic.jpg"),
 	}
@@ -314,11 +313,11 @@ func TestRepoAttachmentDimensions(t *testing.T) {
 
 	// An external URL image has no dimensions.
 	url := "https://example.com/cover.png"
-	other := e.insert(core.Item{ListID: list, Title: "Linked", Metadata: json.RawMessage(`{}`)})
+	other := e.insert(items.Item{ListID: list, Title: "Linked", Metadata: json.RawMessage(`{}`)})
 	if _, err := e.pool.Exec(e.ctx, `UPDATE items SET image_url = $2 WHERE id = $1`, other, url); err != nil {
 		t.Fatal(err)
 	}
-	if got := e.get(other).Image; got == nil || got.Source != core.ImageSourceURL || got.URL != url || got.Width != 0 {
+	if got := e.get(other).Image; got == nil || got.Source != items.ImageSourceURL || got.URL != url || got.Width != 0 {
 		t.Errorf("url image = %+v", got)
 	}
 }
@@ -326,11 +325,11 @@ func TestRepoAttachmentDimensions(t *testing.T) {
 func TestRepoGetForUpdateReadsStoredColumnsOnly(t *testing.T) {
 	e := newEnv(t)
 	list := e.insertList(nil, ptr("vehicle"), "Garage")
-	id := e.insert(core.Item{ListID: list, Title: "Locked", Metadata: json.RawMessage(`{"make":"MV"}`),
-		Price: &core.Price{Amount: ptr("7.50"), Currency: "EUR"}})
+	id := e.insert(items.Item{ListID: list, Title: "Locked", Metadata: json.RawMessage(`{"make":"MV"}`),
+		Price: &items.Price{Amount: ptr("7.50"), Currency: "EUR"}})
 	e.setImageAttachment(id, e.attachment(10, 10, nil))
 
-	var got core.Item
+	var got items.Item
 	e.tx(func(r items.Repo) error {
 		var err error
 		got, err = r.GetForUpdate(e.ctx, id)
@@ -357,13 +356,13 @@ func TestRepoUpdateWritesEditableColumns(t *testing.T) {
 	e := newEnv(t)
 	list := e.insertList(nil, ptr("vehicle"), "Garage")
 	site := "https://example.com"
-	id := e.insert(core.Item{ListID: list, Title: "Old", Website: &site, Metadata: json.RawMessage(`{"make":"A"}`),
-		Price: &core.Price{Min: ptr("1.00"), Max: ptr("2.00"), Currency: "EUR"}})
+	id := e.insert(items.Item{ListID: list, Title: "Old", Website: &site, Metadata: json.RawMessage(`{"make":"A"}`),
+		Price: &items.Price{Min: ptr("1.00"), Max: ptr("2.00"), Currency: "EUR"}})
 	att := e.attachment(40, 30, nil)
 	e.setImageAttachment(id, att)
 
 	e.tx(func(r items.Repo) error {
-		return r.Update(e.ctx, core.Item{ID: id, Title: "New", Metadata: json.RawMessage(`{"make":"MV","power_hp":200}`)}, later)
+		return r.Update(e.ctx, items.Item{ID: id, Title: "New", Metadata: json.RawMessage(`{"make":"MV","power_hp":200}`)}, later)
 	})
 	got := e.get(id)
 	if got.Title != "New" || got.Version != 2 || got.Price != nil || got.Website != nil {
@@ -378,7 +377,7 @@ func TestRepoUpdateWritesEditableColumns(t *testing.T) {
 
 	var err error
 	e.tx(func(r items.Repo) error {
-		err = r.Update(e.ctx, core.Item{ID: uuid.New(), Title: "x", Metadata: json.RawMessage(`{}`)}, later)
+		err = r.Update(e.ctx, items.Item{ID: uuid.New(), Title: "x", Metadata: json.RawMessage(`{}`)}, later)
 		return nil
 	})
 	if !isNotFound(err) {
@@ -399,7 +398,7 @@ func TestRepoListByListActiveInOrder(t *testing.T) {
 	e.trash("items", gone)
 	e.sortRow(other, "elsewhere", 0)
 
-	var got []core.Item
+	var got []items.Item
 	e.tx(func(r items.Repo) error {
 		var err error
 		got, err = r.ListByList(e.ctx, list)
@@ -420,7 +419,7 @@ func TestRepoListByListActiveInOrder(t *testing.T) {
 	}
 
 	emptyList := e.insertList(nil, nil, "Empty")
-	var empty []core.Item
+	var empty []items.Item
 	e.tx(func(r items.Repo) error {
 		var err error
 		empty, err = r.ListByList(e.ctx, emptyList)
@@ -579,9 +578,9 @@ func TestRepoPathOf(t *testing.T) {
 	deep := e.insertList(&child, nil, "Deep list")
 	top := e.insertList(nil, nil, "Top list")
 
-	pathOf := func(list uuid.UUID) []core.PathSegment {
+	pathOf := func(list uuid.UUID) []items.PathSegment {
 		t.Helper()
-		var path []core.PathSegment
+		var path []items.PathSegment
 		e.tx(func(r items.Repo) error {
 			var err error
 			path, err = r.PathOf(e.ctx, list)
@@ -589,7 +588,7 @@ func TestRepoPathOf(t *testing.T) {
 		})
 		return path
 	}
-	want := []core.PathSegment{
+	want := []items.PathSegment{
 		{Type: "folder", ID: root, Name: "Root"},
 		{Type: "folder", ID: child, Name: "Child"},
 		{Type: "list", ID: deep, Name: "Deep list"},
@@ -597,7 +596,7 @@ func TestRepoPathOf(t *testing.T) {
 	if got := pathOf(deep); !reflect.DeepEqual(got, want) {
 		t.Errorf("path = %+v, want %+v", got, want)
 	}
-	if got := pathOf(top); !reflect.DeepEqual(got, []core.PathSegment{{Type: "list", ID: top, Name: "Top list"}}) {
+	if got := pathOf(top); !reflect.DeepEqual(got, []items.PathSegment{{Type: "list", ID: top, Name: "Top list"}}) {
 		t.Errorf("root list path = %+v", got)
 	}
 
@@ -625,7 +624,7 @@ func TestRepoLockTreeAndRollback(t *testing.T) {
 		if err := r.LockTree(e.ctx); err != nil {
 			return err
 		}
-		if _, err := r.Insert(e.ctx, core.Item{ListID: list, Title: "never"}, now); err != nil {
+		if _, err := r.Insert(e.ctx, items.Item{ListID: list, Title: "never"}, now); err != nil {
 			return err
 		}
 		return errors.New("stop")
@@ -645,7 +644,7 @@ func TestRepoLockTreeAndRollback(t *testing.T) {
 func TestRepoInsertUsesRowTimes(t *testing.T) {
 	e := newEnv(t)
 	list := e.insertList(nil, nil, "Times")
-	id := e.insert(core.Item{ListID: list, Title: "t", Metadata: json.RawMessage(`{}`)})
+	id := e.insert(items.Item{ListID: list, Title: "t", Metadata: json.RawMessage(`{}`)})
 	got := e.get(id)
 	if !got.CreatedAt.Equal(now) || !got.UpdatedAt.Equal(now) {
 		t.Errorf("created %s updated %s, want %s (the injected clock)", got.CreatedAt, got.UpdatedAt, now)

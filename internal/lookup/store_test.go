@@ -19,7 +19,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
@@ -59,7 +58,7 @@ type lookupEnv struct {
 	db       DB
 	files    storage.FileStore
 	clock    *fakeClock
-	items    *items.Items
+	items    *items.Service
 	store    *DBStore
 	ws, list uuid.UUID
 }
@@ -89,7 +88,7 @@ func newLookupEnv(t *testing.T, now time.Time) *lookupEnv {
 	}
 	t.Cleanup(func() { _ = local.Close() })
 	clk := &fakeClock{now: now}
-	itemSvc := items.NewItems(items.NewPostgres(db), envTypes{definitions.NewPostgres(db)}, envSettings{workspace.NewService(workspace.NewPostgres(db))}, clk)
+	itemSvc := items.NewService(items.NewPostgres(db), envTypes{definitions.NewPostgres(db)}, envSettings{workspace.NewService(workspace.NewPostgres(db))}, clk)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return &lookupEnv{t: t, db: db, files: local, clock: clk, items: itemSvc, store: NewStore(db, local, clk, itemSvc, logger, ws), ws: ws, list: list}
 }
@@ -133,9 +132,9 @@ func (a envSettings) PreferredStore(ctx context.Context) (string, error) {
 	return s.PreferredStore, nil
 }
 
-func (e *lookupEnv) create(title string, metadata map[string]any) core.Item {
+func (e *lookupEnv) create(title string, metadata map[string]any) items.Item {
 	e.t.Helper()
-	it, err := e.items.Create(scope.With(e.t.Context(), e.ws), e.list, core.CreateInput{Title: title, Metadata: metadata})
+	it, err := e.items.Create(scope.With(e.t.Context(), e.ws), e.list, items.CreateInput{Title: title, Metadata: metadata})
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -162,7 +161,7 @@ func TestF013B3_ApplyCreateTracksOnlyImportedLeaves(t *testing.T) {
 	it, err := e.store.Apply(t.Context(), ApplyParams{
 		Mode: ModeCreate, ListID: e.list, Type: "movie", Provider: ProviderTMDB, SourceID: "603",
 		Title: "The Matrix", OriginalTitle: "matrix",
-		CreateInput: &core.CreateInput{Title: "matrix", Metadata: map[string]any{"director": "My director"}},
+		CreateInput: &items.CreateInput{Title: "matrix", Metadata: map[string]any{"director": "My director"}},
 		Fields: map[string]any{
 			"release_year": 1999, "director": "The Wachowskis",
 			"streaming": map[string]any{"country": "IT", "platforms": []any{"Netflix"}},

@@ -24,7 +24,6 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/items"
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
@@ -48,14 +47,14 @@ type Service struct {
 	db          DB
 	store       storage.FileStore
 	clock       clock.Clock
-	items       *items.Items
+	items       *items.Service
 	log         *slog.Logger
 	workspaceID uuid.UUID
 }
 
 // New returns a Service bound to the single workspace. items renders the
 // updated item that every write returns.
-func New(db DB, store storage.FileStore, clk clock.Clock, itemSvc *items.Items, log *slog.Logger, workspaceID uuid.UUID) *Service {
+func New(db DB, store storage.FileStore, clk clock.Clock, itemSvc *items.Service, log *slog.Logger, workspaceID uuid.UUID) *Service {
 	return &Service{db: db, store: store, clock: clk, items: itemSvc, log: log, workspaceID: workspaceID}
 }
 
@@ -66,15 +65,15 @@ func New(db DB, store storage.FileStore, clk clock.Clock, itemSvc *items.Items, 
 // Order: both files are written first; then one transaction checks the item
 // (404, 412), inserts the attachment, points the item at it and removes the
 // previous attachment row; after the commit the previous files are deleted.
-func (s *Service) SetUpload(ctx context.Context, itemID uuid.UUID, version int, p *Processed, filename *string) (core.Item, error) {
+func (s *Service) SetUpload(ctx context.Context, itemID uuid.UUID, version int, p *Processed, filename *string) (items.Item, error) {
 	id := uuid.New()
 	key, thumbKey := storageKeys(id, p.Ext)
 	if _, err := s.store.Put(key, bytes.NewReader(p.Original)); err != nil {
-		return core.Item{}, fmt.Errorf("store original: %w", err)
+		return items.Item{}, fmt.Errorf("store original: %w", err)
 	}
 	if _, err := s.store.Put(thumbKey, bytes.NewReader(p.Thumbnail)); err != nil {
 		s.deleteFiles(ctx, key)
-		return core.Item{}, fmt.Errorf("store thumbnail: %w", err)
+		return items.Item{}, fmt.Errorf("store thumbnail: %w", err)
 	}
 
 	var old *sqlc.DeleteAttachmentRow
@@ -101,7 +100,7 @@ func (s *Service) SetUpload(ctx context.Context, itemID uuid.UUID, version int, 
 	})
 	if err != nil {
 		s.discardUnreferenced(ctx, id, key, thumbKey)
-		return core.Item{}, err
+		return items.Item{}, err
 	}
 	s.deleteOld(ctx, old)
 	return s.items.Get(scope.With(ctx, s.workspaceID), itemID)
@@ -109,10 +108,10 @@ func (s *Service) SetUpload(ctx context.Context, itemID uuid.UUID, version int, 
 
 // SetURL points an item at an external image, replacing any existing image.
 // Setting the URL it already has changes nothing and does not bump the version.
-func (s *Service) SetURL(ctx context.Context, itemID uuid.UUID, version int, rawURL string) (core.Item, error) {
+func (s *Service) SetURL(ctx context.Context, itemID uuid.UUID, version int, rawURL string) (items.Item, error) {
 	clean, err := cleanURL(rawURL)
 	if err != nil {
-		return core.Item{}, err
+		return items.Item{}, err
 	}
 	var old *sqlc.DeleteAttachmentRow
 	err = database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
@@ -130,7 +129,7 @@ func (s *Service) SetURL(ctx context.Context, itemID uuid.UUID, version int, raw
 		return err
 	})
 	if err != nil {
-		return core.Item{}, err
+		return items.Item{}, err
 	}
 	s.deleteOld(ctx, old)
 	return s.items.Get(scope.With(ctx, s.workspaceID), itemID)
@@ -138,7 +137,7 @@ func (s *Service) SetURL(ctx context.Context, itemID uuid.UUID, version int, raw
 
 // Delete removes the image of an item. An item without an image is returned
 // unchanged (no version bump), so repeating a DELETE is harmless.
-func (s *Service) Delete(ctx context.Context, itemID uuid.UUID, version int) (core.Item, error) {
+func (s *Service) Delete(ctx context.Context, itemID uuid.UUID, version int) (items.Item, error) {
 	var old *sqlc.DeleteAttachmentRow
 	err := database.InTx(ctx, s.db, func(q *sqlc.Queries) error {
 		cur, err := s.lock(ctx, q, itemID, version)
@@ -155,7 +154,7 @@ func (s *Service) Delete(ctx context.Context, itemID uuid.UUID, version int) (co
 		return err
 	})
 	if err != nil {
-		return core.Item{}, err
+		return items.Item{}, err
 	}
 	s.deleteOld(ctx, old)
 	return s.items.Get(scope.With(ctx, s.workspaceID), itemID)

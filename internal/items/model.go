@@ -1,8 +1,16 @@
-// Package core is the pure items logic of F-019-B3d: the item model, metadata
-// and price rules, the patch merge and the list query. It has no database and
-// no HTTP. Its rules copy the code and SQL they replace (internal/items before
-// B3d, db/queries/items.sql ListItems/CountItems). T6 makes it the items package.
-package core
+// Package items owns items: create, read, list, update, move and reorder
+// (API.md §5 Items, DATA_MODEL §2 and §7). The files are layered: model.go, the
+// pure item model (with metadata.go, listquery.go and validate.go: the metadata,
+// price and patch rules and the list query, no database and no HTTP); service.go,
+// the rules over a Store; repository.go, the only file with SQL; handler.go and
+// wire.go, the Huma operations. Other features reach items only through the
+// interfaces declared in service.go. Deleting items is the trash service's job,
+// images are internal/images, Markdown content is internal/content.
+//
+// Reads and writes work on active rows only (deleted_at IS NULL); a trashed or
+// missing item or list is a NotFound. Create, move and reorder take the tree lock
+// (D-060, Repo.LockTree).
+package items
 
 import (
 	"encoding/json"

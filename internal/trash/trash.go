@@ -22,7 +22,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
+	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
@@ -38,8 +38,8 @@ const (
 
 // Page sizes follow the other list endpoints.
 const (
-	DefaultLimit = core.DefaultLimit
-	MaxLimit     = core.MaxLimit
+	DefaultLimit = items.DefaultLimit
+	MaxLimit     = items.MaxLimit
 )
 
 // DB is satisfied by *pgxpool.Pool.

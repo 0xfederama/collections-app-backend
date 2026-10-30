@@ -7,14 +7,14 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
+	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 )
 
 // itemOf maps a search row to the item read model. The search and recent-items
 // queries return the same columns as the items read, so the rows convert to one type.
-func itemOf(r sqlc.SearchItemsRow) core.Item {
-	it := core.Item{
+func itemOf(r sqlc.SearchItemsRow) items.Item {
+	it := items.Item{
 		ID: r.ID, ListID: r.ListID, Title: r.Title, Type: r.Type,
 		Price: priceOf(r.PriceMin, r.PriceMax, r.Currency), Website: r.WebsiteUrl,
 		Metadata: json.RawMessage(r.Metadata), ContentVersion: int(r.ContentVersion), SortOrder: int(r.SortOrder),
@@ -23,8 +23,8 @@ func itemOf(r sqlc.SearchItemsRow) core.Item {
 	switch {
 	case r.ImageAttachmentID.Valid:
 		id := r.ImageAttachmentID.UUID
-		img := &core.Image{
-			Source: core.ImageSourceUpload, AttachmentID: id,
+		img := &items.Image{
+			Source: items.ImageSourceUpload, AttachmentID: id,
 			URL: "/api/v1/attachments/" + id.String() + "/file", ThumbnailURL: "/api/v1/attachments/" + id.String() + "/thumbnail",
 			OriginalFilename: r.ImageOriginalFilename,
 		}
@@ -36,18 +36,18 @@ func itemOf(r sqlc.SearchItemsRow) core.Item {
 		}
 		it.Image = img
 	case r.ImageUrl != nil:
-		it.Image = &core.Image{Source: core.ImageSourceURL, URL: *r.ImageUrl}
+		it.Image = &items.Image{Source: items.ImageSourceURL, URL: *r.ImageUrl}
 	}
 	return it
 }
 
 // priceOf is the price of a row; nil when both bounds are NULL.
-func priceOf(minV, maxV pgtype.Numeric, currency *string) *core.Price {
+func priceOf(minV, maxV pgtype.Numeric, currency *string) *items.Price {
 	lo, hi := moneyOf(minV), moneyOf(maxV)
 	if lo == nil && hi == nil {
 		return nil
 	}
-	p := &core.Price{Min: lo, Max: hi}
+	p := &items.Price{Min: lo, Max: hi}
 	if currency != nil {
 		p.Currency = *currency
 	}

@@ -3,38 +3,46 @@ package items
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
+	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 )
 
+// DB is satisfied by *pgxpool.Pool: plain queries plus transactions.
+type DB interface {
+	database.TxBeginner
+	sqlc.DBTX
+}
+
 // Repo is the item data the service needs. Methods work on active rows only and
 // take the workspace from the context (scope). Rows map to the pure model in
-// internal/items/core; no rule lives here.
+// model.go; no rule lives here.
 type Repo interface {
 	// LockTree serializes structural writes of the workspace until the transaction ends (D-060).
 	LockTree(ctx context.Context) error
 	// Get returns an active item with its list type and attachment dimensions. ContentVersion is 0:
 	// the service fills it with MaxContentVersions. Path is not set (see PathOf).
-	Get(ctx context.Context, id uuid.UUID) (core.Item, error)
+	Get(ctx context.Context, id uuid.UUID) (Item, error)
 	// GetForUpdate locks the item row (FOR UPDATE, no joins). Only the stored columns are set:
 	// Type, Image and ContentVersion stay zero.
-	GetForUpdate(ctx context.Context, id uuid.UUID) (core.Item, error)
+	GetForUpdate(ctx context.Context, id uuid.UUID) (Item, error)
 	// ListByList returns the active items of a list in sort_order, id order (same fields as Get).
-	ListByList(ctx context.Context, listID uuid.UUID) ([]core.Item, error)
+	ListByList(ctx context.Context, listID uuid.UUID) ([]Item, error)
 	// Insert writes a new item from it (ListID, Title, Price, Website, Metadata, SortOrder) and returns its id.
-	Insert(ctx context.Context, it core.Item, now time.Time) (uuid.UUID, error)
+	Insert(ctx context.Context, it Item, now time.Time) (uuid.UUID, error)
 	// Update writes the editable columns of the active item it.ID (price, website and metadata included)
 	// and bumps its version. Image columns are not touched.
-	Update(ctx context.Context, it core.Item, now time.Time) error
+	Update(ctx context.Context, it Item, now time.Time) error
 	// Move puts an active item at the end of another list: its list and sort order change, version bumps.
 	Move(ctx context.Context, id, listID uuid.UUID, sortOrder int, now time.Time) error
 	// SetSortOrder sets the position of one active item. The version stays (DATA_MODEL §7).
@@ -46,7 +54,7 @@ type Repo interface {
 	// ListInfo returns an active list's name, folder, sort mode, type and icon. NotFound otherwise.
 	ListInfo(ctx context.Context, listID uuid.UUID) (ListInfo, error)
 	// PathOf returns the folders above an active list (root first), then the list itself.
-	PathOf(ctx context.Context, listID uuid.UUID) ([]core.PathSegment, error)
+	PathOf(ctx context.Context, listID uuid.UUID) ([]PathSegment, error)
 }
 
 // ListInfo is what an item operation needs from its list.
@@ -70,11 +78,11 @@ func NewPostgres(db DB) *Postgres { return &Postgres{db: db} }
 
 func (p *Postgres) reads() *repo { return &repo{q: sqlc.New(p.db)} }
 
-func (p *Postgres) Get(ctx context.Context, id uuid.UUID) (core.Item, error) {
+func (p *Postgres) Get(ctx context.Context, id uuid.UUID) (Item, error) {
 	return p.reads().Get(ctx, id)
 }
 
-func (p *Postgres) ListByList(ctx context.Context, listID uuid.UUID) ([]core.Item, error) {
+func (p *Postgres) ListByList(ctx context.Context, listID uuid.UUID) ([]Item, error) {
 	return p.reads().ListByList(ctx, listID)
 }
 
@@ -82,7 +90,7 @@ func (p *Postgres) ListInfo(ctx context.Context, listID uuid.UUID) (ListInfo, er
 	return p.reads().ListInfo(ctx, listID)
 }
 
-func (p *Postgres) PathOf(ctx context.Context, listID uuid.UUID) ([]core.PathSegment, error) {
+func (p *Postgres) PathOf(ctx context.Context, listID uuid.UUID) ([]PathSegment, error) {
 	return p.reads().PathOf(ctx, listID)
 }
 
@@ -106,20 +114,20 @@ func (r *repo) LockTree(ctx context.Context) error {
 	return r.q.LockTree(ctx, scope.WorkspaceID(ctx))
 }
 
-func (r *repo) Get(ctx context.Context, id uuid.UUID) (core.Item, error) {
+func (r *repo) Get(ctx context.Context, id uuid.UUID) (Item, error) {
 	row, err := r.q.ReadItem(ctx, sqlc.ReadItemParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx)})
 	if err != nil {
-		return core.Item{}, notFoundOr(err, "item")
+		return Item{}, notFoundOr(err, "item")
 	}
 	return readItem(row), nil
 }
 
-func (r *repo) GetForUpdate(ctx context.Context, id uuid.UUID) (core.Item, error) {
+func (r *repo) GetForUpdate(ctx context.Context, id uuid.UUID) (Item, error) {
 	row, err := r.q.LockItemRow(ctx, sqlc.LockItemRowParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx)})
 	if err != nil {
-		return core.Item{}, notFoundOr(err, "item")
+		return Item{}, notFoundOr(err, "item")
 	}
-	return core.Item{
+	return Item{
 		ID: row.ID, ListID: row.ListID, Title: row.Title,
 		Price: rowPrice(row.PriceMin, row.PriceMax, row.Currency), Website: row.WebsiteUrl,
 		Metadata: json.RawMessage(row.Metadata), SortOrder: int(row.SortOrder), Version: int(row.Version),
@@ -127,19 +135,19 @@ func (r *repo) GetForUpdate(ctx context.Context, id uuid.UUID) (core.Item, error
 	}, nil
 }
 
-func (r *repo) ListByList(ctx context.Context, listID uuid.UUID) ([]core.Item, error) {
+func (r *repo) ListByList(ctx context.Context, listID uuid.UUID) ([]Item, error) {
 	rows, err := r.q.ReadListItems(ctx, sqlc.ReadListItemsParams{ListID: listID, WorkspaceID: scope.WorkspaceID(ctx)})
 	if err != nil {
 		return nil, fmt.Errorf("list items: %w", err)
 	}
-	out := make([]core.Item, 0, len(rows))
+	out := make([]Item, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, readItem(sqlc.ReadItemRow(row)))
 	}
 	return out, nil
 }
 
-func (r *repo) Insert(ctx context.Context, it core.Item, now time.Time) (uuid.UUID, error) {
+func (r *repo) Insert(ctx context.Context, it Item, now time.Time) (uuid.UUID, error) {
 	minV, maxV, currency := PriceParts(it.Price)
 	id, err := r.q.InsertItemRow(ctx, sqlc.InsertItemRowParams{
 		WorkspaceID: scope.WorkspaceID(ctx), ListID: it.ListID, Title: it.Title,
@@ -152,7 +160,7 @@ func (r *repo) Insert(ctx context.Context, it core.Item, now time.Time) (uuid.UU
 	return id, nil
 }
 
-func (r *repo) Update(ctx context.Context, it core.Item, now time.Time) error {
+func (r *repo) Update(ctx context.Context, it Item, now time.Time) error {
 	minV, maxV, currency := PriceParts(it.Price)
 	_, err := r.q.UpdateItemRow(ctx, sqlc.UpdateItemRowParams{
 		Title: it.Title, PriceMin: minV, PriceMax: maxV, Currency: currency, WebsiteUrl: it.Website,
@@ -220,12 +228,12 @@ func (r *repo) ListInfo(ctx context.Context, listID uuid.UUID) (ListInfo, error)
 // PathOf loads the active folders once and walks the parents in Go, as the
 // lists repository does. A missing or trashed folder ends the chain, and a
 // repeated folder ends it too, so corrupt cycles terminate.
-func (r *repo) PathOf(ctx context.Context, listID uuid.UUID) ([]core.PathSegment, error) {
+func (r *repo) PathOf(ctx context.Context, listID uuid.UUID) ([]PathSegment, error) {
 	list, err := r.ListInfo(ctx, listID)
 	if err != nil {
 		return nil, err
 	}
-	path := []core.PathSegment{}
+	path := []PathSegment{}
 	if list.FolderID != nil {
 		folders, err := r.q.ListActiveFolders(ctx, scope.WorkspaceID(ctx))
 		if err != nil {
@@ -233,16 +241,16 @@ func (r *repo) PathOf(ctx context.Context, listID uuid.UUID) ([]core.PathSegment
 		}
 		path = folderPath(folders, *list.FolderID)
 	}
-	return append(path, core.PathSegment{Type: "list", ID: list.ID, Name: list.Name}), nil
+	return append(path, PathSegment{Type: "list", ID: list.ID, Name: list.Name}), nil
 }
 
 // folderPath returns folderID and its ancestors among rows (active folders), root first.
-func folderPath(rows []sqlc.Folder, folderID uuid.UUID) []core.PathSegment {
+func folderPath(rows []sqlc.Folder, folderID uuid.UUID) []PathSegment {
 	byID := make(map[uuid.UUID]sqlc.Folder, len(rows))
 	for _, f := range rows {
 		byID[f.ID] = f
 	}
-	path := []core.PathSegment{}
+	path := []PathSegment{}
 	seen := make(map[uuid.UUID]bool, len(rows))
 	id := folderID
 	for {
@@ -251,7 +259,7 @@ func folderPath(rows []sqlc.Folder, folderID uuid.UUID) []core.PathSegment {
 			break
 		}
 		seen[id] = true
-		path = append(path, core.PathSegment{Type: "folder", ID: f.ID, Name: f.Name})
+		path = append(path, PathSegment{Type: "folder", ID: f.ID, Name: f.Name})
 		if !f.ParentFolderID.Valid {
 			break
 		}
@@ -262,8 +270,8 @@ func folderPath(rows []sqlc.Folder, folderID uuid.UUID) []core.PathSegment {
 }
 
 // readItem maps a joined item row (ReadItem, ReadListItems) to the model.
-func readItem(r sqlc.ReadItemRow) core.Item {
-	it := core.Item{
+func readItem(r sqlc.ReadItemRow) Item {
+	it := Item{
 		ID: r.ID, ListID: r.ListID, Title: r.Title, Type: r.Type,
 		Price: rowPrice(r.PriceMin, r.PriceMax, r.Currency), Website: r.WebsiteUrl,
 		Metadata: json.RawMessage(r.Metadata), SortOrder: int(r.SortOrder), Version: int(r.Version),
@@ -272,8 +280,8 @@ func readItem(r sqlc.ReadItemRow) core.Item {
 	switch {
 	case r.ImageAttachmentID.Valid:
 		id := r.ImageAttachmentID.UUID
-		img := &core.Image{
-			Source: core.ImageSourceUpload, AttachmentID: id,
+		img := &Image{
+			Source: ImageSourceUpload, AttachmentID: id,
 			URL: "/api/v1/attachments/" + id.String() + "/file", ThumbnailURL: "/api/v1/attachments/" + id.String() + "/thumbnail",
 			OriginalFilename: r.ImageOriginalFilename,
 		}
@@ -285,7 +293,7 @@ func readItem(r sqlc.ReadItemRow) core.Item {
 		}
 		it.Image = img
 	case r.ImageUrl != nil:
-		it.Image = &core.Image{Source: core.ImageSourceURL, URL: *r.ImageUrl}
+		it.Image = &Image{Source: ImageSourceURL, URL: *r.ImageUrl}
 	}
 	return it
 }
@@ -293,7 +301,7 @@ func readItem(r sqlc.ReadItemRow) core.Item {
 // PriceParts converts a price (or nil) to the three item columns. A single
 // amount (Amount) is stored as Min = Max. Values use the D-062 mapping (moneyToNumeric).
 // The lookup package writes a book's price in its own atomic create.
-func PriceParts(p *core.Price) (minV, maxV pgtype.Numeric, currency *string) {
+func PriceParts(p *Price) (minV, maxV pgtype.Numeric, currency *string) {
 	if p == nil {
 		return pgtype.Numeric{}, pgtype.Numeric{}, nil
 	}
@@ -312,12 +320,12 @@ func PriceParts(p *core.Price) (minV, maxV pgtype.Numeric, currency *string) {
 }
 
 // rowPrice is the price of a row; nil when both bounds are NULL.
-func rowPrice(minV, maxV pgtype.Numeric, currency *string) *core.Price {
+func rowPrice(minV, maxV pgtype.Numeric, currency *string) *Price {
 	lo, hi := numericToMoney(minV), numericToMoney(maxV)
 	if lo == nil && hi == nil {
 		return nil
 	}
-	p := &core.Price{Min: lo, Max: hi}
+	p := &Price{Min: lo, Max: hi}
 	if currency != nil {
 		p.Currency = *currency
 	}
@@ -339,4 +347,12 @@ func ptrUUID(id uuid.NullUUID) *uuid.UUID {
 	}
 	v := id.UUID
 	return &v
+}
+
+// notFoundOr maps a missing row to apperr.NotFound and wraps any other error.
+func notFoundOr(err error, resource string) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return apperr.NotFound(resource)
+	}
+	return fmt.Errorf("%s: %w", resource, err)
 }

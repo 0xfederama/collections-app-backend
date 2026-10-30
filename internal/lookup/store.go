@@ -20,7 +20,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database"
@@ -42,7 +41,7 @@ type DBStore struct {
 	db          DB
 	store       storage.FileStore
 	clock       clock.Clock
-	items       *items.Items
+	items       *items.Service
 	log         *slog.Logger
 	workspaceID uuid.UUID
 }
@@ -50,7 +49,7 @@ type DBStore struct {
 var _ Store = (*DBStore)(nil)
 
 // NewStore returns a lookup store bound to one workspace.
-func NewStore(db DB, fileStore storage.FileStore, clk clock.Clock, itemSvc *items.Items, log *slog.Logger, workspaceID uuid.UUID) *DBStore {
+func NewStore(db DB, fileStore storage.FileStore, clk clock.Clock, itemSvc *items.Service, log *slog.Logger, workspaceID uuid.UUID) *DBStore {
 	return &DBStore{db: db, store: fileStore, clock: clk, items: itemSvc, log: log, workspaceID: workspaceID}
 }
 
@@ -78,13 +77,13 @@ func typeKey(typ *string) string {
 // allows_price, or no type at all). It reads the definition inside the transaction q.
 func (s *DBStore) priceAllowed(ctx context.Context, q *sqlc.Queries, typ *string) error {
 	if typ == nil {
-		return core.PriceAllowed(false)
+		return items.PriceAllowed(false)
 	}
 	def, err := q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: s.workspaceID, Key: *typ})
 	if err != nil {
 		return fmt.Errorf("load list type definition: %w", err)
 	}
-	return core.PriceAllowed(def.AllowsPrice)
+	return items.PriceAllowed(def.AllowsPrice)
 }
 
 // typeFields loads the fields a metadata write is checked against, inside the
@@ -143,13 +142,13 @@ type preparedPoster struct {
 // Apply atomically changes the item, attachment row and lookup provenance.
 // Processed poster bytes are written before the transaction and old files are
 // removed only after commit.
-func (s *DBStore) Apply(ctx context.Context, p ApplyParams) (core.Item, error) {
+func (s *DBStore) Apply(ctx context.Context, p ApplyParams) (items.Item, error) {
 	if err := validateApply(p); err != nil {
-		return core.Item{}, err
+		return items.Item{}, err
 	}
 	prepared, err := s.preparePoster(p.Poster)
 	if err != nil {
-		return core.Item{}, err
+		return items.Item{}, err
 	}
 	usedPoster := false
 	var oldFiles []string
@@ -171,7 +170,7 @@ func (s *DBStore) Apply(ctx context.Context, p ApplyParams) (core.Item, error) {
 		if prepared != nil {
 			s.discardPrepared(context.WithoutCancel(ctx), prepared)
 		}
-		return core.Item{}, err
+		return items.Item{}, err
 	}
 	if prepared != nil && !usedPoster {
 		s.deleteFiles(context.WithoutCancel(ctx), prepared.key, prepared.thumbKey)
@@ -223,7 +222,7 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 		return uuid.Nil, false, apperr.TypeMismatch()
 	}
 	if p.CreateInput.Price != nil {
-		if err := core.ValidatePrice(p.CreateInput.Price); err != nil {
+		if err := items.ValidatePrice(p.CreateInput.Price); err != nil {
 			return uuid.Nil, false, err
 		}
 		if err := s.priceAllowed(ctx, q, typ); err != nil {
@@ -272,7 +271,7 @@ func (s *DBStore) applyCreate(ctx context.Context, q *sqlc.Queries, p ApplyParam
 	if err != nil {
 		return uuid.Nil, false, err
 	}
-	metadata, err = core.ValidateImport(typ, fields, metadata)
+	metadata, err = items.ValidateImport(typ, fields, metadata)
 	if err != nil {
 		return uuid.Nil, false, err
 	}
@@ -358,7 +357,7 @@ func (s *DBStore) applyExisting(ctx context.Context, q *sqlc.Queries, p ApplyPar
 	if err != nil {
 		return false, nil, err
 	}
-	merged, err = core.ValidateImport(cur.Type, fields, merged)
+	merged, err = items.ValidateImport(cur.Type, fields, merged)
 	if err != nil {
 		return false, nil, err
 	}

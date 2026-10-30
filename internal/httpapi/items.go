@@ -9,7 +9,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
+	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
 	"github.com/0xfederama/collections-app-backend/internal/platform/etag"
 )
@@ -37,22 +37,22 @@ func (s *Server) LookupItemMetadata(ctx context.Context, r oapi.LookupItemMetada
 	}, nil
 }
 
-func itemETag(it core.Item) string { return etag.Format(etag.Item, it.Version) }
+func itemETag(it items.Item) string { return etag.Format(etag.Item, it.Version) }
 
-func priceBody(p *core.Price) nullable.Nullable[oapi.Price] {
+func priceBody(p *items.Price) nullable.Nullable[oapi.Price] {
 	if p == nil {
 		return nullable.NewNullNullable[oapi.Price]()
 	}
 	return nullable.NewNullableWithValue(oapi.Price{Min: nullableString(p.Min), Max: nullableString(p.Max), Currency: p.Currency})
 }
 
-func imageBody(img *core.Image) (nullable.Nullable[oapi.Image], error) {
+func imageBody(img *items.Image) (nullable.Nullable[oapi.Image], error) {
 	if img == nil {
 		return nullable.NewNullNullable[oapi.Image](), nil
 	}
 	var out oapi.Image
 	var err error
-	if img.Source == core.ImageSourceUpload {
+	if img.Source == items.ImageSourceUpload {
 		err = out.FromUploadImage(oapi.UploadImage{
 			Source: oapi.Upload, AttachmentId: img.AttachmentID, Url: img.URL, ThumbnailUrl: img.ThumbnailURL,
 			Width: img.Width, Height: img.Height, OriginalFilename: nullableString(img.OriginalFilename),
@@ -66,7 +66,7 @@ func imageBody(img *core.Image) (nullable.Nullable[oapi.Image], error) {
 	return nullable.NewNullableWithValue(out), nil
 }
 
-func itemBody(it core.Item) (oapi.Item, error) {
+func itemBody(it items.Item) (oapi.Item, error) {
 	image, err := imageBody(it.Image)
 	if err != nil {
 		return oapi.Item{}, err
@@ -97,7 +97,7 @@ func itemBody(it core.Item) (oapi.Item, error) {
 }
 
 // itemSummaryBody is the item row of search and recent items (the list route moved to Huma).
-func itemSummaryBody(it core.Item) oapi.ItemSummary {
+func itemSummaryBody(it items.Item) oapi.ItemSummary {
 	out := oapi.ItemSummary{
 		Id: it.ID, ListId: it.ListID, Title: it.Title, Type: nullableString(it.Type),
 		Price: priceBody(it.Price), Website: nullableString(it.Website), ContentVersion: it.ContentVersion,
@@ -114,7 +114,7 @@ func itemSummaryBody(it core.Item) oapi.ItemSummary {
 	}
 	if img := it.Image; img != nil {
 		sum := oapi.ImageSummary{Url: img.URL}
-		if img.Source == core.ImageSourceUpload {
+		if img.Source == items.ImageSourceUpload {
 			thumb := img.ThumbnailURL
 			sum.ThumbnailUrl = &thumb
 		}

@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
 	"github.com/0xfederama/collections-app-backend/internal/platform/etag"
 	"github.com/0xfederama/collections-app-backend/internal/platform/httpserver"
 	"github.com/0xfederama/collections-app-backend/internal/platform/problem"
@@ -21,7 +20,7 @@ import (
 // wires it over internal/lookup, which keeps the plain create for the other
 // types. Nil means no lookup, and the create goes straight to the service.
 type Importer interface {
-	Create(ctx context.Context, listID uuid.UUID, in core.CreateInput, opts ImportOptions) (core.Item, error)
+	Create(ctx context.Context, listID uuid.UUID, in CreateInput, opts ImportOptions) (Item, error)
 }
 
 // ImportOptions are the lookup fields of a create request. Lookup nil means the
@@ -36,7 +35,7 @@ type ImportOptions struct {
 // the input, call the service, shape the output. Errors go back as they are:
 // httpserver.Op maps them to problems. The lookup operations and the image,
 // content and delete operations are not here yet.
-func Register(api huma.API, log *slog.Logger, svc *Items, lk Importer) {
+func Register(api huma.API, log *slog.Logger, svc *Service, lk Importer) {
 	h := &handler{svc: svc, lookup: lk}
 	tags := []string{"items"}
 
@@ -84,7 +83,7 @@ func Register(api huma.API, log *slog.Logger, svc *Items, lk Importer) {
 }
 
 type handler struct {
-	svc    *Items
+	svc    *Service
 	lookup Importer
 }
 
@@ -156,7 +155,7 @@ func (in *ListItemsInput) Resolve(ctx huma.Context) []error {
 }
 
 func (h *handler) list(ctx context.Context, in *ListItemsInput) (*ItemPageOutput, error) {
-	page, err := h.svc.List(ctx, in.ID, core.ListParams{
+	page, err := h.svc.List(ctx, in.ID, ListParams{
 		Sort: in.Sort, Q: in.Q, FilterField: in.FilterField, FilterValue: in.FilterValue,
 		FilterMin: in.FilterMin, FilterMax: in.FilterMax, Limit: in.Limit, Offset: in.Offset,
 	})
@@ -174,10 +173,10 @@ func (h *handler) list(ctx context.Context, in *ListItemsInput) (*ItemPageOutput
 // 400 invalid_parameter of the old handler, which names what is wrong.
 func queryProblem(err error) error {
 	switch {
-	case errors.Is(err, core.ErrInvalidSort):
+	case errors.Is(err, ErrInvalidSort):
 		return problem.New(http.StatusBadRequest, "invalid_parameter", "Invalid parameter",
 			"sort must be manual, title, updated, price (when allowed), or a field key of this list's type.")
-	case errors.Is(err, core.ErrInvalidFilter):
+	case errors.Is(err, ErrInvalidFilter):
 		return problem.New(http.StatusBadRequest, "invalid_parameter", "Invalid parameter",
 			"field filter parameters must match a sortable field's type.")
 	}
@@ -192,8 +191,8 @@ type CreateItemInput struct {
 
 func (h *handler) create(ctx context.Context, in *CreateItemInput) (*CreatedItemOutput, error) {
 	b := in.Body
-	ci := core.CreateInput{Title: b.Title, Price: priceInput(b.Price), Website: b.Website, Metadata: b.Metadata}
-	var it core.Item
+	ci := CreateInput{Title: b.Title, Price: priceInput(b.Price), Website: b.Website, Metadata: b.Metadata}
+	var it Item
 	var err error
 	if h.lookup != nil {
 		it, err = h.lookup.Create(ctx, in.ID, ci, ImportOptions{Lookup: b.Lookup, TMDBID: b.TmdbID, SourceID: b.SourceID})
@@ -231,7 +230,7 @@ func (h *handler) update(ctx context.Context, in *UpdateItemInput) (*ItemOutput,
 		return nil, problem.PreconditionRequired()
 	}
 	b := in.Body
-	it, err := h.svc.Update(ctx, in.ID, version, core.Patch{
+	it, err := h.svc.Update(ctx, in.ID, version, Patch{
 		Title: b.Title, Price: priceOptional(b.Price), Website: websiteOptional(b.Website), Metadata: b.Metadata,
 	})
 	if err != nil {
@@ -276,7 +275,7 @@ func (h *handler) reorder(ctx context.Context, in *ReorderItemsInput) (*struct{}
 }
 
 // itemOutput is an item with its ETag.
-func itemOutput(it core.Item) (*ItemOutput, error) {
+func itemOutput(it Item) (*ItemOutput, error) {
 	body, err := itemJSON(it)
 	if err != nil {
 		return nil, err
@@ -284,23 +283,23 @@ func itemOutput(it core.Item) (*ItemOutput, error) {
 	return &ItemOutput{ETag: itemETag(it), Body: body}, nil
 }
 
-func itemETag(it core.Item) string { return etag.Format(etag.Item, it.Version) }
+func itemETag(it Item) string { return etag.Format(etag.Item, it.Version) }
 
-// priceInput converts a wire price to the core model; nil stays nil.
-func priceInput(p *PriceInput) *core.Price {
+// priceInput converts a wire price to the model; nil stays nil.
+func priceInput(p *PriceInput) *Price {
 	if p == nil {
 		return nil
 	}
-	return &core.Price{Amount: p.Amount, Min: p.Min, Max: p.Max, Currency: p.Currency}
+	return &Price{Amount: p.Amount, Min: p.Min, Max: p.Max, Currency: p.Currency}
 }
 
 // priceOptional converts the wire PATCH price: absent is not Set, null is Set
 // with no value (clear the price).
-func priceOptional(o httpserver.Optional[PriceInput]) core.Optional[core.Price] {
-	return core.Optional[core.Price]{Set: o.Set, Value: priceInput(o.Value)}
+func priceOptional(o httpserver.Optional[PriceInput]) Optional[Price] {
+	return Optional[Price]{Set: o.Set, Value: priceInput(o.Value)}
 }
 
 // websiteOptional converts the wire PATCH website: absent is not Set, null clears it.
-func websiteOptional(o httpserver.Optional[string]) core.Optional[string] {
-	return core.Optional[string]{Set: o.Set, Value: o.Value}
+func websiteOptional(o httpserver.Optional[string]) Optional[string] {
+	return Optional[string]{Set: o.Set, Value: o.Value}
 }

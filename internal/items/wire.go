@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
 	"github.com/0xfederama/collections-app-backend/internal/platform/httpserver"
 )
 
@@ -145,12 +144,12 @@ type ReorderItemsRequest struct {
 }
 
 // pageOf is the paging of a page of rows.
-func pageOf(p core.ItemPage) PageJSON {
+func pageOf(p ItemPage) PageJSON {
 	return PageJSON{Limit: p.Limit, Offset: p.Offset, Total: p.Total}
 }
 
 // itemJSON is the wire shape of it. Path is set only when the item has one (getItem).
-func itemJSON(it core.Item) (ItemJSON, error) {
+func itemJSON(it Item) (ItemJSON, error) {
 	metadata, err := metadataOf(it.Metadata)
 	if err != nil {
 		return ItemJSON{}, err
@@ -172,7 +171,7 @@ func itemJSON(it core.Item) (ItemJSON, error) {
 
 // itemSummaryJSON is the wire shape of a list row. The stored metadata is validated
 // JSON written by this service; anything unreadable degrades to {}.
-func itemSummaryJSON(it core.Item) ItemSummaryJSON {
+func itemSummaryJSON(it Item) ItemSummaryJSON {
 	metadata, err := metadataOf(it.Metadata)
 	if err != nil {
 		metadata = map[string]any{}
@@ -201,26 +200,26 @@ func metadataOf(raw json.RawMessage) (map[string]any, error) {
 }
 
 // imageJSON is the full image: an upload or a URL, nil when there is none.
-func imageJSON(img *core.Image) any {
+func imageJSON(img *Image) any {
 	if img == nil {
 		return nil
 	}
-	if img.Source == core.ImageSourceUpload {
+	if img.Source == ImageSourceUpload {
 		return UploadImageJSON{
 			AttachmentID: img.AttachmentID, Height: img.Height, OriginalFilename: img.OriginalFilename,
-			Source: core.ImageSourceUpload, ThumbnailURL: img.ThumbnailURL, URL: img.URL, Width: img.Width,
+			Source: ImageSourceUpload, ThumbnailURL: img.ThumbnailURL, URL: img.URL, Width: img.Width,
 		}
 	}
-	return URLImageJSON{Source: core.ImageSourceURL, URL: img.URL}
+	return URLImageJSON{Source: ImageSourceURL, URL: img.URL}
 }
 
 // imageSummaryJSON is the reduced image of a list row, nil when there is none.
-func imageSummaryJSON(img *core.Image) *ImageSummaryJSON {
+func imageSummaryJSON(img *Image) *ImageSummaryJSON {
 	if img == nil {
 		return nil
 	}
 	out := &ImageSummaryJSON{URL: img.URL}
-	if img.Source == core.ImageSourceUpload {
+	if img.Source == ImageSourceUpload {
 		thumb := img.ThumbnailURL
 		out.ThumbnailURL = &thumb
 	}
@@ -228,7 +227,7 @@ func imageSummaryJSON(img *core.Image) *ImageSummaryJSON {
 }
 
 // priceJSON is the wire shape of a price, nil when there is none.
-func priceJSON(p *core.Price) *PriceJSON {
+func priceJSON(p *Price) *PriceJSON {
 	if p == nil {
 		return nil
 	}

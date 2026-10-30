@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
+	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 )
 
@@ -26,9 +26,9 @@ func (e *lookupEnv) bookList() uuid.UUID {
 	return id
 }
 
-func (e *lookupEnv) createBook(list uuid.UUID, title string, metadata map[string]any) core.Item {
+func (e *lookupEnv) createBook(list uuid.UUID, title string, metadata map[string]any) items.Item {
 	e.t.Helper()
-	it, err := e.items.Create(scope.With(e.t.Context(), e.ws), list, core.CreateInput{Title: title, Metadata: metadata})
+	it, err := e.items.Create(scope.With(e.t.Context(), e.ws), list, items.CreateInput{Title: title, Metadata: metadata})
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestF016B3_BookCreateKeepsProvenanceWithoutRetention(t *testing.T) {
 	it, err := e.store.Apply(t.Context(), ApplyParams{
 		Mode: ModeCreate, ListID: list, Type: "book", Provider: ProviderOpenLibrary, SourceID: "OL893415W",
 		Title: "Dune", OriginalTitle: "dune",
-		CreateInput: &core.CreateInput{Title: "dune", Metadata: map[string]any{"pages": 700}},
+		CreateInput: &items.CreateInput{Title: "dune", Metadata: map[string]any{"pages": 700}},
 		Fields:      bookFields(), FillOnly: map[string]any{"stores": []string{"amazon", "kobo"}},
 		PosterPath: "12547191", Poster: processedPoster("cover"), RefreshFields: true, RefreshPoster: true,
 	})
@@ -88,7 +88,7 @@ func TestF016B3_BookCreateExplicitStoresWinOverTheProviderLink(t *testing.T) {
 	list := e.bookList()
 	it, err := e.store.Apply(t.Context(), ApplyParams{
 		Mode: ModeCreate, ListID: list, Type: "book", Provider: ProviderOpenLibrary, SourceID: "OL1W",
-		Title: "Dune", OriginalTitle: "dune", CreateInput: &core.CreateInput{Title: "dune", Metadata: map[string]any{"stores": []any{}}},
+		Title: "Dune", OriginalTitle: "dune", CreateInput: &items.CreateInput{Title: "dune", Metadata: map[string]any{"stores": []any{}}},
 		Fields: bookFields(), FillOnly: map[string]any{"stores": []string{"amazon"}},
 	})
 	if err != nil {
@@ -103,7 +103,7 @@ func TestF016B3_BookFillSetsOnlyEmptyValuesAndTheStoreLinkOnlyWhenEmpty(t *testi
 	e := newLookupEnv(t, time.Now().UTC())
 	list := e.bookList()
 	it := e.createBook(list, "dune", map[string]any{"author": "Mine", "stores": []any{}})
-	apply := func(it core.Item) core.Item {
+	apply := func(it items.Item) items.Item {
 		t.Helper()
 		got, err := e.store.Apply(t.Context(), ApplyParams{
 			Mode: ModeFill, ItemID: it.ID, ExpectedVersion: it.Version, Type: "book", Provider: ProviderOpenLibrary, SourceID: "OL1W",
@@ -301,7 +301,7 @@ func TestHardcover_UntrackedCreateKeepsTypedTitleAndWritesNoProvenance(t *testin
 	list := e.bookList()
 	it, err := e.store.Apply(t.Context(), ApplyParams{
 		Mode: ModeCreateUntracked, ListID: list, Type: "book", Title: "dune", OriginalTitle: "dune",
-		CreateInput: &core.CreateInput{Title: "dune", Metadata: map[string]any{"pages": 700}},
+		CreateInput: &items.CreateInput{Title: "dune", Metadata: map[string]any{"pages": 700}},
 		Fields:      bookFields(), FillOnly: map[string]any{"stores": []string{"kobo"}},
 		Poster: processedPoster("hc"),
 	})
@@ -324,7 +324,7 @@ func TestHardcover_UntrackedCreateKeepsTypedTitleAndWritesNoProvenance(t *testin
 func TestHardcover_UntrackedCreateRejectsNonBooks(t *testing.T) {
 	e := newLookupEnv(t, time.Now().UTC())
 	_, err := e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeCreateUntracked, ListID: e.bookList(), Type: "movie", Title: "x", CreateInput: &core.CreateInput{Title: "x"},
+		Mode: ModeCreateUntracked, ListID: e.bookList(), Type: "movie", Title: "x", CreateInput: &items.CreateInput{Title: "x"},
 	})
 	if err == nil {
 		t.Fatal("untracked create of a movie must fail")

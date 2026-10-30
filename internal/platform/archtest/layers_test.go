@@ -27,7 +27,6 @@ const (
 // legacyPackages are not migrated to the layers yet. They are exempt from every
 // check (a prefix covers subpackages). B3b..f remove their entries as they migrate.
 var legacyPackages = []string{
-	"internal/items",   // migrates in B3b..f
 	"internal/trash",   // migrates in B3b..f
 	"internal/search",  // migrates in B3b..f
 	"internal/images",  // migrates in B3b..f

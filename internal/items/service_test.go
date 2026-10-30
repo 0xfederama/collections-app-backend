@@ -15,7 +15,6 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/items"
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
 )
 
@@ -24,10 +23,10 @@ import (
 // and a type or settings read made inside a transaction is a test failure.
 type fakeDB struct {
 	t        *testing.T
-	items    map[uuid.UUID]core.Item
+	items    map[uuid.UUID]items.Item
 	lists    map[uuid.UUID]items.ListInfo
-	paths    map[uuid.UUID][]core.PathSegment // optional; PathOf defaults to the list alone
-	versions map[uuid.UUID]int                // content version by item
+	paths    map[uuid.UUID][]items.PathSegment // optional; PathOf defaults to the list alone
+	versions map[uuid.UUID]int                 // content version by item
 	defs     map[string]items.TypeDef
 	fields   map[string][]types.Field
 
@@ -43,8 +42,8 @@ type fakeDB struct {
 func newFakeDB(t *testing.T) *fakeDB {
 	return &fakeDB{
 		t:     t,
-		items: map[uuid.UUID]core.Item{}, lists: map[uuid.UUID]items.ListInfo{},
-		paths: map[uuid.UUID][]core.PathSegment{}, versions: map[uuid.UUID]int{},
+		items: map[uuid.UUID]items.Item{}, lists: map[uuid.UUID]items.ListInfo{},
+		paths: map[uuid.UUID][]items.PathSegment{}, versions: map[uuid.UUID]int{},
 		defs: map[string]items.TypeDef{
 			"movie":    {Key: "movie"},
 			"vehicle":  {Key: "vehicle"},
@@ -80,33 +79,33 @@ func (f *fakeDB) LockTree(context.Context) error {
 }
 
 // view fills the list type, as the item read joins the list.
-func (f *fakeDB) view(it core.Item) core.Item {
+func (f *fakeDB) view(it items.Item) items.Item {
 	if l, ok := f.lists[it.ListID]; ok {
 		it.Type = l.Type
 	}
 	return it
 }
 
-func (f *fakeDB) Get(_ context.Context, id uuid.UUID) (core.Item, error) {
+func (f *fakeDB) Get(_ context.Context, id uuid.UUID) (items.Item, error) {
 	it, ok := f.items[id]
 	if !ok {
-		return core.Item{}, apperr.NotFound("item")
+		return items.Item{}, apperr.NotFound("item")
 	}
 	return f.view(it), nil
 }
 
-func (f *fakeDB) GetForUpdate(ctx context.Context, id uuid.UUID) (core.Item, error) {
+func (f *fakeDB) GetForUpdate(ctx context.Context, id uuid.UUID) (items.Item, error) {
 	return f.Get(ctx, id)
 }
 
-func (f *fakeDB) ListByList(_ context.Context, listID uuid.UUID) ([]core.Item, error) {
-	out := []core.Item{}
+func (f *fakeDB) ListByList(_ context.Context, listID uuid.UUID) ([]items.Item, error) {
+	out := []items.Item{}
 	for _, it := range f.items {
 		if it.ListID == listID {
 			out = append(out, f.view(it))
 		}
 	}
-	slices.SortFunc(out, func(a, b core.Item) int { return a.SortOrder - b.SortOrder })
+	slices.SortFunc(out, func(a, b items.Item) int { return a.SortOrder - b.SortOrder })
 	return out, nil
 }
 
@@ -118,7 +117,7 @@ func (f *fakeDB) ListInfo(_ context.Context, listID uuid.UUID) (items.ListInfo, 
 	return l, nil
 }
 
-func (f *fakeDB) PathOf(_ context.Context, listID uuid.UUID) ([]core.PathSegment, error) {
+func (f *fakeDB) PathOf(_ context.Context, listID uuid.UUID) ([]items.PathSegment, error) {
 	l, ok := f.lists[listID]
 	if !ok {
 		return nil, apperr.NotFound("list")
@@ -126,7 +125,7 @@ func (f *fakeDB) PathOf(_ context.Context, listID uuid.UUID) ([]core.PathSegment
 	if p, ok := f.paths[listID]; ok {
 		return p, nil
 	}
-	return []core.PathSegment{{Type: "list", ID: l.ID, Name: l.Name}}, nil
+	return []items.PathSegment{{Type: "list", ID: l.ID, Name: l.Name}}, nil
 }
 
 func (f *fakeDB) MaxContentVersions(_ context.Context, ids []uuid.UUID) (map[uuid.UUID]int, error) {
@@ -149,7 +148,7 @@ func (f *fakeDB) NextSortOrder(_ context.Context, listID uuid.UUID) (int, error)
 	return next, nil
 }
 
-func (f *fakeDB) Insert(_ context.Context, it core.Item, now time.Time) (uuid.UUID, error) {
+func (f *fakeDB) Insert(_ context.Context, it items.Item, now time.Time) (uuid.UUID, error) {
 	f.calls = append(f.calls, "insert")
 	it.ID = uuid.New()
 	it.Version = 1
@@ -158,7 +157,7 @@ func (f *fakeDB) Insert(_ context.Context, it core.Item, now time.Time) (uuid.UU
 	return it.ID, nil
 }
 
-func (f *fakeDB) Update(_ context.Context, it core.Item, now time.Time) error {
+func (f *fakeDB) Update(_ context.Context, it items.Item, now time.Time) error {
 	f.calls = append(f.calls, "update")
 	cur, ok := f.items[it.ID]
 	if !ok {
@@ -238,7 +237,7 @@ func (f *fakeDB) addItem(list uuid.UUID, title string, order int, meta string) u
 	if meta == "" {
 		meta = "{}"
 	}
-	f.items[id] = core.Item{ID: id, ListID: list, Title: title, SortOrder: order, Version: 1, Metadata: json.RawMessage(meta)}
+	f.items[id] = items.Item{ID: id, ListID: list, Title: title, SortOrder: order, Version: 1, Metadata: json.RawMessage(meta)}
 	return id
 }
 
@@ -282,9 +281,9 @@ func describe(err error) string {
 		return "version_conflict"
 	case errors.As(err, &uf):
 		return "unknown:" + uf.Path
-	case errors.Is(err, core.ErrInvalidSort):
+	case errors.Is(err, items.ErrInvalidSort):
 		return "invalid_sort"
-	case errors.Is(err, core.ErrInvalidFilter):
+	case errors.Is(err, items.ErrInvalidFilter):
 		return "invalid_filter"
 	}
 	return "error:" + err.Error()
@@ -311,7 +310,7 @@ func retypedBeforeTx(from, to *string) func(*fakeDB) uuid.UUID {
 	}
 }
 
-func metaOf(t *testing.T, it core.Item) map[string]any {
+func metaOf(t *testing.T, it items.Item) map[string]any {
 	t.Helper()
 	var m map[string]any
 	if err := json.Unmarshal(it.Metadata, &m); err != nil {
@@ -320,8 +319,8 @@ func metaOf(t *testing.T, it core.Item) map[string]any {
 	return m
 }
 
-func eur(amount string) *core.Price {
-	return &core.Price{Min: strPtr(amount), Max: strPtr(amount), Currency: "EUR"}
+func eur(amount string) *items.Price {
+	return &items.Price{Min: strPtr(amount), Max: strPtr(amount), Currency: "EUR"}
 }
 
 func TestCreate_ErrorOrder(t *testing.T) {
@@ -329,24 +328,24 @@ func TestCreate_ErrorOrder(t *testing.T) {
 	tests := []struct {
 		name string
 		list func(*fakeDB) uuid.UUID
-		in   core.CreateInput
+		in   items.CreateInput
 		want string
 	}{
-		{"field rules come before a missing list", missingList, core.CreateInput{Title: ""}, "validation:title"},
-		{"a missing list is 404", missingList, core.CreateInput{Title: "t"}, "notfound:list"},
-		{"a price on a type without one is 422 before the metadata", listOf(movie), core.CreateInput{Title: "t", Price: price, Metadata: map[string]any{"make": "x"}}, "validation:price"},
-		{"a price on a list with no type is 422", listOf(nil), core.CreateInput{Title: "t", Price: price}, "validation:price"},
-		{"an undeclared metadata key is 400", listOf(movie), core.CreateInput{Title: "t", Metadata: map[string]any{"make": "VW"}}, "unknown:metadata.make"},
-		{"metadata on a list with no type must be empty", listOf(nil), core.CreateInput{Title: "t", Metadata: map[string]any{"release_year": float64(1999)}}, "unknown:metadata.release_year"},
-		{"a type without a definition is 422 on type", listOf(ghost), core.CreateInput{Title: "t"}, "validation:type"},
-		{"a type changed before the transaction is a 409", retypedBeforeTx(movie, vehicle), core.CreateInput{Title: "t"}, "conflict:type_mismatch"},
-		{"a price on a wishlist item is accepted", listOf(wishlist), core.CreateInput{Title: "t", Price: price}, "ok"},
+		{"field rules come before a missing list", missingList, items.CreateInput{Title: ""}, "validation:title"},
+		{"a missing list is 404", missingList, items.CreateInput{Title: "t"}, "notfound:list"},
+		{"a price on a type without one is 422 before the metadata", listOf(movie), items.CreateInput{Title: "t", Price: price, Metadata: map[string]any{"make": "x"}}, "validation:price"},
+		{"a price on a list with no type is 422", listOf(nil), items.CreateInput{Title: "t", Price: price}, "validation:price"},
+		{"an undeclared metadata key is 400", listOf(movie), items.CreateInput{Title: "t", Metadata: map[string]any{"make": "VW"}}, "unknown:metadata.make"},
+		{"metadata on a list with no type must be empty", listOf(nil), items.CreateInput{Title: "t", Metadata: map[string]any{"release_year": float64(1999)}}, "unknown:metadata.release_year"},
+		{"a type without a definition is 422 on type", listOf(ghost), items.CreateInput{Title: "t"}, "validation:type"},
+		{"a type changed before the transaction is a 409", retypedBeforeTx(movie, vehicle), items.CreateInput{Title: "t"}, "conflict:type_mismatch"},
+		{"a price on a wishlist item is accepted", listOf(wishlist), items.CreateInput{Title: "t", Price: price}, "ok"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := newFakeDB(t)
 			listID := tt.list(db)
-			_, err := items.NewItems(db, db, db, fixedClock{}).Create(t.Context(), listID, tt.in)
+			_, err := items.NewService(db, db, db, fixedClock{}).Create(t.Context(), listID, tt.in)
 			if got := describe(err); got != tt.want {
 				t.Fatalf("Create = %s, want %s", got, tt.want)
 			}
@@ -366,7 +365,7 @@ func TestCreate_AppendsUnderTheTreeLock(t *testing.T) {
 	l := db.addList(movie, "manual")
 	db.addItem(l, "a", 0, "")
 	db.addItem(l, "b", 1, "")
-	it, err := items.NewItems(db, db, db, fixedClock{}).Create(t.Context(), l, core.CreateInput{Title: "  c  "})
+	it, err := items.NewService(db, db, db, fixedClock{}).Create(t.Context(), l, items.CreateInput{Title: "  c  "})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -396,7 +395,7 @@ func TestCreate_PreferredStoreSeeding(t *testing.T) {
 			db := newFakeDB(t)
 			db.noSettings = tt.noSettings
 			l := db.addList(wishlist, "manual")
-			it, err := items.NewItems(db, db, db, fixedClock{}).Create(t.Context(), l, core.CreateInput{Title: "t", Metadata: tt.meta})
+			it, err := items.NewService(db, db, db, fixedClock{}).Create(t.Context(), l, items.CreateInput{Title: "t", Metadata: tt.meta})
 			if err != nil {
 				t.Fatalf("Create: %v", err)
 			}
@@ -413,12 +412,12 @@ func TestCreate_SettingsFailureOnlyWhenNeeded(t *testing.T) {
 	db := newFakeDB(t)
 	db.settingsErr = boom
 	plain := db.addList(vehicle, "manual")
-	if _, err := items.NewItems(db, db, db, fixedClock{}).Create(t.Context(), plain, core.CreateInput{Title: "t"}); err != nil {
+	if _, err := items.NewService(db, db, db, fixedClock{}).Create(t.Context(), plain, items.CreateInput{Title: "t"}); err != nil {
 		t.Fatalf("a type without stores fields must not need settings: %v", err)
 	}
 
 	withStores := db.addList(wishlist, "manual")
-	_, err := items.NewItems(db, db, db, fixedClock{}).Create(t.Context(), withStores, core.CreateInput{Title: "t"})
+	_, err := items.NewService(db, db, db, fixedClock{}).Create(t.Context(), withStores, items.CreateInput{Title: "t"})
 	if !errors.Is(err, boom) {
 		t.Fatalf("err = %v, want the settings failure", err)
 	}
@@ -431,11 +430,11 @@ func TestGet_PathAndContentVersion(t *testing.T) {
 	db := newFakeDB(t)
 	folder := uuid.New()
 	l := db.addList(movie, "manual")
-	db.paths[l] = []core.PathSegment{{Type: "folder", ID: folder, Name: "Films"}, {Type: "list", ID: l, Name: "L"}}
+	db.paths[l] = []items.PathSegment{{Type: "folder", ID: folder, Name: "Films"}, {Type: "list", ID: l, Name: "L"}}
 	it := db.addItem(l, "a", 0, "")
 	db.versions[it] = 3
 
-	svc := items.NewItems(db, db, db, fixedClock{})
+	svc := items.NewService(db, db, db, fixedClock{})
 	got, err := svc.Get(t.Context(), it)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
@@ -455,24 +454,24 @@ func TestList_ErrorOrder(t *testing.T) {
 	tests := []struct {
 		name   string
 		list   func(*fakeDB) uuid.UUID
-		params core.ListParams
+		params items.ListParams
 		want   string
 	}{
-		{"a missing list is 404", missingList, core.ListParams{}, "notfound:list"},
-		{"a type without a definition is an invalid sort", listOf(ghost), core.ListParams{}, "invalid_sort"},
-		{"sort by price on a type without one is an invalid sort", listOf(movie), core.ListParams{Sort: "price"}, "invalid_sort"},
-		{"sort by an unknown field is an invalid sort", listOf(movie), core.ListParams{Sort: "nope"}, "invalid_sort"},
-		{"a stores field is not sortable", listOf(wishlist), core.ListParams{Sort: "stores"}, "invalid_sort"},
-		{"a filter value without a field is an invalid filter", listOf(movie), core.ListParams{FilterValue: "x"}, "invalid_filter"},
-		{"a boolean filter takes true or false", listOf(movie), core.ListParams{FilterField: "owned", FilterValue: "maybe"}, "invalid_filter"},
-		{"a number range with min above max is an invalid filter", listOf(movie), core.ListParams{FilterField: "release_year", FilterMin: "2000", FilterMax: "1990"}, "invalid_filter"},
-		{"a valid filter and a field sort", listOf(movie), core.ListParams{Sort: "release_year", FilterField: "owned", FilterValue: "true"}, "ok"},
+		{"a missing list is 404", missingList, items.ListParams{}, "notfound:list"},
+		{"a type without a definition is an invalid sort", listOf(ghost), items.ListParams{}, "invalid_sort"},
+		{"sort by price on a type without one is an invalid sort", listOf(movie), items.ListParams{Sort: "price"}, "invalid_sort"},
+		{"sort by an unknown field is an invalid sort", listOf(movie), items.ListParams{Sort: "nope"}, "invalid_sort"},
+		{"a stores field is not sortable", listOf(wishlist), items.ListParams{Sort: "stores"}, "invalid_sort"},
+		{"a filter value without a field is an invalid filter", listOf(movie), items.ListParams{FilterValue: "x"}, "invalid_filter"},
+		{"a boolean filter takes true or false", listOf(movie), items.ListParams{FilterField: "owned", FilterValue: "maybe"}, "invalid_filter"},
+		{"a number range with min above max is an invalid filter", listOf(movie), items.ListParams{FilterField: "release_year", FilterMin: "2000", FilterMax: "1990"}, "invalid_filter"},
+		{"a valid filter and a field sort", listOf(movie), items.ListParams{Sort: "release_year", FilterField: "owned", FilterValue: "true"}, "ok"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := newFakeDB(t)
 			listID := tt.list(db)
-			_, err := items.NewItems(db, db, db, fixedClock{}).List(t.Context(), listID, tt.params)
+			_, err := items.NewService(db, db, db, fixedClock{}).List(t.Context(), listID, tt.params)
 			if got := describe(err); got != tt.want {
 				t.Fatalf("List = %s, want %s", got, tt.want)
 			}
@@ -487,7 +486,7 @@ func TestList_Rules(t *testing.T) {
 		db.addItem(l, "b", 0, "")
 		db.addItem(l, "A", 1, "")
 		db.addItem(l, "c", 2, "")
-		page, err := items.NewItems(db, db, db, fixedClock{}).List(t.Context(), l, core.ListParams{})
+		page, err := items.NewService(db, db, db, fixedClock{}).List(t.Context(), l, items.ListParams{})
 		if err != nil {
 			t.Fatalf("List: %v", err)
 		}
@@ -502,7 +501,7 @@ func TestList_Rules(t *testing.T) {
 		for i, title := range []string{"a", "b", "c", "d", "e"} {
 			db.addItem(l, title, i, "")
 		}
-		page, err := items.NewItems(db, db, db, fixedClock{}).List(t.Context(), l, core.ListParams{Limit: 2, Offset: 2})
+		page, err := items.NewService(db, db, db, fixedClock{}).List(t.Context(), l, items.ListParams{Limit: 2, Offset: 2})
 		if err != nil {
 			t.Fatalf("List: %v", err)
 		}
@@ -518,7 +517,7 @@ func TestList_Rules(t *testing.T) {
 		a := db.addItem(l, "a", 0, "")
 		db.addItem(other, "elsewhere", 0, "")
 		db.versions[a] = 3
-		page, err := items.NewItems(db, db, db, fixedClock{}).List(t.Context(), l, core.ListParams{})
+		page, err := items.NewService(db, db, db, fixedClock{}).List(t.Context(), l, items.ListParams{})
 		if err != nil {
 			t.Fatalf("List: %v", err)
 		}
@@ -528,7 +527,7 @@ func TestList_Rules(t *testing.T) {
 	})
 }
 
-func titles(page core.ItemPage) []string {
+func titles(page items.ItemPage) []string {
 	out := make([]string, 0, len(page.Items))
 	for _, it := range page.Items {
 		out = append(out, it.Title)
@@ -537,7 +536,7 @@ func titles(page core.ItemPage) []string {
 }
 
 func TestUpdate_ErrorOrder(t *testing.T) {
-	type setup func(*fakeDB) (uuid.UUID, int, core.Patch)
+	type setup func(*fakeDB) (uuid.UUID, int, items.Patch)
 	movieItem := func(db *fakeDB) (uuid.UUID, uuid.UUID) {
 		l := db.addList(movie, "manual")
 		return db.addItem(l, "a", 0, `{"release_year":1999}`), l
@@ -547,48 +546,48 @@ func TestUpdate_ErrorOrder(t *testing.T) {
 		setup setup
 		want  string
 	}{
-		{"field rules come before a missing item", func(*fakeDB) (uuid.UUID, int, core.Patch) {
-			return uuid.New(), 1, core.Patch{Title: strPtr("")}
+		{"field rules come before a missing item", func(*fakeDB) (uuid.UUID, int, items.Patch) {
+			return uuid.New(), 1, items.Patch{Title: strPtr("")}
 		}, "validation:title"},
-		{"a missing item is 404", func(*fakeDB) (uuid.UUID, int, core.Patch) {
-			return uuid.New(), 1, core.Patch{Title: strPtr("x")}
+		{"a missing item is 404", func(*fakeDB) (uuid.UUID, int, items.Patch) {
+			return uuid.New(), 1, items.Patch{Title: strPtr("x")}
 		}, "notfound:item"},
-		{"a stale version wins over bad metadata", func(db *fakeDB) (uuid.UUID, int, core.Patch) {
+		{"a stale version wins over bad metadata", func(db *fakeDB) (uuid.UUID, int, items.Patch) {
 			id, _ := movieItem(db)
 			it := db.items[id]
 			it.Version = 2
 			db.items[id] = it
-			return id, 1, core.Patch{Metadata: map[string]any{"make": "x"}}
+			return id, 1, items.Patch{Metadata: map[string]any{"make": "x"}}
 		}, "version_conflict"},
-		{"a price on a type without one is 422 before the merge", func(db *fakeDB) (uuid.UUID, int, core.Patch) {
+		{"a price on a type without one is 422 before the merge", func(db *fakeDB) (uuid.UUID, int, items.Patch) {
 			id, _ := movieItem(db)
-			return id, 1, core.Patch{Price: core.Optional[core.Price]{Set: true, Value: eur("1.00")}, Metadata: map[string]any{"make": "x"}}
+			return id, 1, items.Patch{Price: items.Optional[items.Price]{Set: true, Value: eur("1.00")}, Metadata: map[string]any{"make": "x"}}
 		}, "validation:price"},
-		{"an undeclared metadata key is 400", func(db *fakeDB) (uuid.UUID, int, core.Patch) {
+		{"an undeclared metadata key is 400", func(db *fakeDB) (uuid.UUID, int, items.Patch) {
 			id, _ := movieItem(db)
-			return id, 1, core.Patch{Metadata: map[string]any{"make": "x"}}
+			return id, 1, items.Patch{Metadata: map[string]any{"make": "x"}}
 		}, "unknown:metadata.make"},
-		{"a trashed list is 404", func(db *fakeDB) (uuid.UUID, int, core.Patch) {
+		{"a trashed list is 404", func(db *fakeDB) (uuid.UUID, int, items.Patch) {
 			id, l := movieItem(db)
 			delete(db.lists, l)
-			return id, 1, core.Patch{Title: strPtr("x")}
+			return id, 1, items.Patch{Title: strPtr("x")}
 		}, "notfound:list"},
-		{"a type changed before the transaction is a version conflict", func(db *fakeDB) (uuid.UUID, int, core.Patch) {
+		{"a type changed before the transaction is a version conflict", func(db *fakeDB) (uuid.UUID, int, items.Patch) {
 			l := retypedBeforeTx(movie, vehicle)(db)
 			id := db.addItem(l, "a", 0, "")
-			return id, 1, core.Patch{Title: strPtr("x")}
+			return id, 1, items.Patch{Title: strPtr("x")}
 		}, "version_conflict"},
-		{"a price on a wishlist item is accepted", func(db *fakeDB) (uuid.UUID, int, core.Patch) {
+		{"a price on a wishlist item is accepted", func(db *fakeDB) (uuid.UUID, int, items.Patch) {
 			l := db.addList(wishlist, "manual")
 			id := db.addItem(l, "a", 0, "")
-			return id, 1, core.Patch{Price: core.Optional[core.Price]{Set: true, Value: eur("1.00")}}
+			return id, 1, items.Patch{Price: items.Optional[items.Price]{Set: true, Value: eur("1.00")}}
 		}, "ok"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := newFakeDB(t)
 			id, version, p := tt.setup(db)
-			_, err := items.NewItems(db, db, db, fixedClock{}).Update(t.Context(), id, version, p)
+			_, err := items.NewService(db, db, db, fixedClock{}).Update(t.Context(), id, version, p)
 			if got := describe(err); got != tt.want {
 				t.Fatalf("Update = %s, want %s", got, tt.want)
 			}
@@ -604,7 +603,7 @@ func TestUpdate_Rules(t *testing.T) {
 		db := newFakeDB(t)
 		l := db.addList(movie, "manual")
 		id := db.addItem(l, "a", 0, `{"release_year":1999}`)
-		it, err := items.NewItems(db, db, db, fixedClock{}).Update(t.Context(), id, 1, core.Patch{
+		it, err := items.NewService(db, db, db, fixedClock{}).Update(t.Context(), id, 1, items.Patch{
 			Title:    strPtr("a"),
 			Metadata: map[string]any{"release_year": float64(1999)},
 		})
@@ -620,7 +619,7 @@ func TestUpdate_Rules(t *testing.T) {
 		db := newFakeDB(t)
 		l := db.addList(movie, "manual")
 		id := db.addItem(l, "a", 0, "")
-		it, err := items.NewItems(db, db, db, fixedClock{}).Update(t.Context(), id, 1, core.Patch{Title: strPtr("b")})
+		it, err := items.NewService(db, db, db, fixedClock{}).Update(t.Context(), id, 1, items.Patch{Title: strPtr("b")})
 		if err != nil {
 			t.Fatalf("Update: %v", err)
 		}
@@ -633,8 +632,8 @@ func TestUpdate_Rules(t *testing.T) {
 		db := newFakeDB(t)
 		l := db.addList(wishlist, "manual")
 		id := db.addItem(l, "a", 0, "")
-		p := core.Patch{Price: core.Optional[core.Price]{Set: true, Value: &core.Price{Amount: strPtr("3.00"), Currency: "EUR"}}}
-		it, err := items.NewItems(db, db, db, fixedClock{}).Update(t.Context(), id, 1, p)
+		p := items.Patch{Price: items.Optional[items.Price]{Set: true, Value: &items.Price{Amount: strPtr("3.00"), Currency: "EUR"}}}
+		it, err := items.NewService(db, db, db, fixedClock{}).Update(t.Context(), id, 1, p)
 		if err != nil {
 			t.Fatalf("Update: %v", err)
 		}
@@ -684,7 +683,7 @@ func TestMove_ErrorOrder(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := newFakeDB(t)
 			id, version, dest := tt.setup(db)
-			_, err := items.NewItems(db, db, db, fixedClock{}).Move(t.Context(), id, version, dest)
+			_, err := items.NewService(db, db, db, fixedClock{}).Move(t.Context(), id, version, dest)
 			if got := describe(err); got != tt.want {
 				t.Fatalf("Move = %s, want %s", got, tt.want)
 			}
@@ -699,7 +698,7 @@ func TestMove_AppendsToDestination(t *testing.T) {
 	db.addItem(dest, "x", 0, "")
 	db.addItem(dest, "y", 1, "")
 	id := db.addItem(src, "a", 0, "")
-	it, err := items.NewItems(db, db, db, fixedClock{}).Move(t.Context(), id, 1, dest)
+	it, err := items.NewService(db, db, db, fixedClock{}).Move(t.Context(), id, 1, dest)
 	if err != nil {
 		t.Fatalf("Move: %v", err)
 	}
@@ -742,7 +741,7 @@ func TestReorder_ErrorOrder(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := newFakeDB(t)
 			listID, ids := tt.setup(db)
-			err := items.NewItems(db, db, db, fixedClock{}).Reorder(t.Context(), listID, ids)
+			err := items.NewService(db, db, db, fixedClock{}).Reorder(t.Context(), listID, ids)
 			if got := describe(err); got != tt.want {
 				t.Fatalf("Reorder = %s, want %s", got, tt.want)
 			}
@@ -758,7 +757,7 @@ func TestReorder_SetsPositionsAndKeepsVersions(t *testing.T) {
 	l := db.addList(movie, "manual")
 	a := db.addItem(l, "a", 0, "")
 	b := db.addItem(l, "b", 1, "")
-	if err := items.NewItems(db, db, db, fixedClock{}).Reorder(t.Context(), l, []uuid.UUID{b, a}); err != nil {
+	if err := items.NewService(db, db, db, fixedClock{}).Reorder(t.Context(), l, []uuid.UUID{b, a}); err != nil {
 		t.Fatalf("Reorder: %v", err)
 	}
 	if db.items[b].SortOrder != 0 || db.items[a].SortOrder != 1 {

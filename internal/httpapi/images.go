@@ -11,14 +11,14 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
+	"github.com/0xfederama/collections-app-backend/internal/items"
 )
 
 // SetItemImage takes either a multipart upload (field `file`) or JSON `{url}`.
 // The request guard has already checked If-Match, the media type and the size.
 func (s *Server) SetItemImage(ctx context.Context, r oapi.SetItemImageRequestObject) (oapi.SetItemImageResponseObject, error) {
 	version := IfMatchVersion(ctx)
-	var item core.Item
+	var item items.Item
 	switch {
 	case r.JSONBody != nil:
 		var err error

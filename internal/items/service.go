@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
 )
@@ -21,10 +20,10 @@ import (
 type Store interface {
 	InTx(ctx context.Context, fn func(Repo) error) error
 	// Get returns an active item with its list type; the service fills the rest.
-	Get(ctx context.Context, id uuid.UUID) (core.Item, error)
-	ListByList(ctx context.Context, listID uuid.UUID) ([]core.Item, error)
+	Get(ctx context.Context, id uuid.UUID) (Item, error)
+	ListByList(ctx context.Context, listID uuid.UUID) ([]Item, error)
 	ListInfo(ctx context.Context, listID uuid.UUID) (ListInfo, error)
-	PathOf(ctx context.Context, listID uuid.UUID) ([]core.PathSegment, error)
+	PathOf(ctx context.Context, listID uuid.UUID) ([]PathSegment, error)
 	MaxContentVersions(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]int, error)
 }
 
@@ -50,19 +49,19 @@ type SettingsSource interface {
 	PreferredStore(ctx context.Context) (string, error)
 }
 
-// Items holds the item rules. Structural writes (create, move, reorder) take the
+// Service holds the item rules. Structural writes (create, move, reorder) take the
 // tree lock first (D-060). Cross-feature reads (the list type, the preferred
 // store) happen before the transaction opens, never inside it.
-type Items struct {
+type Service struct {
 	store    Store
 	types    TypeSource
 	settings SettingsSource
 	clock    clock.Clock
 }
 
-// NewItems returns the item rules over the given store and sources.
-func NewItems(store Store, typeSource TypeSource, settings SettingsSource, clk clock.Clock) *Items {
-	return &Items{store: store, types: typeSource, settings: settings, clock: clk}
+// NewService returns the item rules over the given store and sources.
+func NewService(store Store, typeSource TypeSource, settings SettingsSource, clk clock.Clock) *Service {
+	return &Service{store: store, types: typeSource, settings: settings, clock: clk}
 }
 
 // Create appends an item to the end of an active list. Errors in order: the field
@@ -70,10 +69,10 @@ func NewItems(store Store, typeSource TypeSource, settings SettingsSource, clk c
 // metadata rules of the type (400 unknown field, 422). A stores field the request
 // left unset takes the preferred store. The list, its type and the preferred store
 // are read before the transaction; a type change in between is a TypeMismatch.
-func (s *Items) Create(ctx context.Context, listID uuid.UUID, in core.CreateInput) (core.Item, error) {
-	in, err := core.CleanCreate(in)
+func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) (Item, error) {
+	in, err := CleanCreate(in)
 	if err != nil {
-		return core.Item{}, err
+		return Item{}, err
 	}
 	// Each read failure is kept and returned at the point where the old code made it.
 	info, infoErr := s.store.ListInfo(ctx, listID)
@@ -103,14 +102,14 @@ func (s *Items) Create(ctx context.Context, listID uuid.UUID, in core.CreateInpu
 			if typeErr != nil {
 				return typeErr
 			}
-			if err := core.PriceAllowed(def.AllowsPrice); err != nil {
+			if err := PriceAllowed(def.AllowsPrice); err != nil {
 				return err
 			}
 		}
 		if typeErr != nil {
 			return unknownTypeErr(typeErr)
 		}
-		meta, err := core.ValidateMetadata(info.Type, fields, in.Metadata, nil)
+		meta, err := ValidateMetadata(info.Type, fields, in.Metadata, nil)
 		if err != nil {
 			return err
 		}
@@ -126,57 +125,57 @@ func (s *Items) Create(ctx context.Context, listID uuid.UUID, in core.CreateInpu
 		if err != nil {
 			return err
 		}
-		id, err = r.Insert(ctx, core.Item{
+		id, err = r.Insert(ctx, Item{
 			ListID: listID, Title: in.Title, Price: in.Price, Website: in.Website,
 			Metadata: raw, SortOrder: next,
 		}, s.now())
 		return err
 	})
 	if err != nil {
-		return core.Item{}, err
+		return Item{}, err
 	}
 	return s.load(ctx, id)
 }
 
 // Get returns an active item with its content version and its path (the folders
 // above its list, root first, then the list).
-func (s *Items) Get(ctx context.Context, id uuid.UUID) (core.Item, error) {
+func (s *Service) Get(ctx context.Context, id uuid.UUID) (Item, error) {
 	it, err := s.load(ctx, id)
 	if err != nil {
-		return core.Item{}, err
+		return Item{}, err
 	}
 	it.Path, err = s.store.PathOf(ctx, it.ListID)
 	if err != nil {
-		return core.Item{}, err
+		return Item{}, err
 	}
 	return it, nil
 }
 
 // List returns one page of the active items of an active list. Errors: NotFound
-// list; core.ErrInvalidSort when the list's type has no definition or the sort is
-// not available on it; core.ErrInvalidFilter; the rest is core.Query's. The list
+// list; ErrInvalidSort when the list's type has no definition or the sort is
+// not available on it; ErrInvalidFilter; the rest is Query's. The list
 // and its type are read before the page is computed in memory.
-func (s *Items) List(ctx context.Context, listID uuid.UUID, p core.ListParams) (core.ItemPage, error) {
+func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (ItemPage, error) {
 	info, err := s.store.ListInfo(ctx, listID)
 	if err != nil {
-		return core.ItemPage{}, err
+		return ItemPage{}, err
 	}
 	p = p.Normalized(info.SortMode)
 	def, fields, typeErr := s.types.TypeFields(ctx, info.Type)
 	if isNotFound(typeErr) {
-		return core.ItemPage{}, core.ErrInvalidSort
+		return ItemPage{}, ErrInvalidSort
 	}
 	if typeErr != nil {
-		return core.ItemPage{}, typeErr
+		return ItemPage{}, typeErr
 	}
 	all, err := s.store.ListByList(ctx, listID)
 	if err != nil {
-		return core.ItemPage{}, err
+		return ItemPage{}, err
 	}
-	defs := core.ListDefs{SortMode: info.SortMode, AllowsPrice: def.AllowsPrice, Fields: fields}
-	rows, total, err := core.Query(all, info.Type, defs, p)
+	defs := ListDefs{SortMode: info.SortMode, AllowsPrice: def.AllowsPrice, Fields: fields}
+	rows, total, err := Query(all, info.Type, defs, p)
 	if err != nil {
-		return core.ItemPage{}, err
+		return ItemPage{}, err
 	}
 	ids := make([]uuid.UUID, 0, len(rows))
 	for _, it := range rows {
@@ -184,12 +183,12 @@ func (s *Items) List(ctx context.Context, listID uuid.UUID, p core.ListParams) (
 	}
 	versions, err := s.store.MaxContentVersions(ctx, ids)
 	if err != nil {
-		return core.ItemPage{}, err
+		return ItemPage{}, err
 	}
 	for i := range rows {
 		rows[i].ContentVersion = versions[rows[i].ID]
 	}
-	return core.ItemPage{Items: rows, Limit: p.Limit, Offset: p.Offset, Total: total}, nil
+	return ItemPage{Items: rows, Limit: p.Limit, Offset: p.Offset, Total: total}, nil
 }
 
 // Update applies a partial update. version is the caller's If-Match version.
@@ -200,10 +199,10 @@ func (s *Items) List(ctx context.Context, listID uuid.UUID, p core.ListParams) (
 // The item's list type is read before the transaction. The transaction re-checks
 // the item, its list and the type: a change in between is a VersionConflict, as
 // lists.Update answers it.
-func (s *Items) Update(ctx context.Context, id uuid.UUID, version int, p core.Patch) (core.Item, error) {
-	p, err := core.CleanPatch(p)
+func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch) (Item, error) {
+	p, err := CleanPatch(p)
 	if err != nil {
-		return core.Item{}, err
+		return Item{}, err
 	}
 	pre, preErr := s.store.Get(ctx, id)
 	var def TypeDef
@@ -231,14 +230,14 @@ func (s *Items) Update(ctx context.Context, id uuid.UUID, version int, p core.Pa
 			if typeErr != nil {
 				return typeErr
 			}
-			if err := core.PriceAllowed(def.AllowsPrice); err != nil {
+			if err := PriceAllowed(def.AllowsPrice); err != nil {
 				return err
 			}
 		}
 		if p.Metadata != nil && typeErr != nil {
 			return unknownTypeErr(typeErr)
 		}
-		next, changed, err := core.MergePatch(core.Editable{
+		next, changed, err := MergePatch(Editable{
 			Title: cur.Title, Price: cur.Price, Website: cur.Website, Metadata: cur.Metadata,
 		}, list.Type, fields, p)
 		if err != nil {
@@ -247,12 +246,12 @@ func (s *Items) Update(ctx context.Context, id uuid.UUID, version int, p core.Pa
 		if !changed {
 			return nil
 		}
-		return r.Update(ctx, core.Item{
+		return r.Update(ctx, Item{
 			ID: id, Title: next.Title, Price: next.Price, Website: next.Website, Metadata: next.Metadata,
 		}, s.now())
 	})
 	if err != nil {
-		return core.Item{}, err
+		return Item{}, err
 	}
 	return s.load(ctx, id)
 }
@@ -260,7 +259,7 @@ func (s *Items) Update(ctx context.Context, id uuid.UUID, version int, p core.Pa
 // Move appends an item to the end of another active list. Errors in order:
 // NotFound item, VersionConflict, DestinationUnavailable, NotFound list, then
 // TypeMismatch when the destination has another type than the item's list (F-007).
-func (s *Items) Move(ctx context.Context, id uuid.UUID, version int, dest uuid.UUID) (core.Item, error) {
+func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, dest uuid.UUID) (Item, error) {
 	err := s.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return err
@@ -293,7 +292,7 @@ func (s *Items) Move(ctx context.Context, id uuid.UUID, version int, dest uuid.U
 		return r.Move(ctx, id, dest, next, s.now())
 	})
 	if err != nil {
-		return core.Item{}, err
+		return Item{}, err
 	}
 	return s.load(ctx, id)
 }
@@ -301,7 +300,7 @@ func (s *Items) Move(ctx context.Context, id uuid.UUID, version int, dest uuid.U
 // Reorder rewrites the order of an active list's items: the position in ids. ids
 // must be exactly the active items of the list, else OrderStale. It works in any
 // sort mode and does not bump item versions (DATA_MODEL §7).
-func (s *Items) Reorder(ctx context.Context, listID uuid.UUID, ids []uuid.UUID) error {
+func (s *Service) Reorder(ctx context.Context, listID uuid.UUID, ids []uuid.UUID) error {
 	return s.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return err
@@ -331,20 +330,20 @@ func (s *Items) Reorder(ctx context.Context, listID uuid.UUID, ids []uuid.UUID) 
 }
 
 // load reads an active item with its content version. It has no path.
-func (s *Items) load(ctx context.Context, id uuid.UUID) (core.Item, error) {
+func (s *Service) load(ctx context.Context, id uuid.UUID) (Item, error) {
 	it, err := s.store.Get(ctx, id)
 	if err != nil {
-		return core.Item{}, err
+		return Item{}, err
 	}
 	versions, err := s.store.MaxContentVersions(ctx, []uuid.UUID{id})
 	if err != nil {
-		return core.Item{}, err
+		return Item{}, err
 	}
 	it.ContentVersion = versions[id]
 	return it, nil
 }
 
-func (s *Items) now() time.Time { return s.clock.Now() }
+func (s *Service) now() time.Time { return s.clock.Now() }
 
 // seedPreferredStores fills every stores field the create request left unset
 // (absent or null) with [preferred] (F-016, D-096). An explicit value, including

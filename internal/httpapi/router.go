@@ -19,7 +19,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/lists"
 	"github.com/0xfederama/collections-app-backend/internal/lookup"
@@ -59,7 +58,7 @@ type Deps struct {
 	Lookup *lookup.Service
 	// Items serves items (F-019-B3d). The composition root builds it with NewItems and
 	// gives the same instance to lookup and images.
-	Items *items.Items
+	Items *items.Service
 	// Search serves GET /search (B-11).
 	Search *search.Service
 	// Images serves item images and attachment files (B-09).
@@ -170,8 +169,8 @@ func (a listTypes) TypeInfo(ctx context.Context, key *string) (lists.TypeInfo, [
 // NewItems builds the item rules over the pool: a list type is read from the type
 // definitions and the preferred store from the workspace settings. The composition
 // root builds one instance and gives it to lookup, images and Deps.Items.
-func NewItems(pool *pgxpool.Pool, clk clock.Clock, settings *workspace.Service) *items.Items {
-	return items.NewItems(items.NewPostgres(pool), itemTypes{definitions.NewPostgres(pool)}, itemSettings{settings}, clk)
+func NewItems(pool *pgxpool.Pool, clk clock.Clock, settings *workspace.Service) *items.Service {
+	return items.NewService(items.NewPostgres(pool), itemTypes{definitions.NewPostgres(pool)}, itemSettings{settings}, clk)
 }
 
 // itemTypes is the items.TypeSource: it reads a list type from the type definitions
@@ -256,6 +255,6 @@ func importer(d Deps) items.Importer {
 // importItems is the items.Importer over internal/lookup.
 type importItems struct{ lk *lookup.Service }
 
-func (a importItems) Create(ctx context.Context, listID uuid.UUID, in core.CreateInput, o items.ImportOptions) (core.Item, error) {
+func (a importItems) Create(ctx context.Context, listID uuid.UUID, in items.CreateInput, o items.ImportOptions) (items.Item, error) {
 	return a.lk.Create(ctx, listID, in, lookup.CreateOptions{Lookup: o.Lookup, TMDBID: o.TMDBID, SourceID: o.SourceID})
 }

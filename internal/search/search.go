@@ -14,15 +14,15 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
+	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 )
 
 // Limits of the q parameter (after trimming) and page sizes (API.md §5).
 const (
 	MaxQueryLen  = 200
-	DefaultLimit = core.DefaultLimit
-	MaxLimit     = core.MaxLimit
+	DefaultLimit = items.DefaultLimit
+	MaxLimit     = items.MaxLimit
 
 	// DefaultRecentLimit and MaxRecentLimit bound Recent (API.md §5, D-070).
 	DefaultRecentLimit = 12
@@ -55,9 +55,9 @@ type Params struct {
 
 // Result is one match: the item and where it lives, root folder first, list last.
 type Result struct {
-	Item     core.Item
+	Item     items.Item
 	TypeName *string // nil when the list has no type
-	Path     []core.PathSegment
+	Path     []items.PathSegment
 }
 
 // Page is one page of results and the total number of matches.
@@ -86,7 +86,7 @@ func (s *Service) Search(ctx context.Context, p Params) (Page, error) {
 	}
 
 	db := sqlc.New(s.db)
-	like := core.EscapeLike(q)
+	like := items.EscapeLike(q)
 	rows, err := db.SearchItems(ctx, sqlc.SearchItemsParams{
 		WorkspaceID: s.workspaceID, LikeQ: like, Q: q,
 		PageLimit: int32(p.Limit), PageOffset: int32(p.Offset), //nolint:gosec // bounded above
@@ -194,22 +194,22 @@ func (t tree) typeName(listID uuid.UUID) *string { return t.lists[listID].typeNa
 
 // of returns the path of a list: its folders root first, then the list. ok is
 // false when the list or one of its folders is not active.
-func (t tree) of(listID uuid.UUID) (path []core.PathSegment, ok bool) {
+func (t tree) of(listID uuid.UUID) (path []items.PathSegment, ok bool) {
 	l, found := t.lists[listID]
 	if !found {
 		return nil, false
 	}
 	// Collect leaf to root, then reverse.
-	rev := []core.PathSegment{{Type: "list", ID: listID, Name: l.name, Icon: l.icon, IconColor: l.iconColor}}
+	rev := []items.PathSegment{{Type: "list", ID: listID, Name: l.name, Icon: l.icon, IconColor: l.iconColor}}
 	for next, depth := l.folder, 0; next.Valid; depth++ {
 		f, found := t.folders[next.UUID]
 		if !found || depth >= maxPathDepth {
 			return nil, false
 		}
-		rev = append(rev, core.PathSegment{Type: "folder", ID: next.UUID, Name: f.name})
+		rev = append(rev, items.PathSegment{Type: "folder", ID: next.UUID, Name: f.name})
 		next = f.parent
 	}
-	path = make([]core.PathSegment, 0, len(rev))
+	path = make([]items.PathSegment, 0, len(rev))
 	for i := len(rev) - 1; i >= 0; i-- {
 		path = append(path, rev[i])
 	}

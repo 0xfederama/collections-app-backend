@@ -71,7 +71,7 @@ func (f fakePinger) Ping(context.Context) error { return f.err }
 
 // newItems is the item service of a test router, built the way the composition root
 // builds it (httpapi.NewItems).
-func newItems(pool *pgxpool.Pool, clk clock.Clock) *items.Items {
+func newItems(pool *pgxpool.Pool, clk clock.Clock) *items.Service {
 	return httpapi.NewItems(pool, clk, workspace.NewService(workspace.NewPostgres(pool)))
 }
 

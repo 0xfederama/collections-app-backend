@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
+	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
@@ -48,7 +48,7 @@ func TestStreamingLink_TrackedKeptOnPlatformEditAndClientCannotWriteIt(t *testin
 	}
 
 	// Editing only the platforms keeps the link; a link sent by the client is ignored.
-	it, err = e.items.Update(scope.With(t.Context(), e.ws), it.ID, it.Version, core.Patch{Metadata: map[string]any{
+	it, err = e.items.Update(scope.With(t.Context(), e.ws), it.ID, it.Version, items.Patch{Metadata: map[string]any{
 		"release_year": 1999,
 		"streaming":    map[string]any{"country": "IT", "platforms": []any{"Netflix", "Prime Video"}},
 	}})
@@ -58,7 +58,7 @@ func TestStreamingLink_TrackedKeptOnPlatformEditAndClientCannotWriteIt(t *testin
 	if got := linkOf(t, it.Metadata); got != matrixLink {
 		t.Errorf("link after platform edit = %v, want kept", got)
 	}
-	it, err = e.items.Update(scope.With(t.Context(), e.ws), it.ID, it.Version, core.Patch{Metadata: map[string]any{
+	it, err = e.items.Update(scope.With(t.Context(), e.ws), it.ID, it.Version, items.Patch{Metadata: map[string]any{
 		"streaming": map[string]any{"country": "IT", "platforms": []any{"Netflix"}, "link": "https://evil.example/"},
 	}})
 	if err != nil {
@@ -68,7 +68,7 @@ func TestStreamingLink_TrackedKeptOnPlatformEditAndClientCannotWriteIt(t *testin
 		t.Errorf("link after client-sent link = %v, want the stored one", got)
 	}
 	// Another country is another page: the stored link does not carry over.
-	it, err = e.items.Update(scope.With(t.Context(), e.ws), it.ID, it.Version, core.Patch{Metadata: map[string]any{
+	it, err = e.items.Update(scope.With(t.Context(), e.ws), it.ID, it.Version, items.Patch{Metadata: map[string]any{
 		"streaming": map[string]any{"country": "GB", "platforms": []any{"Netflix"}},
 	}})
 	if err != nil {
@@ -79,7 +79,7 @@ func TestStreamingLink_TrackedKeptOnPlatformEditAndClientCannotWriteIt(t *testin
 	}
 
 	// A client cannot plant a link on create either.
-	c, err := e.items.Create(scope.With(t.Context(), e.ws), e.list, core.CreateInput{Title: "Other", Metadata: map[string]any{
+	c, err := e.items.Create(scope.With(t.Context(), e.ws), e.list, items.CreateInput{Title: "Other", Metadata: map[string]any{
 		"streaming": map[string]any{"country": "IT", "link": matrixLink},
 	}})
 	if err != nil {

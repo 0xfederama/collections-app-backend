@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/hardcover"
-	"github.com/0xfederama/collections-app-backend/internal/items/core"
+	"github.com/0xfederama/collections-app-backend/internal/items"
 )
 
 type fakeHardcover struct {
@@ -67,9 +67,9 @@ func olWith(fields map[string]any) *fakeClient {
 	return book
 }
 
-func createBook(t *testing.T, svc *Service, title string, opts CreateOptions) (core.Item, error) {
+func createBook(t *testing.T, svc *Service, title string, opts CreateOptions) (items.Item, error) {
 	t.Helper()
-	return svc.Create(t.Context(), uuid.New(), core.CreateInput{Title: title}, opts)
+	return svc.Create(t.Context(), uuid.New(), items.CreateInput{Title: title}, opts)
 }
 
 func TestHardcover_GapFillIsFillOnly(t *testing.T) {
@@ -89,7 +89,7 @@ func TestHardcover_GapFillIsFillOnly(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			book, h := olWith(tc.ol), &fakeHardcover{enabled: true, isbnBook: hc, isbnOK: true}
-			store := &fakeStore{typ: "book", result: core.Item{Title: "Dune"}}
+			store := &fakeStore{typ: "book", result: items.Item{Title: "Dune"}}
 			svc := bookService(book, &fakeClient{}, store, &fakeItems{}).WithHardcover(h)
 			if _, err := createBook(t, svc, "Dune", CreateOptions{}); err != nil {
 				t.Fatal(err)
@@ -123,7 +123,7 @@ func TestHardcover_GapFillRejectedOrFailedLeavesOpenLibraryUnchanged(t *testing.
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			book := olWith(map[string]any{"isbn": "9780441172719"})
-			store := &fakeStore{typ: "book", result: core.Item{Title: "Dune"}}
+			store := &fakeStore{typ: "book", result: items.Item{Title: "Dune"}}
 			svc := bookService(book, &fakeClient{}, store, &fakeItems{}).WithHardcover(tc.h)
 			if _, err := createBook(t, svc, "Dune", CreateOptions{}); err != nil {
 				t.Fatal(err)
@@ -150,7 +150,7 @@ func TestHardcover_GapFillNotUsedForSelectedOrExplicitRequests(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			book := olWith(map[string]any{"isbn": "9780441172719"})
 			h := &fakeHardcover{enabled: true, isbnOK: true, isbnBook: hardcover.Book{Authors: []string{"X"}, Pages: 1}}
-			store := &fakeStore{typ: "book", result: core.Item{Title: "Dune"}}
+			store := &fakeStore{typ: "book", result: items.Item{Title: "Dune"}}
 			svc := bookService(book, &fakeClient{}, store, &fakeItems{}).WithHardcover(h)
 			if _, err := createBook(t, svc, "Dune", tc.opts); err != nil {
 				t.Fatal(err)
@@ -190,7 +190,7 @@ func TestHardcover_OpenLibraryEmptyExactTitleIsAccepted(t *testing.T) {
 			book := bookClient(true)
 			book.matches = nil
 			h := &fakeHardcover{enabled: true, titleBooks: []hardcover.Book{tc.doc}, cover: tinyPNG(t)}
-			store := &fakeStore{typ: "book", result: core.Item{Title: tc.typed}}
+			store := &fakeStore{typ: "book", result: items.Item{Title: tc.typed}}
 			itemSvc := &fakeItems{}
 			svc := bookService(book, &fakeClient{}, store, itemSvc).WithHardcover(h)
 			if _, err := createBook(t, svc, tc.typed, CreateOptions{}); err != nil {
@@ -226,7 +226,7 @@ func TestHardcover_OpenLibraryFailureFallsBackToHardcover(t *testing.T) {
 	book := bookClient(true)
 	book.err = errors.New("down")
 	h := &fakeHardcover{enabled: true, titleBooks: []hardcover.Book{hcDune()}}
-	store := &fakeStore{typ: "book", result: core.Item{Title: "Dune"}}
+	store := &fakeStore{typ: "book", result: items.Item{Title: "Dune"}}
 	svc := bookService(book, &fakeClient{}, store, &fakeItems{}).WithHardcover(h)
 	if _, err := createBook(t, svc, "Dune", CreateOptions{}); err != nil {
 		t.Fatal(err)
@@ -273,7 +273,7 @@ func TestHardcover_CoverFailureIsNonFatal(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			book := bookClient(true)
 			book.matches = nil
-			store := &fakeStore{typ: "book", result: core.Item{Title: "Dune"}}
+			store := &fakeStore{typ: "book", result: items.Item{Title: "Dune"}}
 			svc := bookService(book, &fakeClient{}, store, &fakeItems{}).WithHardcover(h)
 			if _, err := createBook(t, svc, "Dune", CreateOptions{}); err != nil {
 				t.Fatal(err)
@@ -329,9 +329,9 @@ func TestHardcover_NotUsedOutsideBooks(t *testing.T) {
 func TestHardcover_ApplyWithoutSelectionGapFillsButNeverCreatesUntracked(t *testing.T) {
 	book := olWith(map[string]any{"isbn": "9780441172719"})
 	h := &fakeHardcover{enabled: true, isbnOK: true, isbnBook: hardcover.Book{Authors: []string{"HC"}, Pages: 5}}
-	store := &fakeStore{typ: "book", result: core.Item{Title: "Dune"}}
+	store := &fakeStore{typ: "book", result: items.Item{Title: "Dune"}}
 	typ := "book"
-	itemSvc := &fakeItems{item: core.Item{ID: uuid.New(), Title: "Dune", Version: 1, Type: &typ}}
+	itemSvc := &fakeItems{item: items.Item{ID: uuid.New(), Title: "Dune", Version: 1, Type: &typ}}
 	svc := bookService(book, &fakeClient{}, store, itemSvc).WithHardcover(h)
 	if _, err := svc.Apply(t.Context(), itemSvc.item.ID, 1, ModeFill, Selection{}); err != nil {
 		t.Fatal(err)

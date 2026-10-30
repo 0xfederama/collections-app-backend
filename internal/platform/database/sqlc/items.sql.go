@@ -53,73 +53,6 @@ func (q *Queries) ClearListItemsPrice(ctx context.Context, arg ClearListItemsPri
 	return result.RowsAffected(), nil
 }
 
-const countItems = `-- name: CountItems :one
-SELECT count(*)::int AS total FROM items i
-JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-WHERE i.list_id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
-  AND (lower(i.title) LIKE '%' || lower($3::text) || '%' ESCAPE '\'
-       OR (l.type = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower($3::text) || '%' ESCAPE '\'))
-  AND ($4::text = '' OR CASE $5::text
-       WHEN 'text' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
-       WHEN 'link' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
-       WHEN 'number' THEN (NOT $7::boolean OR (i.metadata ->> $4::text)::numeric >= NULLIF($8::text, '')::numeric)
-                        AND (NOT $9::boolean OR (i.metadata ->> $4::text)::numeric <= NULLIF($10::text, '')::numeric)
-       WHEN 'date' THEN (NOT $7::boolean OR i.metadata ->> $4::text >= $8::text)
-                      AND (NOT $9::boolean OR i.metadata ->> $4::text <= $10::text)
-       WHEN 'boolean' THEN i.metadata -> $4::text = $6::jsonb
-       WHEN 'streaming' THEN lower(COALESCE((CASE WHEN jsonb_typeof(i.metadata -> $4::text) = 'object' THEN ((i.metadata -> $4::text) - 'link')::text ELSE i.metadata ->> $4::text END), '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
-       ELSE false END)
-`
-
-type CountItemsParams struct {
-	ListID       uuid.UUID
-	WorkspaceID  uuid.UUID
-	Q            string
-	FilterKey    string
-	FilterType   string
-	FilterValue  string
-	FilterMinSet bool
-	FilterMin    string
-	FilterMaxSet bool
-	FilterMax    string
-}
-
-func (q *Queries) CountItems(ctx context.Context, arg CountItemsParams) (int32, error) {
-	row := q.db.QueryRow(ctx, countItems,
-		arg.ListID,
-		arg.WorkspaceID,
-		arg.Q,
-		arg.FilterKey,
-		arg.FilterType,
-		arg.FilterValue,
-		arg.FilterMinSet,
-		arg.FilterMin,
-		arg.FilterMaxSet,
-		arg.FilterMax,
-	)
-	var total int32
-	err := row.Scan(&total)
-	return total, err
-}
-
-const countListItems = `-- name: CountListItems :one
-SELECT count(*)::int AS total FROM items
-WHERE list_id = $1 AND workspace_id = $2
-`
-
-type CountListItemsParams struct {
-	ListID      uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-// All items of a list, trashed ones included (a type change clears all of them).
-func (q *Queries) CountListItems(ctx context.Context, arg CountListItemsParams) (int32, error) {
-	row := q.db.QueryRow(ctx, countListItems, arg.ListID, arg.WorkspaceID)
-	var total int32
-	err := row.Scan(&total)
-	return total, err
-}
-
 const getActiveListForItems = `-- name: GetActiveListForItems :one
 SELECT id, name, folder_id, sort_mode, type FROM lists
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
@@ -149,123 +82,6 @@ func (q *Queries) GetActiveListForItems(ctx context.Context, arg GetActiveListFo
 		&i.Type,
 	)
 	return i, err
-}
-
-const getItem = `-- name: GetItem :one
-
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
-       l.type              AS type,
-       a.width             AS image_width,
-       a.height            AS image_height,
-       a.original_filename AS image_original_filename,
-       COALESCE((SELECT max(v.version) FROM item_content_versions v WHERE v.item_id = i.id), 0)::int AS content_version
-FROM items i
-LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
-JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-WHERE i.id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
-`
-
-type GetItemParams struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-type GetItemRow struct {
-	ID                    uuid.UUID
-	WorkspaceID           uuid.UUID
-	ListID                uuid.UUID
-	Title                 string
-	ImageUrl              *string
-	ImageAttachmentID     uuid.NullUUID
-	PriceMin              pgtype.Numeric
-	PriceMax              pgtype.Numeric
-	Currency              *string
-	WebsiteUrl            *string
-	Metadata              []byte
-	SortOrder             int32
-	Version               int32
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
-	DeletedAt             *time.Time
-	TrashBatchID          uuid.NullUUID
-	Type                  *string
-	ImageWidth            *int32
-	ImageHeight           *int32
-	ImageOriginalFilename *string
-	ContentVersion        int32
-}
-
-// Item read model: GetItem and ListItems return the same columns, so one mapper
-// (internal/items) serves both. type is not stored on the item: it comes from its list (F-007). The image columns come from the attachment the
-// item points to (NULL for no image or an external URL). content_version is the
-// highest saved Markdown version, 0 when there is none (D-052).
-func (q *Queries) GetItem(ctx context.Context, arg GetItemParams) (GetItemRow, error) {
-	row := q.db.QueryRow(ctx, getItem, arg.ID, arg.WorkspaceID)
-	var i GetItemRow
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.ListID,
-		&i.Title,
-		&i.ImageUrl,
-		&i.ImageAttachmentID,
-		&i.PriceMin,
-		&i.PriceMax,
-		&i.Currency,
-		&i.WebsiteUrl,
-		&i.Metadata,
-		&i.SortOrder,
-		&i.Version,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-		&i.TrashBatchID,
-		&i.Type,
-		&i.ImageWidth,
-		&i.ImageHeight,
-		&i.ImageOriginalFilename,
-		&i.ContentVersion,
-	)
-	return i, err
-}
-
-const insertItem = `-- name: InsertItem :one
-INSERT INTO items (workspace_id, list_id, title, price_min, price_max, currency,
-                   website_url, metadata, sort_order, created_at, updated_at)
-VALUES ($1, $2, $3, $4,
-        $5, $6, $7, $8, $9, $10, $10)
-RETURNING id
-`
-
-type InsertItemParams struct {
-	WorkspaceID uuid.UUID
-	ListID      uuid.UUID
-	Title       string
-	PriceMin    pgtype.Numeric
-	PriceMax    pgtype.Numeric
-	Currency    *string
-	WebsiteUrl  *string
-	Metadata    []byte
-	SortOrder   int32
-	Now         time.Time
-}
-
-func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, insertItem,
-		arg.WorkspaceID,
-		arg.ListID,
-		arg.Title,
-		arg.PriceMin,
-		arg.PriceMax,
-		arg.Currency,
-		arg.WebsiteUrl,
-		arg.Metadata,
-		arg.SortOrder,
-		arg.Now,
-	)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
 }
 
 const insertItemRow = `-- name: InsertItemRow :one
@@ -308,211 +124,8 @@ func (q *Queries) InsertItemRow(ctx context.Context, arg InsertItemRowParams) (u
 	return id, err
 }
 
-const listActiveItemIDsByList = `-- name: ListActiveItemIDsByList :many
-SELECT id FROM items
-WHERE list_id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-ORDER BY sort_order, id
-`
-
-type ListActiveItemIDsByListParams struct {
-	ListID      uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-func (q *Queries) ListActiveItemIDsByList(ctx context.Context, arg ListActiveItemIDsByListParams) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, listActiveItemIDsByList, arg.ListID, arg.WorkspaceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []uuid.UUID{}
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listItemIDsOfList = `-- name: ListItemIDsOfList :many
-SELECT id FROM items
-WHERE list_id = $1 AND workspace_id = $2
-ORDER BY sort_order, id
-`
-
-type ListItemIDsOfListParams struct {
-	ListID      uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-func (q *Queries) ListItemIDsOfList(ctx context.Context, arg ListItemIDsOfListParams) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, listItemIDsOfList, arg.ListID, arg.WorkspaceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []uuid.UUID{}
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listItems = `-- name: ListItems :many
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
-       l.type              AS type,
-       a.width             AS image_width,
-       a.height            AS image_height,
-       a.original_filename AS image_original_filename,
-       COALESCE((SELECT max(v.version) FROM item_content_versions v WHERE v.item_id = i.id), 0)::int AS content_version
-FROM items i
-LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
-JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-WHERE i.list_id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
-  AND (lower(i.title) LIKE '%' || lower($3::text) || '%' ESCAPE '\'
-       OR (l.type = 'movie' AND lower(COALESCE(i.metadata ->> 'director', '')) LIKE '%' || lower($3::text) || '%' ESCAPE '\'))
-  AND ($4::text = '' OR CASE $5::text
-       WHEN 'text' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
-       WHEN 'link' THEN lower(COALESCE(i.metadata ->> $4::text, '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
-       WHEN 'number' THEN (NOT $7::boolean OR (i.metadata ->> $4::text)::numeric >= NULLIF($8::text, '')::numeric)
-                        AND (NOT $9::boolean OR (i.metadata ->> $4::text)::numeric <= NULLIF($10::text, '')::numeric)
-       WHEN 'date' THEN (NOT $7::boolean OR i.metadata ->> $4::text >= $8::text)
-                      AND (NOT $9::boolean OR i.metadata ->> $4::text <= $10::text)
-       WHEN 'boolean' THEN i.metadata -> $4::text = $6::jsonb
-       WHEN 'streaming' THEN lower(COALESCE((CASE WHEN jsonb_typeof(i.metadata -> $4::text) = 'object' THEN ((i.metadata -> $4::text) - 'link')::text ELSE i.metadata ->> $4::text END), '')) LIKE '%' || lower($6::text) || '%' ESCAPE '\'
-       ELSE false END)
-ORDER BY
-  CASE WHEN $11::text = 'manual' THEN i.sort_order END ASC,
-  CASE WHEN $11::text = 'title' THEN lower(i.title) END ASC,
-  CASE WHEN $11::text = 'updated' THEN i.updated_at END DESC,
-  CASE WHEN $11::text = 'price' THEN i.price_min END ASC NULLS LAST,
-  CASE WHEN $11::text = 'price' THEN lower(i.title) END ASC,
-  CASE WHEN $12::text = 'number' THEN (i.metadata ->> $13::text)::numeric END ASC NULLS LAST,
-  CASE WHEN $12::text = 'date' THEN i.metadata ->> $13::text END ASC NULLS LAST,
-  CASE WHEN $12::text IN ('text', 'link') THEN lower(NULLIF(i.metadata ->> $13::text, '')) END ASC NULLS LAST,
-  CASE WHEN $12::text = 'streaming' THEN lower((CASE WHEN jsonb_typeof(i.metadata -> $13::text) = 'object' THEN ((i.metadata -> $13::text) - 'link')::text ELSE i.metadata ->> $13::text END)) END ASC NULLS LAST,
-  CASE WHEN $12::text = 'boolean' THEN (i.metadata ->> $13::text)::boolean END ASC NULLS LAST,
-  i.id
-LIMIT $15 OFFSET $14
-`
-
-type ListItemsParams struct {
-	ListID       uuid.UUID
-	WorkspaceID  uuid.UUID
-	Q            string
-	FilterKey    string
-	FilterType   string
-	FilterValue  string
-	FilterMinSet bool
-	FilterMin    string
-	FilterMaxSet bool
-	FilterMax    string
-	Sort         string
-	SortType     string
-	SortKey      string
-	PageOffset   int32
-	PageLimit    int32
-}
-
-type ListItemsRow struct {
-	ID                    uuid.UUID
-	WorkspaceID           uuid.UUID
-	ListID                uuid.UUID
-	Title                 string
-	ImageUrl              *string
-	ImageAttachmentID     uuid.NullUUID
-	PriceMin              pgtype.Numeric
-	PriceMax              pgtype.Numeric
-	Currency              *string
-	WebsiteUrl            *string
-	Metadata              []byte
-	SortOrder             int32
-	Version               int32
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
-	DeletedAt             *time.Time
-	TrashBatchID          uuid.NullUUID
-	Type                  *string
-	ImageWidth            *int32
-	ImageHeight           *int32
-	ImageOriginalFilename *string
-	ContentVersion        int32
-}
-
-// A streaming field filters and sorts on its object without the server-managed link.
-// @sort is manual, title, updated, price or a metadata field key. Field sorting is driven by its definition type.
-func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListItemsRow, error) {
-	rows, err := q.db.Query(ctx, listItems,
-		arg.ListID,
-		arg.WorkspaceID,
-		arg.Q,
-		arg.FilterKey,
-		arg.FilterType,
-		arg.FilterValue,
-		arg.FilterMinSet,
-		arg.FilterMin,
-		arg.FilterMaxSet,
-		arg.FilterMax,
-		arg.Sort,
-		arg.SortType,
-		arg.SortKey,
-		arg.PageOffset,
-		arg.PageLimit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListItemsRow{}
-	for rows.Next() {
-		var i ListItemsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.ListID,
-			&i.Title,
-			&i.ImageUrl,
-			&i.ImageAttachmentID,
-			&i.PriceMin,
-			&i.PriceMax,
-			&i.Currency,
-			&i.WebsiteUrl,
-			&i.Metadata,
-			&i.SortOrder,
-			&i.Version,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-			&i.TrashBatchID,
-			&i.Type,
-			&i.ImageWidth,
-			&i.ImageHeight,
-			&i.ImageOriginalFilename,
-			&i.ContentVersion,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const lockItem = `-- name: LockItem :one
+
 SELECT id, workspace_id, list_id, title, image_url, image_attachment_id, price_min, price_max, currency, website_url, metadata, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM items
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 FOR UPDATE
@@ -523,6 +136,10 @@ type LockItemParams struct {
 	WorkspaceID uuid.UUID
 }
 
+// Item queries (internal/items/repository.go and the callers that lock or clear items). type is not
+// stored on the item: it comes from its list (F-007). The image columns come from the attachment the
+// item points to (NULL for no image or an external URL). The read queries do not read the content
+// versions: MaxItemContentVersions does that, in one query per page (D-052).
 func (q *Queries) LockItem(ctx context.Context, arg LockItemParams) (Item, error) {
 	row := q.db.QueryRow(ctx, lockItem, arg.ID, arg.WorkspaceID)
 	var i Item
@@ -625,34 +242,6 @@ func (q *Queries) MaxItemContentVersions(ctx context.Context, arg MaxItemContent
 	return items, nil
 }
 
-const moveItem = `-- name: MoveItem :one
-UPDATE items
-SET list_id = $1, sort_order = $2, version = version + 1, updated_at = $3
-WHERE id = $4 AND workspace_id = $5 AND deleted_at IS NULL
-RETURNING id
-`
-
-type MoveItemParams struct {
-	ListID      uuid.UUID
-	SortOrder   int32
-	Now         time.Time
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-func (q *Queries) MoveItem(ctx context.Context, arg MoveItemParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, moveItem,
-		arg.ListID,
-		arg.SortOrder,
-		arg.Now,
-		arg.ID,
-		arg.WorkspaceID,
-	)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
-}
-
 const moveItemRow = `-- name: MoveItemRow :one
 UPDATE items
 SET list_id = $1, sort_order = $2, version = version + 1, updated_at = $3
@@ -718,7 +307,6 @@ func (q *Queries) NextItemSortOrderRow(ctx context.Context, arg NextItemSortOrde
 }
 
 const readItem = `-- name: ReadItem :one
-
 SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
        l.type              AS type,
        a.width             AS image_width,
@@ -759,10 +347,6 @@ type ReadItemRow struct {
 	ImageOriginalFilename *string
 }
 
-// Plain item queries of the F-019-B3d repository (internal/items/repository.go). They sit
-// beside the queries above, which stay until the old service is removed. The read
-// queries join the list (type) and the attachment (image dimensions) and do not read
-// the content versions: MaxItemContentVersions does that, in one query per page.
 // One active item with its list type and attachment dimensions.
 func (q *Queries) ReadItem(ctx context.Context, arg ReadItemParams) (ReadItemRow, error) {
 	row := q.db.QueryRow(ctx, readItem, arg.ID, arg.WorkspaceID)
@@ -914,31 +498,6 @@ func (q *Queries) ReadListItems(ctx context.Context, arg ReadListItemsParams) ([
 	return items, nil
 }
 
-const reorderItems = `-- name: ReorderItems :exec
-UPDATE items i
-SET sort_order = (o.ord - 1)::int, updated_at = $1
-FROM unnest($4::uuid[]) WITH ORDINALITY AS o(id, ord)
-WHERE i.id = o.id AND i.workspace_id = $2 AND i.list_id = $3 AND i.deleted_at IS NULL
-`
-
-type ReorderItemsParams struct {
-	Now         time.Time
-	WorkspaceID uuid.UUID
-	ListID      uuid.UUID
-	Ids         []uuid.UUID
-}
-
-// Rewrites sort_order to the position in ids (0..n-1). Versions stay (DATA_MODEL §7).
-func (q *Queries) ReorderItems(ctx context.Context, arg ReorderItemsParams) error {
-	_, err := q.db.Exec(ctx, reorderItems,
-		arg.Now,
-		arg.WorkspaceID,
-		arg.ListID,
-		arg.Ids,
-	)
-	return err
-}
-
 const setItemRowSortOrder = `-- name: SetItemRowSortOrder :exec
 UPDATE items
 SET sort_order = $1, updated_at = $2
@@ -961,47 +520,6 @@ func (q *Queries) SetItemRowSortOrder(ctx context.Context, arg SetItemRowSortOrd
 		arg.WorkspaceID,
 	)
 	return err
-}
-
-const updateItem = `-- name: UpdateItem :one
-UPDATE items
-SET title = $1,
-    price_min = $2, price_max = $3, currency = $4,
-    website_url = $5, metadata = $6,
-    version = version + 1, updated_at = $7
-WHERE id = $8 AND workspace_id = $9 AND deleted_at IS NULL
-RETURNING id
-`
-
-type UpdateItemParams struct {
-	Title       string
-	PriceMin    pgtype.Numeric
-	PriceMax    pgtype.Numeric
-	Currency    *string
-	WebsiteUrl  *string
-	Metadata    []byte
-	Now         time.Time
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-// A full replacement of the editable fields: the service merges the PATCH into the locked row first.
-// Image columns are not touched here (B-09 owns them).
-func (q *Queries) UpdateItem(ctx context.Context, arg UpdateItemParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, updateItem,
-		arg.Title,
-		arg.PriceMin,
-		arg.PriceMax,
-		arg.Currency,
-		arg.WebsiteUrl,
-		arg.Metadata,
-		arg.Now,
-		arg.ID,
-		arg.WorkspaceID,
-	)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
 }
 
 const updateItemRow = `-- name: UpdateItemRow :one

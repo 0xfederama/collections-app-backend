@@ -162,7 +162,13 @@ scripts/backup.sh "$T/backups" >"$T/backup.log" || { cat "$T/backup.log" >&2; fa
 backup="$(find "$T/backups" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 [ -f "$backup/db.dump" ] && [ -f "$backup/manifest.json" ] || fail "backup is missing files"
 ls "$backup"/files.tar.* >/dev/null || fail "backup is missing the image archive"
-curl -fsS "$BASE/readyz" >/dev/null || fail "api was not restarted after the backup"
+# backup.sh starts the api again without waiting for it: poll readiness for up to 30 s.
+ready=0
+for _ in $(seq 1 30); do
+  if curl -fsS "$BASE/readyz" >/dev/null 2>&1; then ready=1; break; fi
+  sleep 1
+done
+[ "$ready" = 1 ] || fail "api was not restarted after the backup"
 jq -e '.row_counts.items == 5 and .row_counts.attachments == 5 and (.content_sha256 | length) == 3 and .migration_version >= 1' "$backup/manifest.json" >/dev/null ||
   fail "unexpected manifest: $(jq -c '{row_counts, migration_version}' "$backup/manifest.json")"
 grep -q "$POSTGRES_PASSWORD" "$backup/manifest.json" "$T/backup.log" && fail "the password leaked into the manifest or log"

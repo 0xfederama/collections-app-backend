@@ -202,7 +202,7 @@ func (h *handler) create(ctx context.Context, in *CreateItemInput) (*CreatedItem
 	if err != nil {
 		return nil, err
 	}
-	body, err := itemJSON(it)
+	body, err := ToItemJSON(it)
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +276,7 @@ func (h *handler) reorder(ctx context.Context, in *ReorderItemsInput) (*struct{}
 
 // itemOutput is an item with its ETag.
 func itemOutput(it Item) (*ItemOutput, error) {
-	body, err := itemJSON(it)
+	body, err := ToItemJSON(it)
 	if err != nil {
 		return nil, err
 	}

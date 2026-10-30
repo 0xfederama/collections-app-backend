@@ -2,18 +2,24 @@ package images
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 
-	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 )
 
 // orphanAge is how old a file or an unreferenced attachment must be before the
 // sweeper touches it. It keeps the sweeper away from an upload that is still
 // between "files written" and "transaction committed".
 const orphanAge = time.Hour
+
+// errUnscopedSweep is returned when the context carries no workspace. The store
+// would list no attachments for it, so the file walk would take every file
+// under images/ for an orphan: the sweeper refuses to run instead.
+var errUnscopedSweep = errors.New("images: sweep needs a workspace in the context")
 
 // SweepInterval is the pause between two sweeper runs (a run also happens at startup).
 const SweepInterval = 24 * time.Hour
@@ -33,35 +39,38 @@ type SweepResult struct {
 //     that failed after a replacement).
 //
 // A deletion that fails is logged and retried by the next run. Each pass
-// returns the first error after trying everything.
+// returns the first error after trying everything. An unscoped ctx fails before
+// anything is listed or deleted.
 func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 	var res SweepResult
+	if scope.WorkspaceID(ctx) == uuid.Nil {
+		return res, errUnscopedSweep
+	}
 	cutoff := s.clock.Now().Add(-orphanAge)
-	q := sqlc.New(s.db)
 
-	ids, err := q.ListUnreferencedAttachments(ctx, sqlc.ListUnreferencedAttachmentsParams{WorkspaceID: s.workspaceID, Cutoff: cutoff})
+	ids, err := s.store.ListUnreferencedAttachments(ctx, cutoff)
 	if err != nil {
-		return res, fmt.Errorf("list unreferenced attachments: %w", err)
+		return res, err
 	}
 	var firstErr error
 	for _, id := range ids {
-		n, err := s.sweepAttachment(ctx, q, id)
+		n, err := s.sweepAttachment(ctx, id)
 		res.Attachments += n
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
 
-	known, err := q.ListAttachmentKeys(ctx, s.workspaceID)
+	known, err := s.store.ListAttachmentKeys(ctx)
 	if err != nil {
-		return res, fmt.Errorf("list attachment keys: %w", err)
+		return res, err
 	}
 	inUse := make(map[string]bool, len(known))
 	for _, k := range known {
 		inUse[k] = true
 	}
 	var orphans []string
-	err = s.store.Walk("images", func(key string, modTime time.Time) error {
+	err = s.files.Walk("images", func(key string, modTime time.Time) error {
 		if !inUse[key] && modTime.Before(cutoff) {
 			orphans = append(orphans, key)
 		}
@@ -71,7 +80,7 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 		return res, fmt.Errorf("walk images: %w", err)
 	}
 	for _, key := range orphans {
-		if err := s.store.Delete(key); err != nil {
+		if err := s.files.Delete(key); err != nil {
 			s.log.WarnContext(ctx, "sweeper could not delete an orphan file; will retry", "err", err)
 			if firstErr == nil {
 				firstErr = fmt.Errorf("delete orphan file: %w", err)
@@ -86,20 +95,26 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 // sweepAttachment deletes one unreferenced attachment: the row first (guarded
 // by NOT EXISTS, so an item that grabbed it meanwhile keeps it), then the files.
 // A file that cannot be deleted becomes an orphan file for the second pass.
-func (s *Service) sweepAttachment(ctx context.Context, q *sqlc.Queries, id uuid.UUID) (int, error) {
-	row, err := q.DeleteAttachment(ctx, sqlc.DeleteAttachmentParams{ID: id, WorkspaceID: s.workspaceID})
+// Any error from the row delete means "referenced again or already gone" and is
+// skipped, as before the repository split.
+func (s *Service) sweepAttachment(ctx context.Context, id uuid.UUID) (int, error) {
+	keys, err := s.store.DeleteAttachment(ctx, id)
 	if err != nil {
 		return 0, nil //nolint:nilerr // no row: referenced again or already gone
 	}
-	s.deleteFiles(ctx, row.StorageKey, row.ThumbnailStorageKey)
+	s.deleteFiles(ctx, keys.StorageKey, keys.ThumbnailStorageKey)
 	return 1, nil
 }
 
 // RunSweeper sweeps once now and then every interval until ctx is cancelled.
-// It logs counts only, never paths.
+// It logs counts only, never paths. ctx must carry the workspace.
 func (s *Service) RunSweeper(ctx context.Context, interval time.Duration) {
 	run := func() {
 		res, err := s.Sweep(ctx)
+		if errors.Is(err, errUnscopedSweep) {
+			s.log.ErrorContext(ctx, "image sweeper not run: context has no workspace")
+			return
+		}
 		if err != nil && ctx.Err() == nil {
 			s.log.WarnContext(ctx, "image sweeper finished with errors", "err", err,
 				"files_removed", res.Files, "attachments_removed", res.Attachments)

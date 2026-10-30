@@ -28,6 +28,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/seed"
@@ -94,7 +95,7 @@ func newImageEnv(t *testing.T) *imageEnv {
 	store := &flakyStore{Local: local}
 	clk := &testClock{t: time.Now().UTC()}
 	itemSvc := newItems(pool, clk)
-	svc := images.New(pool, store, clk, itemSvc, quietLogger(), ws)
+	svc := images.NewService(images.NewPostgres(pool), store, itemSvc, clk, quietLogger())
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: dir, Logger: quietLogger(), WorkspaceID: ws,
 		Items: itemSvc, Images: svc,
@@ -589,13 +590,13 @@ func TestAT20_SweepsOrphanFilesAfterACrash(t *testing.T) {
 	}
 
 	// Recent files may belong to an upload still in flight: untouched.
-	res, err := e.svc.Sweep(t.Context())
+	res, err := e.svc.Sweep(scope.With(t.Context(), e.ws))
 	if err != nil || res.Files != 0 || res.Attachments != 0 || len(e.fileKeys()) != 5 {
 		t.Fatalf("early sweep = %+v, %v, files=%d", res, err, len(e.fileKeys()))
 	}
 
 	e.clk.Advance(2 * time.Hour)
-	res, err = e.svc.Sweep(t.Context())
+	res, err = e.svc.Sweep(scope.With(t.Context(), e.ws))
 	if err != nil || res.Files != 3 || res.Attachments != 0 {
 		t.Fatalf("sweep = %+v, %v", res, err)
 	}
@@ -605,7 +606,7 @@ func TestAT20_SweepsOrphanFilesAfterACrash(t *testing.T) {
 	wantStatus(t, e.call("GET", "/api/v1/attachments/"+attachmentIDOf(t, kept)+"/file", "", ""), 200)
 	e.wantConsistent()
 
-	res, err = e.svc.Sweep(t.Context())
+	res, err = e.svc.Sweep(scope.With(t.Context(), e.ws))
 	if err != nil || res != (images.SweepResult{}) {
 		t.Fatalf("second sweep = %+v, %v", res, err)
 	}
@@ -624,7 +625,7 @@ func TestAT20_FailedDeleteAfterReplaceIsRetriedBySweeper(t *testing.T) {
 	e.wantConsistent() // never a dangling reference, only orphan files
 
 	e.clk.Advance(2 * time.Hour)
-	if res, err := e.svc.Sweep(t.Context()); err == nil || res.Files != 0 {
+	if res, err := e.svc.Sweep(scope.With(t.Context(), e.ws)); err == nil || res.Files != 0 {
 		t.Fatalf("sweep with a broken disk = %+v, %v", res, err)
 	}
 	if len(e.fileKeys()) != 4 {
@@ -632,7 +633,7 @@ func TestAT20_FailedDeleteAfterReplaceIsRetriedBySweeper(t *testing.T) {
 	}
 
 	e.store.setFail(false)
-	res, err := e.svc.Sweep(t.Context())
+	res, err := e.svc.Sweep(scope.With(t.Context(), e.ws))
 	if err != nil || res.Files != 2 {
 		t.Fatalf("retry sweep = %+v, %v", res, err)
 	}
@@ -660,11 +661,11 @@ func TestAT20_SweepsUnreferencedAttachmentRows(t *testing.T) {
 		VALUES ($1, $2, $3, $4, 'image/png', 1, 1, 1, '\x00', $5)`, orphan, e.ws, key, thumb, e.clk.Now())
 
 	// Too young: it may belong to an upload whose item write is about to commit.
-	if res, err := e.svc.Sweep(t.Context()); err != nil || res != (images.SweepResult{}) {
+	if res, err := e.svc.Sweep(scope.With(t.Context(), e.ws)); err != nil || res != (images.SweepResult{}) {
 		t.Fatalf("early sweep = %+v, %v", res, err)
 	}
 	e.clk.Advance(2 * time.Hour)
-	res, err := e.svc.Sweep(t.Context())
+	res, err := e.svc.Sweep(scope.With(t.Context(), e.ws))
 	if err != nil || res.Attachments != 1 || res.Files != 0 {
 		t.Fatalf("sweep = %+v, %v", res, err)
 	}
@@ -688,7 +689,7 @@ func TestAT20_ServedRowWithMissingFileIs404(t *testing.T) {
 
 func TestRunSweeperStopsWhenContextIsCancelled(t *testing.T) {
 	e := newImageEnv(t)
-	ctx, cancel := context.WithCancel(t.Context())
+	ctx, cancel := context.WithCancel(scope.With(t.Context(), e.ws))
 	done := make(chan struct{})
 	go func() { e.svc.RunSweeper(ctx, 5*time.Millisecond); close(done) }()
 	time.Sleep(30 * time.Millisecond) // a few ticks

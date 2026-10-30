@@ -2,33 +2,36 @@
 
 ## Purpose
 
-Owns item pictures: validates uploads by magic bytes, strips embedded metadata from the stored original, builds a JPEG thumbnail, stores files through `storage`, sets or clears an item's image (upload or external URL), serves stored files and sweeps orphans. No HTTP; returns `apperr` errors. Design context: `/Users/federico/Developer/collections-app/design-docs/` (DATA_MODEL §5, ARCHITECTURE §4 and §5).
+Owns item pictures on Huma: sets an item's image from an upload (multipart) or an external URL (JSON), removes it, serves stored files and sweeps orphans. Pure rules in `process.go` and `strip.go` (magic-byte sniffing, metadata stripping, thumbnails). Storage goes through `storage`. Design context: `/Users/federico/Developer/collections-app/design-docs/` (DATA_MODEL §5, ARCHITECTURE §4 and §5).
 
 ## Key files
 
-- `internal/images/process.go`: `Process`, sniffing, size and pixel limits, thumbnail, EXIF orientation
-- `internal/images/strip.go`: `Strip`, lossless metadata removal for JPEG, PNG, WebP
-- `internal/images/service.go`: `Service`, `SetUpload`, `SetURL`, `Delete`, `Open`, file ordering
-- `internal/images/sweeper.go`: `Sweep`, `RunSweeper`, orphan age and interval
+- `internal/images/handler.go`: Huma operations, `ifMatchFirst`, upload guard, multipart and JSON decoding, `StreamResponse` for files
+- `internal/images/service.go`: `Service`, write order (files, tx, delete old files), `Open`
+- `internal/images/repository.go`: `Postgres`, `Repo` and `Store`; item-image writes are `// SEAM` methods that move to items
+- `internal/images/sweep.go`: `Sweep`, `RunSweeper`, workspace check, orphan age
+- `internal/images/rules.go`, `model.go`: storage keys, display name and URL rules; `Attachment`, `ItemImageState`
+- `internal/images/process.go`, `strip.go`: `Process`, `Strip` (pure)
 - `db/queries/attachments.sql`: attachment queries
 
 ## Interfaces
 
-- `Process(r io.Reader) (*Processed, error)`: JPEG, PNG or WebP only; 413, 415 or 422 on failure
-- `Strip(data []byte, mediaType string) ([]byte, error)`: removes EXIF, GPS, XMP, IPTC, comments; keeps ICC, JFIF, Adobe APP14
-- `New(db, store, clk, items *items.Service, log, workspaceID) *Service`: `items.Get` re-reads the item after each write
-- `(*Service).SetUpload`, `SetURL`, `Delete`, `Open(ctx, attachmentID, thumbnail bool)`, `Sweep`, `RunSweeper(ctx, interval)`
-- Limits: `MaxUploadBytes` (10 MiB), `MaxPixels` (40 000 000), `ThumbnailMaxSide` (640), `SweepInterval` (24h)
+- `PUT /api/v1/items/{id}/image`: `If-Match` required; `multipart/form-data` (`file` part) or `application/json` `{url}`; returns the item
+- `DELETE /api/v1/items/{id}/image`: `If-Match` required; returns the item
+- `GET /api/v1/attachments/{id}/file` and `/thumbnail`: streamed, immutable cache
+- `Register(api, log, svc)`, `NewService(store, files, items, clk, log)`, `NewPostgres(db)`
+- `(*Service)`: `SetUpload`, `SetURL`, `Delete`, `Open(ctx, id, thumbnail)`, `Sweep(ctx)`, `RunSweeper(ctx, interval)`
+- Limits: `MaxUploadBytes` (10 MiB), `MaxPixels` (40 000 000), `ThumbnailMaxSide` (640), `SweepInterval` (24 h), orphan age 1 h
 
 ## Gotchas
 
-- Type comes from magic bytes only (SVG and anything else is 415). Dimensions are checked with `DecodeConfig` before the full decode.
-- The stored original is the stripped copy; SHA256 is over the stripped bytes. The thumbnail is re-encoded from pixels, so it has no metadata either.
-- Strip is lossless and strict: any malformed layout is an error. Bytes after EOI, IEND or the RIFF end are copied untouched.
-- JPEG keeps a minimal EXIF segment with only Orientation when it is not 1. PNG and WebP orientation is ignored.
-- Writes: files first, then one tx (If-Match check, insert, point item, delete previous row), then delete previous files. A failed tx deletes the new files only if no attachment row exists.
-- Every replacement gets a new attachment id, so a served URL never changes content.
-- `SetURL` trims the URL, accepts http and https up to 2048 chars, and does not bump the version when the URL is unchanged. `Delete` without an image also does not bump.
-- Trashed items keep serving their files. A row whose file is missing answers 404 and logs at ERROR.
-- Sweeper: unreferenced attachment rows and unreferenced `images/` files older than 1 hour are removed; failures are retried next run. Logs carry counts only.
+- Writes: files before the tx, previous attachment row deleted inside it, previous files deleted after commit. A failed tx removes the new files only if no attachment row exists.
+- Sweep refuses a context without a workspace (`scope.With`); `cmd/api` runs the sweeper with it. Without a workspace the file walk would treat every file as an orphan.
+- Item-image writes (`LockItem`, `SetItemImage*`, `ClearItemImage`) are SEAM queries on items and move there later.
+- Upload bodies are capped at 10 MiB plus the 64 KiB envelope; JSON bodies at 64 KiB. Bad media types answer 400, a missing `file` part 422.
+- Every replacement gets a new attachment id; a served URL never changes content. Trashed items keep serving files.
+- The stored original is stripped (`Strip`), so its SHA-256 differs from the upload. The thumbnail is re-encoded and has no metadata.
+- JPEG keeps only an Orientation EXIF when it is not 1; PNG and WebP orientation is ignored.
+- `SetURL` trims the URL (http/https, max 2048 characters) and changes nothing when it is unchanged (no version bump). `Delete` without an image also does not bump.
+- A row whose file is missing answers 404 and logs at ERROR. Failed file deletes are logged and left to the sweeper.
 - Filenames are display-only: base name, control characters removed, max 255 characters.

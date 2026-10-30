@@ -6,14 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/getkin/kin-openapi/openapi3"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi/oapi"
@@ -225,32 +222,6 @@ func TestAccessLogHasNoQueryOrBody(t *testing.T) {
 		t.Errorf("log leaks query text: %s", line)
 	}
 }
-
-// The multipart body is not buffered by the guard, so the limit has to hold
-// while the (future) handler streams it.
-func TestMultipartBodyIsCappedWhileStreaming(t *testing.T) {
-	op := &operation{id: "SetItemImage", bodies: map[string]*openapi3.Schema{"multipart/form-data": nil}}
-	r := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/x", io.NopCloser(io.LimitReader(zeros{}, multipartBodyLimit+10)))
-	r.ContentLength = -1
-	r.Header.Set("Content-Type", "multipart/form-data; boundary=b")
-
-	r, p := op.checkBody(httptest.NewRecorder(), r)
-	if p.Code != "" {
-		t.Fatalf("unexpected problem %+v", p)
-	}
-	_, err := io.Copy(io.Discard, r.Body)
-	var tooBig *http.MaxBytesError
-	if !errors.As(err, &tooBig) || tooBig.Limit != multipartBodyLimit {
-		t.Fatalf("err = %v, want MaxBytesError with limit %d", err, multipartBodyLimit)
-	}
-	if p, _ := toProblem(err, ""); p.Status != 413 {
-		t.Errorf("a handler returning that error maps to %d, want 413", p.Status)
-	}
-}
-
-type zeros struct{}
-
-func (zeros) Read(b []byte) (int, error) { clear(b); return len(b), nil }
 
 func TestF016_ClientAbortIsNot500(t *testing.T) {
 	canceledCtx := func(t *testing.T) context.Context {

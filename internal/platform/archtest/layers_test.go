@@ -29,7 +29,6 @@ const (
 var legacyPackages = []string{
 	"internal/trash",   // migrates in B3b..f
 	"internal/search",  // migrates in B3b..f
-	"internal/images",  // migrates in B3b..f
 	"internal/lookup",  // migrates in B3b..f
 	"internal/httpapi", // migrates in B3b..f
 	"internal/seed",    // migrates in B3b..f

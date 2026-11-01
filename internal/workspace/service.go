@@ -143,10 +143,10 @@ func checkStreamingKeys(keys []string) string {
 	seen := make(map[string]bool, len(keys))
 	for _, key := range keys {
 		if !isStreamingKey(key) {
-			return fmt.Sprintf("invalid service key %q: 1 to 64 lowercase letters, digits or underscores, starting with a letter", key)
+			return "each service key must be 1 to 64 lowercase letters, digits or underscores, starting with a letter"
 		}
 		if seen[key] {
-			return fmt.Sprintf("duplicate service key %q", key)
+			return fmt.Sprintf("duplicate service key %q", key) // key is valid here, so at most 64 chars
 		}
 		seen[key] = true
 	}

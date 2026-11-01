@@ -109,10 +109,6 @@ func TestAT10_IfMatchRequired(t *testing.T) {
 		{"DeleteItemImage", "DELETE", "/api/v1/items/" + id1 + "/image", "", "i"},
 		{"LookupItemMetadata", "POST", "/api/v1/items/" + id1 + "/lookup", `{"mode":"fill"}`, "i"},
 		{"UpdateSettings", "PATCH", "/api/v1/settings", `{"workspace_name":"n"}`, "s"},
-		{"CreateTypeField", "POST", "/api/v1/types/movie/fields", `{"label":"Rating","type":"number"}`, "k"},
-		{"ReorderTypeFields", "PUT", "/api/v1/types/movie/fields/order", `{"keys":[]}`, "k"},
-		{"UpdateTypeField", "PATCH", "/api/v1/types/movie/fields/rating", `{"label":"Rating"}`, "kf"},
-		{"DeleteTypeField", "DELETE", "/api/v1/types/movie/fields/rating", "", "kf"},
 	}
 	for _, op := range ops {
 		ct := ""
@@ -134,7 +130,7 @@ func TestAT10_IfMatchRequired(t *testing.T) {
 		for i, v := range bad {
 			t.Run(op.name+"/rejects/"+strconv.Itoa(i), func(t *testing.T) { wantProblem(t, call(str(v)), 428, "precondition_required") })
 		}
-		for _, other := range []string{"f", "l", "i", "c", "s", "k", "kf"} {
+		for _, other := range []string{"f", "l", "i", "c", "s"} {
 			if other == op.prefix {
 				continue
 			}

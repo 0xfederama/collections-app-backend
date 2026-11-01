@@ -80,17 +80,14 @@ func idsJSON(ids ...string) string {
 const matrix = `{"title":"The Matrix","website":"https://www.warnerbros.com/movies/matrix",
 	"metadata":{"release_year":1999,"runtime_minutes":136,"imdb_url":"https://www.imdb.com/title/tt0133093/","streaming":{"country":"IT","platforms":["Netflix","Prime Video"]}}}`
 
-func TestF014B2_ItemMetadataUsesWorkspaceFieldDefinitions(t *testing.T) {
+func TestF023_ItemMetadataAcceptsOnlyBuiltinFields(t *testing.T) {
 	e := newTreeEnv(t)
-	e.exec(`INSERT INTO type_fields (workspace_id, type_id, key, label, field_type, position)
-		SELECT $1, id, 'rating', 'Rating', 'number', 100 FROM type_definitions
-		WHERE workspace_id = $1 AND key = 'movie'`, e.ws)
 	list := e.listOfType("Films", nil, "movie")
-	item := e.newItem(list["id"].(string), `{"title":"A film","metadata":{"rating":4.5}}`)
-	if got := item["metadata"].(map[string]any)["rating"]; got != float64(4.5) {
-		t.Fatalf("rating = %v, want 4.5", got)
+	item := e.newItem(list["id"].(string), `{"title":"A film","metadata":{"release_year":1999}}`)
+	if got := item["metadata"].(map[string]any)["release_year"]; got != float64(1999) {
+		t.Fatalf("release_year = %v, want 1999", got)
 	}
-	wantProblem(t, e.call("POST", "/api/v1/lists/"+list["id"].(string)+"/items", `{"title":"A film","metadata":{"unknown":4.5}}`, ""), 400, "unknown_field")
+	wantProblem(t, e.call("POST", "/api/v1/lists/"+list["id"].(string)+"/items", `{"title":"A film","metadata":{"rating":4.5}}`, ""), 400, "unknown_field")
 }
 
 func TestAT05_CreateItem(t *testing.T) {
@@ -1045,30 +1042,27 @@ func TestF014B4_ListItemsSortsByDefinitionAndFilters(t *testing.T) {
 	})
 }
 
-func TestF014B4_CustomFieldSortAndCombinedFilter(t *testing.T) {
+func TestF014B4_BuiltinFieldSortAndCombinedFilter(t *testing.T) {
 	e := newTreeEnv(t)
-	e.exec(`INSERT INTO type_fields (workspace_id, type_id, key, label, field_type, position)
-		SELECT $1, id, 'rating', 'Rating', 'number', 100 FROM type_definitions
-		WHERE workspace_id = $1 AND key = 'movie'`, e.ws)
 	l := e.listOfType("Ratings", nil, "movie")
 	lid := l["id"].(string)
 	for _, body := range []string{
-		`{"title":"Match ten","metadata":{"rating":10}}`,
-		`{"title":"Match two","metadata":{"rating":2}}`,
-		`{"title":"Match five","metadata":{"rating":5}}`,
+		`{"title":"Match ten","metadata":{"release_year":2020}}`,
+		`{"title":"Match two","metadata":{"release_year":1990}}`,
+		`{"title":"Match five","metadata":{"release_year":2005}}`,
 		`{"title":"Match missing"}`,
 	} {
 		e.newItem(lid, body)
 	}
-	rows, _ := e.page(lid, "?sort=rating")
+	rows, _ := e.page(lid, "?sort=release_year")
 	if got := strings.Join(titlesOf(rows), ","); got != "Match two,Match five,Match ten,Match missing" {
 		t.Fatalf("numeric sort = %s", got)
 	}
-	rows, page := e.page(lid, "?sort=rating&q=match&filter_field=rating&filter_min=4&filter_max=10")
+	rows, page := e.page(lid, "?sort=release_year&q=match&filter_field=release_year&filter_min=2000&filter_max=2020")
 	if got := strings.Join(titlesOf(rows), ","); got != "Match five,Match ten" || page["total"] != float64(2) {
 		t.Fatalf("combined title and field filter = %s, page %v", got, page)
 	}
-	bad := wantProblem(t, e.call("GET", "/api/v1/lists/"+lid+"/items?filter_field=rating&filter_min=10&filter_max=2", "", ""), 400, "invalid_parameter")
+	bad := wantProblem(t, e.call("GET", "/api/v1/lists/"+lid+"/items?filter_field=release_year&filter_min=2020&filter_max=1990", "", ""), 400, "invalid_parameter")
 	if bad.Status != 400 {
 		t.Fatalf("invalid range = %+v", bad)
 	}

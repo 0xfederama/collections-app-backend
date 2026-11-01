@@ -155,9 +155,8 @@ func (q *Queries) ListSearchFolders(ctx context.Context, workspaceID uuid.UUID) 
 }
 
 const listSearchLists = `-- name: ListSearchLists :many
-SELECT l.id, l.name, l.folder_id, l.icon, l.icon_color, kd.name AS type_name
+SELECT l.id, l.name, l.folder_id, l.icon, l.icon_color, l.type
 FROM lists l
-LEFT JOIN type_definitions kd ON kd.workspace_id = l.workspace_id AND kd.key = l.type
 WHERE l.workspace_id = $1 AND l.deleted_at IS NULL
 `
 
@@ -167,7 +166,7 @@ type ListSearchListsRow struct {
 	FolderID  uuid.NullUUID
 	Icon      *string
 	IconColor *string
-	TypeName  *string
+	Type      *string
 }
 
 // Active lists, just enough to name the last path segment (with its icon) and find its folder.
@@ -186,7 +185,7 @@ func (q *Queries) ListSearchLists(ctx context.Context, workspaceID uuid.UUID) ([
 			&i.FolderID,
 			&i.Icon,
 			&i.IconColor,
-			&i.TypeName,
+			&i.Type,
 		); err != nil {
 			return nil, err
 		}

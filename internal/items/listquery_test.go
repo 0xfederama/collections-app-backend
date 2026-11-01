@@ -21,11 +21,11 @@ import (
 var (
 	movieFields = []types.Field{
 		{Key: "director", Type: "text"},
-		{Key: "imdb_url", Type: "link", Special: true},
+		{Key: "imdb_url", Type: "link"},
 		{Key: "release_year", Type: "number"},
 		{Key: "runtime_minutes", Type: "number"},
-		{Key: "lookup_disabled", Type: "boolean", Special: true},
-		{Key: "streaming", Type: "streaming", Special: true},
+		{Key: "lookup_disabled", Type: "boolean"},
+		{Key: "streaming", Type: "streaming"},
 	}
 	movieDefs = ListDefs{SortMode: SortManual, Fields: movieFields}
 	movie     = types.Movie

@@ -2,14 +2,13 @@
 
 ## Purpose
 
-Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and sqlc-generated queries. The baseline migration is pure schema (no triggers, functions or ON DELETE CASCADE); built-in types are seeded from Go (`internal/seed`). Schema intent: `/Users/federico/Developer/collections-app/design-docs/DATA_MODEL.md`.
+Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and sqlc-generated queries. The baseline migration is pure schema (no triggers, functions or ON DELETE CASCADE); the built-in types are Go code (`internal/items/types/registry.go`), not rows. Schema intent: `/Users/federico/Developer/collections-app/design-docs/DATA_MODEL.md`.
 
 ## Key files
 
 - `internal/platform/database/database.go`: `NewPool`, `TxBeginner`, `InTx`
 - `internal/platform/database/intx_test.go`: commit, rollback, panic and `NewPool` tests
 - `db/migrations/000001_init.{up,down}.sql`: the baseline schema (pg_trgm, all tables, no logic); down drops everything. Later changes append as new numbered files
-- `db/queries/types.sql`: definition reads, locks, writes and cleanup queries
 - `db/queries/items.sql`, `content.sql`: item row reads and writes (one query per repository method, list filtering in Go) and content locks
 - `db/queries/trash.sql`, `search.sql`: trash batch and purge queries, search and recent reads (see [trash](trash.md), [search](search.md))
 - `db/queries/schema.sql`: smoke query, sqlc input

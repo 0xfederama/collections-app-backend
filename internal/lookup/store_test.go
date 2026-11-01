@@ -16,14 +16,11 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
-	"github.com/0xfederama/collections-app-backend/internal/definitions"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
-	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
-	"github.com/0xfederama/collections-app-backend/internal/seed"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
@@ -73,9 +70,6 @@ func newLookupEnv(t *testing.T, now time.Time) *lookupEnv {
 	if _, err := db.Exec(t.Context(), `INSERT INTO workspaces (id, name) VALUES ($1, 'W')`, ws); err != nil {
 		t.Fatal(err)
 	}
-	if err := seed.BuiltinTypes(t.Context(), sqlc.New(db), ws); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := db.Exec(t.Context(), `INSERT INTO workspace_settings (workspace_id) VALUES ($1)`, ws); err != nil {
 		t.Fatal(err)
 	}
@@ -88,37 +82,24 @@ func newLookupEnv(t *testing.T, now time.Time) *lookupEnv {
 	}
 	t.Cleanup(func() { _ = local.Close() })
 	clk := &fakeClock{now: now}
-	itemSvc := items.NewService(items.NewPostgres(db), envTypes{definitions.NewPostgres(db)}, envSettings{workspace.NewService(workspace.NewPostgres(db))}, clk)
+	itemSvc := items.NewService(items.NewPostgres(db), envTypes{}, envSettings{workspace.NewService(workspace.NewPostgres(db))}, clk)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return &lookupEnv{t: t, db: db, files: local, clock: clk, items: itemSvc, store: NewStore(db, local, clk, itemSvc, logger, ws), ws: ws, list: list}
 }
 
-// envTypes reads a list type from the seeded definitions, the way the composition
+// envTypes reads a list type from the built-in registry, the way the composition
 // root wires the items type source (httpapi/router.go itemTypes).
-type envTypes struct{ defs *definitions.Postgres }
+type envTypes struct{}
 
-func (a envTypes) TypeFields(ctx context.Context, key *string) (items.TypeDef, []types.Field, error) {
+func (envTypes) TypeFields(_ context.Context, key *string) (items.TypeDef, []types.Field, error) {
 	if key == nil {
 		return items.TypeDef{}, nil, nil
 	}
-	var typ definitions.Type
-	var fields []definitions.Field
-	err := a.defs.InTx(ctx, func(r definitions.Repo) error {
-		var err error
-		if typ, err = r.GetTypeByKey(ctx, *key); err != nil {
-			return err
-		}
-		fields, err = r.ListFields(ctx, typ.ID)
-		return err
-	})
-	if err != nil {
-		return items.TypeDef{}, nil, err
+	def, ok := types.Lookup(*key)
+	if !ok {
+		return items.TypeDef{}, nil, apperr.NotFound("type")
 	}
-	out := make([]types.Field, 0, len(fields))
-	for _, f := range fields {
-		out = append(out, types.Field{Key: f.Key, Type: f.Type, Special: f.Locked})
-	}
-	return items.TypeDef{Key: typ.Key, AllowsPrice: typ.AllowsPrice}, out, nil
+	return items.TypeDef{Key: def.Key, AllowsPrice: def.AllowsPrice}, def.Fields, nil
 }
 
 // envSettings reads the preferred store from the workspace settings (httpapi itemSettings).

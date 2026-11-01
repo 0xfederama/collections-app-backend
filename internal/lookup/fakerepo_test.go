@@ -15,7 +15,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
-	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 )
 
@@ -31,8 +30,6 @@ type fakeRepo struct {
 	outside []string // the ones made outside a transaction (must stay empty)
 
 	lists       map[uuid.UUID]*string
-	defs        map[string]typeDef
-	fields      map[uuid.UUID][]types.Field
 	items       map[uuid.UUID]fakeItem
 	imports     map[uuid.UUID]importSave
 	attachments map[uuid.UUID]images.Attachment
@@ -57,8 +54,6 @@ type fakeItem struct {
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
 		lists:       map[uuid.UUID]*string{},
-		defs:        map[string]typeDef{},
-		fields:      map[uuid.UUID][]types.Field{},
 		items:       map[uuid.UUID]fakeItem{},
 		imports:     map[uuid.UUID]importSave{},
 		attachments: map[uuid.UUID]images.Attachment{},
@@ -185,15 +180,6 @@ func (f *fakeRepo) SaveImport(_ context.Context, in importSave) error {
 	f.write("save import")
 	f.imports[in.ItemID] = in
 	return nil
-}
-
-func (f *fakeRepo) TypeByKey(_ context.Context, key string) (typeDef, bool, error) {
-	def, ok := f.defs[key]
-	return def, ok, nil
-}
-
-func (f *fakeRepo) TypeFields(_ context.Context, typeID uuid.UUID) ([]types.Field, error) {
-	return f.fields[typeID], nil
 }
 
 func (f *fakeRepo) InsertAttachment(_ context.Context, a images.Attachment, _ time.Time) error {
@@ -368,16 +354,8 @@ func newApplyEnv(t *testing.T, now time.Time) *applyEnv {
 	files := &deleteLog{FileStore: local, repo: repo}
 	clk := &fakeClock{now: now}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	list, movie := uuid.New(), uuid.New()
+	list := uuid.New()
 	repo.lists[list] = ptr("movie")
-	repo.defs["movie"] = typeDef{ID: movie}
-	repo.fields[movie] = []types.Field{
-		{Key: "release_year", Type: "number"},
-		{Key: "director", Type: "text"},
-		{Key: "runtime_minutes", Type: "number"},
-		{Key: "tmdb_id", Type: "number", Special: true},
-		{Key: "lookup_disabled", Type: "boolean", Special: true},
-	}
 	store := newStore(repo, files, clk, repoItems{repo}, logger, uuid.New())
 	return &applyEnv{t: t, repo: repo, files: files, clock: clk, store: store, list: list}
 }

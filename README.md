@@ -31,7 +31,7 @@ internal/platform      shared infra: config, database (sqlc/ GENERATED, never ed
 internal/apperr        typed domain errors (no HTTP)
 internal/folders       folders: create, get, rename, move, reorder (Huma)
 internal/lists         lists: create, get with path, update, move, reorder (Huma)
-internal/definitions   type and custom-field definitions (Huma); repository, service rules, validators
+internal/definitions   GET /api/v1/types, the built-in types served from the Go registry (items/types/registry.go)
 internal/tree          GET /api/v1/tree, the flat sidebar read (handler only)
 internal/items         items; items/types validates per-type metadata
 internal/content       Markdown content and versions
@@ -40,7 +40,6 @@ internal/storage       FileStore (local files)
 internal/trash         delete, list, restore, purge
 internal/search        search and recent items
 internal/workspace     bootstrap of the single workspace; settings (Huma)
-internal/seed          idempotent Go seed of the built-in types and their locked fields, run at bootstrap
 internal/httpapi       HTTP composition root: Huma router, probes, Spec() for cmd/specgen (the spec is generated from it)
 cmd/specgen            prints the OpenAPI document for `make spec`
 internal/lookup        metadata lookup (TMDB, Open Library, Hardcover gap-fill): merge rules, provenance, retention (Huma)

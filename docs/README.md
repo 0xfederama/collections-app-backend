@@ -8,7 +8,7 @@
 - [config](modules/config.md): env var parsing and startup validation
 - [content](modules/content.md): item Markdown content, versions, restore and retention
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
-- [definitions](modules/definitions.md): workspace type list and custom-field operations (Huma `/api/v1/types...`); types are fixed, no type create/update/delete
+- [definitions](modules/definitions.md): `GET /api/v1/types`, the built-in types and fields served from the Go registry; no custom fields, no type writes
 - [folders](modules/folders.md): folder create, get, rename, move (cycle check) and reorder (Huma)
 - [httpapi](modules/httpapi.md): HTTP composition root: router build, Huma registration of every feature package, health probes, `Spec()`
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping on upload, validation, thumbnails, serving, orphan sweeper
@@ -19,7 +19,6 @@
 - [openlibrary](modules/openlibrary.md): bounded Open Library client for book search, work details and covers (`internal/integrations`)
 - [hardcover](modules/hardcover.md): optional bounded Hardcover client, book gap-filler for automatic lookup (`internal/integrations`)
 - [platform](modules/platform.md): shared infrastructure (Huma on chi, problem+json and its code list, scope, etag, clock, shared wire types, testdb, layer archtest)
-- [seed](modules/seed.md): idempotent Go seed of the five built-in types and their locked fields, run at every bootstrap
 - [search](modules/search.md): item title search with folder and list paths and recent items (Huma: `GET /api/v1/search`, `GET /api/v1/recent-items`)
 - [smoke](modules/smoke.md): HTTP smoke test over a running stack (`scripts/smoke.sh`, `make smoke`)
 - [stores](modules/stores.md): fixed online store provider keys for `stores` fields and `preferred_store`; Huma `GET /api/v1/store-providers`

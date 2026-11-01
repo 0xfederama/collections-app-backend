@@ -33,8 +33,6 @@ var exemptPackages = []string{
 	"internal/httpapi",
 	// cmd/api is the process wiring (open the pool, build the services, start the server).
 	"cmd/api",
-	// seed writes the built-in type definitions with sqlc at workspace bootstrap, from Go data.
-	"internal/seed",
 	// platform/database is the sqlc plumbing (pool, transactions, generated code): the
 	// database layer itself must be free to use sqlc. The other platform packages
 	// (httpserver, problem, scope, clock, logs, ...) are checked like features.
@@ -42,16 +40,14 @@ var exemptPackages = []string{
 }
 
 // sqlcExemptFiles may import sqlc outside repository.go. bootstrap.go runs the
-// startup seeding of a new workspace in one transaction (see workspace.Bootstrap).
-// lookup/store_test.go seeds the built-in types of its test workspace (seed.BuiltinTypes).
+// startup bootstrap of the workspace in one transaction (see workspace.Bootstrap).
 var sqlcExemptFiles = []string{
 	"internal/workspace/bootstrap.go",
-	"internal/lookup/store_test.go",
 }
 
 // crossFeatureExemptFiles may use another feature's repository identifiers. They
 // are the lookup Store's end-to-end tests (store_test.go, streaming_link_test.go):
-// they run the real lookup Store over Postgres next to the real items, definitions
+// they run the real lookup Store over Postgres next to the real items
 // and workspace services. That wiring is the composition root's job (httpapi), and
 // the Store's constructor and fixtures are unexported, so the tests cannot move
 // there without exporting the Store. They stay here, and each file is a reviewed

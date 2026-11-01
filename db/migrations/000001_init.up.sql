@@ -150,44 +150,6 @@ CREATE TABLE public.trash_batches (
     CONSTRAINT trash_batches_root_type_check CHECK ((root_type = ANY (ARRAY['folder'::text, 'list'::text, 'item'::text])))
 );
 
-CREATE TABLE public.type_definitions (
-    id uuid DEFAULT gen_random_uuid() CONSTRAINT kind_definitions_id_not_null NOT NULL,
-    workspace_id uuid CONSTRAINT kind_definitions_workspace_id_not_null NOT NULL,
-    key text CONSTRAINT kind_definitions_key_not_null NOT NULL,
-    name text CONSTRAINT kind_definitions_name_not_null NOT NULL,
-    default_icon text,
-    allows_price boolean DEFAULT false CONSTRAINT kind_definitions_allows_price_not_null NOT NULL,
-    default_sort_field text,
-    is_locked boolean DEFAULT false CONSTRAINT kind_definitions_is_locked_not_null NOT NULL,
-    version integer DEFAULT 1 CONSTRAINT kind_definitions_version_not_null NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now() CONSTRAINT kind_definitions_created_at_not_null NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT now() CONSTRAINT kind_definitions_updated_at_not_null NOT NULL,
-    CONSTRAINT type_definitions_default_sort_field_check CHECK (((default_sort_field IS NULL) OR (default_sort_field ~ '^[a-z][a-z0-9_]{0,31}$'::text))),
-    CONSTRAINT type_definitions_key_check CHECK ((key ~ '^[a-z][a-z0-9_]{0,31}$'::text)),
-    CONSTRAINT type_definitions_name_check CHECK (((char_length(name) >= 1) AND (char_length(name) <= 100))),
-    CONSTRAINT type_definitions_version_check CHECK ((version >= 1))
-);
-
-CREATE TABLE public.type_fields (
-    id uuid DEFAULT gen_random_uuid() CONSTRAINT kind_fields_id_not_null NOT NULL,
-    workspace_id uuid CONSTRAINT kind_fields_workspace_id_not_null NOT NULL,
-    type_id uuid CONSTRAINT kind_fields_kind_id_not_null NOT NULL,
-    key text CONSTRAINT kind_fields_key_not_null NOT NULL,
-    label text CONSTRAINT kind_fields_label_not_null NOT NULL,
-    field_type text CONSTRAINT kind_fields_field_type_not_null NOT NULL,
-    "position" integer CONSTRAINT kind_fields_position_not_null NOT NULL,
-    is_locked boolean DEFAULT false CONSTRAINT kind_fields_is_locked_not_null NOT NULL,
-    version integer DEFAULT 1 CONSTRAINT kind_fields_version_not_null NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now() CONSTRAINT kind_fields_created_at_not_null NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT now() CONSTRAINT kind_fields_updated_at_not_null NOT NULL,
-    CONSTRAINT type_fields_custom_field_type_check CHECK ((is_locked OR (field_type = ANY (ARRAY['text'::text, 'number'::text, 'date'::text, 'boolean'::text, 'link'::text])))),
-    CONSTRAINT type_fields_field_type_check CHECK ((field_type = ANY (ARRAY['text'::text, 'number'::text, 'date'::text, 'boolean'::text, 'link'::text, 'streaming'::text, 'stores'::text]))),
-    CONSTRAINT type_fields_key_check CHECK ((key ~ '^[a-z][a-z0-9_]{0,31}$'::text)),
-    CONSTRAINT type_fields_label_check CHECK (((char_length(label) >= 1) AND (char_length(label) <= 100))),
-    CONSTRAINT type_fields_position_check CHECK (("position" >= 0)),
-    CONSTRAINT type_fields_version_check CHECK ((version >= 1))
-);
-
 CREATE TABLE public.workspace_settings (
     workspace_id uuid NOT NULL,
     streaming_country_code character(2) DEFAULT 'IT'::bpchar NOT NULL,
@@ -261,27 +223,6 @@ ALTER TABLE ONLY public.trash_batches
 ALTER TABLE ONLY public.trash_batches
     ADD CONSTRAINT trash_batches_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.type_definitions
-    ADD CONSTRAINT type_definitions_id_workspace_id_key UNIQUE (id, workspace_id);
-
-ALTER TABLE ONLY public.type_definitions
-    ADD CONSTRAINT type_definitions_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.type_definitions
-    ADD CONSTRAINT type_definitions_workspace_id_key_key UNIQUE (workspace_id, key);
-
-ALTER TABLE ONLY public.type_fields
-    ADD CONSTRAINT type_fields_id_workspace_id_key UNIQUE (id, workspace_id);
-
-ALTER TABLE ONLY public.type_fields
-    ADD CONSTRAINT type_fields_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.type_fields
-    ADD CONSTRAINT type_fields_type_id_key_key UNIQUE (type_id, key);
-
-ALTER TABLE ONLY public.type_fields
-    ADD CONSTRAINT type_fields_type_id_position_key UNIQUE (type_id, "position");
-
 ALTER TABLE ONLY public.workspace_settings
     ADD CONSTRAINT workspace_settings_pkey PRIMARY KEY (workspace_id);
 
@@ -311,10 +252,6 @@ CREATE INDEX lookup_imports_poster_due_idx ON public.lookup_imports USING btree 
 CREATE INDEX lookup_imports_poster_expiry_idx ON public.lookup_imports USING btree (workspace_id, poster_expires_at, item_id) WHERE (poster_expires_at IS NOT NULL);
 
 CREATE INDEX trash_batches_workspace_deleted_idx ON public.trash_batches USING btree (workspace_id, deleted_at DESC);
-
-CREATE INDEX type_definitions_workspace_idx ON public.type_definitions USING btree (workspace_id, key);
-
-CREATE INDEX type_fields_workspace_type_position_idx ON public.type_fields USING btree (workspace_id, type_id, "position");
 
 ALTER TABLE ONLY public.attachments
     ADD CONSTRAINT attachments_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
@@ -357,12 +294,6 @@ ALTER TABLE ONLY public.lookup_imports
 
 ALTER TABLE ONLY public.trash_batches
     ADD CONSTRAINT trash_batches_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
-
-ALTER TABLE ONLY public.type_definitions
-    ADD CONSTRAINT type_definitions_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
-
-ALTER TABLE ONLY public.type_fields
-    ADD CONSTRAINT type_fields_type_workspace_fkey FOREIGN KEY (type_id, workspace_id) REFERENCES public.type_definitions(id, workspace_id);
 
 ALTER TABLE ONLY public.workspace_settings
     ADD CONSTRAINT workspace_settings_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);

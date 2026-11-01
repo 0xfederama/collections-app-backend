@@ -115,34 +115,6 @@ type TrashBatch struct {
 	DeletedAt   time.Time
 }
 
-type TypeDefinition struct {
-	ID               uuid.UUID
-	WorkspaceID      uuid.UUID
-	Key              string
-	Name             string
-	DefaultIcon      *string
-	AllowsPrice      bool
-	DefaultSortField *string
-	IsLocked         bool
-	Version          int32
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-}
-
-type TypeField struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-	TypeID      uuid.UUID
-	Key         string
-	Label       string
-	FieldType   string
-	Position    int32
-	IsLocked    bool
-	Version     int32
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-}
-
 type Workspace struct {
 	ID        uuid.UUID
 	Name      string

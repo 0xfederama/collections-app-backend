@@ -11,10 +11,8 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
-	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/search"
-	"github.com/0xfederama/collections-app-backend/internal/seed"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
 )
@@ -25,9 +23,6 @@ func newRecentEnv(t *testing.T) *treeEnv {
 	pool := testdb.NewMigrated(t, sharedPostgres(t))
 	ws := uuid.New()
 	if _, err := pool.Exec(t.Context(), "INSERT INTO workspaces (id, name) VALUES ($1, 'W')", ws); err != nil {
-		t.Fatal(err)
-	}
-	if err := seed.BuiltinTypes(t.Context(), sqlc.New(pool), ws); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(t.Context(), "INSERT INTO workspace_settings (workspace_id) VALUES ($1)", ws); err != nil {

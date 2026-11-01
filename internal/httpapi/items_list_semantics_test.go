@@ -2,7 +2,6 @@ package httpapi_test
 
 import (
 	"encoding/json"
-	"net/http"
 	"net/url"
 	"slices"
 	"testing"
@@ -33,17 +32,6 @@ func (e *treeEnv) semItem(listID, title string, metadata obj) obj {
 	}
 	b, _ := json.Marshal(body)
 	return e.newItem(listID, string(b))
-}
-
-// semField adds custom fields ({label, type} each) to the built-in type key and returns the key.
-func (e *treeEnv) semField(key string, fields ...obj) string {
-	e.t.Helper()
-	for _, f := range fields {
-		body, _ := json.Marshal(f)
-		typ := e.typ(key)
-		wantStatus(e.t, e.call(http.MethodPost, "/api/v1/types/"+key+"/fields", string(body), etagOf("k", typ)), http.StatusCreated)
-	}
-	return key
 }
 
 // semSetLink writes streaming.link the way only the lookup does (clients cannot send it).
@@ -109,10 +97,9 @@ func TestSemanticsSearchQ(t *testing.T) {
 	e.semItem(films, "snakeXcase", nil)
 	e.semItem(films, "Heat", obj{"director": "Michael Mann"})
 
-	// A TV show with a custom director text field: its director is not searched (movie only).
-	shows := e.semField("tv_show", obj{"label": "Director", "type": "text"})
-	gizmos := e.listOfType("Gizmos", nil, shows)["id"].(string)
-	e.semItem(gizmos, "Gizmo", obj{"director": "Wachowski"})
+	// A list of another type: only its titles are searched (the director is movie only).
+	gizmos := e.listOfType("Gizmos", nil, "tv_show")["id"].(string)
+	e.semItem(gizmos, "Gizmo", nil)
 
 	tests := []struct {
 		name, list, q string
@@ -126,7 +113,6 @@ func TestSemanticsSearchQ(t *testing.T) {
 		{"100% does not match 100 Years", films, "100%", []string{"Under 100%"}},
 		{"underscore is literal", films, "_", []string{"snake_case"}},
 		{"no match", films, "nothing", nil},
-		{"director of a non-movie type is not searched", gizmos, "wachowski", nil},
 		{"title of a non-movie type is searched", gizmos, "GIZ", []string{"Gizmo"}},
 	}
 	for _, tt := range tests {
@@ -213,49 +199,6 @@ func TestSemanticsNumberFilter(t *testing.T) {
 			"?filter_field=release_year&filter_min=2000&filter_max=1990",
 		} {
 			wantProblem(t, e.call("GET", "/api/v1/lists/"+films+"/items"+query, "", ""), 400, "invalid_parameter")
-		}
-	})
-}
-
-func TestSemanticsDateFilter(t *testing.T) {
-	e := newTreeEnv(t)
-	concerts := e.semField("vehicle", obj{"label": "Date", "type": "date"})
-	list := e.listOfType("Shows", nil, concerts)["id"].(string)
-	e.semItem(list, "Spring", obj{"date": "2023-05-01"})
-	e.semItem(list, "New year", obj{"date": "2024-01-01"})
-	e.semItem(list, "Summer", obj{"date": "2024-06-30"})
-	e.semItem(list, "Winter", obj{"date": "2025-12-31"})
-	e.semItem(list, "Undated", nil)
-
-	tests := []struct {
-		name  string
-		query []string
-		want  []string
-	}{
-		{"min is inclusive", []string{"filter_min", "2024-01-01"}, []string{"New year", "Summer", "Winter"}},
-		{"max is inclusive", []string{"filter_max", "2024-06-30"}, []string{"Spring", "New year", "Summer"}},
-		{"min and max together", []string{"filter_min", "2024-01-01", "filter_max", "2024-06-30"}, []string{"New year", "Summer"}},
-		{"equal bounds", []string{"filter_min", "2024-06-30", "filter_max", "2024-06-30"}, []string{"Summer"}},
-		{"after every date", []string{"filter_min", "2026-01-01"}, nil},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rows, page := e.page(list, semQuery(append([]string{"sort", "title", "filter_field", "date"}, tt.query...)...))
-			sameTitles(t, rows, tt.want...)
-			if page["total"] != float64(len(tt.want)) {
-				t.Fatalf("total = %v, want %d", page["total"], len(tt.want))
-			}
-		})
-	}
-
-	t.Run("invalid dates, reversed bounds and a value are 400", func(t *testing.T) {
-		for _, query := range []string{
-			"?filter_field=date&filter_min=2024-02-30",
-			"?filter_field=date&filter_min=yesterday",
-			"?filter_field=date&filter_min=2025-01-01&filter_max=2024-01-01",
-			"?filter_field=date&filter_value=2024-01-01",
-		} {
-			wantProblem(t, e.call("GET", "/api/v1/lists/"+list+"/items"+query, "", ""), 400, "invalid_parameter")
 		}
 	})
 }
@@ -368,17 +311,6 @@ func TestSemanticsSorts(t *testing.T) {
 		wantStatus(t, e.patchItem(charlie, `{"website":"https://charlie.example"}`), 200)
 		rows, _ := e.page(films, "?sort=updated")
 		inOrderIDs(t, rows, []string{charlie["id"].(string), echo["id"].(string), delta["id"].(string), bravo["id"].(string), alpha["id"].(string)})
-	})
-
-	t.Run("date sorts as text, no value last, ties by id", func(t *testing.T) {
-		concerts := e.semField("vehicle", obj{"label": "Date", "type": "date"})
-		list := e.listOfType("Shows", nil, concerts)["id"].(string)
-		late := e.semItem(list, "Late", obj{"date": "2024-05-01"})
-		early := e.semItem(list, "Early", obj{"date": "2023-01-01"})
-		undated := e.semItem(list, "Undated", nil)
-		same := e.semItem(list, "Same", obj{"date": "2024-05-01"})
-		rows, _ := e.page(list, "?sort=date")
-		inOrderIDs(t, rows, join([]string{early["id"].(string)}, tied(late, same), []string{undated["id"].(string)}))
 	})
 
 	t.Run("price sorts ascending, no price last, title breaks ties", func(t *testing.T) {

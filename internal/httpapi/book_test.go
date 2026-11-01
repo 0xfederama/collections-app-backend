@@ -1,7 +1,6 @@
 package httpapi_test
 
 import (
-	"net/http"
 	"reflect"
 	"testing"
 )
@@ -9,7 +8,7 @@ import (
 func TestF016B2_BuiltinBookTypeIsSeeded(t *testing.T) {
 	e := newTreeEnv(t)
 	typ := e.typ("book")
-	if typ["name"] != "Books" || typ["is_locked"] != true || typ["allows_price"] != false || typ["default_sort_field"] != nil {
+	if typ["name"] != "Books" || typ["allows_price"] != false || typ["default_sort_field"] != nil {
 		t.Fatalf("book type = %#v", typ)
 	}
 	var keys []string
@@ -50,11 +49,6 @@ func TestF016B2_BookItemValidation(t *testing.T) {
 	// The first publication year was removed from the book type (0.13.0).
 	wantProblem(t, e.call("POST", "/api/v1/lists/"+lid+"/items", `{"title":"x","metadata":{"first_publish_year":1965}}`, ""), 400, "unknown_field")
 	wantProblem(t, e.call("POST", "/api/v1/lists/"+lid+"/items", `{"title":"x","metadata":{"stores":["openlibrary"]}}`, ""), 422, "validation_failed")
-}
-
-func TestF016B2_BookTypeIsLocked(t *testing.T) {
-	e := newTreeEnv(t)
-	wantProblem(t, e.call(http.MethodDelete, "/api/v1/types/book/fields/isbn", "", `"kf-1"`), http.StatusUnprocessableEntity, "validation_failed")
 }
 
 func TestF016B2_NewBookItemsGetThePreferredStores(t *testing.T) {

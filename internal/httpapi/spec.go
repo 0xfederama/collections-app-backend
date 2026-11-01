@@ -44,7 +44,7 @@ func specTags() []*huma.Tag {
 	return []*huma.Tag{
 		{Name: "health", Description: "Liveness and readiness probes (outside `/api/v1`)."},
 		{Name: "settings", Description: "Workspace name and settings (one resource, one ETag)."},
-		{Name: "types", Description: "Workspace type and field definitions."},
+		{Name: "types", Description: "The built-in item types and their fields."},
 		{Name: "tree", Description: "The sidebar tree of active folders and lists."},
 		{Name: "folders", Description: "Folders, their moves and ordering."},
 		{Name: "lists", Description: "Lists, their moves and ordering."},

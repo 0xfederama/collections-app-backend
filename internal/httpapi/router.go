@@ -117,11 +117,10 @@ func register(api huma.API, d Deps) {
 	})
 	folderRepo := folders.NewPostgres(folderDB(d.DB))
 	listRepo := lists.NewPostgres(folderDB(d.DB))
-	typeDefs := definitions.NewPostgres(typeDB(d.DB))
 	folders.Register(api, d.Logger, folders.NewService(folderRepo, d.Clock))
-	lists.Register(api, d.Logger, lists.NewService(listRepo, listTypes{typeDefs}, d.Clock))
+	lists.Register(api, d.Logger, lists.NewService(listRepo, listTypes{}, d.Clock))
 	tree.Register(api, d.Logger, folderRepo, listRepo)
-	definitions.Register(api, d.Logger, definitions.NewService(typeDefs, d.Clock))
+	definitions.Register(api, d.Logger)
 	items.Register(api, d.Logger, d.Items, importer(d))
 	content.Register(api, d.Logger, content.NewService(content.NewPostgres(contentDB(d.DB)), contentSettings{settingsService(d)}, d.Clock))
 	images.Register(api, d.Logger, d.Images)
@@ -143,74 +142,47 @@ func folderDB(db Pinger) folders.DB {
 	return fdb
 }
 
-// typeDB is the database the type repository runs on, with the same rule as folderDB.
-func typeDB(db Pinger) definitions.DB {
-	tdb, _ := db.(definitions.DB)
-	return tdb
-}
-
-// listTypes is the lists.TypeSource: it reads a type from the type definitions and
+// listTypes is the lists.TypeSource: it reads a built-in type from the registry and
 // converts it to the lists rules' view. The composition root wires it, so lists
-// does not import definitions.
-type listTypes struct{ defs *definitions.Postgres }
+// does not import the registry.
+type listTypes struct{}
 
-func (a listTypes) TypeInfo(ctx context.Context, key *string) (lists.TypeInfo, []lists.FieldInfo, error) {
+func (listTypes) TypeInfo(_ context.Context, key *string) (lists.TypeInfo, []lists.FieldInfo, error) {
 	if key == nil {
 		return lists.TypeInfo{}, nil, nil
 	}
-	var typ definitions.Type
-	var fields []definitions.Field
-	err := a.defs.InTx(ctx, func(r definitions.Repo) error {
-		var err error
-		if typ, err = r.GetTypeByKey(ctx, *key); err != nil {
-			return err
-		}
-		fields, err = r.ListFields(ctx, typ.ID)
-		return err
-	})
-	if err != nil {
-		return lists.TypeInfo{}, nil, err
+	def, ok := types.Lookup(*key)
+	if !ok {
+		return lists.TypeInfo{}, nil, apperr.NotFound("type")
 	}
-	out := make([]lists.FieldInfo, 0, len(fields))
-	for _, f := range fields {
+	out := make([]lists.FieldInfo, 0, len(def.Fields))
+	for _, f := range def.Fields {
 		out = append(out, lists.FieldInfo{Key: f.Key, FieldType: f.Type})
 	}
-	return lists.TypeInfo{Key: typ.Key, AllowsPrice: typ.AllowsPrice, DefaultSortField: typ.DefaultSortField}, out, nil
+	return lists.TypeInfo{Key: def.Key, AllowsPrice: def.AllowsPrice, DefaultSortField: def.DefaultSortField}, out, nil
 }
 
-// NewItems builds the item rules over the pool: a list type is read from the type
-// definitions and the preferred store from the workspace settings. The composition
+// NewItems builds the item rules over the pool: a list type is read from the built-in
+// registry and the preferred store from the workspace settings. The composition
 // root builds one instance and gives it to lookup, images and Deps.Items.
 func NewItems(pool *pgxpool.Pool, clk clock.Clock, settings *workspace.Service) *items.Service {
-	return items.NewService(items.NewPostgres(pool), itemTypes{definitions.NewPostgres(pool)}, itemSettings{settings}, clk)
+	return items.NewService(items.NewPostgres(pool), itemTypes{}, itemSettings{settings}, clk)
 }
 
-// itemTypes is the items.TypeSource: it reads a list type from the type definitions
-// and converts it to the items rules' view, so items does not import definitions.
-type itemTypes struct{ defs *definitions.Postgres }
+// itemTypes is the items.TypeSource: it reads a list type from the built-in registry
+// and converts it to the items rules' view, so items does not import the registry's
+// callers.
+type itemTypes struct{}
 
-func (a itemTypes) TypeFields(ctx context.Context, key *string) (items.TypeDef, []types.Field, error) {
+func (itemTypes) TypeFields(_ context.Context, key *string) (items.TypeDef, []types.Field, error) {
 	if key == nil {
 		return items.TypeDef{}, nil, nil
 	}
-	var typ definitions.Type
-	var fields []definitions.Field
-	err := a.defs.InTx(ctx, func(r definitions.Repo) error {
-		var err error
-		if typ, err = r.GetTypeByKey(ctx, *key); err != nil {
-			return err
-		}
-		fields, err = r.ListFields(ctx, typ.ID)
-		return err
-	})
-	if err != nil {
-		return items.TypeDef{}, nil, err
+	def, ok := types.Lookup(*key)
+	if !ok {
+		return items.TypeDef{}, nil, apperr.NotFound("type")
 	}
-	out := make([]types.Field, 0, len(fields))
-	for _, f := range fields {
-		out = append(out, types.Field{Key: f.Key, Type: f.Type, Special: f.Locked})
-	}
-	return items.TypeDef{Key: typ.Key, AllowsPrice: typ.AllowsPrice}, out, nil
+	return items.TypeDef{Key: def.Key, AllowsPrice: def.AllowsPrice}, def.Fields, nil
 }
 
 // settingsService is the workspace settings the content rules read: the one the

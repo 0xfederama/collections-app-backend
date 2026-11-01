@@ -3,58 +3,37 @@ package httpapi_test
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 )
 
-func TestF014B3_TypeFieldLifecycle(t *testing.T) {
+func TestF023_ListTypesServesTheBuiltinRegistry(t *testing.T) {
 	e := newTreeEnv(t)
-	typ := e.typ("movie")
-
-	created := e.call(http.MethodPost, "/api/v1/types/movie/fields", `{"label":"Rating","type":"number"}`, etagOf("k", typ))
-	wantStatus(t, created, http.StatusCreated)
-	field := decode(t, created)
-	if field["key"] != "rating" || created.Header().Get("ETag") != etagOf("kf", field) {
-		t.Fatalf("created field = %v, ETag = %q", field, created.Header().Get("ETag"))
+	rec := e.call(http.MethodGet, "/api/v1/types", "", "")
+	wantStatus(t, rec, http.StatusOK)
+	var got []obj
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
 	}
-
-	list := e.listOfType("Movies", nil, "movie")
-	item := e.newItem(list["id"].(string), `{"title":"The Matrix","metadata":{"rating":5}}`)
-	preview := e.call(http.MethodGet, "/api/v1/types/movie/fields/rating", "", "")
-	wantStatus(t, preview, http.StatusOK)
-	if decode(t, preview)["populated_item_count"] != float64(1) {
-		t.Fatalf("preview = %s", preview.Body)
+	var keys []string
+	for _, typ := range got {
+		keys = append(keys, typ["key"].(string))
+		for _, banned := range []string{"is_locked", "version"} {
+			if _, ok := typ[banned]; ok {
+				t.Errorf("type %v still carries %s", typ["key"], banned)
+			}
+		}
 	}
-
-	renamed := e.call(http.MethodPatch, "/api/v1/types/movie/fields/rating", `{"label":"Personal rating"}`, etagOf("kf", field))
-	wantStatus(t, renamed, http.StatusOK)
-	field = decode(t, renamed)
-	if field["label"] != "Personal rating" || renamed.Header().Get("ETag") != etagOf("kf", field) {
-		t.Fatalf("renamed field = %v, ETag = %q", field, renamed.Header().Get("ETag"))
+	if want := "movie,tv_show,book,vehicle,wishlist"; strings.Join(keys, ",") != want {
+		t.Fatalf("types = %v, want %s", keys, want)
 	}
-
-	typ = e.typ("movie")
-	reordered := e.call(http.MethodPut, "/api/v1/types/movie/fields/order", `{"keys":["rating"]}`, etagOf("k", typ))
-	wantStatus(t, reordered, http.StatusNoContent)
-	if reordered.Header().Get("ETag") == "" {
-		t.Fatal("reorder response omitted ETag")
+	movie := got[0]
+	first := movie["fields"].([]any)[0].(map[string]any)
+	if movie["default_sort_field"] != "release_year" || first["key"] != "release_year" || first["position"] != float64(0) {
+		t.Errorf("movie = %v", movie)
 	}
-	field["version"] = field["version"].(float64) + 1
-
-	deleted := e.call(http.MethodDelete, "/api/v1/types/movie/fields/rating", "", etagOf("kf", field))
-	wantStatus(t, deleted, http.StatusOK)
-	if decode(t, deleted)["populated_item_count"] != float64(1) {
-		t.Fatalf("delete = %s", deleted.Body)
-	}
-	fetched := e.fetch("items", item["id"].(string))
-	metadata, ok := fetched["metadata"].(map[string]any)
-	if !ok || metadata["rating"] != nil {
-		t.Errorf("metadata after deletion = %#v", fetched["metadata"])
-	}
-
-	locked := e.call(http.MethodDelete, "/api/v1/types/movie/fields/release_year", "", `"kf-1"`)
-	p := wantProblem(t, locked, http.StatusUnprocessableEntity, "validation_failed")
-	if len(p.Errors) != 1 || p.Errors[0].Field != "field" {
-		t.Errorf("locked field problem = %+v", p)
+	for _, path := range []string{"/api/v1/types/movie/fields", "/api/v1/types/movie/fields/order", "/api/v1/types/movie/fields/director"} {
+		wantProblem(t, e.call(http.MethodPost, path, `{"label":"Rating","type":"number"}`, `"k-1"`), http.StatusNotFound, "not_found")
 	}
 }
 

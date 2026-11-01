@@ -64,7 +64,7 @@ func TestF014B2_ValidateRejectsUnknownDefinitionField(t *testing.T) {
 }
 
 func TestF014B2_ValidateKeepsStreamingAndTMDBRules(t *testing.T) {
-	fields := []types.Field{{Key: "streaming", Type: "streaming", Special: true}, {Key: "tmdb_id", Type: "number", Special: true}, {Key: "lookup_disabled", Type: "boolean", Special: true}, {Key: "imdb_url", Type: "link", Special: true}}
+	fields := []types.Field{{Key: "streaming", Type: "streaming"}, {Key: "tmdb_id", Type: "number"}, {Key: "lookup_disabled", Type: "boolean"}, {Key: "imdb_url", Type: "link"}}
 	got, err := types.Validate(fields, map[string]any{
 		"streaming":       map[string]any{"country": "IT", "platforms": []any{"Netflix"}, "paid_platforms": []any{"netflix"}},
 		"tmdb_id":         603,
@@ -90,7 +90,7 @@ func TestF014B2_ValidateKeepsStreamingAndTMDBRules(t *testing.T) {
 }
 
 func TestStreamingLinkValidation(t *testing.T) {
-	fields := []types.Field{{Key: "streaming", Type: "streaming", Special: true}}
+	fields := []types.Field{{Key: "streaming", Type: "streaming"}}
 	ok := "https://www.justwatch.com/it/movie/the-matrix"
 	got, err := types.Validate(fields, map[string]any{"streaming": map[string]any{"country": "IT", "link": ok}})
 	if err != nil || got["streaming"].(map[string]any)["link"] != ok {
@@ -104,7 +104,7 @@ func TestStreamingLinkValidation(t *testing.T) {
 }
 
 func TestF016B4_ValidateStoresField(t *testing.T) {
-	fields := []types.Field{{Key: "stores", Type: "stores", Special: true}}
+	fields := []types.Field{{Key: "stores", Type: "stores"}}
 	for _, tt := range []struct {
 		name  string
 		value any

@@ -30,7 +30,7 @@ const (
 // schemaTables are the tables created by 000001 (DATA_MODEL §2), in FK order.
 var schemaTables = []string{
 	"workspaces", "workspace_settings", "trash_batches", "folders", "lists",
-	"attachments", "items", "item_content_versions", "lookup_imports", "type_definitions", "type_fields",
+	"attachments", "items", "item_content_versions", "lookup_imports",
 }
 
 var (
@@ -199,10 +199,6 @@ func seedAllTables(ctx context.Context, tx pgx.Tx) error {
 	stmts := []string{
 		`INSERT INTO workspaces (id, name) VALUES ('00000000-0000-0000-0000-000000000001', 'W')`,
 		`INSERT INTO workspace_settings (workspace_id) VALUES ('00000000-0000-0000-0000-000000000001')`,
-		`INSERT INTO type_definitions (id, workspace_id, key, name) VALUES
-		   ('00000000-0000-0000-0000-000000000008', '00000000-0000-0000-0000-000000000001', 'custom', 'Custom')`,
-		`INSERT INTO type_fields (workspace_id, type_id, key, label, field_type, position) VALUES
-		   ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000008', 'rating', 'Rating', 'number', 0)`,
 		`INSERT INTO folders (id, workspace_id, name, sort_order)
 		   VALUES ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'F', 0)`,
 		`INSERT INTO lists (id, workspace_id, folder_id, name, type, sort_order)

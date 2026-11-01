@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/0xfederama/collections-app-backend/internal/items"
+	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 )
@@ -65,8 +66,14 @@ func (p *Postgres) ListSearchLists(ctx context.Context) ([]List, error) {
 	}
 	out := make([]List, 0, len(rows))
 	for _, l := range rows {
+		var typeName *string
+		if l.Type != nil {
+			if def, ok := types.Lookup(*l.Type); ok {
+				typeName = &def.Name
+			}
+		}
 		out = append(out, List{
-			ID: l.ID, Name: l.Name, FolderID: ptrUUID(l.FolderID), Icon: l.Icon, IconColor: l.IconColor, TypeName: l.TypeName,
+			ID: l.ID, Name: l.Name, FolderID: ptrUUID(l.FolderID), Icon: l.Icon, IconColor: l.IconColor, TypeName: typeName,
 		})
 	}
 	return out, nil

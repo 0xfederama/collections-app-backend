@@ -11,7 +11,7 @@ Owns lists: create, get (with ancestor folder path), patch, move and reorder. A 
 - `internal/lists/validate.go`: name, description, enum, type and sort checks
 - `internal/lists/icon.go`: icon grammar (one emoji or `i:<name>`), palette, `ValidIcon`
 - `internal/lists/repository.go`: `Postgres`, `repo`; item-clear queries are the seams (B3d)
-- `internal/httpapi/router.go`: `listTypes`, the `TypeSource` adapter over [definitions](definitions.md)
+- `internal/httpapi/router.go`: `listTypes`, the `TypeSource` adapter over the built-in registry in [definitions](definitions.md)
 - `internal/lists/handler.go`, `wire.go`: Huma operations, `ListJSON`, `ListWithPathJSON`
 
 ## Interfaces

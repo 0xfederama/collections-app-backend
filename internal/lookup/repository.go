@@ -13,7 +13,6 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
-	"github.com/0xfederama/collections-app-backend/internal/items/types"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
@@ -52,12 +51,6 @@ type Repo interface {
 	// SaveImport upserts the provenance row of an item.
 	SaveImport(ctx context.Context, in importSave) error
 
-	// TypeByKey returns the definition of a type key. ok is false when none is defined.
-	// SEAM: moves to definitions.
-	TypeByKey(ctx context.Context, key string) (def typeDef, ok bool, err error)
-	// TypeFields returns the fields of a type definition. SEAM: moves to definitions.
-	TypeFields(ctx context.Context, typeID uuid.UUID) ([]types.Field, error)
-
 	// InsertAttachment stores a new attachment row created at now. SEAM: moves to images.
 	InsertAttachment(ctx context.Context, a images.Attachment, now time.Time) error
 	// AttachmentExists reports whether an attachment row exists. SEAM: moves to images.
@@ -79,12 +72,6 @@ type Repo interface {
 	RetainPosterAfterMetadataExpiry(ctx context.Context, itemID uuid.UUID) error
 	// DeleteImport removes the provenance row of an item.
 	DeleteImport(ctx context.Context, itemID uuid.UUID) error
-}
-
-// typeDef is the part of a type definition the lookup rules read.
-type typeDef struct {
-	ID          uuid.UUID
-	AllowsPrice bool
 }
 
 // lockedItem is an item row read under FOR UPDATE. The Imported* fields are set
@@ -264,29 +251,6 @@ func (r *repo) SaveImport(ctx context.Context, in importSave) error {
 		PosterRefreshAfter: in.PosterRefreshAfter, PosterExpiresAt: in.PosterExpiresAt,
 		FetchedAt: in.FetchedAt, RefreshAfter: in.RefreshAfter, ExpiresAt: in.ExpiresAt,
 	})
-}
-
-func (r *repo) TypeByKey(ctx context.Context, key string) (typeDef, bool, error) {
-	def, err := r.q.GetTypeDefinitionByKey(ctx, sqlc.GetTypeDefinitionByKeyParams{WorkspaceID: scope.WorkspaceID(ctx), Key: key})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return typeDef{}, false, nil
-	}
-	if err != nil {
-		return typeDef{}, false, err
-	}
-	return typeDef{ID: def.ID, AllowsPrice: def.AllowsPrice}, true, nil
-}
-
-func (r *repo) TypeFields(ctx context.Context, typeID uuid.UUID) ([]types.Field, error) {
-	rows, err := r.q.ListTypeFields(ctx, sqlc.ListTypeFieldsParams{WorkspaceID: scope.WorkspaceID(ctx), TypeID: typeID})
-	if err != nil {
-		return nil, err
-	}
-	fields := make([]types.Field, len(rows))
-	for i, f := range rows {
-		fields[i] = types.Field{Key: f.Key, Type: f.FieldType, Special: f.IsLocked}
-	}
-	return fields, nil
 }
 
 func (r *repo) InsertAttachment(ctx context.Context, a images.Attachment, now time.Time) error {

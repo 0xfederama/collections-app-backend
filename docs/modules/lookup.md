@@ -29,7 +29,7 @@ Merges values imported from a metadata provider (TMDB for movie and TV, Open Lib
 ## Gotchas
 
 - `lookup_imports` rows carry `provider` (`tmdb` or `openlibrary`) and `source_id`. Only TMDB has retention: refresh at five months, expiry at six. Open Library rows have NULL deadlines and maintenance never touches them (D-095).
-- Type-definition and attachment queries reach `apply` through `Repo` methods, so the merge and apply rules are testable with a fake repository.
+- Attachment queries reach `apply` through `Repo` methods, so the merge and apply rules are testable with a fake repository.
 - Poster files are written before the transaction and their rows inside it. Replaced files are deleted after commit.
 - `FillOnly` values (book `stores: [preferred_store]`, D-096) apply only on create and fill, never overwrite chosen stores and are never tracked as imported.
 - Automatic book lookup (no `source_id`) uses `pickBest`: exact normalised title first, then author and pages, ties in upstream order. TMDB takes the first result.

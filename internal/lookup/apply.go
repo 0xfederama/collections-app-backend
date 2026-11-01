@@ -67,7 +67,7 @@ func (s *DBStore) applyCreate(ctx context.Context, r Repo, p ApplyParams, poster
 		if err := items.ValidatePrice(p.CreateInput.Price); err != nil {
 			return uuid.Nil, false, err
 		}
-		if err := priceAllowed(ctx, r, typ); err != nil {
+		if err := priceAllowed(typ); err != nil {
 			return uuid.Nil, false, err
 		}
 	}
@@ -108,7 +108,7 @@ func (s *DBStore) applyCreate(ctx context.Context, r Repo, p ApplyParams, poster
 		metadata[idKey] = idValue
 	}
 	fillOnly(metadata, p.FillOnly, false)
-	fields, err := typeFields(ctx, r, typ)
+	fields, err := typeFields(typ)
 	if err != nil {
 		return uuid.Nil, false, err
 	}
@@ -191,7 +191,7 @@ func (s *DBStore) applyExisting(ctx context.Context, r Repo, p ApplyParams, post
 		merged = cloneLookupMap(metadata)
 		snapshots = cloneLookupMap(old.ImportedFields)
 	}
-	fields, err := typeFields(ctx, r, cur.Type)
+	fields, err := typeFields(cur.Type)
 	if err != nil {
 		return false, nil, err
 	}
@@ -321,38 +321,28 @@ func (s *DBStore) saveProvenance(ctx context.Context, r Repo, itemID uuid.UUID, 
 }
 
 // priceAllowed is the 422 on price for a list type without a price (the type's
-// allows_price, or no type at all). It reads the definition inside the transaction r.
-func priceAllowed(ctx context.Context, r Repo, typ *string) error {
+// allows_price, or no type at all).
+func priceAllowed(typ *string) error {
 	if typ == nil {
 		return items.PriceAllowed(false)
 	}
-	def, ok, err := r.TypeByKey(ctx, *typ)
-	if err != nil {
-		return fmt.Errorf("load list type definition: %w", err)
-	}
+	def, ok := types.Lookup(*typ)
 	if !ok {
 		return fmt.Errorf("load list type definition: %q is not defined", *typ)
 	}
 	return items.PriceAllowed(def.AllowsPrice)
 }
 
-// typeFields loads the fields a metadata write is checked against, inside the
-// transaction r. A nil type (a list with no type) has none. A type that is not
-// defined is the 422 of the metadata rules.
-func typeFields(ctx context.Context, r Repo, typ *string) ([]types.Field, error) {
+// typeFields returns the fields a metadata write is checked against. A nil type
+// (a list with no type) has none. A type that is not built in is the 422 of the
+// metadata rules.
+func typeFields(typ *string) ([]types.Field, error) {
 	if typ == nil {
 		return nil, nil
 	}
-	def, ok, err := r.TypeByKey(ctx, *typ)
-	if err != nil {
-		return nil, fmt.Errorf("get type definition: %w", err)
-	}
+	def, ok := types.Lookup(*typ)
 	if !ok {
 		return nil, apperr.Validation(apperr.FieldError{Field: "type", Message: "is not a known item type"})
 	}
-	fields, err := r.TypeFields(ctx, def.ID)
-	if err != nil {
-		return nil, fmt.Errorf("list type fields: %w", err)
-	}
-	return fields, nil
+	return def.Fields, nil
 }

@@ -6,7 +6,7 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 
 ## Key files
 
-- `internal/workspace/bootstrap.go`: `Bootstrap`, advisory lock, calls `seed.BuiltinTypes`
+- `internal/workspace/bootstrap.go`: `Bootstrap`, advisory lock
 - `internal/workspace/model.go`: `Settings`, `SettingsPatch`
 - `internal/workspace/service.go`: `Service`, `Get`, `Update`, validation, version check
 - `internal/workspace/repository.go`: `Postgres` store, scoped queries, settings row mapping
@@ -17,7 +17,7 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 
 ## Interfaces
 
-- `Bootstrap(ctx, db database.TxBeginner, name string) (uuid.UUID, error)`: creates the workspace with settings if missing, runs `seed.BuiltinTypes` on every call, returns its ID
+- `Bootstrap(ctx, db database.TxBeginner, name string) (uuid.UUID, error)`: creates the workspace with settings if missing, returns its ID
 - `NewPostgres(pool *pgxpool.Pool) *Postgres`, `NewService(store Store) *Service`: the store is `InTx` plus `Get`
 - `(*Service).Get(ctx) (Settings, error)`: workspace from `scope.WorkspaceID(ctx)`; `apperr.NotFound("settings")` if no row
 - `(*Service).Update(ctx, ifMatch int, p SettingsPatch) (Settings, error)`: 422 field errors, then 412 `apperr.VersionConflict` on a stale version
@@ -28,7 +28,6 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 ## Gotchas
 
 - `Bootstrap` runs from `cmd/api/main.go` before the server starts, under `pg_advisory_xact_lock` with a fixed key; a later `WORKSPACE_NAME` does not rename an existing workspace. More than one workspace is an error.
-- Built-in types are seeded on every start, not only on creation (idempotent, see `seed`). No SQL trigger seeds them.
 - Validation runs before the row lock, so an invalid body answers 422 even when If-Match is stale.
 - A patch that changes nothing returns the current settings with no version bump. Equality compares retention by value.
 - A name change updates `workspaces.name` in the same transaction and bumps its version; the ETag stream is only `workspace_settings.version` (`"s-N"`).

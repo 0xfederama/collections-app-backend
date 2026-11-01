@@ -25,7 +25,7 @@ type SearchPathSegmentJSON struct {
 type SearchResultJSON struct {
 	Item     items.ItemSummaryJSON   `json:"item"`
 	Path     []SearchPathSegmentJSON `json:"path" nullable:"false"`
-	TypeName *string                 `json:"type_name" nullable:"true" doc:"The display name from this workspace's type definition, null when the list has no type."`
+	TypeName *string                 `json:"type_name" nullable:"true" doc:"The display name of the built-in type, null when the list has no type."`
 }
 
 // SearchPageJSON is the searchItems answer (published as "SearchPage").

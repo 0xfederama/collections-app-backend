@@ -31,7 +31,7 @@ func ValidateMetadata(typ *string, fields []types.Field, in, stored map[string]a
 	}
 	var out map[string]any
 	for _, f := range fields {
-		if f.Type != "streaming" && (!f.Special || f.Key != "streaming") {
+		if f.Type != "streaming" {
 			continue
 		}
 		obj, ok := in[f.Key].(map[string]any)

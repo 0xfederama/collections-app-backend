@@ -27,11 +27,9 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
-	"github.com/0xfederama/collections-app-backend/internal/platform/database/sqlc"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
 	"github.com/0xfederama/collections-app-backend/internal/search"
-	"github.com/0xfederama/collections-app-backend/internal/seed"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
 )
@@ -81,9 +79,6 @@ func newImageEnv(t *testing.T) *imageEnv {
 	pool := testdb.NewMigrated(t, sharedPostgres(t))
 	ws := uuid.New()
 	if _, err := pool.Exec(t.Context(), "INSERT INTO workspaces (id, name) VALUES ($1, 'W')", ws); err != nil {
-		t.Fatal(err)
-	}
-	if err := seed.BuiltinTypes(t.Context(), sqlc.New(pool), ws); err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()

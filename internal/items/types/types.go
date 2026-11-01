@@ -1,6 +1,5 @@
-// Package types validates and normalizes item metadata from type definitions.
-// It is pure Go: callers load the workspace-scoped definitions from the
-// database. Every key is optional and a null value means "key omitted".
+// Package types holds the built-in item types (registry.go) and validates and
+// normalizes item metadata against their fields. It is pure Go. Every key is optional and a null value means "key omitted".
 package types
 
 import (
@@ -51,18 +50,10 @@ type outcome struct {
 // rule validates one value found at the dotted path "metadata.<key>".
 type rule func(path string, v any) outcome
 
-// Field is one persisted type field definition, reduced to the values needed
-// for metadata validation.
-type Field struct {
-	Key     string
-	Type    string
-	Special bool // locked built-in field with an established wire shape
-}
-
-// Validate checks metadata against the supplied type fields and returns the
-// normalized map to store. Streaming and TMDB bookkeeping retain their
-// established validators by key; all other fields follow their stored type.
-// An undeclared key wins over field errors.
+// Validate checks metadata against the fields of a built-in type and returns the
+// normalized map to store. Streaming and TMDB bookkeeping have their own
+// validators by key; all other fields follow their field type. A key the type
+// does not declare is an unknown field and wins over field errors.
 func Validate(fields []Field, in map[string]any) (map[string]any, error) {
 	rules := make(map[string]rule, len(fields))
 	for _, field := range fields {
@@ -95,19 +86,17 @@ func Validate(fields []Field, in map[string]any) (map[string]any, error) {
 }
 
 func ruleFor(field Field) rule {
-	// These keys are data imported from TMDB or maintain lookup state. Their
-	// wire shape must remain independent of a definition label/type edit.
-	if field.Special {
-		switch field.Key {
-		case "streaming":
-			return streaming
-		case "tmdb_id":
-			return positiveInteger
-		case "lookup_disabled":
-			return boolean
-		case "imdb_url":
-			return imdbURL
-		}
+	// These keys are data imported from TMDB or maintain lookup state, so they
+	// have a stricter shape than their field type.
+	switch field.Key {
+	case "streaming":
+		return streaming
+	case "tmdb_id":
+		return positiveInteger
+	case "lookup_disabled":
+		return boolean
+	case "imdb_url":
+		return imdbURL
 	}
 	switch field.Type {
 	case "text":

@@ -5,8 +5,6 @@ DROP TABLE IF EXISTS lists;
 DROP TABLE IF EXISTS folders;
 DROP TABLE IF EXISTS attachments;
 DROP TABLE IF EXISTS trash_batches;
-DROP TABLE IF EXISTS type_fields;
-DROP TABLE IF EXISTS type_definitions;
 DROP TABLE IF EXISTS workspace_settings;
 DROP TABLE IF EXISTS workspaces;
 

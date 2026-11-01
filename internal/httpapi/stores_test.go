@@ -31,9 +31,6 @@ func TestF016B4_StoresFieldValidation(t *testing.T) {
 			}
 		})
 	}
-	t.Run("a stores field is not a custom field type", func(t *testing.T) {
-		wantProblem(t, e.call("POST", "/api/v1/types/book/fields", `{"label":"Shops","type":"stores"}`, `"k-1"`), 422, "validation_failed")
-	})
 }
 
 func TestF016B4_StoresFieldIsNotSortableOrFilterable(t *testing.T) {

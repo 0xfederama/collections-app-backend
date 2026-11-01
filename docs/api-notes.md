@@ -21,9 +21,6 @@ in step with it.
 | `updateSettings` | `trash_retention_days` | 1 to 365, or `null` |
 | `updateSettings` | `owned_streaming_services` | at most 64 entries; each `^[a-z][a-z0-9_]{0,63}$`; no duplicates |
 | `updateList` | `type` | not empty when sent (`null` = no type) |
-| `createTypeField`, `updateTypeField` | `label` | 1 to 100 characters |
-| `createTypeField` | `type` | one of `text`, `number`, `date`, `boolean`, `link` |
-| `reorderTypeFields` | `keys` | unique strings |
 | `reorderFolders`, `reorderLists`, `reorderListItems` | `ids` | at most 10000 UUIDs |
 | `createList`, `updateList` | `name` | 1 to 200 characters |
 | `createList`, `updateList` | `description` | Markdown, at most 65536 UTF-8 bytes |

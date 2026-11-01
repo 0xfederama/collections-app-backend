@@ -31,20 +31,6 @@ func (q *Queries) CountTypeFieldValues(ctx context.Context, arg CountTypeFieldVa
 	return column_1, err
 }
 
-const deleteTypeDefinition = `-- name: DeleteTypeDefinition :exec
-DELETE FROM type_definitions WHERE id = $1 AND workspace_id = $2
-`
-
-type DeleteTypeDefinitionParams struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-func (q *Queries) DeleteTypeDefinition(ctx context.Context, arg DeleteTypeDefinitionParams) error {
-	_, err := q.db.Exec(ctx, deleteTypeDefinition, arg.ID, arg.WorkspaceID)
-	return err
-}
-
 const deleteTypeField = `-- name: DeleteTypeField :exec
 DELETE FROM type_fields WHERE id = $1 AND workspace_id = $2
 `
@@ -59,22 +45,8 @@ func (q *Queries) DeleteTypeField(ctx context.Context, arg DeleteTypeFieldParams
 	return err
 }
 
-const deleteTypeFieldsOfType = `-- name: DeleteTypeFieldsOfType :exec
-DELETE FROM type_fields WHERE type_id = $1 AND workspace_id = $2
-`
-
-type DeleteTypeFieldsOfTypeParams struct {
-	TypeID      uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-func (q *Queries) DeleteTypeFieldsOfType(ctx context.Context, arg DeleteTypeFieldsOfTypeParams) error {
-	_, err := q.db.Exec(ctx, deleteTypeFieldsOfType, arg.TypeID, arg.WorkspaceID)
-	return err
-}
-
 const getTypeDefinitionByKey = `-- name: GetTypeDefinitionByKey :one
-SELECT id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at FROM type_definitions
+SELECT id, workspace_id, key, name, default_icon, allows_price, default_sort_field, is_locked, version, created_at, updated_at FROM type_definitions
 WHERE workspace_id = $1 AND key = $2
 `
 
@@ -94,7 +66,6 @@ func (q *Queries) GetTypeDefinitionByKey(ctx context.Context, arg GetTypeDefinit
 		&i.DefaultIcon,
 		&i.AllowsPrice,
 		&i.DefaultSortField,
-		&i.DefaultPinnedFields,
 		&i.IsLocked,
 		&i.Version,
 		&i.CreatedAt,
@@ -125,52 +96,6 @@ func (q *Queries) GetTypeFieldByKey(ctx context.Context, arg GetTypeFieldByKeyPa
 		&i.Label,
 		&i.FieldType,
 		&i.Position,
-		&i.IsLocked,
-		&i.Version,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const insertTypeDefinition = `-- name: InsertTypeDefinition :one
-INSERT INTO type_definitions (workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at
-`
-
-type InsertTypeDefinitionParams struct {
-	WorkspaceID         uuid.UUID
-	Key                 string
-	Name                string
-	DefaultIcon         *string
-	AllowsPrice         bool
-	DefaultSortField    *string
-	DefaultPinnedFields []byte
-	Now                 time.Time
-}
-
-func (q *Queries) InsertTypeDefinition(ctx context.Context, arg InsertTypeDefinitionParams) (TypeDefinition, error) {
-	row := q.db.QueryRow(ctx, insertTypeDefinition,
-		arg.WorkspaceID,
-		arg.Key,
-		arg.Name,
-		arg.DefaultIcon,
-		arg.AllowsPrice,
-		arg.DefaultSortField,
-		arg.DefaultPinnedFields,
-		arg.Now,
-	)
-	var i TypeDefinition
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.Key,
-		&i.Name,
-		&i.DefaultIcon,
-		&i.AllowsPrice,
-		&i.DefaultSortField,
-		&i.DefaultPinnedFields,
 		&i.IsLocked,
 		&i.Version,
 		&i.CreatedAt,
@@ -221,43 +146,9 @@ func (q *Queries) InsertTypeField(ctx context.Context, arg InsertTypeFieldParams
 	return i, err
 }
 
-const listActiveListsByType = `-- name: ListActiveListsByType :many
-SELECT id, name FROM lists WHERE workspace_id = $1 AND type = $2::text AND deleted_at IS NULL ORDER BY name, id
-`
-
-type ListActiveListsByTypeParams struct {
-	WorkspaceID uuid.UUID
-	Type        string
-}
-
-type ListActiveListsByTypeRow struct {
-	ID   uuid.UUID
-	Name string
-}
-
-func (q *Queries) ListActiveListsByType(ctx context.Context, arg ListActiveListsByTypeParams) ([]ListActiveListsByTypeRow, error) {
-	rows, err := q.db.Query(ctx, listActiveListsByType, arg.WorkspaceID, arg.Type)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListActiveListsByTypeRow{}
-	for rows.Next() {
-		var i ListActiveListsByTypeRow
-		if err := rows.Scan(&i.ID, &i.Name); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listTypeDefinitions = `-- name: ListTypeDefinitions :many
 
-SELECT id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at FROM type_definitions
+SELECT id, workspace_id, key, name, default_icon, allows_price, default_sort_field, is_locked, version, created_at, updated_at FROM type_definitions
 WHERE workspace_id = $1
 ORDER BY is_locked DESC, name, key
 `
@@ -280,7 +171,6 @@ func (q *Queries) ListTypeDefinitions(ctx context.Context, workspaceID uuid.UUID
 			&i.DefaultIcon,
 			&i.AllowsPrice,
 			&i.DefaultSortField,
-			&i.DefaultPinnedFields,
 			&i.IsLocked,
 			&i.Version,
 			&i.CreatedAt,
@@ -341,7 +231,7 @@ func (q *Queries) ListTypeFields(ctx context.Context, arg ListTypeFieldsParams) 
 }
 
 const lockTypeDefinition = `-- name: LockTypeDefinition :one
-SELECT id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at FROM type_definitions
+SELECT id, workspace_id, key, name, default_icon, allows_price, default_sort_field, is_locked, version, created_at, updated_at FROM type_definitions
 WHERE id = $1 AND workspace_id = $2
 FOR UPDATE
 `
@@ -362,7 +252,6 @@ func (q *Queries) LockTypeDefinition(ctx context.Context, arg LockTypeDefinition
 		&i.DefaultIcon,
 		&i.AllowsPrice,
 		&i.DefaultSortField,
-		&i.DefaultPinnedFields,
 		&i.IsLocked,
 		&i.Version,
 		&i.CreatedAt,
@@ -442,29 +331,6 @@ func (q *Queries) ParkTypeFieldPosition(ctx context.Context, arg ParkTypeFieldPo
 	return err
 }
 
-const resetListTypeFieldPins = `-- name: ResetListTypeFieldPins :exec
-UPDATE lists
-SET pinned_fields = NULL, version = version + 1, updated_at = $1
-WHERE workspace_id = $2 AND type = $3::text AND pinned_fields ? $4::text
-`
-
-type ResetListTypeFieldPinsParams struct {
-	Now         time.Time
-	WorkspaceID uuid.UUID
-	Type        string
-	Key         string
-}
-
-func (q *Queries) ResetListTypeFieldPins(ctx context.Context, arg ResetListTypeFieldPinsParams) error {
-	_, err := q.db.Exec(ctx, resetListTypeFieldPins,
-		arg.Now,
-		arg.WorkspaceID,
-		arg.Type,
-		arg.Key,
-	)
-	return err
-}
-
 const resetListTypeFieldSort = `-- name: ResetListTypeFieldSort :exec
 UPDATE lists
 SET sort_mode = 'manual', version = version + 1, updated_at = $1
@@ -491,10 +357,6 @@ func (q *Queries) ResetListTypeFieldSort(ctx context.Context, arg ResetListTypeF
 const resetTypeFieldDefaults = `-- name: ResetTypeFieldDefaults :exec
 UPDATE type_definitions
 SET default_sort_field = CASE WHEN default_sort_field = $1 THEN NULL ELSE default_sort_field END,
-    default_pinned_fields = CASE
-      WHEN default_pinned_fields ? $1::text THEN default_pinned_fields - $1::text
-      ELSE default_pinned_fields
-    END,
     version = version + 1,
     updated_at = $2
 WHERE id = $3 AND workspace_id = $4
@@ -577,59 +439,6 @@ type TouchTypeDefinitionParams struct {
 func (q *Queries) TouchTypeDefinition(ctx context.Context, arg TouchTypeDefinitionParams) error {
 	_, err := q.db.Exec(ctx, touchTypeDefinition, arg.Now, arg.ID, arg.WorkspaceID)
 	return err
-}
-
-const updateTypeDefinition = `-- name: UpdateTypeDefinition :one
-UPDATE type_definitions
-SET name = $1::text,
-    default_icon = $2,
-    allows_price = $3::boolean,
-    default_sort_field = $4,
-    default_pinned_fields = $5,
-    version = version + 1,
-    updated_at = $6
-WHERE id = $7 AND workspace_id = $8 RETURNING id, workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, is_locked, version, created_at, updated_at
-`
-
-type UpdateTypeDefinitionParams struct {
-	Name                string
-	DefaultIcon         *string
-	AllowsPrice         bool
-	DefaultSortField    *string
-	DefaultPinnedFields []byte
-	Now                 time.Time
-	ID                  uuid.UUID
-	WorkspaceID         uuid.UUID
-}
-
-// Writes every editable column: the caller merges the patch and holds the row lock.
-func (q *Queries) UpdateTypeDefinition(ctx context.Context, arg UpdateTypeDefinitionParams) (TypeDefinition, error) {
-	row := q.db.QueryRow(ctx, updateTypeDefinition,
-		arg.Name,
-		arg.DefaultIcon,
-		arg.AllowsPrice,
-		arg.DefaultSortField,
-		arg.DefaultPinnedFields,
-		arg.Now,
-		arg.ID,
-		arg.WorkspaceID,
-	)
-	var i TypeDefinition
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.Key,
-		&i.Name,
-		&i.DefaultIcon,
-		&i.AllowsPrice,
-		&i.DefaultSortField,
-		&i.DefaultPinnedFields,
-		&i.IsLocked,
-		&i.Version,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
 }
 
 const updateTypeFieldLabel = `-- name: UpdateTypeFieldLabel :one

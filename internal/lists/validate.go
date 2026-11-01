@@ -2,7 +2,6 @@ package lists
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -144,40 +143,6 @@ func validateDefinitionSort(typ *string, sortMode string, allowsPrice bool, fiel
 		return apperr.Validation(apperr.FieldError{Field: field, Message: "must be a built-in sort mode (a list with no type has no fields)"})
 	}
 	return apperr.Validation(apperr.FieldError{Field: field, Message: fmt.Sprintf("must be a built-in sort mode or a field of type %s", *typ)})
-}
-
-// validateDefinitionPins checks the ordered pinned keys against the type (at most 3, each a field of the type or
-// price when the type allows it, no duplicates) and returns them normalized (never nil).
-func validateDefinitionPins(allowsPrice bool, fields []FieldInfo, in *PinnedFields) (*PinnedFields, error) {
-	if len(*in) > 3 {
-		return nil, apperr.Validation(apperr.FieldError{Field: "pinned_fields", Message: "must have at most 3 entries"})
-	}
-	seen := make(map[string]bool, len(*in))
-	for i, key := range *in {
-		valid := key == "price" && allowsPrice
-		for _, f := range fields {
-			valid = valid || f.Key == key
-		}
-		if !valid {
-			return nil, apperr.Validation(apperr.FieldError{Field: fmt.Sprintf("pinned_fields[%d]", i), Message: "must name a field of this type"})
-		}
-		if seen[key] {
-			return nil, apperr.Validation(apperr.FieldError{Field: fmt.Sprintf("pinned_fields[%d]", i), Message: "must be unique"})
-		}
-		seen[key] = true
-	}
-	p := *in
-	if p == nil {
-		p = PinnedFields{}
-	}
-	return &p, nil
-}
-
-func equalPinned(a, b *PinnedFields) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return slices.Equal(*a, *b)
 }
 
 func equalPtr(a, b *string) bool {

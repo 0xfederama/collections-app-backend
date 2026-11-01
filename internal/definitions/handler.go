@@ -27,24 +27,6 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		Errors:  []int{http.StatusInternalServerError},
 	}, httpserver.Op(log, h.list))
 	huma.Register(api, huma.Operation{
-		OperationID: "createType", Method: http.MethodPost, Path: "/api/v1/types", Tags: tags,
-		Summary: "Create a custom type", DefaultStatus: http.StatusCreated,
-		Errors: []int{http.StatusBadRequest, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity, http.StatusConflict},
-	}, httpserver.Op(log, h.create))
-	huma.Register(api, huma.Operation{
-		OperationID: "updateType", Method: http.MethodPatch, Path: "/api/v1/types/{key}", Tags: tags,
-		Summary: "Update a custom type", Description: "Requires `If-Match` (`\"k-N\"`). Send `null` to clear a nullable default.",
-		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
-			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,
-			http.StatusPreconditionRequired},
-	}, httpserver.Op(log, h.update))
-	huma.Register(api, huma.Operation{
-		OperationID: "deleteType", Method: http.MethodDelete, Path: "/api/v1/types/{key}", Tags: tags,
-		Summary: "Delete a custom type not used by any list", Description: "Requires `If-Match` (`\"k-N\"`).",
-		DefaultStatus: http.StatusNoContent,
-		Errors:        []int{http.StatusNotFound, http.StatusPreconditionFailed, http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
-	}, httpserver.Op(log, h.remove))
-	huma.Register(api, huma.Operation{
 		OperationID: "createTypeField", Method: http.MethodPost, Path: "/api/v1/types/{key}/fields", Tags: tags,
 		Summary: "Add a custom field", Description: "Requires `If-Match` on the type (`\"k-N\"`).", DefaultStatus: http.StatusCreated,
 		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
@@ -96,102 +78,9 @@ func (h *handler) list(ctx context.Context, _ *struct{}) (*ListTypesOutput, erro
 	return &ListTypesOutput{Body: out}, nil
 }
 
-// TypeOutput is a type with its ETag.
-type TypeOutput struct {
-	ETag string `header:"ETag"`
-	Body TypeDefinitionJSON
-}
-
-// CreatedTypeOutput adds the Location of the new type.
-type CreatedTypeOutput struct {
-	ETag     string `header:"ETag"`
-	Location string `header:"Location"`
-	Body     TypeDefinitionJSON
-}
-
-// CreateTypeRequest is the body of createType. The name is trimmed and checked by the manager.
-type CreateTypeRequest struct {
-	Name                string    `json:"name"`
-	DefaultIcon         *string   `json:"default_icon,omitempty" nullable:"true"`
-	AllowsPrice         *bool     `json:"allows_price,omitempty"`
-	DefaultSortField    *string   `json:"default_sort_field,omitempty" nullable:"true"`
-	DefaultPinnedFields *[]string `json:"default_pinned_fields,omitempty" nullable:"true"`
-}
-
-type createInput struct{ Body CreateTypeRequest }
-
-func (h *handler) create(ctx context.Context, in *createInput) (*CreatedTypeOutput, error) {
-	b := in.Body
-	t, err := h.svc.Create(ctx, CreateType{
-		Name: b.Name, DefaultIcon: b.DefaultIcon, AllowsPrice: b.AllowsPrice != nil && *b.AllowsPrice,
-		DefaultSortField: b.DefaultSortField, DefaultPinnedFields: b.DefaultPinnedFields,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &CreatedTypeOutput{
-		ETag: etag.Format(etag.Type, t.Version), Location: "/api/v1/types/" + t.Key, Body: typeJSON(t),
-	}, nil
-}
-
 // KeyParam is the {key} path parameter of a type.
 type KeyParam struct {
 	Key string `path:"key"`
-}
-
-type updateInput struct {
-	KeyParam
-	IfMatch string `header:"If-Match" doc:"Type ETag, \"k-N\"."`
-	Body    UpdateTypeRequest
-}
-
-// UpdateTypeRequest is the body of updateType. Absent fields stay as they are;
-// the nullable defaults tell null (clear) from absent with httpserver.Optional.
-type UpdateTypeRequest struct {
-	Name                *string                       `json:"name,omitempty"`
-	DefaultIcon         httpserver.Optional[string]   `json:"default_icon,omitempty"`
-	AllowsPrice         *bool                         `json:"allows_price,omitempty"`
-	DefaultSortField    httpserver.Optional[string]   `json:"default_sort_field,omitempty"`
-	DefaultPinnedFields httpserver.Optional[[]string] `json:"default_pinned_fields,omitempty"`
-}
-
-func (h *handler) update(ctx context.Context, in *updateInput) (*TypeOutput, error) {
-	version, ok := etag.Parse(in.IfMatch, etag.Type)
-	if !ok {
-		return nil, problem.PreconditionRequired()
-	}
-	b := in.Body
-	t, err := h.svc.Update(ctx, in.Key, version, UpdateType{
-		Name: b.Name, AllowsPrice: b.AllowsPrice,
-		DefaultIcon:         nullableString(b.DefaultIcon),
-		DefaultSortField:    nullableString(b.DefaultSortField),
-		DefaultPinnedFields: NullableStrings{Set: b.DefaultPinnedFields.Set, Value: b.DefaultPinnedFields.Value},
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &TypeOutput{ETag: etag.Format(etag.Type, t.Version), Body: typeJSON(t)}, nil
-}
-
-// nullableString converts a wire PATCH field to the manager's NullableString.
-func nullableString(o httpserver.Optional[string]) NullableString {
-	return NullableString{Set: o.Set, Value: o.Value}
-}
-
-type removeInput struct {
-	KeyParam
-	IfMatch string `header:"If-Match" doc:"Type ETag, \"k-N\"."`
-}
-
-func (h *handler) remove(ctx context.Context, in *removeInput) (*struct{}, error) {
-	version, ok := etag.Parse(in.IfMatch, etag.Type)
-	if !ok {
-		return nil, problem.PreconditionRequired()
-	}
-	if err := h.svc.Delete(ctx, in.Key, version); err != nil {
-		return nil, err
-	}
-	return nil, nil
 }
 
 // FieldParam is the {key} and {fieldKey} path parameters of a field.

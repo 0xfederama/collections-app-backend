@@ -21,23 +21,14 @@ type searchRows struct {
 	Page obj
 }
 
-func TestF014B5_CustomTypeListsAndSearchNames(t *testing.T) {
+func TestF014B5_TypeNamesInSearchAndRecent(t *testing.T) {
 	e := newTreeEnv(t)
-	created := e.call("POST", "/api/v1/types", `{"name":"Board game"}`, "")
-	wantStatus(t, created, 201)
-	typ := decode(t, created)
-	key := typ["key"].(string)
-	list := e.call("POST", "/api/v1/lists", fmt.Sprintf(`{"name":"Shelf","type":%q}`, key), "")
-	wantStatus(t, list, 201)
-	lid := decode(t, list)["id"].(string)
+	lid := e.listOfType("Shelf", nil, "vehicle")["id"].(string)
 	e.newItem(lid, `{"title":"Catan"}`)
 
 	got := e.search(q("catan"))
-	if len(got.Data) != 1 || got.Data[0].Item["type"] != key || got.Data[0].TypeName != "Board game" {
-		t.Fatalf("custom-type search result = %+v", got.Data)
-	}
-	if definition := e.typ(key); definition["name"] != "Board game" {
-		t.Fatalf("custom type missing from definitions picker data: %v", definition)
+	if len(got.Data) != 1 || got.Data[0].Item["type"] != "vehicle" || got.Data[0].TypeName != "Vehicles" {
+		t.Fatalf("search result = %+v", got.Data)
 	}
 	recent := e.call("GET", "/api/v1/recent-items", "", "")
 	wantStatus(t, recent, 200)
@@ -45,8 +36,8 @@ func TestF014B5_CustomTypeListsAndSearchNames(t *testing.T) {
 	if err := json.Unmarshal(recent.Body.Bytes(), &recentResults); err != nil {
 		t.Fatal(err)
 	}
-	if len(recentResults.Data) != 1 || recentResults.Data[0].TypeName != "Board game" {
-		t.Fatalf("custom-type recent result = %+v", recentResults.Data)
+	if len(recentResults.Data) != 1 || recentResults.Data[0].TypeName != "Vehicles" {
+		t.Fatalf("recent result = %+v", recentResults.Data)
 	}
 }
 

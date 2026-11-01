@@ -120,7 +120,7 @@ func (f *fakeDB) Update(_ context.Context, l List, now time.Time) (List, error) 
 	f.calls = append(f.calls, "update")
 	cur := f.lists[l.ID]
 	cur.Name, cur.Description, cur.DisplayMode, cur.SortMode = l.Name, l.Description, l.DisplayMode, l.SortMode
-	cur.PinnedFields, cur.Icon, cur.IconColor = l.PinnedFields, l.Icon, l.IconColor
+	cur.Icon, cur.IconColor = l.Icon, l.IconColor
 	cur.Version++
 	cur.UpdatedAt = now
 	f.lists[l.ID] = cur
@@ -130,7 +130,7 @@ func (f *fakeDB) Update(_ context.Context, l List, now time.Time) (List, error) 
 func (f *fakeDB) UpdateType(_ context.Context, id uuid.UUID, typ *string, now time.Time) (List, error) {
 	f.calls = append(f.calls, "updateType")
 	cur := f.lists[id]
-	cur.Type, cur.PinnedFields, cur.Version, cur.UpdatedAt = typ, nil, cur.Version+1, now
+	cur.Type, cur.Version, cur.UpdatedAt = typ, cur.Version+1, now
 	f.lists[id] = cur
 	return cur, nil
 }
@@ -262,8 +262,8 @@ func TestCreate_Defaults(t *testing.T) {
 			if (got.Type == nil) != (tt.wantType == nil) || (got.Type != nil && *got.Type != *tt.wantType) {
 				t.Fatalf("type = %v, want %v", got.Type, tt.wantType)
 			}
-			if got.PinnedFields != nil || got.Icon != nil || got.IconColor != nil {
-				t.Fatalf("pins/icon not defaulted: %+v", got)
+			if got.Icon != nil || got.IconColor != nil {
+				t.Fatalf("icon not defaulted: %+v", got)
 			}
 		})
 	}
@@ -325,7 +325,7 @@ func TestUpdate_TypeChange(t *testing.T) {
 		wantCalls []string
 	}{
 		// A type with a price keeps the items' prices: only metadata is cleared. The row is not
-		// written again: no sort or pin changes and the type update already bumped the version.
+		// written again: no sort changes and the type update already bumped the version.
 		{"to a type with a price clears metadata only", ptr("wishlist"),
 			[]string{"lock", "updateType", "clearMetadata"}},
 		// A type without a price clears the prices too. Its default sort field replaces the manual

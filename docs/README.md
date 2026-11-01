@@ -8,7 +8,7 @@
 - [config](modules/config.md): env var parsing and startup validation
 - [content](modules/content.md): item Markdown content, versions, restore and retention
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
-- [definitions](modules/definitions.md): workspace type and custom-field definitions (Huma `/api/v1/types...`), locked built-ins excluded
+- [definitions](modules/definitions.md): workspace type list and custom-field operations (Huma `/api/v1/types...`); types are fixed, no type create/update/delete
 - [folders](modules/folders.md): folder create, get, rename, move (cycle check) and reorder (Huma)
 - [httpapi](modules/httpapi.md): HTTP composition root: router build, Huma registration of every feature package, health probes, `Spec()`
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping on upload, validation, thumbnails, serving, orphan sweeper

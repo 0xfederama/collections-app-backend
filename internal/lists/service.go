@@ -33,7 +33,7 @@ type Repo interface {
 	Insert(ctx context.Context, l List, now time.Time) (List, error)
 	// Update writes the editable fields of the list l.ID (the service merges the patch first).
 	Update(ctx context.Context, l List, now time.Time) (List, error)
-	// UpdateType sets the type (nil = no type) and resets the pinned fields to the type default.
+	// UpdateType sets the type (nil = no type).
 	UpdateType(ctx context.Context, id uuid.UUID, typ *string, now time.Time) (List, error)
 	Move(ctx context.Context, id uuid.UUID, folder *uuid.UUID, sortOrder int, now time.Time) (List, error)
 	SetSortOrder(ctx context.Context, id uuid.UUID, sortOrder int, now time.Time) error
@@ -104,13 +104,6 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (List, error) {
 		if err := validateDefinitionSort(in.Type, in.SortMode, def.AllowsPrice, fields, "sort_mode"); err != nil {
 			return err
 		}
-		if in.PinnedFields != nil {
-			pins, err := validateDefinitionPins(def.AllowsPrice, fields, in.PinnedFields)
-			if err != nil {
-				return err
-			}
-			in.PinnedFields = pins
-		}
 		if err := requireFolder(ctx, r, in.FolderID); err != nil {
 			return err
 		}
@@ -120,7 +113,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (List, error) {
 		}
 		created, err := r.Insert(ctx, List{
 			FolderID: in.FolderID, Name: name, Type: in.Type, Description: in.Description,
-			DisplayMode: in.DisplayMode, SortMode: in.SortMode, PinnedFields: in.PinnedFields,
+			DisplayMode: in.DisplayMode, SortMode: in.SortMode,
 			Icon: in.Icon, IconColor: in.IconColor, SortOrder: next,
 		}, s.clock.Now())
 		if err != nil {
@@ -239,7 +232,7 @@ func (s *Service) apply(ctx context.Context, r Repo, id uuid.UUID, plan updatePl
 	}
 	_, err := r.Update(ctx, List{
 		ID: id, Name: plan.Name, Description: plan.Description, DisplayMode: plan.DisplayMode, SortMode: plan.SortMode,
-		PinnedFields: plan.PinnedFields, Icon: plan.Icon, IconColor: plan.IconColor,
+		Icon: plan.Icon, IconColor: plan.IconColor,
 	}, now)
 	return err
 }

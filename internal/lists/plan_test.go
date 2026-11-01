@@ -23,28 +23,16 @@ var (
 
 func strp(s string) *string { return &s }
 
-// pinsOf is a stored or sent pinned list, never nil.
-func pinsOf(keys ...string) *PinnedFields {
-	p := append(PinnedFields{}, keys...)
-	return &p
-}
-
-// movieList is a list of type movie sorted by its default, with two pinned fields.
+// movieList is a list of type movie sorted by its default.
 func movieList() List {
 	return List{
 		Name: "Films", Type: strp("movie"), DisplayMode: "thumbnail", SortMode: "release_year",
-		PinnedFields: pinsOf("release_year", "streaming"),
 	}
 }
 
-// vehicleList is a list of type vehicle sorted manually, nothing pinned.
+// vehicleList is a list of type vehicle sorted manually.
 func vehicleList() List {
 	return List{Name: "Bikes", Type: strp("vehicle"), DisplayMode: "thumbnail", SortMode: "manual"}
-}
-
-// wishlistList is a list of type wishlist (the type that allows a price) sorted manually.
-func wishlistList() List {
-	return List{Name: "Wish", Type: strp("wishlist"), DisplayMode: "thumbnail", SortMode: "manual"}
 }
 
 type planCase struct {
@@ -68,8 +56,7 @@ func TestPlanUpdate(t *testing.T) {
 			patch: Patch{
 				Name: strp("Films"), Type: Optional[string]{Set: true, Value: strp("movie")}, Description: Optional[string]{Set: true},
 				DisplayMode: strp("thumbnail"), SortMode: strp("release_year"),
-				PinnedFields: Optional[PinnedFields]{Set: true, Value: pinsOf("release_year", "streaming")},
-				Icon:         Optional[string]{Set: true}, IconColor: Optional[string]{Set: true},
+				Icon: Optional[string]{Set: true}, IconColor: Optional[string]{Set: true},
 			},
 			want: updatePlan{},
 		},
@@ -88,7 +75,7 @@ func TestPlanUpdate(t *testing.T) {
 		{
 			name: "rename writes the row", cur: movieList(), def: movieDef, fields: movieFields,
 			patch: Patch{Name: strp("Renamed")},
-			want:  updatePlan{Write: true, Name: "Renamed", DisplayMode: "thumbnail", SortMode: "release_year", PinnedFields: pinsOf("release_year", "streaming")},
+			want:  updatePlan{Write: true, Name: "Renamed", DisplayMode: "thumbnail", SortMode: "release_year"},
 		},
 		{
 			name: "description cleared by null", cur: func() List {
@@ -98,22 +85,22 @@ func TestPlanUpdate(t *testing.T) {
 			}(),
 			def: movieDef, fields: movieFields,
 			patch: Patch{Description: Optional[string]{Set: true}},
-			want:  updatePlan{Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "release_year", PinnedFields: pinsOf("release_year", "streaming")},
+			want:  updatePlan{Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "release_year"},
 		},
 		{
 			name: "display mode change", cur: movieList(), def: movieDef, fields: movieFields,
 			patch: Patch{DisplayMode: strp("grid")},
-			want:  updatePlan{Write: true, Name: "Films", DisplayMode: "grid", SortMode: "release_year", PinnedFields: pinsOf("release_year", "streaming")},
+			want:  updatePlan{Write: true, Name: "Films", DisplayMode: "grid", SortMode: "release_year"},
 		},
 		{
 			name: "explicit built-in sort", cur: movieList(), def: movieDef, fields: movieFields,
 			patch: Patch{SortMode: strp("title")},
-			want:  updatePlan{Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "title", PinnedFields: pinsOf("release_year", "streaming")},
+			want:  updatePlan{Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "title"},
 		},
 		{
 			name: "explicit sort on a field of the type", cur: movieList(), def: movieDef, fields: movieFields,
 			patch: Patch{SortMode: strp("streaming")},
-			want:  updatePlan{Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "streaming", PinnedFields: pinsOf("release_year", "streaming")},
+			want:  updatePlan{Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "streaming"},
 		},
 		{name: "sort on a field of another type is 422", cur: movieList(), def: movieDef, fields: movieFields, patch: Patch{SortMode: strp("displacement_cc")}, wantErr: "sort_mode"},
 		{name: "sort on a stores field is 422", cur: vehicleList(), def: vehicleDef, fields: vehicleFields, patch: Patch{SortMode: strp("stores")}, wantErr: "sort_mode"},
@@ -127,7 +114,7 @@ func TestPlanUpdate(t *testing.T) {
 		{
 			name: "type sent as the stored type is not a change", cur: movieList(), def: movieDef, fields: movieFields,
 			patch: Patch{Type: Optional[string]{Set: true, Value: strp("movie")}, DisplayMode: strp("grid")},
-			want:  updatePlan{Write: true, Name: "Films", DisplayMode: "grid", SortMode: "release_year", PinnedFields: pinsOf("release_year", "streaming")},
+			want:  updatePlan{Write: true, Name: "Films", DisplayMode: "grid", SortMode: "release_year"},
 		},
 		{
 			name: "type change from no type to a type with a default sort", cur: List{Name: "Bikes", DisplayMode: "thumbnail", SortMode: "manual"}, def: movieDef, fields: movieFields,
@@ -138,9 +125,9 @@ func TestPlanUpdate(t *testing.T) {
 			},
 		},
 		{
-			// The stored sort is valid for the new type, so it stays: only the pins go, and that is the
-			// UpdateListType write alone.
-			name: "type change keeps a valid sort and resets pins without a row write", cur: func() List {
+			// The stored sort is valid for the new type, so it stays: the type write is the
+			// only write.
+			name: "type change keeps a valid sort without a row write", cur: func() List {
 				l := movieList()
 				l.SortMode = "title"
 				return l
@@ -199,63 +186,12 @@ func TestPlanUpdate(t *testing.T) {
 				Name: "Films", DisplayMode: "thumbnail", SortMode: "manual",
 			},
 		},
-		{
-			name: "type change with pinned fields for the new type", cur: movieList(), def: vehicleDef, fields: vehicleFields,
-			patch: Patch{Type: Optional[string]{Set: true, Value: strp("vehicle")}, PinnedFields: Optional[PinnedFields]{Set: true, Value: pinsOf("make")}},
-			want: updatePlan{
-				Write: true, TypeChanged: true, NewType: strp("vehicle"), ClearMetadata: true, ClearPrice: true,
-				Name: "Films", DisplayMode: "thumbnail", SortMode: "manual", PinnedFields: pinsOf("make"),
-			},
-		},
-		{
-			name: "type change with pinned fields the new type rejects is 422", cur: movieList(), def: vehicleDef, fields: vehicleFields,
-			patch: Patch{Type: Optional[string]{Set: true, Value: strp("vehicle")}, PinnedFields: Optional[PinnedFields]{Set: true, Value: pinsOf("price")}}, wantErr: "pinned_fields[0]",
-		},
-
-		// Pinned fields.
-		{
-			name: "pinned null resets to the type default", cur: movieList(), def: movieDef, fields: movieFields,
-			patch: Patch{PinnedFields: Optional[PinnedFields]{Set: true}},
-			want:  updatePlan{Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "release_year"},
-		},
-		{
-			name: "empty pinned list is stored, not the default", cur: func() List {
-				l := movieList()
-				l.PinnedFields = nil
-				return l
-			}(),
-			def: movieDef, fields: movieFields,
-			patch: Patch{PinnedFields: Optional[PinnedFields]{Set: true, Value: pinsOf()}},
-			want:  updatePlan{Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "release_year", PinnedFields: pinsOf()},
-		},
-		{
-			name: "key that is no field of the type is 422", cur: movieList(), def: movieDef, fields: movieFields,
-			patch: Patch{PinnedFields: Optional[PinnedFields]{Set: true, Value: pinsOf("make")}}, wantErr: "pinned_fields[0]",
-		},
-		{
-			name: "more than three pinned keys is 422", cur: movieList(), def: movieDef, fields: movieFields,
-			patch: Patch{PinnedFields: Optional[PinnedFields]{Set: true, Value: pinsOf("release_year", "streaming", "release_year", "x")}}, wantErr: "pinned_fields",
-		},
-		{
-			name: "duplicate pinned key is 422", cur: movieList(), def: movieDef, fields: movieFields,
-			patch: Patch{PinnedFields: Optional[PinnedFields]{Set: true, Value: pinsOf("release_year", "release_year")}}, wantErr: "pinned_fields[1]",
-		},
-		{
-			name: "price is not pinnable where the type has none", cur: movieList(), def: movieDef, fields: movieFields,
-			patch: Patch{PinnedFields: Optional[PinnedFields]{Set: true, Value: pinsOf("release_year", "price")}}, wantErr: "pinned_fields[1]",
-		},
-		{
-			name: "price is pinnable where the type allows it", cur: wishlistList(), def: wishlistDef,
-			patch: Patch{PinnedFields: Optional[PinnedFields]{Set: true, Value: pinsOf("price")}},
-			want:  updatePlan{Write: true, Name: "Wish", DisplayMode: "thumbnail", SortMode: "manual", PinnedFields: pinsOf("price")},
-		},
-
 		// Icon and colour (F012-B1).
 		{
 			name: "built-in icon with a colour", cur: movieList(), def: movieDef, fields: movieFields,
 			patch: Patch{Icon: Optional[string]{Set: true, Value: strp("i:film")}, IconColor: Optional[string]{Set: true, Value: strp("indigo")}},
 			want: updatePlan{
-				Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "release_year", PinnedFields: pinsOf("release_year", "streaming"),
+				Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "release_year",
 				Icon: strp("i:film"), IconColor: strp("indigo"),
 			},
 		},
@@ -268,7 +204,7 @@ func TestPlanUpdate(t *testing.T) {
 			def: movieDef, fields: movieFields,
 			patch: Patch{IconColor: Optional[string]{Set: true, Value: strp("blue")}},
 			want: updatePlan{
-				Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "release_year", PinnedFields: pinsOf("release_year", "streaming"),
+				Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "release_year",
 				Icon: strp("i:film"), IconColor: strp("blue"),
 			},
 		},
@@ -281,7 +217,7 @@ func TestPlanUpdate(t *testing.T) {
 			def: movieDef, fields: movieFields,
 			patch: Patch{IconColor: Optional[string]{Set: true}},
 			want: updatePlan{
-				Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "release_year", PinnedFields: pinsOf("release_year", "streaming"),
+				Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "release_year",
 				Icon: strp("i:film"),
 			},
 		},
@@ -294,7 +230,7 @@ func TestPlanUpdate(t *testing.T) {
 			def: movieDef, fields: movieFields,
 			patch: Patch{Icon: Optional[string]{Set: true, Value: strp("⭐")}},
 			want: updatePlan{
-				Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "release_year", PinnedFields: pinsOf("release_year", "streaming"),
+				Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "release_year",
 				Icon: strp("⭐"),
 			},
 		},
@@ -306,7 +242,7 @@ func TestPlanUpdate(t *testing.T) {
 			}(),
 			def: movieDef, fields: movieFields,
 			patch: Patch{Icon: Optional[string]{Set: true}},
-			want:  updatePlan{Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "release_year", PinnedFields: pinsOf("release_year", "streaming")},
+			want:  updatePlan{Write: true, Name: "Films", DisplayMode: "thumbnail", SortMode: "release_year"},
 		},
 		{
 			name: "colour with an emoji is 422", cur: movieList(), def: movieDef, fields: movieFields,
@@ -325,14 +261,10 @@ func TestPlanUpdate(t *testing.T) {
 			patch: Patch{Icon: Optional[string]{Set: true, Value: strp("i:Star")}}, wantErr: "icon",
 		},
 
-		// Order of the errors: sort, then icon and colour, then pinned fields.
+		// Order of the errors: sort, then icon and colour.
 		{
 			name: "sort error comes before icon error", cur: movieList(), def: movieDef, fields: movieFields,
 			patch: Patch{SortMode: strp("nope"), Icon: Optional[string]{Set: true, Value: strp("i:Star")}}, wantErr: "sort_mode",
-		},
-		{
-			name: "icon error comes before pinned error", cur: movieList(), def: movieDef, fields: movieFields,
-			patch: Patch{Icon: Optional[string]{Set: true, Value: strp("i:Star")}, PinnedFields: Optional[PinnedFields]{Set: true, Value: pinsOf("make")}}, wantErr: "icon",
 		},
 	}
 	for _, tt := range tests {

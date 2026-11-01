@@ -25,16 +25,14 @@ type builtinType struct {
 	icon        *string
 	allowsPrice bool
 	sortField   *string
-	pins        string
 	fields      []builtinField
 }
 
 // builtins is the built-in set (exactly these five, F-018). Existing rows are
-// never overwritten: the pins are only set while NULL.
+// never overwritten.
 var builtins = []builtinType{
 	{
 		key: "movie", name: "Movies", allowsPrice: false, sortField: ptr("release_year"),
-		pins: `["runtime_minutes","streaming"]`,
 		fields: []builtinField{
 			{"release_year", "Release year", "number"},
 			{"runtime_minutes", "Runtime", "number"},
@@ -47,7 +45,6 @@ var builtins = []builtinType{
 	},
 	{
 		key: "tv_show", name: "TV shows", allowsPrice: false, sortField: ptr("first_air_year"),
-		pins: `["seasons","streaming"]`,
 		fields: []builtinField{
 			{"first_air_year", "First air year", "number"},
 			{"end_year", "End year", "number"},
@@ -62,7 +59,6 @@ var builtins = []builtinType{
 	},
 	{
 		key: "book", name: "Books", allowsPrice: false,
-		pins: `["author","pages","stores"]`,
 		fields: []builtinField{
 			{"author", "Writer", "text"},
 			{"pages", "Pages", "number"},
@@ -74,7 +70,6 @@ var builtins = []builtinType{
 	},
 	{
 		key: "vehicle", name: "Vehicles", icon: ptr("i:car"), allowsPrice: false,
-		pins: `["model_year","power_hp"]`,
 		fields: []builtinField{
 			{"make", "Make", "text"},
 			{"model", "Model", "text"},
@@ -85,13 +80,12 @@ var builtins = []builtinType{
 	},
 	{
 		key: "wishlist", name: "Wishlist", icon: ptr("i:tag"), allowsPrice: true,
-		pins: `["price"]`,
 	},
 }
 
 // BuiltinTypes makes sure the built-in types of the workspace exist with their
-// locked fields and default pins. It is idempotent: an existing row is never
-// changed, so a user's edit of a locked label or of the pins survives. Pass the
+// locked fields. It is idempotent: an existing row is never
+// changed, so a user's edit of a locked label survives. Pass the
 // Queries of a transaction (or of the pool) from the caller.
 func BuiltinTypes(ctx context.Context, q *sqlc.Queries, workspaceID uuid.UUID) error {
 	for _, b := range builtins {
@@ -104,13 +98,6 @@ func BuiltinTypes(ctx context.Context, q *sqlc.Queries, workspaceID uuid.UUID) e
 			DefaultSortField: b.sortField,
 		}); err != nil {
 			return fmt.Errorf("insert built-in type %s: %w", b.key, err)
-		}
-		if err := q.SetBuiltinDefaultPinnedFields(ctx, sqlc.SetBuiltinDefaultPinnedFieldsParams{
-			Pins:        []byte(b.pins),
-			WorkspaceID: workspaceID,
-			Key:         b.key,
-		}); err != nil {
-			return fmt.Errorf("set default pins of built-in type %s: %w", b.key, err)
 		}
 		for i, f := range b.fields {
 			if err := q.InsertBuiltinTypeField(ctx, sqlc.InsertBuiltinTypeFieldParams{

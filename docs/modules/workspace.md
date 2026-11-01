@@ -22,7 +22,7 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 - `(*Service).Get(ctx) (Settings, error)`: workspace from `scope.WorkspaceID(ctx)`; `apperr.NotFound("settings")` if no row
 - `(*Service).Update(ctx, ifMatch int, p SettingsPatch) (Settings, error)`: 422 field errors, then 412 `apperr.VersionConflict` on a stale version
 - `Register(api, log, svc, reader, Availability)`: adds the two settings operations to a Huma API
-- `Settings`: name, streaming country, `MetadataLanguage`, markdown history limit, `TrashRetentionDays *int` (nil = off), `PreferredStore`, version
+- `Settings`: name, streaming country, `MetadataLanguage`, markdown history limit, `TrashRetentionDays *int` (nil = off), `PreferredStore`, `OwnedStreamingServices []string` (never nil, `[]` = show all), version
 - `SettingsPatch`: pointer fields (nil = leave as is); `TrashRetentionDays` is `Optional[int]`
 
 ## Gotchas
@@ -36,5 +36,6 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 - Changing `streaming_country_code` also clears `streaming.link` on items and snapshots (`ClearItemStreamingLinks`, `ClearStreamingLinkSnapshots`), workspace-wide, in the same transaction. No item version bump.
 - `trash_retention_days` (1 to 365, or null = off; default NULL) is read by the trash auto-purge (`internal/trash`). Setting it purges nothing at once.
 - `preferred_store` (NOT NULL, default `amazon`, CHECK on the five store keys) seeds `stores` for new book items and book lookup. An unknown key is 422 on `preferred_store`.
+- `owned_streaming_services` (`jsonb` array, NOT NULL, default `[]`, CHECK array of at most 64) is the user's streaming services as provider keys (F-022 B3). The web registry owns the key list, so the backend checks only the shape and rejects duplicates (422). Absent in a PATCH = unchanged, `[]` = show all.
 - `book_lookup_available` is not stored: it is true when the Open Library client is enabled, which is always.
 - `metadata_language` defaults to `it-IT` for new workspaces; it takes `xx` or `xx-YY` and is used for TMDB results.

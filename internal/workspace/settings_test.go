@@ -2,7 +2,9 @@ package workspace_test
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -14,7 +16,7 @@ import (
 func ptr[T any](v T) *T { return &v }
 
 func TestService_Update(t *testing.T) {
-	base := workspace.Settings{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, PreferredStore: "amazon", Version: 1}
+	base := workspace.Settings{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 1}
 	tests := []struct {
 		name  string
 		patch workspace.SettingsPatch
@@ -28,7 +30,7 @@ func TestService_Update(t *testing.T) {
 		{"preferred store", workspace.SettingsPatch{PreferredStore: ptr("kobo")}, with(base, func(s *workspace.Settings) { s.PreferredStore = "kobo"; s.Version = 2 })},
 		{"the default preferred store is a no-op", workspace.SettingsPatch{PreferredStore: ptr("amazon")}, base},
 		{"all fields bump once", workspace.SettingsPatch{WorkspaceName: ptr("X"), StreamingCountryCode: ptr("DE"), MarkdownHistoryLimit: ptr(5)},
-			workspace.Settings{WorkspaceName: "X", StreamingCountryCode: "DE", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 5, PreferredStore: "amazon", Version: 2}},
+			workspace.Settings{WorkspaceName: "X", StreamingCountryCode: "DE", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 5, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 2}},
 		{"empty patch is a no-op", workspace.SettingsPatch{}, base},
 		{"same values are a no-op", workspace.SettingsPatch{WorkspaceName: ptr(" Our Collection "), StreamingCountryCode: ptr("IT"), MetadataLanguage: ptr("it-IT")}, base},
 	}
@@ -196,4 +198,148 @@ func TestService_Update_ConcurrentSameVersion(t *testing.T) {
 func with(s workspace.Settings, f func(*workspace.Settings)) workspace.Settings {
 	f(&s)
 	return s
+}
+
+// F-022 B3: the owned streaming services are saved and returned in the order given.
+func TestF022B3_OwnedStreamingServicesRoundTrip(t *testing.T) {
+	tests := []struct {
+		name string
+		keys []string
+	}{
+		{"keeps the order given", []string{"netflix", "primevideo", "appletv_plus2"}},
+		{"one service", []string{"netflix"}},
+		{"longest key", []string{"a" + strings.Repeat("b", 63)}},
+		{"sixty four entries", keysN(64)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := newPool(t)
+			id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")
+			if err != nil {
+				t.Fatal(err)
+			}
+			svc := workspace.NewService(workspace.NewPostgres(pool))
+			ctx := scope.With(t.Context(), id)
+
+			got, err := svc.Update(ctx, 1, workspace.SettingsPatch{OwnedStreamingServices: &tt.keys})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got.OwnedStreamingServices, tt.keys) || got.Version != 2 {
+				t.Errorf("Update = %v at version %d, want %v at 2", got.OwnedStreamingServices, got.Version, tt.keys)
+			}
+			stored, err := svc.Get(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(stored.OwnedStreamingServices, tt.keys) {
+				t.Errorf("Get = %v, want %v", stored.OwnedStreamingServices, tt.keys)
+			}
+		})
+	}
+}
+
+// F-022 B3: a new workspace shows every service, so the list is [] and never nil.
+func TestF022B3_OwnedStreamingServicesDefaultEmpty(t *testing.T) {
+	pool := newPool(t)
+	id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := workspace.NewService(workspace.NewPostgres(pool)).Get(scope.With(t.Context(), id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.OwnedStreamingServices == nil || len(got.OwnedStreamingServices) != 0 {
+		t.Errorf("OwnedStreamingServices = %#v, want an empty non-nil list", got.OwnedStreamingServices)
+	}
+}
+
+// F-022 B3: an absent list is unchanged, a repeat is a no-op, [] clears it (a version bump).
+func TestF022B3_OwnedStreamingServicesUnchangedRepeatClear(t *testing.T) {
+	pool := newPool(t)
+	id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := workspace.NewService(workspace.NewPostgres(pool))
+	ctx := scope.With(t.Context(), id)
+	owned := []string{"netflix"}
+	if _, err := svc.Update(ctx, 1, workspace.SettingsPatch{OwnedStreamingServices: &owned}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Absent: a country change leaves the list alone.
+	if got, err := svc.Update(ctx, 2, workspace.SettingsPatch{StreamingCountryCode: ptr("DE")}); err != nil || !reflect.DeepEqual(got.OwnedStreamingServices, owned) {
+		t.Fatalf("country only: %v, %v; want the list kept", got.OwnedStreamingServices, err)
+	}
+	// Repeat: the same list changes nothing, so no bump.
+	if got, err := svc.Update(ctx, 3, workspace.SettingsPatch{OwnedStreamingServices: &[]string{"netflix"}}); err != nil || got.Version != 3 {
+		t.Fatalf("repeat: version %d, %v; want 3", got.Version, err)
+	}
+	// Empty clears: back to show all.
+	empty := []string{}
+	got, err := svc.Update(ctx, 3, workspace.SettingsPatch{OwnedStreamingServices: &empty})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.OwnedStreamingServices) != 0 || got.Version != 4 {
+		t.Errorf("clear = %v at version %d, want [] at 4", got.OwnedStreamingServices, got.Version)
+	}
+	stored, _ := svc.Get(ctx)
+	if stored.OwnedStreamingServices == nil || len(stored.OwnedStreamingServices) != 0 {
+		t.Errorf("stored = %#v, want an empty non-nil list", stored.OwnedStreamingServices)
+	}
+}
+
+// F-022 B3: bad keys, duplicates and a list over 64 entries are 422 on the field,
+// and nothing is stored.
+func TestF022B3_OwnedStreamingServicesInvalid(t *testing.T) {
+	tests := []struct {
+		name string
+		keys []string
+	}{
+		{"uppercase", []string{"Netflix"}},
+		{"space", []string{"prime video"}},
+		{"hyphen", []string{"prime-video"}},
+		{"starts with a digit", []string{"1password"}},
+		{"starts with an underscore", []string{"_netflix"}},
+		{"empty key", []string{""}},
+		{"key too long", []string{"a" + strings.Repeat("b", 64)}},
+		{"duplicate", []string{"netflix", "primevideo", "netflix"}},
+		{"one bad key among good ones", []string{"netflix", "Hulu"}},
+		{"sixty five entries", keysN(65)},
+	}
+	pool := newPool(t)
+	id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := workspace.NewService(workspace.NewPostgres(pool))
+	ctx := scope.With(t.Context(), id)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := svc.Update(ctx, 1, workspace.SettingsPatch{OwnedStreamingServices: &tt.keys})
+			var ve *apperr.ValidationError
+			if !errors.As(err, &ve) {
+				t.Fatalf("err = %v, want a ValidationError", err)
+			}
+			if len(ve.Errors) != 1 || ve.Errors[0].Field != "owned_streaming_services" {
+				t.Errorf("errors = %+v, want one on owned_streaming_services", ve.Errors)
+			}
+		})
+	}
+	got, err := svc.Get(ctx)
+	if err != nil || got.Version != 1 || len(got.OwnedStreamingServices) != 0 {
+		t.Errorf("after rejected lists: %+v, %v; want version 1 and no list", got, err)
+	}
+}
+
+// keysN returns n distinct valid keys: s0, s1, ...
+func keysN(n int) []string {
+	keys := make([]string, n)
+	for i := range keys {
+		keys[i] = fmt.Sprintf("s%d", i)
+	}
+	return keys
 }

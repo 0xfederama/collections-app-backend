@@ -3,6 +3,7 @@ package workspace
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -117,10 +118,52 @@ func (p SettingsPatch) validate() (SettingsPatch, error) {
 	if p.PreferredStore != nil && !stores.Valid(*p.PreferredStore) {
 		errs = append(errs, apperr.FieldError{Field: "preferred_store", Message: fmt.Sprintf("unknown store %q", *p.PreferredStore)})
 	}
+	if p.OwnedStreamingServices != nil {
+		if msg := checkStreamingKeys(*p.OwnedStreamingServices); msg != "" {
+			errs = append(errs, apperr.FieldError{Field: "owned_streaming_services", Message: msg})
+		}
+	}
 	if len(errs) > 0 {
 		return p, apperr.Validation(errs...)
 	}
 	return p, nil
+}
+
+// maxOwnedStreamingServices bounds the list; the DB CHECK uses the same number.
+const maxOwnedStreamingServices = 64
+
+// checkStreamingKeys returns the first rule the owned-services list breaks, or
+// "". The web registry owns the list of keys, so the rule here is only the
+// shape: lowercase letters, digits and underscores, starting with a letter.
+// Duplicates are rejected, not dropped, so the client sees what it sent.
+func checkStreamingKeys(keys []string) string {
+	if len(keys) > maxOwnedStreamingServices {
+		return fmt.Sprintf("must have at most %d entries", maxOwnedStreamingServices)
+	}
+	seen := make(map[string]bool, len(keys))
+	for _, key := range keys {
+		if !isStreamingKey(key) {
+			return "each service key must be 1 to 64 lowercase letters, digits or underscores, starting with a letter"
+		}
+		if seen[key] {
+			return fmt.Sprintf("duplicate service key %q", key) // key is valid here, so at most 64 chars
+		}
+		seen[key] = true
+	}
+	return ""
+}
+
+func isStreamingKey(s string) bool {
+	if len(s) < 1 || len(s) > 64 || s[0] < 'a' || s[0] > 'z' {
+		return false
+	}
+	for i := 1; i < len(s); i++ {
+		c := s[i]
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '_' {
+			return false
+		}
+	}
+	return true
 }
 
 // isUpperAlpha reports whether s is exactly n ASCII letters A-Z (the DB CHECK regex).
@@ -165,6 +208,9 @@ func (p SettingsPatch) applyTo(s Settings) Settings {
 	if p.PreferredStore != nil {
 		s.PreferredStore = *p.PreferredStore
 	}
+	if p.OwnedStreamingServices != nil {
+		s.OwnedStreamingServices = slices.Clone(*p.OwnedStreamingServices)
+	}
 	return s
 }
 
@@ -173,7 +219,7 @@ func (p SettingsPatch) applyTo(s Settings) Settings {
 func (s Settings) equal(o Settings) bool {
 	return s.WorkspaceName == o.WorkspaceName && s.StreamingCountryCode == o.StreamingCountryCode &&
 		s.MetadataLanguage == o.MetadataLanguage && s.MarkdownHistoryLimit == o.MarkdownHistoryLimit && sameRetention(s.TrashRetentionDays, o.TrashRetentionDays) &&
-		s.PreferredStore == o.PreferredStore
+		s.PreferredStore == o.PreferredStore && slices.Equal(s.OwnedStreamingServices, o.OwnedStreamingServices)
 }
 
 func sameRetention(a, b *int) bool {

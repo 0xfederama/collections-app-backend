@@ -75,21 +75,8 @@ func TestF009B1_PriceOnlyOnPriceTypes(t *testing.T) {
 	})
 }
 
-func TestF009B1_PriceTypesPinsAndSort(t *testing.T) {
+func TestF009B1_PriceTypesAndSort(t *testing.T) {
 	e := newTreeEnv(t)
-
-	t.Run("price is not a pinnable key without a price", func(t *testing.T) {
-		for _, typ := range f009NoPriceTypes {
-			p := wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"P","type":`+typeJSON(typ)+`,"pinned_fields":["price"]}`, ""), 422, "validation_failed")
-			if len(p.Errors) != 1 || p.Errors[0].Field != "pinned_fields[0]" {
-				t.Errorf("%s: errors = %+v", typ, p.Errors)
-			}
-		}
-		wantStatus(t, e.call("POST", "/api/v1/lists", `{"name":"B","type":"wishlist","pinned_fields":["price"]}`, ""), 201)
-		// An empty pin list stays fine on a type that has no price.
-		g := e.listOfType("G", nil, "")
-		wantStatus(t, e.call("PATCH", "/api/v1/lists/"+g["id"].(string), `{"pinned_fields":[]}`, etagOf("l", g)), 200)
-	})
 
 	t.Run("sort_mode price is rejected without a price", func(t *testing.T) {
 		for _, typ := range f009NoPriceTypes {
@@ -121,11 +108,11 @@ func TestF009B1_TypeChangeToTypeWithoutPriceClearsPrice(t *testing.T) {
 	other := e.newItem(e.listOfType("Other", nil, "wishlist")["id"].(string), priceBody)
 	e.exec(`UPDATE items SET deleted_at = now(), trash_batch_id = $2 WHERE id = $1`, trashed["id"], e.trashBatch("item", uuid.MustParse(trashed["id"].(string))))
 
-	l = decode(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"price","pinned_fields":["price"]}`, etagOf("l", l)))
+	l = decode(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"sort_mode":"price"}`, etagOf("l", l)))
 	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"type":"movie"}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
 	got := decode(t, rec)
-	if got["type"] != "movie" || got["sort_mode"] != "release_year" || got["pinned_fields"] != nil {
+	if got["type"] != "movie" || got["sort_mode"] != "release_year" {
 		t.Fatalf("list after type change: %v", got)
 	}
 	if got["version"].(float64) <= l["version"].(float64) || rec.Header().Get("ETag") != etagOf("l", got) {

@@ -14,7 +14,6 @@ const (
 	CodeDestinationUnavailable Code = "destination_unavailable"
 	CodeOrderStale             Code = "order_stale"
 	CodeTypeMismatch           Code = "type_mismatch"
-	CodeTypeKeyTaken           Code = "type_key_taken"
 )
 
 // NotFoundError means the resource is missing or trashed.
@@ -90,9 +89,6 @@ func DestinationUnavailable() error { return &ConflictError{Code: CodeDestinatio
 
 // TypeMismatch reports an item moved to a list of another type (F-007).
 func TypeMismatch() error { return &ConflictError{Code: CodeTypeMismatch} }
-
-// TypeKeyTaken reports a new type whose key another type of the workspace already has.
-func TypeKeyTaken() error { return &ConflictError{Code: CodeTypeKeyTaken} }
 
 // OrderStale reports a reorder whose id set no longer matches the stored one.
 func OrderStale() error { return &ConflictError{Code: CodeOrderStale} }

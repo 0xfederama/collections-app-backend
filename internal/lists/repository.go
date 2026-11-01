@@ -99,13 +99,9 @@ func (r *repo) NextSortOrder(ctx context.Context, folder *uuid.UUID) (int, error
 }
 
 func (r *repo) Insert(ctx context.Context, l List, now time.Time) (List, error) {
-	pinned, err := pinnedToJSON(l.PinnedFields)
-	if err != nil {
-		return List{}, err
-	}
 	row, err := r.q.InsertList(ctx, sqlc.InsertListParams{
 		WorkspaceID: scope.WorkspaceID(ctx), FolderID: nullUUID(l.FolderID), Name: l.Name, Type: l.Type, Description: l.Description,
-		DisplayMode: l.DisplayMode, SortMode: l.SortMode, PinnedFields: pinned, Icon: l.Icon, IconColor: l.IconColor,
+		DisplayMode: l.DisplayMode, SortMode: l.SortMode, Icon: l.Icon, IconColor: l.IconColor,
 		SortOrder: int32(l.SortOrder), Now: now,
 	})
 	if err != nil {
@@ -115,13 +111,9 @@ func (r *repo) Insert(ctx context.Context, l List, now time.Time) (List, error) 
 }
 
 func (r *repo) Update(ctx context.Context, l List, now time.Time) (List, error) {
-	pinned, err := pinnedToJSON(l.PinnedFields)
-	if err != nil {
-		return List{}, err
-	}
 	row, err := r.q.UpdateList(ctx, sqlc.UpdateListParams{
 		Name: l.Name, Description: l.Description, DisplayMode: l.DisplayMode, SortMode: l.SortMode,
-		PinnedFields: pinned, Icon: l.Icon, IconColor: l.IconColor,
+		Icon: l.Icon, IconColor: l.IconColor,
 		Now: now, ID: l.ID, WorkspaceID: scope.WorkspaceID(ctx),
 	})
 	if err != nil {
@@ -242,7 +234,7 @@ func notFound(err error, resource string) error {
 func fromRow(l sqlc.List) List {
 	return List{
 		ID: l.ID, FolderID: ptrUUID(l.FolderID), Name: l.Name, Type: l.Type, Description: l.Description,
-		DisplayMode: l.DisplayMode, SortMode: l.SortMode, PinnedFields: pinnedFromJSON(l.PinnedFields), Icon: l.Icon, IconColor: l.IconColor,
+		DisplayMode: l.DisplayMode, SortMode: l.SortMode, Icon: l.Icon, IconColor: l.IconColor,
 		SortOrder: int(l.SortOrder), Version: int(l.Version), CreatedAt: l.CreatedAt.UTC(), UpdatedAt: l.UpdatedAt.UTC(),
 	}
 }
@@ -251,7 +243,7 @@ func fromRow(l sqlc.List) List {
 func fromCountedRow(l sqlc.GetListRow) List {
 	return List{
 		ID: l.ID, FolderID: ptrUUID(l.FolderID), Name: l.Name, Type: l.Type, Description: l.Description,
-		DisplayMode: l.DisplayMode, SortMode: l.SortMode, PinnedFields: pinnedFromJSON(l.PinnedFields), Icon: l.Icon, IconColor: l.IconColor,
+		DisplayMode: l.DisplayMode, SortMode: l.SortMode, Icon: l.Icon, IconColor: l.IconColor,
 		SortOrder: int(l.SortOrder), ItemCount: int(l.ItemCount), Version: int(l.Version),
 		CreatedAt: l.CreatedAt.UTC(), UpdatedAt: l.UpdatedAt.UTC(),
 	}

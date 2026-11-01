@@ -1052,11 +1052,6 @@ func TestF014B4_CustomFieldSortAndCombinedFilter(t *testing.T) {
 		WHERE workspace_id = $1 AND key = 'movie'`, e.ws)
 	l := e.listOfType("Ratings", nil, "movie")
 	lid := l["id"].(string)
-	cur := e.fetch("lists", lid)
-	gotList := decode(t, e.call("PATCH", "/api/v1/lists/"+lid, `{"pinned_fields":["rating"]}`, etagOf("l", cur)))
-	if !reflect.DeepEqual(gotList["pinned_fields"], []any{"rating"}) {
-		t.Fatalf("custom field pin = %v", gotList["pinned_fields"])
-	}
 	for _, body := range []string{
 		`{"title":"Match ten","metadata":{"rating":10}}`,
 		`{"title":"Match two","metadata":{"rating":2}}`,

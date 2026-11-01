@@ -3,7 +3,6 @@ package definitions
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,15 +26,7 @@ type Repo interface {
 	ListTypes(ctx context.Context) ([]Type, error)
 	GetTypeByKey(ctx context.Context, key string) (Type, error)
 	GetTypeForUpdate(ctx context.Context, id uuid.UUID) (Type, error)
-	// InsertType returns apperr.TypeKeyTaken when the workspace already has the key.
-	InsertType(ctx context.Context, t Type, now time.Time) (Type, error)
-	// UpdateType writes every editable column of t (ID addresses the row); the
-	// caller merges the patch first and holds the row lock.
-	UpdateType(ctx context.Context, t Type, now time.Time) (Type, error)
-	DeleteType(ctx context.Context, id uuid.UUID) error
 	TouchType(ctx context.Context, id uuid.UUID, now time.Time) error
-	// ListActiveListsByType returns the active lists of a type, by name.
-	ListActiveListsByType(ctx context.Context, typeKey string) ([]ListRef, error)
 
 	ListFields(ctx context.Context, typeID uuid.UUID) ([]Field, error)
 	GetField(ctx context.Context, typeID uuid.UUID, key string) (Field, error)
@@ -48,14 +39,12 @@ type Repo interface {
 	ParkFieldPosition(ctx context.Context, id uuid.UUID, position int, now time.Time) error
 	SetFieldPosition(ctx context.Context, id uuid.UUID, position int, now time.Time) error
 	DeleteField(ctx context.Context, id uuid.UUID) error
-	DeleteFieldsOfType(ctx context.Context, typeID uuid.UUID) error
 
 	// CountFieldValues counts the items of the type's lists (trashed ones too) that hold a value for the field.
 	CountFieldValues(ctx context.Context, typeKey, fieldKey string) (int, error)
 	StripFieldValues(ctx context.Context, typeKey, fieldKey string, now time.Time) error
-	// ResetFieldDefaults drops the field from the type's default sort and pins.
+	// ResetFieldDefaults drops the field from the type's default sort.
 	ResetFieldDefaults(ctx context.Context, typeID uuid.UUID, fieldKey string, now time.Time) error
-	ResetListFieldPins(ctx context.Context, typeKey, fieldKey string, now time.Time) error
 	ResetListFieldSort(ctx context.Context, typeKey, fieldKey string, now time.Time) error
 }
 
@@ -90,124 +79,6 @@ func (s *Service) List(ctx context.Context) ([]Type, error) {
 		return nil, err
 	}
 	return out, nil
-}
-
-// Create adds a custom type. Its key comes from the name; a key that already
-// exists is refused by the store with apperr.TypeKeyTaken (409). The built-in
-// keys are taken too.
-func (s *Service) Create(ctx context.Context, in CreateType) (Type, error) {
-	name, err := normalizeTypeName(in.Name)
-	if err != nil {
-		return Type{}, err
-	}
-	if err := checkNewTypeDefaults(in); err != nil {
-		return Type{}, err
-	}
-	var out Type
-	err = s.store.InTx(ctx, func(r Repo) error {
-		var err error
-		out, err = r.InsertType(ctx, Type{
-			Key: keyFromLabel(name), Name: name, DefaultIcon: in.DefaultIcon, AllowsPrice: in.AllowsPrice,
-			DefaultSortField: in.DefaultSortField, DefaultPinnedFields: in.DefaultPinnedFields,
-		}, s.clock.Now())
-		return err
-	})
-	if err != nil {
-		return Type{}, err
-	}
-	return out, nil
-}
-
-// Update patches a custom type. The merged defaults are checked against the
-// type's fields. A patch that changes nothing returns the current type and
-// writes nothing.
-func (s *Service) Update(ctx context.Context, key string, v int, in UpdateType) (Type, error) {
-	var out Type
-	err := s.store.InTx(ctx, func(r Repo) error {
-		cur, err := lockType(ctx, r, key, v)
-		if err != nil {
-			return err
-		}
-		if cur.Locked {
-			return apperr.Validation(apperr.FieldError{Field: "type", Message: "is locked"})
-		}
-		nextName := cur.Name
-		if in.Name != nil {
-			name, err := normalizeTypeName(*in.Name)
-			if err != nil {
-				return err
-			}
-			nextName = name
-		}
-		nextIcon := cur.DefaultIcon
-		if in.DefaultIcon.Set {
-			nextIcon = in.DefaultIcon.Value
-			if nextIcon != nil {
-				if err := checkDefaultIcon(*nextIcon); err != nil {
-					return err
-				}
-			}
-		}
-		nextAllowsPrice := cur.AllowsPrice
-		if in.AllowsPrice != nil {
-			nextAllowsPrice = *in.AllowsPrice
-		}
-		nextSort := cur.DefaultSortField
-		if in.DefaultSortField.Set {
-			nextSort = in.DefaultSortField.Value
-		}
-		currentPins := cur.DefaultPinnedFields
-		nextPins := currentPins
-		if in.DefaultPinnedFields.Set {
-			nextPins = in.DefaultPinnedFields.Value
-		}
-		fields, err := r.ListFields(ctx, cur.ID)
-		if err != nil {
-			return err
-		}
-		if err := checkDefaults(nextAllowsPrice, fields, nextSort, nextPins); err != nil {
-			return err
-		}
-		if nextName == cur.Name && sameOptionalString(nextIcon, cur.DefaultIcon) && nextAllowsPrice == cur.AllowsPrice &&
-			sameOptionalString(nextSort, cur.DefaultSortField) && sameStringList(nextPins, currentPins) {
-			out = cur
-			return nil
-		}
-		out, err = r.UpdateType(ctx, Type{
-			ID: cur.ID, Name: nextName, DefaultIcon: nextIcon, AllowsPrice: nextAllowsPrice,
-			DefaultSortField: nextSort, DefaultPinnedFields: nextPins,
-		}, s.clock.Now())
-		return err
-	})
-	if err != nil {
-		return Type{}, err
-	}
-	return out, nil
-}
-
-// Delete removes a custom type with its fields. A locked type, or one that an
-// active list uses, is refused.
-func (s *Service) Delete(ctx context.Context, key string, v int) error {
-	return s.store.InTx(ctx, func(r Repo) error {
-		cur, err := lockType(ctx, r, key, v)
-		if err != nil {
-			return err
-		}
-		if cur.Locked {
-			return apperr.Validation(apperr.FieldError{Field: "type", Message: "is locked"})
-		}
-		lists, err := r.ListActiveListsByType(ctx, cur.Key)
-		if err != nil {
-			return err
-		}
-		if len(lists) > 0 {
-			return apperr.Validation(apperr.FieldError{Field: "type", Message: fmt.Sprintf("is used by %d list(s), including %s", len(lists), lists[0].Name)})
-		}
-		if err := r.DeleteFieldsOfType(ctx, cur.ID); err != nil {
-			return err
-		}
-		return r.DeleteType(ctx, cur.ID)
-	})
 }
 
 // CreateField appends a custom field to a type. The key comes from the label.
@@ -364,7 +235,7 @@ func (s *Service) FieldDeletePreview(ctx context.Context, typeKey, fieldKey stri
 }
 
 // DeleteField removes a custom field and, in the same transaction, the values
-// stored in items, the list pins and sorts on it, and the type defaults that name
+// stored in items, the list sorts on it, and the type defaults that name
 // it. It returns the number of item values removed.
 func (s *Service) DeleteField(ctx context.Context, typeKey, fieldKey string, v int) (int, error) {
 	var count int
@@ -386,9 +257,6 @@ func (s *Service) DeleteField(ctx context.Context, typeKey, fieldKey string, v i
 		}
 		now := s.clock.Now()
 		if err := r.ResetFieldDefaults(ctx, typ.ID, field.Key, now); err != nil {
-			return err
-		}
-		if err := r.ResetListFieldPins(ctx, typ.Key, field.Key, now); err != nil {
 			return err
 		}
 		if err := r.ResetListFieldSort(ctx, typ.Key, field.Key, now); err != nil {

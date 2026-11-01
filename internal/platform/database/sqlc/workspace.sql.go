@@ -36,20 +36,21 @@ func (q *Queries) ClearStreamingLinkSnapshots(ctx context.Context, workspaceID u
 }
 
 const getSettings = `-- name: GetSettings :one
-SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_store, s.version
+SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_store, s.owned_streaming_services, s.version
 FROM workspace_settings s
 JOIN workspaces w ON w.id = s.workspace_id
 WHERE s.workspace_id = $1
 `
 
 type GetSettingsRow struct {
-	WorkspaceName        string
-	StreamingCountryCode string
-	MetadataLanguage     string
-	MarkdownHistoryLimit int32
-	TrashRetentionDays   *int32
-	PreferredStore       string
-	Version              int32
+	WorkspaceName          string
+	StreamingCountryCode   string
+	MetadataLanguage       string
+	MarkdownHistoryLimit   int32
+	TrashRetentionDays     *int32
+	PreferredStore         string
+	OwnedStreamingServices []byte
+	Version                int32
 }
 
 func (q *Queries) GetSettings(ctx context.Context, workspaceID uuid.UUID) (GetSettingsRow, error) {
@@ -62,6 +63,7 @@ func (q *Queries) GetSettings(ctx context.Context, workspaceID uuid.UUID) (GetSe
 		&i.MarkdownHistoryLimit,
 		&i.TrashRetentionDays,
 		&i.PreferredStore,
+		&i.OwnedStreamingServices,
 		&i.Version,
 	)
 	return i, err
@@ -113,7 +115,7 @@ func (q *Queries) ListWorkspaceIDs(ctx context.Context) ([]uuid.UUID, error) {
 }
 
 const lockSettings = `-- name: LockSettings :one
-SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_store, s.version
+SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_store, s.owned_streaming_services, s.version
 FROM workspace_settings s
 JOIN workspaces w ON w.id = s.workspace_id
 WHERE s.workspace_id = $1
@@ -121,13 +123,14 @@ FOR UPDATE OF s
 `
 
 type LockSettingsRow struct {
-	WorkspaceName        string
-	StreamingCountryCode string
-	MetadataLanguage     string
-	MarkdownHistoryLimit int32
-	TrashRetentionDays   *int32
-	PreferredStore       string
-	Version              int32
+	WorkspaceName          string
+	StreamingCountryCode   string
+	MetadataLanguage       string
+	MarkdownHistoryLimit   int32
+	TrashRetentionDays     *int32
+	PreferredStore         string
+	OwnedStreamingServices []byte
+	Version                int32
 }
 
 // Row lock that serialises concurrent PATCHes of the same workspace.
@@ -141,6 +144,7 @@ func (q *Queries) LockSettings(ctx context.Context, workspaceID uuid.UUID) (Lock
 		&i.MarkdownHistoryLimit,
 		&i.TrashRetentionDays,
 		&i.PreferredStore,
+		&i.OwnedStreamingServices,
 		&i.Version,
 	)
 	return i, err
@@ -164,18 +168,20 @@ SET streaming_country_code = $2,
     markdown_history_limit = $4,
     trash_retention_days   = $5,
     preferred_store        = $6,
+    owned_streaming_services = $7,
     version                = version + 1,
     updated_at             = now()
 WHERE workspace_id = $1
 `
 
 type UpdateSettingsParams struct {
-	WorkspaceID          uuid.UUID
-	StreamingCountryCode string
-	MetadataLanguage     string
-	MarkdownHistoryLimit int32
-	TrashRetentionDays   *int32
-	PreferredStore       string
+	WorkspaceID            uuid.UUID
+	StreamingCountryCode   string
+	MetadataLanguage       string
+	MarkdownHistoryLimit   int32
+	TrashRetentionDays     *int32
+	PreferredStore         string
+	OwnedStreamingServices []byte
 }
 
 func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) error {
@@ -186,6 +192,7 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		arg.MarkdownHistoryLimit,
 		arg.TrashRetentionDays,
 		arg.PreferredStore,
+		arg.OwnedStreamingServices,
 	)
 	return err
 }

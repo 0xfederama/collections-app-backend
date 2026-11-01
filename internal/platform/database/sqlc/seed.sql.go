@@ -28,7 +28,7 @@ type InsertBuiltinTypeDefinitionParams struct {
 }
 
 // Built-in type seeding (internal/seed). The data lives in Go; these are plain statements.
-// Every statement keeps existing rows untouched (ON CONFLICT DO NOTHING, pins only while NULL).
+// Every statement keeps existing rows untouched (ON CONFLICT DO NOTHING).
 // Locked by definition: is_locked is always true for a built-in type.
 func (q *Queries) InsertBuiltinTypeDefinition(ctx context.Context, arg InsertBuiltinTypeDefinitionParams) error {
 	_, err := q.db.Exec(ctx, insertBuiltinTypeDefinition,
@@ -69,23 +69,5 @@ func (q *Queries) InsertBuiltinTypeField(ctx context.Context, arg InsertBuiltinT
 		arg.WorkspaceID,
 		arg.TypeKey,
 	)
-	return err
-}
-
-const setBuiltinDefaultPinnedFields = `-- name: SetBuiltinDefaultPinnedFields :exec
-UPDATE type_definitions
-SET default_pinned_fields = $1::jsonb
-WHERE workspace_id = $2 AND key = $3 AND is_locked AND default_pinned_fields IS NULL
-`
-
-type SetBuiltinDefaultPinnedFieldsParams struct {
-	Pins        []byte
-	WorkspaceID uuid.UUID
-	Key         string
-}
-
-// Sets the default pins only where none are set yet, so a user edit is never overwritten.
-func (q *Queries) SetBuiltinDefaultPinnedFields(ctx context.Context, arg SetBuiltinDefaultPinnedFieldsParams) error {
-	_, err := q.db.Exec(ctx, setBuiltinDefaultPinnedFields, arg.Pins, arg.WorkspaceID, arg.Key)
 	return err
 }

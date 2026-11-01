@@ -132,7 +132,7 @@ func TestBootstrap_DefaultsAndInvalidName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := workspace.Settings{WorkspaceName: "Ours", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, PreferredStore: "amazon", Version: 1}
+	want := workspace.Settings{WorkspaceName: "Ours", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 1}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("settings = %+v, want %+v", got, want)
 	}

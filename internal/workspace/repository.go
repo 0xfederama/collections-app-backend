@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -43,7 +44,7 @@ func (r *repo) Get(ctx context.Context) (Settings, error) {
 	if err != nil {
 		return Settings{}, fmt.Errorf("get settings: %w", err)
 	}
-	return fromGetRow(row), nil
+	return fromGetRow(row)
 }
 
 func (r *repo) LockSettings(ctx context.Context) (Settings, error) {
@@ -54,7 +55,7 @@ func (r *repo) LockSettings(ctx context.Context) (Settings, error) {
 	if err != nil {
 		return Settings{}, fmt.Errorf("lock settings: %w", err)
 	}
-	return fromLockRow(row), nil
+	return fromLockRow(row)
 }
 
 func (r *repo) UpdateWorkspaceName(ctx context.Context, name string) error {
@@ -65,13 +66,18 @@ func (r *repo) UpdateWorkspaceName(ctx context.Context, name string) error {
 }
 
 func (r *repo) UpdateSettings(ctx context.Context, s Settings) error {
-	err := r.q.UpdateSettings(ctx, sqlc.UpdateSettingsParams{
-		WorkspaceID:          scope.WorkspaceID(ctx),
-		StreamingCountryCode: s.StreamingCountryCode,
-		MetadataLanguage:     s.MetadataLanguage,
-		MarkdownHistoryLimit: int32(s.MarkdownHistoryLimit),
-		TrashRetentionDays:   retentionToDB(s.TrashRetentionDays),
-		PreferredStore:       s.PreferredStore,
+	owned, err := streamingKeysToDB(s.OwnedStreamingServices)
+	if err != nil {
+		return fmt.Errorf("encode owned streaming services: %w", err)
+	}
+	err = r.q.UpdateSettings(ctx, sqlc.UpdateSettingsParams{
+		WorkspaceID:            scope.WorkspaceID(ctx),
+		StreamingCountryCode:   s.StreamingCountryCode,
+		MetadataLanguage:       s.MetadataLanguage,
+		MarkdownHistoryLimit:   int32(s.MarkdownHistoryLimit),
+		TrashRetentionDays:     retentionToDB(s.TrashRetentionDays),
+		PreferredStore:         s.PreferredStore,
+		OwnedStreamingServices: owned,
 	})
 	if err != nil {
 		return fmt.Errorf("update settings: %w", err)
@@ -111,26 +117,55 @@ func retentionFromDB(days *int32) *int {
 	return &v
 }
 
-func fromGetRow(r sqlc.GetSettingsRow) Settings {
-	return Settings{
-		WorkspaceName:        r.WorkspaceName,
-		StreamingCountryCode: r.StreamingCountryCode,
-		MetadataLanguage:     r.MetadataLanguage,
-		MarkdownHistoryLimit: int(r.MarkdownHistoryLimit),
-		TrashRetentionDays:   retentionFromDB(r.TrashRetentionDays),
-		PreferredStore:       r.PreferredStore,
-		Version:              int(r.Version),
+// streamingKeysToDB encodes the list as the JSON array the column holds. A nil
+// list is written as [] (the column is NOT NULL and must be an array).
+func streamingKeysToDB(keys []string) ([]byte, error) {
+	if keys == nil {
+		keys = []string{}
 	}
+	return json.Marshal(keys)
 }
 
-func fromLockRow(r sqlc.LockSettingsRow) Settings {
-	return Settings{
-		WorkspaceName:        r.WorkspaceName,
-		StreamingCountryCode: r.StreamingCountryCode,
-		MetadataLanguage:     r.MetadataLanguage,
-		MarkdownHistoryLimit: int(r.MarkdownHistoryLimit),
-		TrashRetentionDays:   retentionFromDB(r.TrashRetentionDays),
-		PreferredStore:       r.PreferredStore,
-		Version:              int(r.Version),
+// streamingKeysFromDB decodes the column; the result is never nil, so the wire
+// answer is [] and not null.
+func streamingKeysFromDB(raw []byte) ([]string, error) {
+	keys := []string{}
+	if err := json.Unmarshal(raw, &keys); err != nil {
+		return nil, fmt.Errorf("decode owned streaming services: %w", err)
 	}
+	return keys, nil
+}
+
+func fromGetRow(r sqlc.GetSettingsRow) (Settings, error) {
+	owned, err := streamingKeysFromDB(r.OwnedStreamingServices)
+	if err != nil {
+		return Settings{}, err
+	}
+	return Settings{
+		WorkspaceName:          r.WorkspaceName,
+		StreamingCountryCode:   r.StreamingCountryCode,
+		MetadataLanguage:       r.MetadataLanguage,
+		MarkdownHistoryLimit:   int(r.MarkdownHistoryLimit),
+		TrashRetentionDays:     retentionFromDB(r.TrashRetentionDays),
+		PreferredStore:         r.PreferredStore,
+		OwnedStreamingServices: owned,
+		Version:                int(r.Version),
+	}, nil
+}
+
+func fromLockRow(r sqlc.LockSettingsRow) (Settings, error) {
+	owned, err := streamingKeysFromDB(r.OwnedStreamingServices)
+	if err != nil {
+		return Settings{}, err
+	}
+	return Settings{
+		WorkspaceName:          r.WorkspaceName,
+		StreamingCountryCode:   r.StreamingCountryCode,
+		MetadataLanguage:       r.MetadataLanguage,
+		MarkdownHistoryLimit:   int(r.MarkdownHistoryLimit),
+		TrashRetentionDays:     retentionFromDB(r.TrashRetentionDays),
+		PreferredStore:         r.PreferredStore,
+		OwnedStreamingServices: owned,
+		Version:                int(r.Version),
+	}, nil
 }

@@ -44,7 +44,6 @@ func TestF016B4_StoresFieldIsNotSortableOrFilterable(t *testing.T) {
 	wantProblem(t, e.call("GET", "/api/v1/lists/"+lid+"/items?sort=stores", "", ""), 400, "invalid_parameter")
 	wantProblem(t, e.call("GET", "/api/v1/lists/"+lid+"/items?filter_field=stores&filter_value=kobo", "", ""), 400, "invalid_parameter")
 	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"By store","type":"book","sort_mode":"stores"}`, ""), 422, "validation_failed")
-	wantProblem(t, e.call("PATCH", "/api/v1/types/book", `{"default_sort_field":"stores"}`, `"k-1"`), 422, "validation_failed")
 }
 
 func TestStreamingLink_RowsCarryItAndWholeObjectRoundTrips(t *testing.T) {

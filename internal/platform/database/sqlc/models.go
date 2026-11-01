@@ -82,7 +82,6 @@ type List struct {
 	DeletedAt    *time.Time
 	TrashBatchID uuid.NullUUID
 	Type         *string
-	PinnedFields []byte
 	Icon         *string
 	IconColor    *string
 }
@@ -117,18 +116,17 @@ type TrashBatch struct {
 }
 
 type TypeDefinition struct {
-	ID                  uuid.UUID
-	WorkspaceID         uuid.UUID
-	Key                 string
-	Name                string
-	DefaultIcon         *string
-	AllowsPrice         bool
-	DefaultSortField    *string
-	DefaultPinnedFields []byte
-	IsLocked            bool
-	Version             int32
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	Key              string
+	Name             string
+	DefaultIcon      *string
+	AllowsPrice      bool
+	DefaultSortField *string
+	IsLocked         bool
+	Version          int32
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 type TypeField struct {
@@ -154,13 +152,14 @@ type Workspace struct {
 }
 
 type WorkspaceSetting struct {
-	WorkspaceID          uuid.UUID
-	StreamingCountryCode string
-	MarkdownHistoryLimit int32
-	Version              int32
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
-	TrashRetentionDays   *int32
-	MetadataLanguage     string
-	PreferredStore       string
+	WorkspaceID            uuid.UUID
+	StreamingCountryCode   string
+	MarkdownHistoryLimit   int32
+	Version                int32
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	TrashRetentionDays     *int32
+	MetadataLanguage       string
+	PreferredStore         string
+	OwnedStreamingServices []byte
 }

@@ -137,8 +137,8 @@ func TestRepo_InsertAndGet(t *testing.T) {
 	e := newEnv(t)
 	in := lists.List{
 		Name: "Books", Type: ptr("book"), DisplayMode: "grid", SortMode: "title",
-		Description: ptr("# Read"), PinnedFields: &lists.PinnedFields{"author", "pages"},
-		Icon: ptr("i:book"), IconColor: ptr("blue"), SortOrder: 0,
+		Description: ptr("# Read"),
+		Icon:        ptr("i:book"), IconColor: ptr("blue"), SortOrder: 0,
 	}
 	var id uuid.UUID
 	err := e.store.InTx(e.ctx, func(r lists.Repo) error {
@@ -155,44 +155,11 @@ func TestRepo_InsertAndGet(t *testing.T) {
 	}
 	want := lists.List{
 		ID: id, Name: "Books", Type: ptr("book"), DisplayMode: "grid", SortMode: "title",
-		Description: ptr("# Read"), PinnedFields: &lists.PinnedFields{"author", "pages"},
-		Icon: ptr("i:book"), IconColor: ptr("blue"), Version: 1, CreatedAt: now, UpdatedAt: now,
+		Description: ptr("# Read"),
+		Icon:        ptr("i:book"), IconColor: ptr("blue"), Version: 1, CreatedAt: now, UpdatedAt: now,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Get = %+v, want %+v", got, want)
-	}
-}
-
-func TestRepo_PinnedFieldsRoundTrip(t *testing.T) {
-	tests := []struct {
-		name   string
-		pinned *lists.PinnedFields
-		want   *lists.PinnedFields
-	}{
-		{"nil is the type default", nil, nil},
-		{"empty pins nothing", &lists.PinnedFields{}, &lists.PinnedFields{}},
-		{"ordered keys", &lists.PinnedFields{"title", "price"}, &lists.PinnedFields{"title", "price"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			e := newEnv(t)
-			var id uuid.UUID
-			err := e.store.InTx(e.ctx, func(r lists.Repo) error {
-				out, err := r.Insert(e.ctx, lists.List{Name: "L", DisplayMode: "thumbnail", SortMode: "manual", PinnedFields: tt.pinned}, now)
-				id = out.ID
-				return err
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			got, err := e.get(id)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !reflect.DeepEqual(got.PinnedFields, tt.want) {
-				t.Errorf("PinnedFields = %v, want %v", got.PinnedFields, tt.want)
-			}
-		})
 	}
 }
 
@@ -226,7 +193,6 @@ func TestRepo_UpdateAndType(t *testing.T) {
 		cur.Description = ptr("notes")
 		cur.Icon = ptr("i:book")
 		cur.IconColor = ptr("red")
-		cur.PinnedFields = &lists.PinnedFields{"author"}
 		cur.Type = ptr("book")
 		// The type is written by UpdateType, the rest by Update.
 		if _, err := r.UpdateType(e.ctx, l.ID, cur.Type, later); err != nil {
@@ -249,16 +215,13 @@ func TestRepo_UpdateAndType(t *testing.T) {
 		got.IconColor == nil || *got.IconColor != "red" || got.Type == nil || *got.Type != "book" || !got.UpdatedAt.Equal(later) {
 		t.Errorf("after update = %+v", got)
 	}
-	if !reflect.DeepEqual(got.PinnedFields, &lists.PinnedFields{"author"}) {
-		t.Errorf("pinned = %v, want [author]", got.PinnedFields)
-	}
 }
 
-func TestRepo_UpdateTypeResetsPinsAndClearsType(t *testing.T) {
+func TestRepo_UpdateTypeClearsType(t *testing.T) {
 	e := newEnv(t)
 	var id uuid.UUID
 	err := e.store.InTx(e.ctx, func(r lists.Repo) error {
-		out, err := r.Insert(e.ctx, lists.List{Name: "W", Type: ptr("wishlist"), DisplayMode: "thumbnail", SortMode: "manual", PinnedFields: &lists.PinnedFields{"title"}}, now)
+		out, err := r.Insert(e.ctx, lists.List{Name: "W", Type: ptr("wishlist"), DisplayMode: "thumbnail", SortMode: "manual"}, now)
 		id = out.ID
 		return err
 	})
@@ -274,8 +237,8 @@ func TestRepo_UpdateTypeResetsPinsAndClearsType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Type != nil || got.PinnedFields != nil || got.Version != 2 {
-		t.Errorf("UpdateType(nil) = %+v, want no type, no pins, version 2", got)
+	if got.Type != nil || got.Version != 2 {
+		t.Errorf("UpdateType(nil) = %+v, want no type, version 2", got)
 	}
 }
 

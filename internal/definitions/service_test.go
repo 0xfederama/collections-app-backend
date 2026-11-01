@@ -45,12 +45,25 @@ type definitionDB struct {
 	ctx         context.Context
 }
 
-func TestF014B3_CustomFieldLifecycle(t *testing.T) {
-	svc, db := newDefinitionsService(t)
-	typ, err := svc.Create(db.ctx, CreateType{Name: "Board game"})
+// builtinType returns a seeded built-in type of the test workspace.
+func builtinType(t *testing.T, svc *Service, db *definitionDB, key string) Type {
+	t.Helper()
+	types, err := svc.List(db.ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, typ := range types {
+		if typ.Key == key {
+			return typ
+		}
+	}
+	t.Fatalf("built-in type %q not found", key)
+	return Type{}
+}
+
+func TestF014B3_CustomFieldLifecycle(t *testing.T) {
+	svc, db := newDefinitionsService(t)
+	typ := builtinType(t, svc, db, "vehicle")
 	rating, err := svc.CreateField(db.ctx, typ.Key, typ.Version, CreateField{Label: "Rating", Type: "number"})
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +72,7 @@ func TestF014B3_CustomFieldLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if age.Position != 1 || rating.Position != 0 {
+	if age.Position != rating.Position+1 {
 		t.Fatalf("created positions = rating %d age %d", rating.Position, age.Position)
 	}
 
@@ -67,20 +80,15 @@ func TestF014B3_CustomFieldLifecycle(t *testing.T) {
 	if err != nil || version != typ.Version+3 {
 		t.Fatalf("ReorderFields() = %d, %v", version, err)
 	}
-	fields, err := svc.List(db.ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	fields := builtinType(t, svc, db, typ.Key).Fields
 	var got []string
-	for _, definition := range fields {
-		if definition.Key == typ.Key {
-			for _, field := range definition.Fields {
-				got = append(got, field.Key)
-			}
+	for _, field := range fields {
+		if !field.Locked {
+			got = append(got, field.Key)
 		}
 	}
 	if !slices.Equal(got, []string{age.Key, rating.Key}) {
-		t.Errorf("field order = %v", got)
+		t.Errorf("custom field order = %v", got)
 	}
 
 	renamed, err := svc.RenameField(db.ctx, typ.Key, age.Key, age.Version+1, "Minimum player age")
@@ -97,129 +105,23 @@ func TestF014B3_CustomFieldLifecycle(t *testing.T) {
 	}
 }
 
-func TestF019B2_DeleteTypeDeletesItsFields(t *testing.T) {
-	svc, db := newDefinitionsService(t)
-	typ, err := svc.Create(db.ctx, CreateType{Name: "Board game"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := svc.CreateField(db.ctx, typ.Key, typ.Version, CreateField{Label: "Rating", Type: "number"}); err != nil {
-		t.Fatal(err)
-	}
-	var typeID uuid.UUID
-	if err := db.pool.QueryRow(t.Context(), "SELECT id FROM type_definitions WHERE workspace_id = $1 AND key = $2", db.workspaceID, typ.Key).Scan(&typeID); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := svc.Delete(db.ctx, typ.Key, typ.Version+1); err != nil {
-		t.Fatalf("Delete() = %v", err)
-	}
-	var fields, types int
-	if err := db.pool.QueryRow(t.Context(), "SELECT count(*) FROM type_fields WHERE type_id = $1", typeID).Scan(&fields); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.pool.QueryRow(t.Context(), "SELECT count(*) FROM type_definitions WHERE id = $1", typeID).Scan(&types); err != nil {
-		t.Fatal(err)
-	}
-	if fields != 0 || types != 0 {
-		t.Errorf("after Delete: fields = %d, types = %d; want 0, 0", fields, types)
-	}
-}
-
-func TestF014B4_CustomTypeDefaultsAllowAtMostThreePins(t *testing.T) {
-	svc, db := newDefinitionsService(t)
-	pins := []string{"rating", "status", "title"}
-	sortField := "rating"
-	typ, err := svc.Create(db.ctx, CreateType{
-		Name: "Board game", DefaultSortField: &sortField, DefaultPinnedFields: &pins,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if typ.DefaultSortField == nil || *typ.DefaultSortField != "rating" || typ.DefaultPinnedFields == nil || !slices.Equal(*typ.DefaultPinnedFields, pins) {
-		t.Fatalf("type defaults = %#v", typ)
-	}
-	tooMany := []string{"one", "two", "three", "four"}
-	if _, err := svc.Create(db.ctx, CreateType{Name: "Too many", DefaultPinnedFields: &tooMany}); err == nil {
-		t.Fatal("Create accepted more than three default pinned fields")
-	}
-}
-
-func TestF014B3_UpdateCustomTypeDefaultsAfterFieldsExist(t *testing.T) {
-	svc, db := newDefinitionsService(t)
-	icon := "i:dices"
-	typ, err := svc.Create(db.ctx, CreateType{Name: "Board game", DefaultIcon: &icon})
-	if err != nil {
-		t.Fatal(err)
-	}
-	rating, err := svc.CreateField(db.ctx, typ.Key, typ.Version, CreateField{Label: "Rating", Type: "number"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	name := "Tabletop game"
-	allowsPrice := true
-	pins := []string{rating.Key, "price"}
-	updated, err := svc.Update(db.ctx, typ.Key, typ.Version+1, UpdateType{
-		Name: &name, AllowsPrice: &allowsPrice,
-		DefaultSortField:    NullableString{Set: true, Value: &rating.Key},
-		DefaultPinnedFields: NullableStrings{Set: true, Value: &pins},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if updated.Name != name || updated.DefaultIcon == nil || *updated.DefaultIcon != icon || !updated.AllowsPrice || updated.DefaultSortField == nil || *updated.DefaultSortField != rating.Key || updated.DefaultPinnedFields == nil || !slices.Equal(*updated.DefaultPinnedFields, pins) {
-		t.Fatalf("updated type = %#v", updated)
-	}
-
-	cleared, err := svc.Update(db.ctx, typ.Key, updated.Version, UpdateType{
-		DefaultIcon:         NullableString{Set: true},
-		DefaultPinnedFields: NullableStrings{Set: true},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cleared.DefaultIcon != nil || cleared.DefaultPinnedFields != nil || cleared.DefaultSortField == nil || *cleared.DefaultSortField != rating.Key {
-		t.Fatalf("cleared type = %#v", cleared)
-	}
-
-	missing := "missing"
-	if _, err := svc.Update(db.ctx, typ.Key, cleared.Version, UpdateType{DefaultSortField: NullableString{Set: true, Value: &missing}}); err == nil {
-		t.Fatal("Update accepted a default sort field that does not exist")
-	} else {
-		var validation *apperr.ValidationError
-		if !errors.As(err, &validation) || len(validation.Errors) != 1 || validation.Errors[0].Field != "default_sort_field" {
-			t.Fatalf("invalid default sort error = %#v", err)
-		}
-	}
-
-	if _, err := svc.Update(db.ctx, "movie", 1, UpdateType{Name: &name}); err == nil {
-		t.Fatal("Update allowed a locked built-in type")
-	}
-}
-
 func TestF014B3_DeleteFieldPreviewsAndAtomicallyStripsValues(t *testing.T) {
 	svc, db := newDefinitionsService(t)
-	typ, err := svc.Create(db.ctx, CreateType{Name: "Board game"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	typ := builtinType(t, svc, db, "vehicle")
 	field, err := svc.CreateField(db.ctx, typ.Key, typ.Version, CreateField{Label: "Rating", Type: "number"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	listID := uuid.New()
-	if _, err := db.pool.Exec(t.Context(), `INSERT INTO lists (id, workspace_id, name, type, sort_mode, pinned_fields, sort_order)
-VALUES ($1, $2, 'Games', $3, 'rating', '["rating"]', 0)`, listID, db.workspaceID, typ.Key); err != nil {
+	if _, err := db.pool.Exec(t.Context(), `INSERT INTO lists (id, workspace_id, name, type, sort_mode, sort_order)
+VALUES ($1, $2, 'Cars', $3, 'rating', 0)`, listID, db.workspaceID, typ.Key); err != nil {
 		t.Fatal(err)
 	}
 	for i, metadata := range []string{`{"rating": 5, "notes": "keep"}`, `{"rating": 4}`} {
 		if _, err := db.pool.Exec(t.Context(), `INSERT INTO items (id, workspace_id, list_id, title, metadata, sort_order)
-VALUES ($1, $2, $3, $4, $5::jsonb, $6)`, uuid.New(), db.workspaceID, listID, "Game", metadata, i); err != nil {
+VALUES ($1, $2, $3, $4, $5::jsonb, $6)`, uuid.New(), db.workspaceID, listID, "Car", metadata, i); err != nil {
 			t.Fatal(err)
 		}
-	}
-	if _, err := db.pool.Exec(t.Context(), `UPDATE type_definitions SET default_sort_field = $1, default_pinned_fields = '["rating"]' WHERE workspace_id = $2 AND id = (SELECT id FROM type_definitions WHERE workspace_id = $2 AND key = $3)`, field.Key, db.workspaceID, typ.Key); err != nil {
-		t.Fatal(err)
 	}
 
 	count, err := svc.FieldDeletePreview(db.ctx, typ.Key, field.Key)
@@ -237,56 +139,12 @@ VALUES ($1, $2, $3, $4, $5::jsonb, $6)`, uuid.New(), db.workspaceID, listID, "Ga
 	if values != 0 {
 		t.Errorf("rating values remaining = %d", values)
 	}
-	var listPins, listSort, defaultSort, defaultPins *string
-	if err := db.pool.QueryRow(t.Context(), `SELECT l.pinned_fields::text, l.sort_mode, k.default_sort_field, k.default_pinned_fields::text
-FROM lists l JOIN type_definitions k ON k.workspace_id = l.workspace_id AND k.key = l.type
-WHERE l.id = $1`, listID).Scan(&listPins, &listSort, &defaultSort, &defaultPins); err != nil {
+	var listSort string
+	if err := db.pool.QueryRow(t.Context(), `SELECT sort_mode FROM lists WHERE id = $1`, listID).Scan(&listSort); err != nil {
 		t.Fatal(err)
 	}
-	if listPins != nil || listSort == nil || *listSort != "manual" || defaultSort != nil || defaultPins == nil || *defaultPins != "[]" {
-		t.Errorf("field references remain: list pins=%v sort=%v default sort=%v pins=%v", listPins, listSort, defaultSort, defaultPins)
-	}
-}
-
-func TestF014_BuiltinTypesSeedDefaultPinnedFields(t *testing.T) {
-	svc, db := newDefinitionsService(t)
-	want := map[string][]string{
-		"movie":    {"runtime_minutes", "streaming"},
-		"tv_show":  {"seasons", "streaming"},
-		"vehicle":  {"model_year", "power_hp"},
-		"wishlist": {"price"},
-		"book":     {"author", "pages", "stores"},
-	}
-	types, err := svc.List(db.ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	seen := 0
-	for _, k := range types {
-		pins, ok := want[k.Key]
-		if !ok || !k.Locked {
-			continue
-		}
-		seen++
-		if k.DefaultPinnedFields == nil || !slices.Equal(*k.DefaultPinnedFields, pins) {
-			t.Errorf("%s default pins = %v, want %v", k.Key, k.DefaultPinnedFields, pins)
-			continue
-		}
-		fields := map[string]bool{}
-		if k.AllowsPrice {
-			fields["price"] = true
-		}
-		for _, f := range k.Fields {
-			fields[f.Key] = true
-		}
-		for _, pin := range *k.DefaultPinnedFields {
-			if !fields[pin] {
-				t.Errorf("%s pins %q, not a field of the type", k.Key, pin)
-			}
-		}
-	}
-	if seen != len(want) {
-		t.Fatalf("found %d built-in types, want %d", seen, len(want))
+	if listSort != "manual" {
+		t.Errorf("list sort = %q, want manual", listSort)
 	}
 }
 
@@ -307,7 +165,6 @@ type fakeList struct {
 	name   string
 	typeK  string
 	sort   string
-	pins   []string
 	active bool
 }
 
@@ -356,8 +213,8 @@ func (f *fakeStore) addType(typ Type, fields ...Field) Type {
 	return typ
 }
 
-func (f *fakeStore) addList(name, typeKey, sort string, pins []string, active bool) {
-	f.state.lists = append(f.state.lists, fakeList{id: uuid.New(), name: name, typeK: typeKey, sort: sort, pins: pins, active: active})
+func (f *fakeStore) addList(name, typeKey, sort string, active bool) {
+	f.state.lists = append(f.state.lists, fakeList{id: uuid.New(), name: name, typeK: typeKey, sort: sort, active: active})
 }
 
 func (f *fakeStore) setValues(typeKey, fieldKey string, n int) {
@@ -449,45 +306,6 @@ func (r *fakeRepo) GetTypeForUpdate(_ context.Context, id uuid.UUID) (Type, erro
 	return r.s.types[i], nil
 }
 
-// InsertType refuses a key the workspace already has, as the repository does on
-// the (workspace_id, key) constraint.
-func (r *fakeRepo) InsertType(_ context.Context, t Type, _ time.Time) (Type, error) {
-	for _, typ := range r.s.types {
-		if typ.Key == t.Key {
-			return Type{}, apperr.TypeKeyTaken()
-		}
-	}
-	t.ID, t.Version = uuid.New(), 1
-	r.s.types = append(r.s.types, t)
-	r.s.calls = append(r.s.calls, "insert type")
-	return t, nil
-}
-
-func (r *fakeRepo) UpdateType(_ context.Context, t Type, _ time.Time) (Type, error) {
-	i := r.typeIndex(t.ID)
-	if i < 0 {
-		return Type{}, apperr.NotFound("type")
-	}
-	cur := r.s.types[i]
-	cur.Name, cur.DefaultIcon, cur.AllowsPrice = t.Name, t.DefaultIcon, t.AllowsPrice
-	cur.DefaultSortField, cur.DefaultPinnedFields = t.DefaultSortField, t.DefaultPinnedFields
-	cur.Version++
-	r.s.types[i] = cur
-	r.s.calls = append(r.s.calls, "update type")
-	return cur, nil
-}
-
-func (r *fakeRepo) DeleteType(_ context.Context, id uuid.UUID) error {
-	for _, field := range r.s.fields {
-		if field.typeID == id {
-			return errors.New("foreign key: type still has fields")
-		}
-	}
-	r.s.types = slices.DeleteFunc(r.s.types, func(typ Type) bool { return typ.ID == id })
-	r.s.calls = append(r.s.calls, "delete type")
-	return nil
-}
-
 func (r *fakeRepo) TouchType(_ context.Context, id uuid.UUID, _ time.Time) error {
 	i := r.typeIndex(id)
 	if i < 0 {
@@ -496,17 +314,6 @@ func (r *fakeRepo) TouchType(_ context.Context, id uuid.UUID, _ time.Time) error
 	r.s.types[i].Version++
 	r.s.calls = append(r.s.calls, "touch type")
 	return nil
-}
-
-func (r *fakeRepo) ListActiveListsByType(_ context.Context, typeKey string) ([]ListRef, error) {
-	var out []ListRef
-	for _, l := range r.s.lists {
-		if l.active && l.typeK == typeKey {
-			out = append(out, ListRef{ID: l.id, Name: l.name})
-		}
-	}
-	slices.SortFunc(out, func(a, b ListRef) int { return strings.Compare(a.Name, b.Name) })
-	return out, nil
 }
 
 func (r *fakeRepo) ListFields(_ context.Context, typeID uuid.UUID) ([]Field, error) {
@@ -607,12 +414,6 @@ func (r *fakeRepo) DeleteField(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *fakeRepo) DeleteFieldsOfType(_ context.Context, typeID uuid.UUID) error {
-	r.s.fields = slices.DeleteFunc(r.s.fields, func(field fakeField) bool { return field.typeID == typeID })
-	r.s.calls = append(r.s.calls, "delete fields of type")
-	return nil
-}
-
 func (r *fakeRepo) CountFieldValues(_ context.Context, typeKey, fieldKey string) (int, error) {
 	return r.s.values[typeKey+"/"+fieldKey], nil
 }
@@ -625,7 +426,7 @@ func (r *fakeRepo) StripFieldValues(_ context.Context, typeKey, fieldKey string,
 	return nil
 }
 
-// ResetFieldDefaults drops the key from the type's default sort and pins, and bumps the type version.
+// ResetFieldDefaults drops the key from the type's default sort, and bumps the type version.
 func (r *fakeRepo) ResetFieldDefaults(_ context.Context, typeID uuid.UUID, fieldKey string, _ time.Time) error {
 	i := r.typeIndex(typeID)
 	if i < 0 {
@@ -635,23 +436,9 @@ func (r *fakeRepo) ResetFieldDefaults(_ context.Context, typeID uuid.UUID, field
 	if typ.DefaultSortField != nil && *typ.DefaultSortField == fieldKey {
 		typ.DefaultSortField = nil
 	}
-	if typ.DefaultPinnedFields != nil {
-		pins := slices.DeleteFunc(slices.Clone(*typ.DefaultPinnedFields), func(p string) bool { return p == fieldKey })
-		typ.DefaultPinnedFields = &pins
-	}
 	typ.Version++
 	r.s.types[i] = typ
 	r.s.calls = append(r.s.calls, "reset type defaults")
-	return nil
-}
-
-func (r *fakeRepo) ResetListFieldPins(_ context.Context, typeKey, fieldKey string, _ time.Time) error {
-	for i, l := range r.s.lists {
-		if l.typeK == typeKey && slices.Contains(l.pins, fieldKey) {
-			r.s.lists[i].pins = nil
-		}
-	}
-	r.s.calls = append(r.s.calls, "reset list pins")
 	return nil
 }
 
@@ -671,7 +458,7 @@ func (fixedClock) Now() time.Time { return time.Unix(1_700_000_000, 0).UTC() }
 
 func ptr[T any](v T) *T { return &v }
 
-// gadgetStore is a custom type "gadget" (version 1) with a number field rating and a
+// gadgetStore is a test type "gadget" (version 1) with a number field rating and a
 // text field brand, plus a locked built-in "movie" with the locked field release_year.
 func gadgetStore() *fakeStore {
 	f := &fakeStore{}
@@ -750,11 +537,6 @@ func TestService_StaleTypeVersionWritesNothing(t *testing.T) {
 		name string
 		run  func(m *Service, v int) error
 	}{
-		{"update", func(m *Service, v int) error {
-			_, err := m.Update(t.Context(), "gadget", v, UpdateType{Name: ptr("Renamed")})
-			return err
-		}},
-		{"delete", func(m *Service, v int) error { return m.Delete(t.Context(), "gadget", v) }},
 		{"create field", func(m *Service, v int) error {
 			_, err := m.CreateField(t.Context(), "gadget", v, CreateField{Label: "Colour", Type: "text"})
 			return err
@@ -810,10 +592,7 @@ func TestService_StaleFieldVersionWritesNothing(t *testing.T) {
 func TestService_MissingTypeOrFieldIsNotFound(t *testing.T) {
 	store := gadgetStore()
 	m := newService(store)
-	_, err := m.Update(t.Context(), "nope", 1, UpdateType{Name: ptr("x")})
-	wantNotFound(t, err, "type")
-	wantNotFound(t, m.Delete(t.Context(), "nope", 1), "type")
-	_, err = m.CreateField(t.Context(), "nope", 1, CreateField{Label: "A", Type: "text"})
+	_, err := m.CreateField(t.Context(), "nope", 1, CreateField{Label: "A", Type: "text"})
 	wantNotFound(t, err, "type")
 	_, err = m.ReorderFields(t.Context(), "nope", 1, nil)
 	wantNotFound(t, err, "type")
@@ -825,32 +604,6 @@ func TestService_MissingTypeOrFieldIsNotFound(t *testing.T) {
 	wantNotFound(t, err, "type field")
 	_, err = m.DeleteField(t.Context(), "gadget", "nope", 1)
 	wantNotFound(t, err, "type field")
-}
-
-func TestService_LockedTypeIsRefused(t *testing.T) {
-	ops := []struct {
-		name string
-		run  func(m *Service) error
-	}{
-		{"update", func(m *Service) error {
-			_, err := m.Update(t.Context(), "movie", 1, UpdateType{Name: ptr("Films")})
-			return err
-		}},
-		{"delete", func(m *Service) error { return m.Delete(t.Context(), "movie", 1) }},
-	}
-	for _, op := range ops {
-		t.Run(op.name, func(t *testing.T) {
-			store := gadgetStore()
-			before := store.state.clone()
-			err := op.run(newService(store))
-			if fields := validationFields(t, err); !slices.Equal(fields, []string{"type"}) {
-				t.Errorf("fields = %v", fields)
-			}
-			if !reflect.DeepEqual(before, store.state) {
-				t.Errorf("locked type write changed the store")
-			}
-		})
-	}
 }
 
 func TestService_LockedFieldIsRefused(t *testing.T) {
@@ -868,215 +621,6 @@ func TestService_LockedFieldIsRefused(t *testing.T) {
 	}
 	if _, err := m.FieldDeletePreview(t.Context(), "movie", "release_year"); err == nil {
 		t.Fatal("preview of a locked field succeeded")
-	}
-}
-
-func TestService_DeleteRefusedWhileActiveListsUseType(t *testing.T) {
-	tests := []struct {
-		name   string
-		lists  []string // active lists of type gadget
-		wantIn string
-	}{
-		{name: "one list", lists: []string{"Games"}, wantIn: "is used by 1 list(s), including Games"},
-		{name: "several lists name the first by name", lists: []string{"Zeta", "Alpha"}, wantIn: "is used by 2 list(s), including Alpha"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := gadgetStore()
-			for _, name := range tt.lists {
-				store.addList(name, "gadget", "manual", nil, true)
-			}
-			store.addList("Trashed", "gadget", "manual", nil, false)
-			before := store.state.clone()
-			err := newService(store).Delete(t.Context(), "gadget", 1)
-			var ve *apperr.ValidationError
-			if !errors.As(err, &ve) || len(ve.Errors) != 1 || ve.Errors[0].Field != "type" || ve.Errors[0].Message != tt.wantIn {
-				t.Fatalf("Delete() = %v, want %q", err, tt.wantIn)
-			}
-			if !reflect.DeepEqual(before, store.state) {
-				t.Errorf("refused delete changed the store")
-			}
-		})
-	}
-}
-
-// The type has fields, so the fake refuses a delete of the type first: this is the
-// order the old service used (fields, then the type).
-func TestService_DeleteRemovesFieldsThenType(t *testing.T) {
-	store := gadgetStore()
-	if err := newService(store).Delete(t.Context(), "gadget", 1); err != nil {
-		t.Fatalf("Delete() = %v", err)
-	}
-	if typ := store.typeByKey("gadget"); typ.ID != uuid.Nil {
-		t.Errorf("type still stored: %#v", typ)
-	}
-	for _, field := range store.state.fields {
-		if field.Key == "rating" || field.Key == "brand" {
-			t.Errorf("field %q still stored", field.Key)
-		}
-	}
-	fieldsAt, typeAt := -1, -1
-	for i, call := range store.state.calls {
-		switch call {
-		case "delete fields of type":
-			fieldsAt = i
-		case "delete type":
-			typeAt = i
-		}
-	}
-	if fieldsAt < 0 || typeAt < 0 || fieldsAt > typeAt {
-		t.Errorf("calls = %v, want fields deleted before the type", store.state.calls)
-	}
-}
-
-func TestService_UpdateDefaults(t *testing.T) {
-	tests := []struct {
-		name       string
-		in         UpdateType
-		wantFields []string // nil = accepted
-	}{
-		{name: "sort on a field", in: UpdateType{DefaultSortField: NullableString{Set: true, Value: ptr("rating")}}},
-		{name: "sort on a missing key", in: UpdateType{DefaultSortField: NullableString{Set: true, Value: ptr("missing")}}, wantFields: []string{"default_sort_field"}},
-		{name: "sort on price without allows_price", in: UpdateType{DefaultSortField: NullableString{Set: true, Value: ptr("price")}}, wantFields: []string{"default_sort_field"}},
-		{name: "sort on price with allows_price in the same patch", in: UpdateType{AllowsPrice: ptr(true), DefaultSortField: NullableString{Set: true, Value: ptr("price")}}},
-		{name: "pins over three", in: UpdateType{DefaultPinnedFields: NullableStrings{Set: true, Value: &[]string{"rating", "brand", "a", "b"}}}, wantFields: []string{"default_pinned_fields"}},
-		{name: "pin duplicated", in: UpdateType{DefaultPinnedFields: NullableStrings{Set: true, Value: &[]string{"rating", "rating"}}}, wantFields: []string{"default_pinned_fields[1]"}},
-		{name: "pin unknown", in: UpdateType{DefaultPinnedFields: NullableStrings{Set: true, Value: &[]string{"nope"}}}, wantFields: []string{"default_pinned_fields[0]"}},
-		{name: "pin price with allows_price", in: UpdateType{AllowsPrice: ptr(true), DefaultPinnedFields: NullableStrings{Set: true, Value: &[]string{"price", "rating"}}}},
-		{name: "turning price off drops a pin on it", in: UpdateType{AllowsPrice: ptr(false), DefaultPinnedFields: NullableStrings{Set: true, Value: &[]string{"price"}}}, wantFields: []string{"default_pinned_fields[0]"}},
-		{name: "invalid icon", in: UpdateType{DefaultIcon: NullableString{Set: true, Value: ptr("car")}}, wantFields: []string{"default_icon"}},
-		{name: "valid icon", in: UpdateType{DefaultIcon: NullableString{Set: true, Value: ptr("i:car")}}},
-		{name: "every problem is reported", in: UpdateType{
-			DefaultSortField:    NullableString{Set: true, Value: ptr("nope")},
-			DefaultPinnedFields: NullableStrings{Set: true, Value: &[]string{"nope", "rating", "rating"}},
-		}, wantFields: []string{"default_sort_field", "default_pinned_fields[0]", "default_pinned_fields[2]"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := gadgetStore()
-			before := store.state.clone()
-			_, err := newService(store).Update(t.Context(), "gadget", 1, tt.in)
-			if tt.wantFields == nil {
-				if err != nil {
-					t.Fatalf("Update() = %v", err)
-				}
-				return
-			}
-			if fields := validationFields(t, err); !slices.Equal(fields, tt.wantFields) {
-				t.Errorf("fields = %v, want %v", fields, tt.wantFields)
-			}
-			if !reflect.DeepEqual(before, store.state) {
-				t.Errorf("refused update changed the store")
-			}
-		})
-	}
-}
-
-func TestService_UpdateSetsDefaultsAndKeepsTheRest(t *testing.T) {
-	store := gadgetStore()
-	m := newService(store)
-	typ, err := m.Update(t.Context(), "gadget", 1, UpdateType{
-		DefaultIcon:         NullableString{Set: true, Value: ptr("i:car")},
-		DefaultSortField:    NullableString{Set: true, Value: ptr("rating")},
-		DefaultPinnedFields: NullableStrings{Set: true, Value: &[]string{"rating", "brand"}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if typ.Version != 2 || typ.Name != "Gadget" || typ.DefaultIcon == nil || *typ.DefaultIcon != "i:car" {
-		t.Fatalf("updated type = %#v", typ)
-	}
-	cleared, err := m.Update(t.Context(), "gadget", typ.Version, UpdateType{
-		DefaultIcon:         NullableString{Set: true},
-		DefaultPinnedFields: NullableStrings{Set: true},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cleared.DefaultIcon != nil || cleared.DefaultPinnedFields != nil || cleared.DefaultSortField == nil || *cleared.DefaultSortField != "rating" {
-		t.Fatalf("cleared type = %#v", cleared)
-	}
-}
-
-// A patch that changes nothing answers the current type and writes nothing.
-func TestService_UpdateNoChangeWritesNothing(t *testing.T) {
-	store := gadgetStore()
-	typ, err := newService(store).Update(t.Context(), "gadget", 1, UpdateType{Name: ptr("Gadget")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if typ.Version != 1 {
-		t.Errorf("version = %d, want 1", typ.Version)
-	}
-	if slices.Contains(store.state.calls, "update type") {
-		t.Errorf("calls = %v, want no update", store.state.calls)
-	}
-}
-
-func TestService_CreateValidatesBeforeWriting(t *testing.T) {
-	tests := []struct {
-		name       string
-		in         CreateType
-		wantFields []string
-	}{
-		{name: "blank name", in: CreateType{Name: "   "}, wantFields: []string{"name"}},
-		{name: "invalid icon", in: CreateType{Name: "Board", DefaultIcon: ptr("car")}, wantFields: []string{"default_icon"}},
-		{name: "sort on price without allows_price", in: CreateType{Name: "Board", DefaultSortField: ptr("price")}, wantFields: []string{"default_sort_field"}},
-		{name: "sort on price with allows_price", in: CreateType{Name: "Board", AllowsPrice: true, DefaultSortField: ptr("price")}},
-		{name: "sort not a key", in: CreateType{Name: "Board", DefaultSortField: ptr("Rating")}, wantFields: []string{"default_sort_field"}},
-		{name: "four pins", in: CreateType{Name: "Board", DefaultPinnedFields: &[]string{"a", "b", "c", "d"}}, wantFields: []string{"default_pinned_fields"}},
-		{name: "duplicate pin", in: CreateType{Name: "Board", DefaultPinnedFields: &[]string{"rating", "rating"}}, wantFields: []string{"default_pinned_fields[1]"}},
-		{name: "price pin without allows_price", in: CreateType{Name: "Board", DefaultPinnedFields: &[]string{"price"}}, wantFields: []string{"default_pinned_fields[0]"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := gadgetStore()
-			before := store.state.clone()
-			_, err := newService(store).Create(t.Context(), tt.in)
-			if tt.wantFields == nil {
-				if err != nil {
-					t.Fatalf("Create() = %v", err)
-				}
-				return
-			}
-			if fields := validationFields(t, err); !slices.Equal(fields, tt.wantFields) {
-				t.Errorf("fields = %v, want %v", fields, tt.wantFields)
-			}
-			if !reflect.DeepEqual(before, store.state) {
-				t.Errorf("refused create changed the store")
-			}
-		})
-	}
-}
-
-// The key comes from the name. A name that gives a key already in use (a built-in
-// key too) is refused with a 409 type_key_taken; there is no runtime `_custom`
-// rename, the built-in keys are only renamed by the migrations.
-func TestService_CreateKeyCollisionIsTypeKeyTaken(t *testing.T) {
-	for _, name := range []string{"Movie", "Gadget"} {
-		t.Run(name, func(t *testing.T) {
-			store := gadgetStore()
-			before := store.state.clone()
-			_, err := newService(store).Create(t.Context(), CreateType{Name: name})
-			var c *apperr.ConflictError
-			if !errors.As(err, &c) || c.Code != apperr.CodeTypeKeyTaken {
-				t.Fatalf("Create() = %v, want type_key_taken", err)
-			}
-			if !reflect.DeepEqual(before, store.state) {
-				t.Errorf("refused create changed the store")
-			}
-		})
-	}
-}
-
-func TestService_CreateSetsKeyFromName(t *testing.T) {
-	store := gadgetStore()
-	typ, err := newService(store).Create(t.Context(), CreateType{Name: "  Board game  "})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if typ.Key != "board_game" || typ.Name != "Board game" || typ.Version != 1 {
-		t.Errorf("created type = %#v", typ)
 	}
 }
 
@@ -1224,13 +768,13 @@ func TestService_FieldDeletePreviewCountsValuesWithoutWriting(t *testing.T) {
 func TestService_DeleteFieldResetsReferences(t *testing.T) {
 	store := &fakeStore{}
 	typ := store.addType(Type{
-		Key: "gadget", Name: "Gadget", DefaultSortField: ptr("rating"), DefaultPinnedFields: &[]string{"rating", "brand"},
+		Key: "gadget", Name: "Gadget", DefaultSortField: ptr("rating"),
 	},
 		Field{Key: "rating", Label: "Rating", Type: "number", Position: 0},
 		Field{Key: "brand", Label: "Brand", Type: "text", Position: 1},
 	)
-	store.addList("Games", "gadget", "rating", []string{"rating", "brand"}, true)
-	store.addList("Other", "gadget", "manual", nil, true)
+	store.addList("Games", "gadget", "rating", true)
+	store.addList("Other", "gadget", "manual", true)
 	store.setValues("gadget", "rating", 3)
 
 	count, err := newService(store).DeleteField(t.Context(), "gadget", "rating", 1)
@@ -1244,16 +788,13 @@ func TestService_DeleteFieldResetsReferences(t *testing.T) {
 	if got.DefaultSortField != nil {
 		t.Errorf("default sort = %v, want nil", *got.DefaultSortField)
 	}
-	if got.DefaultPinnedFields == nil || !slices.Equal(*got.DefaultPinnedFields, []string{"brand"}) {
-		t.Errorf("default pins = %v, want [brand]", got.DefaultPinnedFields)
-	}
 	games := store.state.lists[0]
-	if games.sort != "manual" || games.pins != nil {
-		t.Errorf("Games sort = %q pins = %v, want manual and nil", games.sort, games.pins)
+	if games.sort != "manual" {
+		t.Errorf("Games sort = %q, want manual", games.sort)
 	}
 	other := store.state.lists[1]
-	if other.sort != "manual" || other.pins != nil {
-		t.Errorf("Other changed: sort = %q pins = %v", other.sort, other.pins)
+	if other.sort != "manual" {
+		t.Errorf("Other changed: sort = %q", other.sort)
 	}
 	if n := store.state.values["gadget/rating"]; n != 0 {
 		t.Errorf("values left = %d", n)

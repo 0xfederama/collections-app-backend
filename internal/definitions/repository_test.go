@@ -63,16 +63,14 @@ func (e repoEnv) typeByKey(key string) definitions.Type {
 	return out
 }
 
-// insertType creates a custom type through the repository.
+// insertType writes a bare type with raw SQL: there is no repository method to create types, but the field
+// queries need a type with no fields to work on.
 func (e repoEnv) insertType(key string) definitions.Type {
 	e.t.Helper()
-	var out definitions.Type
-	e.do(func(r definitions.Repo) error {
-		var err error
-		out, err = r.InsertType(e.ctx, definitions.Type{Key: key, Name: "Gadgets"}, repoNow)
-		return err
-	})
-	return out
+	if _, err := e.pool.Exec(e.ctx, `INSERT INTO type_definitions (workspace_id, key, name) VALUES ($1, $2, 'Gadgets')`, e.ws, key); err != nil {
+		e.t.Fatal(err)
+	}
+	return e.typeByKey(key)
 }
 
 // insertField appends a field to typ through the repository.
@@ -88,11 +86,11 @@ func (e repoEnv) insertField(typ definitions.Type, key string, position int) def
 }
 
 // insertList writes a list of a type with raw SQL (the lists repository is another feature).
-func (e repoEnv) insertList(typeKey, sortMode, pinned string) uuid.UUID {
+func (e repoEnv) insertList(typeKey, sortMode string) uuid.UUID {
 	e.t.Helper()
 	var id uuid.UUID
-	err := e.pool.QueryRow(e.ctx, `INSERT INTO lists (workspace_id, name, sort_order, type, sort_mode, pinned_fields)
-		VALUES ($1, 'L', 0, $2, $3, $4::jsonb) RETURNING id`, e.ws, typeKey, sortMode, pinned).Scan(&id)
+	err := e.pool.QueryRow(e.ctx, `INSERT INTO lists (workspace_id, name, sort_order, type, sort_mode)
+		VALUES ($1, 'L', 0, $2, $3) RETURNING id`, e.ws, typeKey, sortMode).Scan(&id)
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -115,8 +113,6 @@ func isNotFoundErr(err error, resource string) bool {
 	var nf *apperr.NotFoundError
 	return errors.As(err, &nf) && nf.Resource == resource
 }
-
-func repoPtr[T any](v T) *T { return &v }
 
 func TestRepo_ListTypesAndGetByKey(t *testing.T) {
 	e := newRepoEnv(t)
@@ -230,85 +226,14 @@ func TestRepo_LockForUpdateIsNotFoundWhenMissing(t *testing.T) {
 	}
 }
 
-func TestRepo_InsertUpdateDeleteType(t *testing.T) {
+func TestRepo_TouchTypeBumpsTheVersion(t *testing.T) {
 	e := newRepoEnv(t)
-	var created definitions.Type
+	typ := e.insertType("gadgets")
 	e.do(func(r definitions.Repo) error {
-		var err error
-		created, err = r.InsertType(e.ctx, definitions.Type{
-			Key: "gadgets", Name: "Gadgets", DefaultIcon: repoPtr("i:tag"), AllowsPrice: true,
-			DefaultSortField: repoPtr("price"), DefaultPinnedFields: &[]string{"title", "price"},
-		}, repoNow)
-		return err
+		return r.TouchType(e.ctx, typ.ID, repoLater)
 	})
-	if created.ID == uuid.Nil || created.Version != 1 || created.Locked {
-		t.Fatalf("InsertType = %+v, want a new unlocked version 1", created)
-	}
-	if got := e.typeByKey("gadgets"); !reflect.DeepEqual(got, created) {
-		t.Errorf("GetTypeByKey = %+v, want %+v", got, created)
-	}
-
-	// Default pins: NULL, the empty list, and a list round-trip as they are stored.
-	for _, tt := range []struct {
-		name string
-		pins *[]string
-	}{
-		{"nil is NULL", nil},
-		{"empty list", &[]string{}},
-		{"ordered keys", &[]string{"price", "title"}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			se := e
-			se.t = t
-			var typ definitions.Type
-			se.do(func(r definitions.Repo) error {
-				var err error
-				typ, err = r.InsertType(se.ctx, definitions.Type{Key: "pins_" + tt.name[:3], Name: "P", DefaultPinnedFields: tt.pins}, repoNow)
-				return err
-			})
-			got := se.typeByKey(typ.Key)
-			if !reflect.DeepEqual(got.DefaultPinnedFields, tt.pins) {
-				t.Errorf("DefaultPinnedFields = %v, want %v", got.DefaultPinnedFields, tt.pins)
-			}
-		})
-	}
-
-	cur := e.typeByKey("gadgets")
-	cur.Name = "Gizmos"
-	cur.DefaultIcon = nil
-	cur.AllowsPrice = false
-	cur.DefaultSortField = nil
-	cur.DefaultPinnedFields = &[]string{"title"}
-	var updated definitions.Type
-	e.do(func(r definitions.Repo) error {
-		var err error
-		updated, err = r.UpdateType(e.ctx, cur, repoLater)
-		return err
-	})
-	if updated.Name != "Gizmos" || updated.DefaultIcon != nil || updated.AllowsPrice || updated.DefaultSortField != nil ||
-		!reflect.DeepEqual(updated.DefaultPinnedFields, &[]string{"title"}) || updated.Version != 2 {
-		t.Errorf("UpdateType = %+v, want the merged values at version 2", updated)
-	}
-
-	e.do(func(r definitions.Repo) error {
-		return r.TouchType(e.ctx, created.ID, repoLater)
-	})
-	if got := e.typeByKey("gadgets"); got.Version != 3 {
-		t.Errorf("version after TouchType = %d, want 3", got.Version)
-	}
-
-	e.do(func(r definitions.Repo) error {
-		if err := r.DeleteFieldsOfType(e.ctx, created.ID); err != nil {
-			return err
-		}
-		return r.DeleteType(e.ctx, created.ID)
-	})
-	err := e.store.InTx(e.ctx, func(r definitions.Repo) error {
-		_, err := r.GetTypeByKey(e.ctx, "gadgets")
-		return err
-	})
-	if !isNotFoundErr(err, "type") {
-		t.Errorf("after DeleteType err = %v, want NotFound type", err)
+	if got := e.typeByKey("gadgets"); got.Version != typ.Version+1 {
+		t.Errorf("version after TouchType = %d, want %d", got.Version, typ.Version+1)
 	}
 }
 
@@ -420,18 +345,14 @@ func TestRepo_FieldValuesAndDefaults(t *testing.T) {
 	e := newRepoEnv(t)
 	typ := e.insertType("gadgets")
 	e.insertField(typ, "rating", 0)
-	cur := e.typeByKey("gadgets")
-	cur.DefaultSortField = repoPtr("rating")
-	cur.DefaultPinnedFields = &[]string{"rating", "title"}
-	e.do(func(r definitions.Repo) error {
-		_, err := r.UpdateType(e.ctx, cur, repoLater)
-		return err
-	})
+	if _, err := e.pool.Exec(e.ctx, `UPDATE type_definitions SET default_sort_field = 'rating', version = version + 1 WHERE id = $1`, typ.ID); err != nil {
+		t.Fatal(err)
+	}
 
-	listA := e.insertList("gadgets", "rating", `["rating","title"]`)
+	listA := e.insertList("gadgets", "rating")
 	itemWithValue := e.insertItem(listA, `{"rating": 4, "note": "x"}`)
 	itemWithoutValue := e.insertItem(listA, `{"note": "y"}`)
-	listOther := e.insertList("movie", "manual", `[]`)
+	listOther := e.insertList("movie", "manual")
 	itemOther := e.insertItem(listOther, `{"rating": 5}`)
 
 	e.do(func(r definitions.Repo) error {
@@ -442,39 +363,23 @@ func TestRepo_FieldValuesAndDefaults(t *testing.T) {
 		return err
 	})
 	e.do(func(r definitions.Repo) error {
-		refs, err := r.ListActiveListsByType(e.ctx, "gadgets")
-		if err != nil || len(refs) != 1 || refs[0].ID != listA {
-			t.Errorf("ListActiveListsByType(gadgets) = %+v, %v; want list A", refs, err)
-		}
-		none, err := r.ListActiveListsByType(e.ctx, "no_such_type")
-		if err != nil || len(none) != 0 {
-			t.Errorf("ListActiveListsByType(unknown) = %+v, %v; want none", none, err)
-		}
-		return err
-	})
-
-	e.do(func(r definitions.Repo) error {
 		return r.ResetFieldDefaults(e.ctx, typ.ID, "rating", repoLater)
 	})
-	if got := e.typeByKey("gadgets"); got.DefaultSortField != nil || !reflect.DeepEqual(got.DefaultPinnedFields, &[]string{"title"}) || got.Version != 3 {
-		t.Errorf("type after ResetFieldDefaults = %+v, want no sort, pins [title], version 3", got)
+	if got := e.typeByKey("gadgets"); got.DefaultSortField != nil || got.Version != 3 {
+		t.Errorf("type after ResetFieldDefaults = %+v, want no sort, version 3", got)
 	}
 
 	e.do(func(r definitions.Repo) error {
-		if err := r.ResetListFieldPins(e.ctx, "gadgets", "rating", repoLater); err != nil {
-			return err
-		}
 		return r.ResetListFieldSort(e.ctx, "gadgets", "rating", repoLater)
 	})
-	var pinsNull bool
 	var sortMode string
 	var listVersion int
-	if err := e.pool.QueryRow(e.ctx, `SELECT pinned_fields IS NULL, sort_mode, version FROM lists WHERE id = $1`, listA).
-		Scan(&pinsNull, &sortMode, &listVersion); err != nil {
+	if err := e.pool.QueryRow(e.ctx, `SELECT sort_mode, version FROM lists WHERE id = $1`, listA).
+		Scan(&sortMode, &listVersion); err != nil {
 		t.Fatal(err)
 	}
-	if !pinsNull || sortMode != "manual" || listVersion != 3 {
-		t.Errorf("list A = pins null %v, sort %q, version %d; want pins NULL, sort manual, version 3", pinsNull, sortMode, listVersion)
+	if sortMode != "manual" || listVersion != 2 {
+		t.Errorf("list A = sort %q, version %d; want sort manual, version 2", sortMode, listVersion)
 	}
 
 	e.do(func(r definitions.Repo) error {

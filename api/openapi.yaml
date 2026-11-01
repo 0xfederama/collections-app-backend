@@ -191,12 +191,6 @@ components:
             - "null"
         name:
           type: string
-        pinned_fields:
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         sort_mode:
           type:
             - string
@@ -218,30 +212,6 @@ components:
       required:
         - label
         - type
-      type: object
-    CreateTypeRequest:
-      additionalProperties: false
-      properties:
-        allows_price:
-          type: boolean
-        default_icon:
-          type:
-            - string
-            - "null"
-        default_pinned_fields:
-          items:
-            type: string
-          type:
-            - array
-            - "null"
-        default_sort_field:
-          type:
-            - string
-            - "null"
-        name:
-          type: string
-      required:
-        - name
       type: object
     FieldError:
       additionalProperties: false
@@ -489,12 +459,6 @@ components:
           type: integer
         name:
           type: string
-        pinned_fields:
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         sort_mode:
           type: string
         sort_order:
@@ -518,7 +482,6 @@ components:
         - description
         - display_mode
         - sort_mode
-        - pinned_fields
         - icon
         - icon_color
         - sort_order
@@ -579,12 +542,6 @@ components:
           items:
             $ref: "#/components/schemas/PathSegment"
           type: array
-        pinned_fields:
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         sort_mode:
           type: string
         sort_order:
@@ -609,7 +566,6 @@ components:
         - description
         - display_mode
         - sort_mode
-        - pinned_fields
         - icon
         - icon_color
         - sort_order
@@ -746,7 +702,6 @@ components:
         - `parent_in_trash`: A restore without a destination whose parent is trashed (409). `blocking_parent` names it.
         - `destination_unavailable`: A move, restore or create targets a folder or list that is missing or trashed (409).
         - `type_mismatch`: An item would move to a list of another type (409).
-        - `type_key_taken`: A type would take a key that another type of the workspace already has (409).
         - `order_stale`: A reorder names an id set that no longer matches the stored one (409).
         - `lookup_disabled`: A lookup was requested but its integration is not configured on this server (503).
         - `upstream_unavailable`: A lookup provider could not be reached or answered in time (503).
@@ -1192,13 +1147,6 @@ components:
           type:
             - string
             - "null"
-        default_pinned_fields:
-          items:
-            type: string
-          maxItems: 3
-          type:
-            - array
-            - "null"
         default_sort_field:
           maxLength: 32
           type:
@@ -1223,7 +1171,6 @@ components:
         - default_icon
         - allows_price
         - default_sort_field
-        - default_pinned_fields
         - is_locked
         - version
         - fields
@@ -1335,12 +1282,6 @@ components:
             - "null"
         name:
           type: string
-        pinned_fields:
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         sort_mode:
           type: string
         type:
@@ -1375,28 +1316,6 @@ components:
           type: string
       required:
         - label
-      type: object
-    UpdateTypeRequest:
-      additionalProperties: false
-      properties:
-        allows_price:
-          type: boolean
-        default_icon:
-          type:
-            - string
-            - "null"
-        default_pinned_fields:
-          items:
-            type: string
-          type:
-            - array
-            - "null"
-        default_sort_field:
-          type:
-            - string
-            - "null"
-        name:
-          type: string
       type: object
     UploadImage:
       additionalProperties: false
@@ -3933,190 +3852,6 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Internal Server Error
       summary: List type definitions and fields
-      tags:
-        - types
-    post:
-      operationId: createType
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateTypeRequest"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TypeDefinition"
-          description: Created
-          headers:
-            ETag:
-              schema:
-                type: string
-            Location:
-              schema:
-                type: string
-        "400":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Bad Request
-        "409":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Conflict
-        "413":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Request Entity Too Large
-        "422":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Unprocessable Entity
-        "500":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Internal Server Error
-      summary: Create a custom type
-      tags:
-        - types
-  /api/v1/types/{key}:
-    delete:
-      description: Requires `If-Match` (`"k-N"`).
-      operationId: deleteType
-      parameters:
-        - in: path
-          name: key
-          required: true
-          schema:
-            type: string
-        - description: Type ETag, "k-N".
-          in: header
-          name: If-Match
-          schema:
-            description: Type ETag, "k-N".
-            type: string
-      responses:
-        "204":
-          description: No Content
-        "404":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Not Found
-        "412":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Precondition Failed
-        "422":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Unprocessable Entity
-        "428":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Precondition Required
-        "500":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Internal Server Error
-      summary: Delete a custom type not used by any list
-      tags:
-        - types
-    patch:
-      description: Requires `If-Match` (`"k-N"`). Send `null` to clear a nullable default.
-      operationId: updateType
-      parameters:
-        - in: path
-          name: key
-          required: true
-          schema:
-            type: string
-        - description: Type ETag, "k-N".
-          in: header
-          name: If-Match
-          schema:
-            description: Type ETag, "k-N".
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateTypeRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TypeDefinition"
-          description: OK
-          headers:
-            ETag:
-              schema:
-                type: string
-        "400":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Bad Request
-        "404":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Not Found
-        "412":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Precondition Failed
-        "413":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Request Entity Too Large
-        "422":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Unprocessable Entity
-        "428":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Precondition Required
-        "500":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Internal Server Error
-      summary: Update a custom type
       tags:
         - types
   /api/v1/types/{key}/fields:

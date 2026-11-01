@@ -2,14 +2,12 @@ package definitions
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/platform/database"
@@ -70,61 +68,8 @@ func (r *repo) GetTypeForUpdate(ctx context.Context, id uuid.UUID) (Type, error)
 	return typeFromRow(row), nil
 }
 
-func (r *repo) InsertType(ctx context.Context, t Type, now time.Time) (Type, error) {
-	pins, err := pinsToJSON(t.DefaultPinnedFields)
-	if err != nil {
-		return Type{}, err
-	}
-	row, err := r.q.InsertTypeDefinition(ctx, sqlc.InsertTypeDefinitionParams{
-		WorkspaceID: scope.WorkspaceID(ctx), Key: t.Key, Name: t.Name, DefaultIcon: t.DefaultIcon,
-		AllowsPrice: t.AllowsPrice, DefaultSortField: t.DefaultSortField, DefaultPinnedFields: pins, Now: now,
-	})
-	if err != nil {
-		if isTypeKeyTaken(err) {
-			return Type{}, apperr.TypeKeyTaken()
-		}
-		return Type{}, fmt.Errorf("insert type: %w", err)
-	}
-	return typeFromRow(row), nil
-}
-
-// UpdateType sets every editable column. The row is locked and t already holds the
-// merged values.
-func (r *repo) UpdateType(ctx context.Context, t Type, now time.Time) (Type, error) {
-	pins, err := pinsToJSON(t.DefaultPinnedFields)
-	if err != nil {
-		return Type{}, err
-	}
-	row, err := r.q.UpdateTypeDefinition(ctx, sqlc.UpdateTypeDefinitionParams{
-		ID: t.ID, WorkspaceID: scope.WorkspaceID(ctx),
-		Name: t.Name, DefaultIcon: t.DefaultIcon, AllowsPrice: t.AllowsPrice,
-		DefaultSortField: t.DefaultSortField, DefaultPinnedFields: pins,
-		Now: now,
-	})
-	if err != nil {
-		return Type{}, notFound(err, "type")
-	}
-	return typeFromRow(row), nil
-}
-
-func (r *repo) DeleteType(ctx context.Context, id uuid.UUID) error {
-	return r.q.DeleteTypeDefinition(ctx, sqlc.DeleteTypeDefinitionParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx)})
-}
-
 func (r *repo) TouchType(ctx context.Context, id uuid.UUID, now time.Time) error {
 	return r.q.TouchTypeDefinition(ctx, sqlc.TouchTypeDefinitionParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx), Now: now})
-}
-
-func (r *repo) ListActiveListsByType(ctx context.Context, typeKey string) ([]ListRef, error) {
-	rows, err := r.q.ListActiveListsByType(ctx, sqlc.ListActiveListsByTypeParams{WorkspaceID: scope.WorkspaceID(ctx), Type: typeKey})
-	if err != nil {
-		return nil, fmt.Errorf("list lists of type: %w", err)
-	}
-	out := make([]ListRef, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, ListRef{ID: row.ID, Name: row.Name})
-	}
-	return out, nil
 }
 
 func (r *repo) ListFields(ctx context.Context, typeID uuid.UUID) ([]Field, error) {
@@ -195,10 +140,6 @@ func (r *repo) DeleteField(ctx context.Context, id uuid.UUID) error {
 	return r.q.DeleteTypeField(ctx, sqlc.DeleteTypeFieldParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx)})
 }
 
-func (r *repo) DeleteFieldsOfType(ctx context.Context, typeID uuid.UUID) error {
-	return r.q.DeleteTypeFieldsOfType(ctx, sqlc.DeleteTypeFieldsOfTypeParams{TypeID: typeID, WorkspaceID: scope.WorkspaceID(ctx)})
-}
-
 func (r *repo) CountFieldValues(ctx context.Context, typeKey, fieldKey string) (int, error) {
 	count, err := r.q.CountTypeFieldValues(ctx, sqlc.CountTypeFieldValuesParams{WorkspaceID: scope.WorkspaceID(ctx), Type: typeKey, Key: fieldKey})
 	if err != nil {
@@ -215,10 +156,6 @@ func (r *repo) ResetFieldDefaults(ctx context.Context, typeID uuid.UUID, fieldKe
 	return r.q.ResetTypeFieldDefaults(ctx, sqlc.ResetTypeFieldDefaultsParams{ID: typeID, WorkspaceID: scope.WorkspaceID(ctx), Key: &fieldKey, Now: now})
 }
 
-func (r *repo) ResetListFieldPins(ctx context.Context, typeKey, fieldKey string, now time.Time) error {
-	return r.q.ResetListTypeFieldPins(ctx, sqlc.ResetListTypeFieldPinsParams{WorkspaceID: scope.WorkspaceID(ctx), Type: typeKey, Key: fieldKey, Now: now})
-}
-
 func (r *repo) ResetListFieldSort(ctx context.Context, typeKey, fieldKey string, now time.Time) error {
 	return r.q.ResetListTypeFieldSort(ctx, sqlc.ResetListTypeFieldSortParams{WorkspaceID: scope.WorkspaceID(ctx), Type: typeKey, Key: fieldKey, Now: now})
 }
@@ -226,52 +163,13 @@ func (r *repo) ResetListFieldSort(ctx context.Context, typeKey, fieldKey string,
 func typeFromRow(r sqlc.TypeDefinition) Type {
 	return Type{
 		ID: r.ID, Key: r.Key, Name: r.Name, AllowsPrice: r.AllowsPrice, Locked: r.IsLocked, Version: int(r.Version),
-		DefaultIcon: r.DefaultIcon, DefaultSortField: r.DefaultSortField, DefaultPinnedFields: pinsFromJSON(r.DefaultPinnedFields),
+		DefaultIcon: r.DefaultIcon, DefaultSortField: r.DefaultSortField,
 	}
 }
 
 func fieldFromRow(r sqlc.TypeField) Field {
 	return Field{ID: r.ID, Key: r.Key, Label: r.Label, Type: r.FieldType, Position: int(r.Position), Locked: r.IsLocked, Version: int(r.Version)}
 }
-
-// pinsFromJSON reads the stored column. NULL, "null" and anything unreadable are nil.
-func pinsFromJSON(raw []byte) *[]string {
-	if len(raw) == 0 || string(raw) == "null" {
-		return nil
-	}
-	var pins []string
-	if json.Unmarshal(raw, &pins) != nil {
-		return nil
-	}
-	return &pins
-}
-
-// pinsToJSON writes the column: nil is NULL (no default pins), a nil slice is [].
-func pinsToJSON(pins *[]string) ([]byte, error) {
-	if pins == nil {
-		return nil, nil
-	}
-	if *pins == nil {
-		return []byte("[]"), nil
-	}
-	b, err := json.Marshal(*pins)
-	if err != nil {
-		return nil, fmt.Errorf("marshal default pinned fields: %w", err)
-	}
-	return b, nil
-}
-
-// typeKeyConstraint is the (workspace_id, key) unique constraint of type_definitions.
-const typeKeyConstraint = "type_definitions_workspace_id_key_key"
-
-// isTypeKeyTaken reports a unique violation on the type key of the workspace.
-func isTypeKeyTaken(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == uniqueViolation && pgErr.ConstraintName == typeKeyConstraint
-}
-
-// uniqueViolation is the SQLSTATE of a unique_violation (23505).
-const uniqueViolation = "23505"
 
 // notFound turns "no rows" into the domain error for resource; other errors pass through.
 func notFound(err error, resource string) error {

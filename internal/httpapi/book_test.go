@@ -12,9 +12,6 @@ func TestF016B2_BuiltinBookTypeIsSeeded(t *testing.T) {
 	if typ["name"] != "Books" || typ["is_locked"] != true || typ["allows_price"] != false || typ["default_sort_field"] != nil {
 		t.Fatalf("book type = %#v", typ)
 	}
-	if !reflect.DeepEqual(typ["default_pinned_fields"], []any{"author", "pages", "stores"}) {
-		t.Errorf("default pins = %v", typ["default_pinned_fields"])
-	}
 	var keys []string
 	for _, f := range typ["fields"].([]any) {
 		keys = append(keys, f.(map[string]any)["key"].(string))

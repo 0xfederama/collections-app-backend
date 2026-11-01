@@ -104,15 +104,14 @@ func output(l List) *ListOutput {
 // (name length, modes, icon, description size), so the request has no schema
 // constraints of its own: each rule answers with its own message.
 type CreateListRequest struct {
-	Name         string     `json:"name"`
-	Type         *string    `json:"type,omitempty" nullable:"true"`
-	FolderID     *uuid.UUID `json:"folder_id,omitempty" format:"uuid" nullable:"true"`
-	Description  *string    `json:"description,omitempty" nullable:"true"`
-	DisplayMode  *string    `json:"display_mode,omitempty" nullable:"true"`
-	SortMode     *string    `json:"sort_mode,omitempty" nullable:"true"`
-	PinnedFields []string   `json:"pinned_fields,omitempty" nullable:"true"`
-	Icon         *string    `json:"icon,omitempty" nullable:"true"`
-	IconColor    *string    `json:"icon_color,omitempty" nullable:"true"`
+	Name        string     `json:"name"`
+	Type        *string    `json:"type,omitempty" nullable:"true"`
+	FolderID    *uuid.UUID `json:"folder_id,omitempty" format:"uuid" nullable:"true"`
+	Description *string    `json:"description,omitempty" nullable:"true"`
+	DisplayMode *string    `json:"display_mode,omitempty" nullable:"true"`
+	SortMode    *string    `json:"sort_mode,omitempty" nullable:"true"`
+	Icon        *string    `json:"icon,omitempty" nullable:"true"`
+	IconColor   *string    `json:"icon_color,omitempty" nullable:"true"`
 }
 
 type createInput struct{ Body CreateListRequest }
@@ -122,7 +121,7 @@ func (h *handler) create(ctx context.Context, in *createInput) (*CreatedListOutp
 	l, err := h.svc.Create(ctx, CreateInput{
 		Name: b.Name, Type: b.Type, FolderID: b.FolderID, Description: b.Description,
 		DisplayMode: deref(b.DisplayMode), SortMode: deref(b.SortMode),
-		PinnedFields: pinnedFromWire(b.PinnedFields), Icon: b.Icon, IconColor: b.IconColor,
+		Icon: b.Icon, IconColor: b.IconColor,
 	})
 	if err != nil {
 		return nil, err
@@ -157,14 +156,13 @@ type updateInput struct {
 // UpdateListRequest is the body of updateList. Absent fields stay as they are;
 // the nullable ones tell null (clear) from absent with httpserver.Optional.
 type UpdateListRequest struct {
-	Name         *string                       `json:"name,omitempty"`
-	Type         httpserver.Optional[string]   `json:"type,omitempty"`
-	Description  httpserver.Optional[string]   `json:"description,omitempty"`
-	DisplayMode  *string                       `json:"display_mode,omitempty"`
-	SortMode     *string                       `json:"sort_mode,omitempty"`
-	PinnedFields httpserver.Optional[[]string] `json:"pinned_fields,omitempty"`
-	Icon         httpserver.Optional[string]   `json:"icon,omitempty"`
-	IconColor    httpserver.Optional[string]   `json:"icon_color,omitempty"`
+	Name        *string                     `json:"name,omitempty"`
+	Type        httpserver.Optional[string] `json:"type,omitempty"`
+	Description httpserver.Optional[string] `json:"description,omitempty"`
+	DisplayMode *string                     `json:"display_mode,omitempty"`
+	SortMode    *string                     `json:"sort_mode,omitempty"`
+	Icon        httpserver.Optional[string] `json:"icon,omitempty"`
+	IconColor   httpserver.Optional[string] `json:"icon_color,omitempty"`
 }
 
 func (h *handler) update(ctx context.Context, in *updateInput) (*ListOutput, error) {
@@ -174,14 +172,13 @@ func (h *handler) update(ctx context.Context, in *updateInput) (*ListOutput, err
 	}
 	b := in.Body
 	l, err := h.svc.Update(ctx, in.ID, version, Patch{
-		Name:         b.Name,
-		Type:         optional(b.Type),
-		Description:  optional(b.Description),
-		DisplayMode:  b.DisplayMode,
-		SortMode:     b.SortMode,
-		PinnedFields: pinnedOptional(b.PinnedFields),
-		Icon:         optional(b.Icon),
-		IconColor:    optional(b.IconColor),
+		Name:        b.Name,
+		Type:        optional(b.Type),
+		Description: optional(b.Description),
+		DisplayMode: b.DisplayMode,
+		SortMode:    b.SortMode,
+		Icon:        optional(b.Icon),
+		IconColor:   optional(b.IconColor),
 	})
 	if err != nil {
 		return nil, err
@@ -230,25 +227,6 @@ func (h *handler) reorder(ctx context.Context, in *reorderInput) (*struct{}, err
 // optional converts a wire PATCH field to the service's Optional.
 func optional[T any](o httpserver.Optional[T]) Optional[T] {
 	return Optional[T]{Set: o.Set, Value: o.Value}
-}
-
-// pinnedOptional converts the wire pinned_fields PATCH field: null is a reset to the type default.
-func pinnedOptional(o httpserver.Optional[[]string]) Optional[PinnedFields] {
-	out := Optional[PinnedFields]{Set: o.Set}
-	if o.Value != nil {
-		p := PinnedFields(*o.Value)
-		out.Value = &p
-	}
-	return out
-}
-
-// pinnedFromWire keeps the difference between absent or null (nil: the type default) and [] (pin nothing).
-func pinnedFromWire(keys []string) *PinnedFields {
-	if keys == nil {
-		return nil
-	}
-	p := PinnedFields(keys)
-	return &p
 }
 
 func deref(s *string) string {

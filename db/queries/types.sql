@@ -29,29 +29,6 @@ SELECT * FROM type_fields
 WHERE id = @id AND workspace_id = @workspace_id
 FOR UPDATE;
 
--- name: InsertTypeDefinition :one
-INSERT INTO type_definitions (workspace_id, key, name, default_icon, allows_price, default_sort_field, default_pinned_fields, updated_at)
-VALUES (@workspace_id, @key, @name, sqlc.narg(default_icon), @allows_price, sqlc.narg(default_sort_field), sqlc.narg(default_pinned_fields), @now)
-RETURNING *;
-
--- name: UpdateTypeDefinition :one
--- Writes every editable column: the caller merges the patch and holds the row lock.
-UPDATE type_definitions
-SET name = @name::text,
-    default_icon = sqlc.narg(default_icon),
-    allows_price = @allows_price::boolean,
-    default_sort_field = sqlc.narg(default_sort_field),
-    default_pinned_fields = sqlc.narg(default_pinned_fields),
-    version = version + 1,
-    updated_at = @now
-WHERE id = @id AND workspace_id = @workspace_id RETURNING *;
-
--- name: DeleteTypeDefinition :exec
-DELETE FROM type_definitions WHERE id = @id AND workspace_id = @workspace_id;
-
--- name: ListActiveListsByType :many
-SELECT id, name FROM lists WHERE workspace_id = @workspace_id AND type = sqlc.arg(type)::text AND deleted_at IS NULL ORDER BY name, id;
-
 -- name: InsertTypeField :one
 INSERT INTO type_fields (workspace_id, type_id, key, label, field_type, position, updated_at)
 VALUES (@workspace_id, @type_id, @key, @label, @field_type, @position, @now) RETURNING *;
@@ -62,9 +39,6 @@ WHERE id = @id AND workspace_id = @workspace_id RETURNING *;
 
 -- name: DeleteTypeField :exec
 DELETE FROM type_fields WHERE id = @id AND workspace_id = @workspace_id;
-
--- name: DeleteTypeFieldsOfType :exec
-DELETE FROM type_fields WHERE type_id = @type_id AND workspace_id = @workspace_id;
 
 -- name: NextTypeFieldPosition :one
 SELECT COALESCE(MAX(position) + 1, 0)::int FROM type_fields WHERE workspace_id = @workspace_id AND type_id = @type_id;
@@ -82,18 +56,9 @@ WHERE i.workspace_id = @workspace_id AND l.type = sqlc.arg(type)::text AND i.met
 -- name: ResetTypeFieldDefaults :exec
 UPDATE type_definitions
 SET default_sort_field = CASE WHEN default_sort_field = @key THEN NULL ELSE default_sort_field END,
-    default_pinned_fields = CASE
-      WHEN default_pinned_fields ? @key::text THEN default_pinned_fields - @key::text
-      ELSE default_pinned_fields
-    END,
     version = version + 1,
     updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id;
-
--- name: ResetListTypeFieldPins :exec
-UPDATE lists
-SET pinned_fields = NULL, version = version + 1, updated_at = @now
-WHERE workspace_id = @workspace_id AND type = sqlc.arg(type)::text AND pinned_fields ? @key::text;
 
 -- name: ResetListTypeFieldSort :exec
 UPDATE lists

@@ -19,7 +19,7 @@ func TestNoType_CreateListDefaultsToNull(t *testing.T) {
 		rec := e.call("POST", "/api/v1/lists", body, "")
 		wantStatus(t, rec, 201)
 		l := decode(t, rec)
-		if v, ok := l["type"]; !ok || v != nil || l["sort_mode"] != "manual" || l["pinned_fields"] != nil {
+		if v, ok := l["type"]; !ok || v != nil || l["sort_mode"] != "manual" {
 			t.Errorf("%s: list = %v", name, l)
 		}
 		if got := e.fetch("lists", l["id"].(string)); got["type"] != nil {
@@ -42,15 +42,12 @@ func TestNoType_ListRules(t *testing.T) {
 	for _, body := range map[string]string{
 		"price sort":    `{"name":"n","sort_mode":"price"}`,
 		"field sort":    `{"name":"n","sort_mode":"release_year"}`,
-		"pinned price":  `{"name":"n","pinned_fields":["price"]}`,
-		"pinned a key":  `{"name":"n","pinned_fields":["release_year"]}`,
 		"unknown field": `{"name":"n","sort_mode":"type_key"}`,
 	} {
 		wantProblem(t, e.call("POST", "/api/v1/lists", body, ""), 422, "validation_failed")
 	}
-	wantStatus(t, e.call("POST", "/api/v1/lists", `{"name":"n","sort_mode":"title","pinned_fields":[]}`, ""), 201)
+	wantStatus(t, e.call("POST", "/api/v1/lists", `{"name":"n","sort_mode":"title"}`, ""), 201)
 	l := e.list("Plain", nil)
-	wantProblem(t, e.call("PATCH", "/api/v1/lists/"+l["id"].(string), `{"pinned_fields":["price"]}`, etagOf("l", l)), 422, "validation_failed")
 	wantStatus(t, e.call("PATCH", "/api/v1/lists/"+l["id"].(string), `{"sort_mode":"updated"}`, etagOf("l", l)), 200)
 }
 
@@ -113,7 +110,7 @@ func TestNoType_ChangeTypeToAndFromNullClearsItems(t *testing.T) {
 	rec := e.call("PATCH", "/api/v1/lists/"+lid, `{"type":null,"sort_mode":"manual"}`, etagOf("l", l))
 	wantStatus(t, rec, 200)
 	l = decode(t, rec)
-	if v, ok := l["type"]; !ok || v != nil || l["pinned_fields"] != nil {
+	if v, ok := l["type"]; !ok || v != nil {
 		t.Fatalf("list after type null = %v", l)
 	}
 	got := e.fetchItem(it["id"])

@@ -4,8 +4,6 @@
 package lists
 
 import (
-	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,8 +17,6 @@ type CreateInput struct {
 	Description *string
 	DisplayMode string
 	SortMode    string
-	// PinnedFields nil = the type default.
-	PinnedFields *PinnedFields
 	// Icon and IconColor nil = the default icon (F012-B1).
 	Icon      *string
 	IconColor *string
@@ -33,8 +29,6 @@ type Patch struct {
 	Description Optional[string]
 	DisplayMode *string
 	SortMode    *string
-	// PinnedFields: Set with a nil Value resets to the type default.
-	PinnedFields Optional[PinnedFields]
 	// Icon and IconColor (F012-B1): a nil Value clears them. A changed icon that is not built-in clears the colour.
 	Icon      Optional[string]
 	IconColor Optional[string]
@@ -58,8 +52,6 @@ type List struct {
 	Description *string
 	DisplayMode string
 	SortMode    string
-	// PinnedFields is nil for the type default (F009-B2).
-	PinnedFields *PinnedFields
 	// Icon and IconColor are nil for the default icon (F012-B1).
 	Icon      *string
 	IconColor *string
@@ -77,11 +69,6 @@ type PathFolder struct {
 	Name string
 }
 
-// PinnedFields are the field keys a list pins in its rows, in order: the first is
-// the primary field, the second the secondary (F009-B2, replaces the under/right
-// slots of F-002). Non-nil once stored, and may be empty (pin nothing).
-type PinnedFields []string
-
 // TypeInfo is what the list rules read from a type definition.
 type TypeInfo struct {
 	Key              string
@@ -93,33 +80,4 @@ type TypeInfo struct {
 type FieldInfo struct {
 	Key       string
 	FieldType string
-}
-
-// pinnedFromJSON reads the stored column. NULL and anything unreadable are nil (the type default).
-func pinnedFromJSON(b []byte) *PinnedFields {
-	if b == nil {
-		return nil
-	}
-	var p PinnedFields
-	if json.Unmarshal(b, &p) != nil {
-		return nil
-	}
-	if p == nil {
-		p = PinnedFields{}
-	}
-	return &p
-}
-
-func pinnedToJSON(p *PinnedFields) ([]byte, error) {
-	if p == nil {
-		return nil, nil
-	}
-	if *p == nil {
-		return []byte("[]"), nil
-	}
-	b, err := json.Marshal(p)
-	if err != nil {
-		return nil, fmt.Errorf("marshal pinned fields: %w", err)
-	}
-	return b, nil
 }

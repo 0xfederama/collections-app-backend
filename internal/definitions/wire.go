@@ -15,15 +15,14 @@ type TypeFieldJSON struct {
 // TypeDefinitionJSON is the wire shape of a type with its fields (published as
 // the schema "TypeDefinition"). The nullable defaults are always present.
 type TypeDefinitionJSON struct {
-	Key                 string          `json:"key"`
-	Name                string          `json:"name"`
-	DefaultIcon         *string         `json:"default_icon" nullable:"true"`
-	AllowsPrice         bool            `json:"allows_price"`
-	DefaultSortField    *string         `json:"default_sort_field" nullable:"true" maxLength:"32"`
-	DefaultPinnedFields *[]string       `json:"default_pinned_fields" nullable:"true" maxItems:"3"`
-	IsLocked            bool            `json:"is_locked"`
-	Version             int             `json:"version"`
-	Fields              []TypeFieldJSON `json:"fields" nullable:"false"`
+	Key              string          `json:"key"`
+	Name             string          `json:"name"`
+	DefaultIcon      *string         `json:"default_icon" nullable:"true"`
+	AllowsPrice      bool            `json:"allows_price"`
+	DefaultSortField *string         `json:"default_sort_field" nullable:"true" maxLength:"32"`
+	IsLocked         bool            `json:"is_locked"`
+	Version          int             `json:"version"`
+	Fields           []TypeFieldJSON `json:"fields" nullable:"false"`
 }
 
 // TypeFieldDeletePreviewJSON is the count of item values a field delete removes
@@ -46,7 +45,7 @@ func typeJSON(t Type) TypeDefinitionJSON {
 	}
 	return TypeDefinitionJSON{
 		Key: t.Key, Name: t.Name, DefaultIcon: t.DefaultIcon, AllowsPrice: t.AllowsPrice,
-		DefaultSortField: t.DefaultSortField, DefaultPinnedFields: t.DefaultPinnedFields,
-		IsLocked: t.Locked, Version: t.Version, Fields: fields,
+		DefaultSortField: t.DefaultSortField,
+		IsLocked:         t.Locked, Version: t.Version, Fields: fields,
 	}
 }

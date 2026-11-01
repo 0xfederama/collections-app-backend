@@ -20,9 +20,7 @@ in step with it.
 | `updateSettings` | `markdown_history_limit` | 0 to 200 |
 | `updateSettings` | `trash_retention_days` | 1 to 365, or `null` |
 | `updateSettings` | `owned_streaming_services` | at most 64 entries; each `^[a-z][a-z0-9_]{0,63}$`; no duplicates |
-| `createType`, `updateType` | `name` | 1 to 100 characters |
-| `createType`, `updateType` | `default_sort_field` | at most 32 characters |
-| `createType`, `updateType` | `default_pinned_fields` | at most 3 entries, each at most 32 characters |
+| `updateList` | `type` | not empty when sent (`null` = no type) |
 | `createTypeField`, `updateTypeField` | `label` | 1 to 100 characters |
 | `createTypeField` | `type` | one of `text`, `number`, `date`, `boolean`, `link` |
 | `reorderTypeFields` | `keys` | unique strings |
@@ -59,10 +57,6 @@ schema carries the type and the nullability of each field.
   A path or query value that does not parse is answered `400 invalid_parameter`, never 422.
   A 422 that a service returns is possible on a body operation, and on `previewDeleteTypeField`
   for a locked field. Other GETs with path or query values never answer 422.
-- `createType` lists no `409`. A duplicate type key reaches the store and is answered as a
-  `500 internal` today, not as the `409` the old contract declared. That is an open defect.
-- `deleteType` lists no `409`. Deleting a type that a list uses is a `422 validation_failed`
-  on the field `type`.
 - The health probes list `500`, the answer of the recovery middleware for a panic. The old
   contract did not list it.
 

@@ -23,4 +23,4 @@ Owns the fixed list of online store provider keys a `stores` field on books can 
 
 - Fixed keys, in display order: `amazon`, `bookshop`, `apple_books`, `google_play_books`, `kobo`. Renaming one is a data migration. Migration 000023 stripped `openlibrary` from every item's stores.
 - No store links in responses (removed in API 0.17.0). Sending `store_links` in `metadata` is `400 unknown_field`.
-- The `stores` field is pinnable but never a sort key.
+- The `stores` field is never a sort key.

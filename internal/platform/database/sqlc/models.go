@@ -152,13 +152,14 @@ type Workspace struct {
 }
 
 type WorkspaceSetting struct {
-	WorkspaceID          uuid.UUID
-	StreamingCountryCode string
-	MarkdownHistoryLimit int32
-	Version              int32
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
-	TrashRetentionDays   *int32
-	MetadataLanguage     string
-	PreferredStore       string
+	WorkspaceID            uuid.UUID
+	StreamingCountryCode   string
+	MarkdownHistoryLimit   int32
+	Version                int32
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	TrashRetentionDays     *int32
+	MetadataLanguage       string
+	PreferredStore         string
+	OwnedStreamingServices []byte
 }

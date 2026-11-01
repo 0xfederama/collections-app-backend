@@ -198,8 +198,10 @@ CREATE TABLE public.workspace_settings (
     trash_retention_days integer,
     metadata_language text DEFAULT 'it-IT'::text NOT NULL,
     preferred_store text DEFAULT 'amazon'::text NOT NULL,
+    owned_streaming_services jsonb DEFAULT '[]'::jsonb NOT NULL,
     CONSTRAINT workspace_settings_markdown_history_limit_check CHECK (((markdown_history_limit >= 0) AND (markdown_history_limit <= 200))),
     CONSTRAINT workspace_settings_metadata_language_check CHECK ((metadata_language ~ '^[a-z]{2}(-[A-Z]{2})?$'::text)),
+    CONSTRAINT workspace_settings_owned_streaming_services_check CHECK (((jsonb_typeof(owned_streaming_services) = 'array'::text) AND (jsonb_array_length(owned_streaming_services) <= 64))),
     CONSTRAINT workspace_settings_preferred_store_check CHECK ((preferred_store = ANY (ARRAY['amazon'::text, 'bookshop'::text, 'apple_books'::text, 'google_play_books'::text, 'kobo'::text]))),
     CONSTRAINT workspace_settings_streaming_country_code_check CHECK ((streaming_country_code ~ '^[A-Z]{2}$'::text)),
     CONSTRAINT workspace_settings_trash_retention_days_check CHECK (((trash_retention_days IS NULL) OR ((trash_retention_days >= 1) AND (trash_retention_days <= 365))))

@@ -946,6 +946,12 @@ components:
             - it-IT
           pattern: ^[a-z]{2}(-[A-Z]{2})?$
           type: string
+        owned_streaming_services:
+          description: Provider keys of the streaming services the user owns; [] shows all.
+          items:
+            type: string
+          maxItems: 64
+          type: array
         preferred_store:
           enum:
             - amazon
@@ -980,6 +986,7 @@ components:
         - markdown_history_limit
         - trash_retention_days
         - preferred_store
+        - owned_streaming_services
         - version
       type: object
     StoreProvider:
@@ -1297,6 +1304,10 @@ components:
           type: integer
         metadata_language:
           type: string
+        owned_streaming_services:
+          items:
+            type: string
+          type: array
         preferred_store:
           type: string
         streaming_country_code:
@@ -3492,7 +3503,7 @@ paths:
       tags:
         - settings
     patch:
-      description: "Requires `If-Match` (`\"s-N\"`). Lowering `markdown_history_limit` prunes on the next save per item, not immediately. `trash_retention_days`: absent = unchanged, `null` = off, otherwise 1 to 365. `preferred_store` is the one default store of the workspace, never null."
+      description: "Requires `If-Match` (`\"s-N\"`). Lowering `markdown_history_limit` prunes on the next save per item, not immediately. `trash_retention_days`: absent = unchanged, `null` = off, otherwise 1 to 365. `preferred_store` is the one default store of the workspace, never null. `owned_streaming_services`: absent = unchanged, `[]` = show every service, otherwise the provider keys of the services the user owns."
       operationId: updateSettings
       parameters:
         - description: Settings ETag, "s-N".

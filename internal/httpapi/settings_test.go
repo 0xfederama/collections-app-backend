@@ -22,7 +22,9 @@ type settingsBody struct {
 	// TrashRetentionDays is nil (JSON null) when off, else the decoded float64.
 	TrashRetentionDays any    `json:"trash_retention_days"`
 	PreferredStore     string `json:"preferred_store"`
-	Version            int    `json:"version"`
+	// OwnedStreamingServices is never null: [] shows every service.
+	OwnedStreamingServices []string `json:"owned_streaming_services"`
+	Version                int      `json:"version"`
 }
 
 // settingsRouter returns a router on a fresh migrated database with the workspace bootstrapped.
@@ -66,7 +68,7 @@ func TestAT02_GetSettings(t *testing.T) {
 	if got := rec.Header().Get("ETag"); got != `"s-1"` {
 		t.Errorf("ETag = %q, want \"s-1\"", got)
 	}
-	want := settingsBody{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 20, PreferredStore: "amazon", Version: 1}
+	want := settingsBody{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 20, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 1}
 	if got := decodeSettings(t, rec); !reflect.DeepEqual(got, want) {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}
@@ -82,7 +84,7 @@ func TestAT02_PatchSettings(t *testing.T) {
 	if got := rec.Header().Get("ETag"); got != `"s-2"` {
 		t.Errorf("ETag = %q, want \"s-2\"", got)
 	}
-	want := settingsBody{WorkspaceName: "Home", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, PreferredStore: "amazon", Version: 2}
+	want := settingsBody{WorkspaceName: "Home", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 2}
 	if got := decodeSettings(t, rec); !reflect.DeepEqual(got, want) {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}
@@ -100,7 +102,7 @@ func TestAT02_PatchSettings(t *testing.T) {
 	}
 
 	get := do(t, h, req{method: "GET", path: "/api/v1/settings"})
-	if got, want := decodeSettings(t, get), (settingsBody{WorkspaceName: "Ours", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, PreferredStore: "amazon", Version: 3}); !reflect.DeepEqual(got, want) {
+	if got, want := decodeSettings(t, get), (settingsBody{WorkspaceName: "Ours", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 3}); !reflect.DeepEqual(got, want) {
 		t.Errorf("GET after patches = %+v, want %+v", got, want)
 	}
 }
@@ -276,4 +278,54 @@ func TestF016B4_GetStoreProviders(t *testing.T) {
 func TestAT02_PatchSettingsPreferredStoreWrongType(t *testing.T) {
 	h := settingsRouter(t)
 	wantProblem(t, patchSettings(t, h, `"s-1"`, `{"preferred_store":3}`), 400, "malformed_request")
+}
+
+// F-022 B3: the owned streaming services round-trip through GET and PATCH; an
+// absent list is unchanged, [] clears it, and a bad key is a 422 on the field.
+func TestF022B3_OwnedStreamingServicesHTTP(t *testing.T) {
+	h := settingsRouter(t)
+
+	rec := patchSettings(t, h, `"s-1"`, `{"owned_streaming_services":["netflix","primevideo"]}`)
+	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-2"` {
+		t.Fatalf("set: status = %d ETag = %q body=%s", rec.Code, rec.Header().Get("ETag"), rec.Body)
+	}
+	want := []string{"netflix", "primevideo"}
+	if got := decodeSettings(t, rec).OwnedStreamingServices; !reflect.DeepEqual(got, want) {
+		t.Errorf("PATCH answered %v, want %v", got, want)
+	}
+	get := decodeSettings(t, do(t, h, req{method: "GET", path: "/api/v1/settings"}))
+	if !reflect.DeepEqual(get.OwnedStreamingServices, want) || get.Version != 2 {
+		t.Errorf("GET = %+v, want the list at version 2", get)
+	}
+
+	// Absent: the list is kept.
+	if rec := patchSettings(t, h, `"s-2"`, `{"markdown_history_limit":5}`); rec.Code != 200 {
+		t.Fatalf("limit only: %d %s", rec.Code, rec.Body)
+	}
+	if got := decodeSettings(t, do(t, h, req{method: "GET", path: "/api/v1/settings"})); !reflect.DeepEqual(got.OwnedStreamingServices, want) {
+		t.Errorf("after an unrelated PATCH = %v, want the list kept", got.OwnedStreamingServices)
+	}
+
+	// Empty clears it: the answer is [] and not null.
+	rec = patchSettings(t, h, `"s-3"`, `{"owned_streaming_services":[]}`)
+	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-4"` {
+		t.Fatalf("clear: status = %d ETag = %q body=%s", rec.Code, rec.Header().Get("ETag"), rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), `"owned_streaming_services":[]`) {
+		t.Errorf("body = %s, want owned_streaming_services as []", rec.Body)
+	}
+
+	// Bad keys and duplicates are rejected on the field, and nothing changes.
+	for _, body := range []string{`{"owned_streaming_services":["Netflix"]}`, `{"owned_streaming_services":["hulu","hulu"]}`} {
+		p := wantProblem(t, patchSettings(t, h, `"s-4"`, body), 422, "validation_failed")
+		if len(p.Errors) != 1 || !strings.Contains(p.Errors[0].Field, "owned_streaming_services") {
+			t.Errorf("errors = %+v, want one on owned_streaming_services", p.Errors)
+		}
+	}
+	if got := decodeSettings(t, do(t, h, req{method: "GET", path: "/api/v1/settings"})); got.Version != 4 || len(got.OwnedStreamingServices) != 0 {
+		t.Errorf("after rejected lists = %+v, want version 4 and no list", got)
+	}
+
+	// A wrong JSON type is rejected by the body decoder.
+	wantProblem(t, patchSettings(t, h, `"s-4"`, `{"owned_streaming_services":"netflix"}`), 400, "malformed_request")
 }

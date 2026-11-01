@@ -44,7 +44,8 @@ func Register(api huma.API, log *slog.Logger, svc *Service, reader settingsReade
 		Summary: "Update workspace settings",
 		Description: "Requires `If-Match` (`\"s-N\"`). Lowering `markdown_history_limit` prunes on the next save per item, not immediately. " +
 			"`trash_retention_days`: absent = unchanged, `null` = off, otherwise 1 to 365. " +
-			"`preferred_store` is the one default store of the workspace, never null.",
+			"`preferred_store` is the one default store of the workspace, never null. " +
+			"`owned_streaming_services`: absent = unchanged, `[]` = show every service, otherwise the provider keys of the services the user owns.",
 		Errors: []int{http.StatusBadRequest, http.StatusPreconditionFailed, http.StatusRequestEntityTooLarge,
 			http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
 	}, httpserver.Op(log, h.update))
@@ -69,7 +70,9 @@ type SettingsJSON struct {
 	// TrashRetentionDays is always present: null when the automatic purge is off.
 	TrashRetentionDays *int   `json:"trash_retention_days" nullable:"true" minimum:"1" maximum:"365"`
 	PreferredStore     string `json:"preferred_store" enum:"amazon,bookshop,apple_books,google_play_books,kobo"`
-	Version            int    `json:"version"`
+	// OwnedStreamingServices is always present: [] means every service is shown.
+	OwnedStreamingServices []string `json:"owned_streaming_services" nullable:"false" maxItems:"64" doc:"Provider keys of the streaming services the user owns; [] shows all."`
+	Version                int      `json:"version"`
 }
 
 // SettingsOutput is the settings with their ETag ("s-N").
@@ -90,33 +93,41 @@ type UpdateSettingsRequest struct {
 	// TrashRetentionDays: absent leaves it, null turns it off, otherwise 1 to 365.
 	TrashRetentionDays httpserver.Optional[int] `json:"trash_retention_days,omitempty"`
 	PreferredStore     *string                  `json:"preferred_store,omitempty"`
+	// OwnedStreamingServices: absent leaves it, [] clears it. Values are checked by the service.
+	OwnedStreamingServices *[]string `json:"owned_streaming_services,omitempty"`
 }
 
 // patch maps the PATCH body to the service input.
 func (r UpdateSettingsRequest) patch() SettingsPatch {
 	return SettingsPatch{
-		WorkspaceName:        r.WorkspaceName,
-		StreamingCountryCode: r.StreamingCountryCode,
-		MetadataLanguage:     r.MetadataLanguage,
-		MarkdownHistoryLimit: r.MarkdownHistoryLimit,
-		TrashRetentionDays:   Optional[int]{Set: r.TrashRetentionDays.Set, Value: r.TrashRetentionDays.Value},
-		PreferredStore:       r.PreferredStore,
+		WorkspaceName:          r.WorkspaceName,
+		StreamingCountryCode:   r.StreamingCountryCode,
+		MetadataLanguage:       r.MetadataLanguage,
+		MarkdownHistoryLimit:   r.MarkdownHistoryLimit,
+		TrashRetentionDays:     Optional[int]{Set: r.TrashRetentionDays.Set, Value: r.TrashRetentionDays.Value},
+		PreferredStore:         r.PreferredStore,
+		OwnedStreamingServices: r.OwnedStreamingServices,
 	}
 }
 
 func (h *handler) output(s Settings) *SettingsOutput {
+	owned := s.OwnedStreamingServices
+	if owned == nil {
+		owned = []string{}
+	}
 	return &SettingsOutput{
 		ETag: etag.Format(etag.Settings, s.Version),
 		Body: SettingsJSON{
-			WorkspaceName:        s.WorkspaceName,
-			StreamingCountryCode: s.StreamingCountryCode,
-			MetadataLanguage:     s.MetadataLanguage,
-			LookupAvailable:      h.avail.Lookup,
-			BookLookupAvailable:  h.avail.BookLookup,
-			MarkdownHistoryLimit: s.MarkdownHistoryLimit,
-			TrashRetentionDays:   s.TrashRetentionDays,
-			PreferredStore:       s.PreferredStore,
-			Version:              s.Version,
+			WorkspaceName:          s.WorkspaceName,
+			StreamingCountryCode:   s.StreamingCountryCode,
+			MetadataLanguage:       s.MetadataLanguage,
+			LookupAvailable:        h.avail.Lookup,
+			BookLookupAvailable:    h.avail.BookLookup,
+			MarkdownHistoryLimit:   s.MarkdownHistoryLimit,
+			TrashRetentionDays:     s.TrashRetentionDays,
+			PreferredStore:         s.PreferredStore,
+			OwnedStreamingServices: owned,
+			Version:                s.Version,
 		},
 	}
 }

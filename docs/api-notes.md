@@ -19,6 +19,7 @@ in step with it.
 | `updateSettings` | `streaming_country_code` | `^[A-Z]{2}$` |
 | `updateSettings` | `markdown_history_limit` | 0 to 200 |
 | `updateSettings` | `trash_retention_days` | 1 to 365, or `null` |
+| `updateSettings` | `owned_streaming_services` | at most 64 entries; each `^[a-z][a-z0-9_]{0,63}$`; no duplicates |
 | `createType`, `updateType` | `name` | 1 to 100 characters |
 | `createType`, `updateType` | `default_sort_field` | at most 32 characters |
 | `createType`, `updateType` | `default_pinned_fields` | at most 3 entries, each at most 32 characters |

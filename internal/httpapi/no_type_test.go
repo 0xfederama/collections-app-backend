@@ -139,13 +139,7 @@ func TestNoType_ChangeTypeToAndFromNullClearsItems(t *testing.T) {
 	wantStatus(t, e.patchItem(got, `{"metadata":{"release_year":1999}}`), 200)
 }
 
-func TestNoType_GenericIsAnOrdinaryKeyNow(t *testing.T) {
+func TestNoType_GenericIsNotAType(t *testing.T) {
 	e := newTreeEnv(t)
 	wantProblem(t, e.call("POST", "/api/v1/lists", `{"name":"n","type":"generic"}`, ""), 422, "validation_failed")
-	rec := e.call("POST", "/api/v1/types", `{"name":"Generic"}`, "")
-	wantStatus(t, rec, 201)
-	if decode(t, rec)["key"] != "generic" {
-		t.Errorf("type = %v", decode(t, rec))
-	}
-	wantStatus(t, e.call("POST", "/api/v1/lists", `{"name":"n","type":"generic"}`, ""), 201)
 }

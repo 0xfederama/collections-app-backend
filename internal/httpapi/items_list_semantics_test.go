@@ -35,13 +35,9 @@ func (e *treeEnv) semItem(listID, title string, metadata obj) obj {
 	return e.newItem(listID, string(b))
 }
 
-// semType creates a custom type with the given fields ({label, type} each) and returns its key.
-func (e *treeEnv) semType(name string, fields ...obj) string {
+// semField adds custom fields ({label, type} each) to the built-in type key and returns the key.
+func (e *treeEnv) semField(key string, fields ...obj) string {
 	e.t.Helper()
-	b, _ := json.Marshal(obj{"name": name})
-	rec := e.call(http.MethodPost, "/api/v1/types", string(b), "")
-	wantStatus(e.t, rec, http.StatusCreated)
-	key := decode(e.t, rec)["key"].(string)
 	for _, f := range fields {
 		body, _ := json.Marshal(f)
 		typ := e.typ(key)
@@ -113,9 +109,9 @@ func TestSemanticsSearchQ(t *testing.T) {
 	e.semItem(films, "snakeXcase", nil)
 	e.semItem(films, "Heat", obj{"director": "Michael Mann"})
 
-	// A custom type with a director text field: its director is not searched (movie only).
-	gadgets := e.semType("Gadgets", obj{"label": "Director", "type": "text"})
-	gizmos := e.listOfType("Gizmos", nil, gadgets)["id"].(string)
+	// A TV show with a custom director text field: its director is not searched (movie only).
+	shows := e.semField("tv_show", obj{"label": "Director", "type": "text"})
+	gizmos := e.listOfType("Gizmos", nil, shows)["id"].(string)
 	e.semItem(gizmos, "Gizmo", obj{"director": "Wachowski"})
 
 	tests := []struct {
@@ -223,7 +219,7 @@ func TestSemanticsNumberFilter(t *testing.T) {
 
 func TestSemanticsDateFilter(t *testing.T) {
 	e := newTreeEnv(t)
-	concerts := e.semType("Concerts", obj{"label": "Date", "type": "date"})
+	concerts := e.semField("vehicle", obj{"label": "Date", "type": "date"})
 	list := e.listOfType("Shows", nil, concerts)["id"].(string)
 	e.semItem(list, "Spring", obj{"date": "2023-05-01"})
 	e.semItem(list, "New year", obj{"date": "2024-01-01"})
@@ -375,7 +371,7 @@ func TestSemanticsSorts(t *testing.T) {
 	})
 
 	t.Run("date sorts as text, no value last, ties by id", func(t *testing.T) {
-		concerts := e.semType("Concerts", obj{"label": "Date", "type": "date"})
+		concerts := e.semField("vehicle", obj{"label": "Date", "type": "date"})
 		list := e.listOfType("Shows", nil, concerts)["id"].(string)
 		late := e.semItem(list, "Late", obj{"date": "2024-05-01"})
 		early := e.semItem(list, "Early", obj{"date": "2023-01-01"})

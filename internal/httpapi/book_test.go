@@ -54,7 +54,6 @@ func TestF016B2_BookItemValidation(t *testing.T) {
 
 func TestF016B2_BookTypeIsLocked(t *testing.T) {
 	e := newTreeEnv(t)
-	wantProblem(t, e.call(http.MethodPatch, "/api/v1/types/book", `{"name":"Novels"}`, etagOf("k", e.typ("book"))), http.StatusUnprocessableEntity, "validation_failed")
 	wantProblem(t, e.call(http.MethodDelete, "/api/v1/types/book/fields/isbn", "", `"kf-1"`), http.StatusUnprocessableEntity, "validation_failed")
 }
 

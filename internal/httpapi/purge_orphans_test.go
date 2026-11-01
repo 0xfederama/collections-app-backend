@@ -1,11 +1,8 @@
 package httpapi_test
 
 import (
-	"net/http"
 	"testing"
 	"time"
-
-	"github.com/google/uuid"
 
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
@@ -70,16 +67,6 @@ func (e *imageEnv) wantNoPurgeLeftovers() {
 		e.t.Fatalf("item_content_versions: %d rows left, want 0", n)
 	}
 	e.wantNoFiles()
-}
-
-// typeID returns the id of the custom or built-in type with the given key.
-func (e *treeEnv) typeID(key string) uuid.UUID {
-	e.t.Helper()
-	var id uuid.UUID
-	if err := e.pool.QueryRow(e.t.Context(), `SELECT id FROM type_definitions WHERE workspace_id = $1 AND key = $2`, e.ws, key).Scan(&id); err != nil {
-		e.t.Fatal(err)
-	}
-	return id
 }
 
 func TestB2_PurgeLeavesNoOrphans(t *testing.T) {
@@ -152,68 +139,4 @@ func TestB2_PurgeKeepsOtherTrees(t *testing.T) {
 		t.Fatalf("beta content = %v", got)
 	}
 	e.fetchItem(b.withImage["id"])
-}
-
-// rowCount runs a count query on the treeEnv's database.
-func (e *treeEnv) rowCount(sql string, args ...any) int {
-	e.t.Helper()
-	var n int
-	if err := e.pool.QueryRow(e.t.Context(), sql, args...).Scan(&n); err != nil {
-		e.t.Fatal(err)
-	}
-	return n
-}
-
-func TestB2_TypeDeleteRemovesItsFields(t *testing.T) {
-	e := newTreeEnv(t)
-	base := e.rowCount(`SELECT count(*) FROM type_fields WHERE workspace_id = $1`, e.ws)
-
-	created := e.call(http.MethodPost, "/api/v1/types", `{"name":"Board game"}`, "")
-	wantStatus(t, created, http.StatusCreated)
-	typ := decode(t, created)
-	wantStatus(t, e.call(http.MethodPost, "/api/v1/types/board_game/fields", `{"label":"Rating","type":"number"}`, etagOf("k", typ)), http.StatusCreated)
-	typ = e.typ("board_game")
-	wantStatus(t, e.call(http.MethodPost, "/api/v1/types/board_game/fields", `{"label":"Notes","type":"text"}`, etagOf("k", typ)), http.StatusCreated)
-	typ = e.typ("board_game")
-
-	typeID := e.typeID("board_game")
-	if n := e.rowCount(`SELECT count(*) FROM type_fields WHERE type_id = $1`, typeID); n != 2 {
-		t.Fatalf("fields before delete = %d, want 2", n)
-	}
-	wantStatus(t, e.call(http.MethodDelete, "/api/v1/types/board_game", "", etagOf("k", typ)), http.StatusNoContent)
-	if n := e.rowCount(`SELECT count(*) FROM type_fields WHERE type_id = $1`, typeID); n != 0 {
-		t.Fatalf("fields of deleted type = %d, want 0", n)
-	}
-	if n := e.rowCount(`SELECT count(*) FROM type_definitions WHERE id = $1`, typeID); n != 0 {
-		t.Fatalf("deleted type rows = %d, want 0", n)
-	}
-	if n := e.rowCount(`SELECT count(*) FROM type_fields WHERE workspace_id = $1`, e.ws); n != base {
-		t.Fatalf("type_fields = %d, want the %d built-in ones", n, base)
-	}
-
-	// Deleting one custom field removes only that row.
-	created = e.call(http.MethodPost, "/api/v1/types", `{"name":"Gizmo"}`, "")
-	wantStatus(t, created, http.StatusCreated)
-	typ = decode(t, created)
-	first := e.call(http.MethodPost, "/api/v1/types/gizmo/fields", `{"label":"Rating","type":"number"}`, etagOf("k", typ))
-	wantStatus(t, first, http.StatusCreated)
-	field := decode(t, first)
-	typ = e.typ("gizmo")
-	wantStatus(t, e.call(http.MethodPost, "/api/v1/types/gizmo/fields", `{"label":"Notes","type":"text"}`, etagOf("k", typ)), http.StatusCreated)
-
-	gizmoID := e.typeID("gizmo")
-	wantStatus(t, e.call(http.MethodDelete, "/api/v1/types/gizmo/fields/rating", "", etagOf("kf", field)), http.StatusOK)
-	if n := e.rowCount(`SELECT count(*) FROM type_fields WHERE type_id = $1`, gizmoID); n != 1 {
-		t.Fatalf("gizmo fields after field delete = %d, want 1", n)
-	}
-	var key string
-	if err := e.pool.QueryRow(t.Context(), `SELECT key FROM type_fields WHERE type_id = $1`, gizmoID).Scan(&key); err != nil {
-		t.Fatal(err)
-	}
-	if key != "notes" {
-		t.Fatalf("remaining field = %q, want notes", key)
-	}
-	if n := e.rowCount(`SELECT count(*) FROM type_definitions WHERE id = $1`, gizmoID); n != 1 {
-		t.Fatalf("type row after field delete = %d, want 1", n)
-	}
 }

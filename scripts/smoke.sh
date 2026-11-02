@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # F003-B1: API smoke test over HTTP against a running stack (curl + jq only).
-# Defaults to the ./deploy/test stack (fresh, never dev data). Run it with `make smoke`.
+# Defaults to the ./deploy/dev stack (fresh). Never run it against ./deploy/test: that is the user's manual environment. Run it with `make smoke`.
 # It creates its own uniquely named data and removes it on exit, whatever the outcome.
 set -euo pipefail
 

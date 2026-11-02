@@ -49,7 +49,7 @@ lint-scripts: ## shellcheck every script through its pinned Docker image
 test-backup: ## AT-17 backup/restore round trip on an isolated compose project (Docker, jq, curl, nc; not part of check)
 	./scripts/test-backup.sh
 
-smoke: ## API smoke test over HTTP (curl, jq) against a running stack; API_URL defaults to http://localhost:8090 (./deploy/test up -d --fresh); not part of check
+smoke: ## API smoke test over HTTP (curl, jq) against a running stack; API_URL defaults to http://localhost:8090 (./deploy/dev up -d --fresh; never ./deploy/test); not part of check
 	./scripts/smoke.sh
 
 check: fmt-check lint check-spec lint-api lint-scripts check-generate test check-compose check-docker ## All local gates

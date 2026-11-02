@@ -2,7 +2,7 @@
 
 ## Purpose
 
-HTTP smoke test of a running stack: one folder, two lists, items, image upload and thumbnail, search, trash, restore and purge, checked with `curl` and `jq`. Run by hand against `./deploy/test`, never against dev data. It is not part of `make check`.
+HTTP smoke test of a running stack: one folder, two lists, items, image upload and thumbnail, search, trash, restore and purge, checked with `curl` and `jq`. Run against `./deploy/dev up -d --fresh`; never against `./deploy/test` (the user's manual environment). It is not part of `make check`.
 
 ## Key files
 
@@ -18,7 +18,7 @@ HTTP smoke test of a running stack: one folder, two lists, items, image upload a
 
 ## Gotchas
 
-- Start the stack first: `./deploy/test up -d --fresh` (ports 5183/8090).
+- Start the stack first: `./deploy/dev up -d --fresh` (ports 5183/8090).
 - Every name carries a `smoke-<pid>-<time>` prefix. Cleanup trashes the test folder and purges trash batches whose `root_id` is that folder, so only the first 200 trash entries are scanned.
 - Cleanup runs on any exit, including Ctrl-C and TERM, and is best effort: a failed cleanup leaves the `smoke-…` folder active or in the trash.
 - The 8x8 PNG is embedded as base64 in the script; no fixture file is needed.

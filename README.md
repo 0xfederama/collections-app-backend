@@ -7,7 +7,7 @@ This repo is the `backend/` submodule of the parent repo [collections-app](https
 next to `frontend-web/` (the React app, repo `collections-app-frontend-web`). From the parent folder,
 `./deploy/dev up -d` starts both together (see the parent README). Everything below also works standalone in this repo.
 
-There is no CI. Quality gates run locally with `make check` (see below).
+Quality gates run locally with `make check` (see below); the only CI is the release image build.
 
 ## What exists today
 
@@ -98,7 +98,7 @@ This starts `db`, runs `migrate` once, then starts `api` on `http://127.0.0.1:80
 
 `make check` = gofmt check, golangci-lint (including goimports and the depguard layer rules), the Redocly spec lint, shellcheck on `scripts/` (pinned Docker image), generated-code and API-spec drift checks, `go test ./...` (testcontainers Postgres, including the architecture test), a check that compose publishes ports on `127.0.0.1` only, and a Docker image build.
 
-Run `make smoke` after a deploy, a compose change or a migration change, and before a release. It walks one end-to-end flow over HTTP (folder, list, item, image, sort, search, trash, restore, purge) and removes what it created. Point it at the test stack, never at dev data: `./deploy/test up -d --fresh`, then `make smoke` (or `API_URL=http://host:port make smoke`).
+Run `make smoke` after a deploy, a compose change or a migration change, and before a release. It walks one end-to-end flow over HTTP (folder, list, item, image, sort, search, trash, restore, purge) and removes what it created. Point it at a fresh dev stack, never at `./deploy/test` (the user's manual environment): `./deploy/dev up -d --fresh`, then `make smoke` (or `API_URL=http://host:port make smoke`).
 
 ## Backup and restore
 
@@ -137,6 +137,13 @@ make run                                                 # uses .env, DATA_DIR=.
 error. To change it, change the handler types or registration, run `make spec`, and commit both. `make check` fails if the
 committed spec is stale (`check-spec`) and lints it with Redocly. Constraints the spec does not carry are listed in
 `docs/api-notes.md`. Contract changes follow `design-docs/AGENT_WORKFLOW.md` §6.
+
+## Releases
+
+Every version tag `vX.Y.Z` runs `.github/workflows/release-image.yml`: it builds the API image for linux/arm64 and
+linux/amd64 and pushes it to GHCR as the private package `ghcr.io/0xfederama/collections-app-backend:X.Y.Z`. A tag is
+not a deploy. Publishing a GitHub Release (marked latest) for that tag is the prod approval; the Pi then deploys it
+(D-117). Orchestrators may leave a draft release, never publish it.
 
 ## Configuration
 

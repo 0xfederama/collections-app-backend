@@ -21,7 +21,7 @@ Go REST API + PostgreSQL for the Collection App. The API contract `api/openapi.y
 | New migration | `make migration name=<snake_case>` |
 | Start everything on 127.0.0.1:8080 / stop / logs | `docker compose up --build` (needs `.env` with `POSTGRES_PASSWORD`) / `docker compose down` / `docker compose logs -f api` |
 | Backup round trip (not in `check`) | `make test-backup` |
-| API smoke over HTTP (against `./deploy/test up -d --fresh` or a compose stack; `API_URL`) | `make smoke` |
+| API smoke over HTTP (against `./deploy/dev up -d --fresh` or a compose stack; `API_URL`) | `make smoke` |
 | Vulnerabilities / dead code | `make audit` / `make deadcode` |
 | Reset dev containers, volumes, `./data` | `make reset-dev` |
 

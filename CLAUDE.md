@@ -12,7 +12,7 @@ Go REST API + PostgreSQL for the Collection App. The API contract `api/openapi.y
 - Update this file in the same PR when commands, layout, conventions or gotchas change. Keep it under ~200 lines.
 - Scope fence: no auth, AI, public-API features, WebSockets, ORM, Redis or queues.
 
-## Commands (no CI: the gates run locally)
+## Commands (gates run locally; CI only builds the release image on a `vX.Y.Z` tag, see README "Releases")
 | Purpose | Command |
 |---|---|
 | All checks (gofmt, golangci-lint with layer rules, spec drift + Redocly lint, sqlc drift, tests incl. migrations and architecture test, compose exposure, shellcheck, Docker build) | `make check` |

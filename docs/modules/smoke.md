@@ -22,4 +22,4 @@ HTTP smoke test of a running stack: one folder, two lists, items, image upload a
 - Every name carries a `smoke-<pid>-<time>` prefix. Cleanup trashes the test folder and purges trash batches whose `root_id` is that folder, so only the first 200 trash entries are scanned.
 - Cleanup runs on any exit, including Ctrl-C and TERM, and is best effort: a failed cleanup leaves the `smoke-…` folder active or in the trash.
 - The 8x8 PNG is embedded as base64 in the script; no fixture file is needed.
-- Not wired into `make check` (no CI, D-031); run it when the change touches the HTTP flow.
+- Not wired into `make check` (gates run locally, D-031); run it when the change touches the HTTP flow.

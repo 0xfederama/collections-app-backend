@@ -14,7 +14,9 @@ Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and 
 - `db/queries/schema.sql`: smoke query, sqlc input
 - `db/queries/workspace.sql`: workspace bootstrap and settings queries (see `workspace` module)
 - `db/queries/lookup_imports.sql`: lookup provenance queries (see [lookup](lookup.md))
-- `internal/platform/testdb/testdb.go`: test-only shared testcontainers Postgres, `NewMigrated`, `Terminate`
+- `db/migrations.go`: package `db`, embeds `migrations/*.sql` (`db.Migrations()`); the Dockerfile copies `db/`
+- `internal/platform/database/migrate.go`: `Migrate`, used by `api migrate` and by `testdb`
+- `internal/platform/testdb/testdb.go`: test-only shared testcontainers Postgres, `NewMigrated` (same embedded migrations as the binary), `Terminate`
 - `sqlc.yaml`: sqlc config (pgx/v5, uuid to google/uuid, timestamptz to time.Time)
 - `internal/platform/database/sqlc/`: generated code, never edit (`sqlc.yaml` output)
 - `internal/platform/database/migrations_test.go`, `schema_test.go`: up/down/up cycle, constraint names, SQLSTATE, D-051
@@ -24,7 +26,9 @@ Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and 
 - `NewPool(ctx, databaseURL string, maxConns int32) (*pgxpool.Pool, error)`: parses URL, sets `MaxConns`, pings; closes the pool on ping failure
 - `TxBeginner`: `Begin(ctx) (pgx.Tx, error)`; satisfied by `*pgxpool.Pool`
 - `InTx(ctx, db TxBeginner, fn func(*sqlc.Queries) error) error`: commits if `fn` returns nil, rolls back on error or panic
-- `make migrate`: applies migrations; `make generate`: runs `go tool sqlc generate`
+- `Migrate(fsys fs.FS, dir, databaseURL string) (uint, error)`: applies pending migrations through golang-migrate (`schema_migrations` table, compatible with the migrate CLI), returns the version; no change is not an error, a dirty state is
+- `/app/api migrate`: reads only `DATABASE_URL`, applies migrations, exits 0 without starting the server; the server never migrates at startup
+- `make migrate`: runs the compose `migrate` service (the API image with `migrate`); `make generate`: runs `go tool sqlc generate`
 
 ## Gotchas
 

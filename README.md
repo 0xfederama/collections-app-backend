@@ -46,7 +46,7 @@ internal/lookup        metadata lookup (TMDB, Open Library, Hardcover gap-fill):
 internal/stores        fixed online store provider keys (Huma)
 internal/integrations  bounded upstream clients: tmdb, openlibrary, hardcover
 api/openapi.yaml       the canonical API contract (spec wins over design-docs/API.md)
-db/migrations          golang-migrate files: one baseline `000001_init` (up/down); later changes append as new numbered files
+db/migrations          golang-migrate files, embedded in the binary by `db/migrations.go`: one baseline `000001_init` (up/down); later changes append as new numbered files
 db/queries             sqlc queries (generated into internal/platform/database/sqlc)
 scripts/               backup, restore, verify, compose exposure check, reset-dev
 docs/                  one short doc per module
@@ -65,7 +65,7 @@ distroless runtime image has no shell or curl.
 | Git, `gh` | for PRs |
 | `jq`, optionally `zstd` | for the backup scripts |
 
-Postgres 18.6 and golang-migrate 4.20.1 run as pinned Docker images, so there's nothing else to install.
+Postgres 18.6 runs as a pinned Docker image (golang-migrate is a Go library inside the API binary; its 4.20.1 image is used only by `make migration`), so there's nothing else to install.
 
 ## Start
 
@@ -74,7 +74,7 @@ cp .env.example .env   # set POSTGRES_PASSWORD (URL-safe characters only)
 docker compose up --build
 ```
 
-This starts `db`, runs `migrate` once, then starts `api` on `http://127.0.0.1:8080` (loopback only, never exposed to the LAN).
+This starts `db`, runs `migrate` once (the API image's `/app/api migrate`: applies the embedded migrations to `DATABASE_URL` and exits 0), then starts `api` on `http://127.0.0.1:8080` (loopback only, never exposed to the LAN).
 
 | Task | Command |
 |---|---|
@@ -116,7 +116,7 @@ scripts/restore.sh ./backups/<timestamp> --force   # deletes the current data fi
 - `restore.sh` checks the checksums in the manifest, restores the database and the images, verifies the result, applies any newer migrations and starts the `api`. It refuses non-empty volumes unless you pass `--force`.
 - `verify-restore.sh` compares row counts per table, the latest Markdown body of every item and every attachment (original and thumbnail present, original checksum matching) with the manifest, and exits non-zero with a list of what differs. Run it right after a restore: edits made since the backup show up as differences.
 - Run the scripts from any directory; set `COMPOSE_PROJECT_NAME` if your stack uses a non-default project name.
-- **Back up before every migration in production** (upgrade steps: backup, pull new images, `migrate up`, restart, check `/readyz`). To roll back, restore the backup taken before the upgrade: a migration `down` does not bring the files back and can lose data.
+- **Back up before every migration in production** (upgrade steps: backup, pull new images, run the image's `/app/api migrate`, restart; the server never migrates at startup, check `/readyz`). To roll back, restore the backup taken before the upgrade: a migration `down` does not bring the files back and can lose data.
 - **Retention:** keep at least 7 daily and 4 weekly copies **off the device** (another disk, NAS or cloud of your choice). Backups hold all your data and the images unencrypted; keep them private and never commit them (`backups/` is gitignored).
 - Only restore backups you made yourself: the manifest checksums detect corruption, not a malicious archive.
 

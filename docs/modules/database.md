@@ -19,6 +19,7 @@ Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and 
 - `internal/platform/testdb/testdb.go`: test-only shared testcontainers Postgres, `NewMigrated` (same embedded migrations as the binary), `Terminate`
 - `sqlc.yaml`: sqlc config (pgx/v5, uuid to google/uuid, timestamptz to time.Time)
 - `internal/platform/database/sqlc/`: generated code, never edit (`sqlc.yaml` output)
+- `internal/platform/database/migrate_test.go`: rollback of a failing file, dirty refusal, idempotence, and a check that no file uses statements that cannot run in a transaction
 - `internal/platform/database/migrations_test.go`, `schema_test.go`: up/down/up cycle, constraint names, SQLSTATE, D-051
 
 ## Interfaces
@@ -26,7 +27,7 @@ Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and 
 - `NewPool(ctx, databaseURL string, maxConns int32) (*pgxpool.Pool, error)`: parses URL, sets `MaxConns`, pings; closes the pool on ping failure
 - `TxBeginner`: `Begin(ctx) (pgx.Tx, error)`; satisfied by `*pgxpool.Pool`
 - `InTx(ctx, db TxBeginner, fn func(*sqlc.Queries) error) error`: commits if `fn` returns nil, rolls back on error or panic
-- `Migrate(fsys fs.FS, dir, databaseURL string) (uint, error)`: applies pending migrations through golang-migrate (`schema_migrations` table, compatible with the migrate CLI), returns the version; no change is not an error, a dirty state is
+- `Migrate(fsys fs.FS, dir, databaseURL string) (uint, error)`: applies pending migrations through golang-migrate (`schema_migrations` table, compatible with the migrate CLI), returns the version; no change is not an error. Each file runs as one transaction (D-118): a failing file rolls back and Migrate clears golang-migrate's dirty flag, so the version stays at the last good file. A database already dirty on entry is refused (`ErrDirty`, nothing applied)
 - `/app/api migrate`: reads only `DATABASE_URL`, applies migrations, exits 0 without starting the server; the server never migrates at startup
 - `make migrate`: runs the compose `migrate` service (the API image with `migrate`); `make generate`: runs `go tool sqlc generate`
 

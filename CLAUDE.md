@@ -12,7 +12,7 @@ Go REST API + PostgreSQL for the Collection App. The API contract `api/openapi.y
 - Update this file in the same PR when commands, layout, conventions or gotchas change. Keep it under ~200 lines.
 - Scope fence: no auth, AI, public-API features, WebSockets, ORM, Redis or queues.
 
-## Commands (gates run locally; CI only builds the release image on a `vX.Y.Z` tag, see README "Releases")
+## Commands (gates run locally; CI builds the release image on a `vX.Y.Z` tag and runs the expand/contract check, see README "Releases")
 | Purpose | Command |
 |---|---|
 | All checks (gofmt, golangci-lint with layer rules, spec drift + Redocly lint, sqlc drift, tests incl. migrations and architecture test, compose exposure, shellcheck, Docker build) | `make check` |
@@ -32,7 +32,8 @@ Package by feature, one direction: **handler → service → repository → data
 - `internal/platform/{database,etag,clock,config,testdb,problem,scope,httpserver,logs,archtest}`: shared plumbing. `internal/apperr`: typed domain errors (no HTTP); `platform/problem` is the only mapper to RFC 9457 problem+json and owns the table of error codes.
 - `internal/integrations/{tmdb,openlibrary,hardcover}`: provider clients (no DB). `internal/storage`: `FileStore` on `os.Root`.
 - **Layer rules are enforced** by golangci `depguard` (per file) and `platform/archtest/layers_test.go`: do not weaken them. A feature never imports another feature's handler/repository; cross-feature needs go through a small interface declared by the consumer and wired in `httpapi/router.go`.
-- Migrations: `db/migrations` (baseline `000001_init`, then append), embedded by `db/migrations.go` and applied only by `/app/api migrate` (compose `migrate` service; the server never migrates). No triggers, no PL/pgSQL, no `ON DELETE CASCADE`: deletes are explicit and children first. Queries: `db/queries/<feature>.sql`, generated code in `internal/platform/database/sqlc` (never edit).
+- Migrations: `db/migrations` (baseline `000001_init`, then append), embedded by `db/migrations.go` and applied only by `/app/api migrate` (compose `migrate` service; the server never migrates). No triggers, no PL/pgSQL, no `ON DELETE CASCADE`: deletes are explicit and children first.
+- **Migrations are expand/contract (D-118, `[CRUCIAL]`)**: the previous release's API must keep working on the new schema, because rollback means running the old version on the newer schema (no down migrations, no restore). Allowed: new tables, nullable or defaulted columns, new indexes, new constraints the old code cannot violate. Never in the same release: drop, rename, change a type, add NOT NULL without a default, or tighten a constraint the old code may break; ship the removal in a later release, once no live version uses the old shape. Each file runs in one transaction: no `BEGIN`/`COMMIT`, `CONCURRENTLY`, `VACUUM` (test-enforced). CI (`.github/workflows/expand-contract.yml`) applies the new migrations, starts the latest GitHub Release's image on them and runs `make smoke`. Queries: `db/queries/<feature>.sql`, generated code in `internal/platform/database/sqlc` (never edit).
 
 ## Conventions
 - Go 1.27, `log/slog`, errors wrapped with `%w`, context everywhere, time from the injected `Clock`, no package-level state (the one exception: Huma's error constructors, set once in `problem.Install()`).

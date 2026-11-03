@@ -1,0 +1,73 @@
+# D-118 expand/contract: the previous release's API must keep working on the new schema,
+# so a rollback never needs a restore. Applies this commit's migrations, then runs the
+# latest GitHub Release's image (from GHCR) on that schema and runs the smoke test against it.
+name: expand-contract
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  previous-api-on-new-schema:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:18.6-alpine3.24
+        env:
+          POSTGRES_USER: collection
+          POSTGRES_DB: collection
+          # Throwaway CI database on loopback: no password to commit (GitGuardian).
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["127.0.0.1:5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U collection -d collection"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgres://127.0.0.1:5432/collection?user=collection&sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Find the previous release
+        id: prev
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # The latest published GitHub Release is what prod runs (D-117).
+        run: |
+          tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "previous release: $tag"
+      - name: Apply this commit's migrations
+        run: go run ./cmd/api migrate
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Start the previous release's API on the new schema
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/collections-app-backend:${TAG#v}"
+          docker run -d --name prev-api --network host \
+            -e APP_ENV=development -e HTTP_ADDR=127.0.0.1:8090 -e DATA_DIR=/data \
+            -e DATABASE_URL -e TMDB_MOCK_FIXTURE=true "$image"
+          for _ in $(seq 60); do
+            curl -fsS http://127.0.0.1:8090/readyz >/dev/null 2>&1 && exit 0
+            sleep 1
+          done
+          docker logs prev-api; exit 1
+        env:
+          TAG: ${{ steps.prev.outputs.tag }}
+      - name: Smoke test the previous API
+        run: make smoke
+        env:
+          API_URL: http://127.0.0.1:8090
+      - name: API logs
+        if: failure()
+        run: docker logs prev-api || true

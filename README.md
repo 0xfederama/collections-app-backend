@@ -7,7 +7,7 @@ This repo is the `backend/` submodule of the parent repo [collections-app](https
 next to `frontend-web/` (the React app, repo `collections-app-frontend-web`). From the parent folder,
 `./deploy/dev up -d` starts both together (see the parent README). Everything below also works standalone in this repo.
 
-Quality gates run locally with `make check` (see below); the only CI is the release image build.
+Quality gates run locally with `make check` (see below); CI builds the release image and runs the expand/contract check.
 
 ## What exists today
 
@@ -144,6 +144,10 @@ Every version tag `vX.Y.Z` runs `.github/workflows/release-image.yml`: it builds
 linux/amd64 and pushes it to GHCR as the private package `ghcr.io/0xfederama/collections-app-backend:X.Y.Z`. A tag is
 not a deploy. Publishing a GitHub Release (marked latest) for that tag is the prod approval; the Pi then deploys it
 (D-117). Orchestrators may leave a draft release, never publish it.
+
+Rollback never restores a backup (D-118): it runs the previous release on the newer schema, so migrations must be
+expand/contract (see CLAUDE.md). `.github/workflows/expand-contract.yml` enforces it on every PR, `main` and tag: it applies
+this commit's migrations, starts the latest GitHub Release's image from GHCR on that schema and runs `make smoke`.
 
 ## Configuration
 

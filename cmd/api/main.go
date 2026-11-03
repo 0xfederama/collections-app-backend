@@ -205,6 +205,10 @@ func migrateUp() int {
 		return 1
 	}
 	v, err := database.Migrate(db.Migrations(), "migrations", url)
+	if errors.Is(err, database.ErrDirty) {
+		fmt.Fprintln(os.Stderr, "migrate: refusing to continue:", err)
+		return 1
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "migrate:", err)
 		return 1

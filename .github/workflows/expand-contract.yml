@@ -22,13 +22,14 @@ jobs:
         env:
           POSTGRES_USER: collection
           POSTGRES_DB: collection
-          POSTGRES_PASSWORD: ci
+          # Throwaway CI database on loopback: no password to commit (GitGuardian).
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports: ["127.0.0.1:5432:5432"]
         options: >-
           --health-cmd "pg_isready -U collection -d collection"
           --health-interval 3s --health-timeout 3s --health-retries 20
     env:
-      DATABASE_URL: postgres://127.0.0.1:5432/collection?user=collection&password=ci&sslmode=disable
+      DATABASE_URL: postgres://127.0.0.1:5432/collection?user=collection&sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

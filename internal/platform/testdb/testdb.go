@@ -6,22 +6,19 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"path/filepath"
-	"runtime"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5" // registers the pgx5:// scheme
-	_ "github.com/golang-migrate/migrate/v4/source/file"     // registers file://
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+
+	"github.com/0xfederama/collections-app-backend/db"
+	"github.com/0xfederama/collections-app-backend/internal/platform/database"
 )
 
 const postgresImage = "postgres:18.6-alpine3.24"
@@ -87,15 +84,9 @@ func NewMigrated(t *testing.T, adminURL string) *pgxpool.Pool {
 	u.Path = "/" + name
 	dsn := u.String()
 
-	_, file, _, _ := runtime.Caller(0)
-	dir := filepath.Join(filepath.Dir(file), "..", "..", "..", "db", "migrations")
-	m, err := migrate.New("file://"+filepath.ToSlash(dir), strings.Replace(dsn, "postgres://", "pgx5://", 1))
-	if err != nil {
-		t.Fatalf("new migrate: %v", err)
-	}
-	defer func() { _, _ = m.Close() }()
-	if err := m.Up(); err != nil {
-		t.Fatalf("migrate up: %v", err)
+	// The same embedded files and code path as `api migrate`.
+	if _, err := database.Migrate(db.Migrations(), "migrations", dsn); err != nil {
+		t.Fatalf("migrate: %v", err)
 	}
 
 	pool, err := pgxpool.New(ctx, dsn)

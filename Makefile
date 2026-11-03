@@ -60,7 +60,7 @@ audit: ## Vulnerability scan (needs network, not part of check)
 deadcode: ## Report unreachable functions, tests included (not part of check; unused types/consts are golangci's unused linter)
 	go tool deadcode -test ./...
 
-migrate: ## Apply migrations through the compose migrate service
+migrate: ## Apply migrations through the compose migrate service (the API image: /app/api migrate)
 	docker compose run --rm migrate
 
 migration: ## Create a migration pair: make migration name=create_items

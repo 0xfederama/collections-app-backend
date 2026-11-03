@@ -15,26 +15,20 @@ services:
       retries: 20
     restart: unless-stopped
 
+  # The API image applies its own embedded migrations and exits; the server never migrates.
   migrate:
-    image: migrate/migrate:v4.20.1
+    build: .
+    image: collections-app-backend:local
+    command: ["migrate"]
     depends_on:
       db:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://db:5432/collection?user=collection&password=${POSTGRES_PASSWORD}&sslmode=disable
-    volumes:
-      - ./db/migrations:/migrations:ro
-    # `migrate up` exits 1 on a directory without migrations (D-037), so skip until one exists.
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        if ls /migrations/*.up.sql >/dev/null 2>&1; then
-          exec migrate -path /migrations -database "$$DATABASE_URL" up
-        fi
-        echo "no migrations yet, nothing to apply"
 
   api:
     build: .
+    image: collections-app-backend:local
     depends_on:
       migrate:
         condition: service_completed_successfully

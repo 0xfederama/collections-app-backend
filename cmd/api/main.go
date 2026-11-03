@@ -10,9 +10,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/0xfederama/collections-app-backend/db"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/integrations/hardcover"
@@ -34,6 +36,9 @@ import (
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		os.Exit(healthcheck())
+	}
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		os.Exit(migrateUp())
 	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "fatal:", err)
@@ -188,5 +193,22 @@ func healthcheck() int {
 	if resp.StatusCode != http.StatusOK {
 		return 1
 	}
+	return 0
+}
+
+// migrateUp is `api migrate`: apply pending migrations to DATABASE_URL and exit.
+// It needs only DATABASE_URL; the server itself never migrates at startup.
+func migrateUp() int {
+	url := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if url == "" {
+		fmt.Fprintln(os.Stderr, "migrate: DATABASE_URL is required")
+		return 1
+	}
+	v, err := database.Migrate(db.Migrations(), "migrations", url)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "migrate:", err)
+		return 1
+	}
+	fmt.Printf("migrations applied, schema version %d\n", v)
 	return 0
 }

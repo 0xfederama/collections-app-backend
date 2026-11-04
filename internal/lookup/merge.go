@@ -33,7 +33,7 @@ func validateApply(p ApplyParams) error {
 		return err
 	}
 	switch p.Mode {
-	case ModeCreate, ModeFill, ModeRematch, ModeRefresh, ModeOwned:
+	case ModeCreate, ModeFill, ModeRematch, ModeScheduled:
 	default:
 		return fmt.Errorf("unknown lookup mode %q", p.Mode)
 	}
@@ -51,7 +51,7 @@ func mergeMetadata(mode Mode, current, candidate map[string]any, old Record, has
 	flatCandidate := flatten(candidate)
 	snapshots := map[string]any{}
 	switch mode {
-	case ModeRematch, ModeRefresh:
+	case ModeRematch:
 		if hasOld {
 			removeUnchangedOwned(out, old.ImportedFields)
 		}
@@ -59,29 +59,20 @@ func mergeMetadata(mode Mode, current, candidate map[string]any, old Record, has
 			setPath(out, path, value)
 			snapshots[path] = value
 		}
-	case ModeOwned:
+	case ModeScheduled:
+		// Every field fetched by the last import is overwritten, user edits included
+		// (D-123). A field the provider no longer returns is removed, so no stale
+		// value stays under a fetched name. User-only fields are not touched.
 		if hasOld {
-			for path, previous := range old.ImportedFields {
-				currentValue, present := getPath(out, path)
-				if !present || !equalValue(currentValue, previous) {
-					continue
-				}
-				if fresh, ok := flatCandidate[path]; ok {
-					setPath(out, path, fresh)
-					snapshots[path] = fresh
-				} else {
+			for path := range old.ImportedFields {
+				if _, fresh := flatCandidate[path]; !fresh {
 					deletePath(out, path)
 				}
 			}
 		}
 		for path, value := range flatCandidate {
-			if _, alreadyOwned := snapshots[path]; alreadyOwned {
-				continue
-			}
-			if _, present := getPath(out, path); !present {
-				setPath(out, path, value)
-				snapshots[path] = value
-			}
+			setPath(out, path, value)
+			snapshots[path] = value
 		}
 	default: // fill
 		if hasOld {
@@ -99,7 +90,7 @@ func mergeMetadata(mode Mode, current, candidate map[string]any, old Record, has
 		}
 	}
 	// The provider identity is part of every successful match, including fill.
-	// Maintenance relies on this owned snapshot to detect user removal/opt-out.
+	// The id is tracked as an imported value like the other fields.
 	setPath(out, idKey, flatCandidate[idKey])
 	snapshots[idKey] = flatCandidate[idKey]
 	return out, snapshots
@@ -130,17 +121,15 @@ func mergeTitle(p ApplyParams, current string, old Record, hasOld bool) (string,
 		original = old.OriginalTitle
 	}
 	switch p.Mode {
-	case ModeOwned:
-		if hasOld && old.ImportedTitle != nil && current == *old.ImportedTitle {
-			return title, &title, original
-		}
-		return current, nil, original
+	case ModeScheduled:
+		// The title is a fetched field: the weekly refresh overwrites it (D-123).
+		return title, &title, original
 	case ModeFill:
 		if hasOld && old.ImportedTitle != nil && current == *old.ImportedTitle {
 			return current, old.ImportedTitle, original
 		}
 		return current, nil, original
-	case ModeRematch, ModeRefresh:
+	case ModeRematch:
 		if hasOld && old.ImportedTitle != nil && current != *old.ImportedTitle {
 			original = p.OriginalTitle
 			if original == "" {

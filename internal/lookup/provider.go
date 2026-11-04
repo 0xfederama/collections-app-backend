@@ -46,7 +46,7 @@ type Suggestion struct {
 type Details struct {
 	SourceID string
 	Title    string
-	// Fields is the provider metadata object, replaced by rematch and refresh and
+	// Fields is the provider metadata object, replaced by rematch and the weekly refresh and
 	// tracked as imported values.
 	Fields map[string]any
 	// FillOnly values are applied only on create and fill, only where the item has
@@ -76,21 +76,30 @@ type Provider interface {
 // no entry has no lookup.
 type Providers map[string]Provider
 
-// Retention is a provider's data-retention rule. Only TMDB declares one (D-089);
-// Open Library imports have none (D-095): they keep provenance for fill, rematch
-// and refresh but are never refreshed or expired by maintenance.
-type Retention struct{ RefreshMonths, ExpireMonths int }
+// legacyDeadlines are the provenance deadlines of a TMDB row (D-089). Since D-123
+// nothing acts on them: movies and TV are refreshed weekly and never expire. They
+// are still written because lookup_imports_retention_check requires them, and an
+// older release on the same database (a rollback) still reads them. Open Library
+// rows have none (D-095).
+type legacyDeadlines struct{ RefreshMonths, ExpireMonths int }
 
-// tmdbRetention: values must be refreshed before TMDB's six-month cap (D-089).
-var tmdbRetention = &Retention{RefreshMonths: 5, ExpireMonths: 6}
+var tmdbLegacyDeadlines = &legacyDeadlines{RefreshMonths: 5, ExpireMonths: 6}
 
-// retentionFor returns the retention of a provider, nil when it has none.
-func retentionFor(provider string) *Retention {
+// legacyDeadlinesFor returns the deadlines written for a provider, nil when it has none.
+func legacyDeadlinesFor(provider string) *legacyDeadlines {
 	if provider == ProviderTMDB {
-		return tmdbRetention
+		return tmdbLegacyDeadlines
 	}
 	return nil
 }
+
+// ErrProviderRateLimited is returned by a Provider the provider answers 429 (TMDB).
+// The weekly pass stops its batch on it; manual lookup maps it to upstream_unavailable.
+var ErrProviderRateLimited = errors.New("lookup provider rate limited the request")
+
+// ErrMatchNotFound is returned by a Provider when the id no longer exists upstream
+// (TMDB 404). The weekly pass leaves the item untouched and retries it next week.
+var ErrMatchNotFound = errors.New("lookup match not found")
 
 // providerTypes are the item types a provider may serve.
 var providerTypes = map[string][]string{
@@ -141,7 +150,7 @@ func ValidSourceID(provider, id string) error {
 
 // identity is the item metadata key that stores a provider's id and its value:
 // tmdb_id is a number, openlibrary_id a string. The id is part of every
-// successful match (maintenance and refresh rely on it).
+// successful match (the weekly refresh relies on it).
 func identity(provider, sourceID string) (string, any) {
 	if provider == ProviderTMDB {
 		n, _ := strconv.Atoi(sourceID)

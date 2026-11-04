@@ -389,7 +389,7 @@ func TestF016B3_LookupFillKeepsUserValuesAndStores(t *testing.T) {
 	}
 }
 
-func TestF016B3_LookupRematchAndRefresh(t *testing.T) {
+func TestF016B3_LookupRematchAndRemovedRefreshMode(t *testing.T) {
 	e := newBookEnv(t, bookEnvOptions{})
 	lid := e.bookList()
 	it := e.newItem(lid, `{"title":"hobbit","lookup":false,"metadata":{"stores":["kobo"]}}`)
@@ -401,18 +401,10 @@ func TestF016B3_LookupRematchAndRefresh(t *testing.T) {
 		t.Fatalf("after rematch = %v", got)
 	}
 
-	// Refresh needs no id: it uses the stored metadata.openlibrary_id.
-	before := e.searches.Load()
-	rec = e.lookupItem(got, `{"mode":"refresh"}`)
-	wantStatus(t, rec, http.StatusOK)
-	if q := e.lastQuery.Load().(url.Values); q.Get("q") != "key:/works/OL27482W" || e.searches.Load() != before+1 {
-		t.Errorf("refresh query = %q", q.Get("q"))
-	}
-
-	// An item that was never matched has nothing to refresh by.
+	// refresh is no longer a mode (D-123): the weekly refresh never covers books.
 	plain := e.newItem(lid, `{"title":"plain","lookup":false}`)
 	p := wantProblem(t, e.lookupItem(plain, `{"mode":"refresh"}`), http.StatusUnprocessableEntity, "validation_failed")
-	if len(p.Errors) == 0 || p.Errors[0].Field != "source_id" {
+	if len(p.Errors) == 0 || p.Errors[0].Field != "mode" {
 		t.Errorf("errors = %+v", p.Errors)
 	}
 	// A stale version is rejected before any request.

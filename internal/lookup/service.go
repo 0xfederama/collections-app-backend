@@ -157,7 +157,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 		Title: candidate.details.Title, OriginalTitle: in.Title,
 		Fields: candidate.details.Fields, FillOnly: defaultStoreFill(provider, candidate.details.FillOnly, settings.PreferredStore),
 		PosterPath: candidate.details.ImagePath, Poster: poster,
-		RefreshFields: true, RefreshPoster: true,
+		RefreshPoster: true,
 	})
 }
 
@@ -166,8 +166,8 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 // before writing.
 func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion int, mode Mode, selection Selection) (items.Item, error) {
 	ctx = scope.With(ctx, s.workspaceID)
-	if mode != ModeFill && mode != ModeRematch && mode != ModeRefresh {
-		return items.Item{}, apperr.Validation(apperr.FieldError{Field: "mode", Message: "must be fill, rematch, or refresh"})
+	if mode != ModeFill && mode != ModeRematch {
+		return items.Item{}, apperr.Validation(apperr.FieldError{Field: "mode", Message: "must be fill or rematch"})
 	}
 	if !s.anyEnabled() {
 		return items.Item{}, apperr.LookupDisabled()
@@ -193,22 +193,7 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 	}
 
 	selectedID := selection.forProvider(provider.Name())
-	lookupID := selectedID
-	if mode == ModeRefresh && lookupID == nil {
-		name := provider.Name()
-		if id := metadataSourceID(name, it.Metadata); id != "" {
-			lookupID = &id
-		} else if record, ok, rerr := s.store.Read(ctx, itemID); rerr != nil {
-			return items.Item{}, rerr
-		} else if ok && record.Provider == name && record.SourceID != "" {
-			lookupID = &record.SourceID
-		} else {
-			return items.Item{}, apperr.Validation(apperr.FieldError{
-				Field: sourceIDField(name), Message: fmt.Sprintf("is required when the item has no previous %s match", providerLabel(name)),
-			})
-		}
-	}
-	candidate, err := s.resolve(ctx, provider, itemType, it.Title, lookupID, settings, lookupID == nil)
+	candidate, err := s.resolve(ctx, provider, itemType, it.Title, selectedID, settings, selectedID == nil)
 	if err != nil {
 		return items.Item{}, err
 	}
@@ -234,27 +219,21 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 		Title: candidate.details.Title, OriginalTitle: it.Title,
 		Fields: candidate.details.Fields, FillOnly: defaultStoreFill(provider, candidate.details.FillOnly, settings.PreferredStore),
 		PosterPath: candidate.details.ImagePath, Poster: poster,
-		RefreshFields: true, RefreshPoster: refreshPoster,
+		RefreshPoster: refreshPoster,
 	})
 }
 
-// RefreshOwned is the maintenance callback for one imported item. Store owns
-// expiry; this method only attempts a safe refresh of still-owned values. Only
-// providers with a retention are ever scheduled (D-095: Open Library has none).
-func (s *Service) RefreshOwned(ctx context.Context, itemID uuid.UUID, expectedVersion int) error {
+// RefreshScheduled is the weekly maintenance refresh of one movie or TV item
+// (D-123). It fetches the TMDB details of the item's stored tmdb_id and overwrites
+// every fetched field and the title, user edits included. A poster is replaced
+// only when TMDB's path changed and the item still carries the poster this
+// refresh fetched (or it has no image at all); a user-supplied image stays.
+// Books and lookup_disabled items are never refreshed. Provider errors come back
+// unchanged (ErrProviderRateLimited, ErrMatchNotFound, others) so the pass in
+// maintenance.go can classify them; nothing is written unless the details fetch
+// and any poster download succeeded.
+func (s *Service) RefreshScheduled(ctx context.Context, itemID uuid.UUID, expectedVersion int) error {
 	ctx = scope.With(ctx, s.workspaceID)
-	record, ok, err := s.store.Read(ctx, itemID)
-	if err != nil || !ok {
-		return err
-	}
-	retention := retentionFor(record.Provider)
-	if retention == nil {
-		return nil
-	}
-	provider := s.providerByName(record.Provider)
-	if provider == nil || !provider.Enabled() {
-		return apperr.LookupDisabled()
-	}
 	it, err := s.items.Get(ctx, itemID)
 	if err != nil {
 		return err
@@ -262,37 +241,73 @@ func (s *Service) RefreshOwned(ctx context.Context, itemID uuid.UUID, expectedVe
 	if it.Version != expectedVersion {
 		return apperr.VersionConflict(it.Version)
 	}
-	settings, err := s.settings.Get(scope.With(ctx, s.workspaceID))
+	typ := typeKey(it.Type)
+	provider := s.providers[typ]
+	if provider == nil || provider.Name() != ProviderTMDB {
+		return errNotScheduled // books are never refreshed (D-095, D-123)
+	}
+	if !provider.Enabled() {
+		return apperr.LookupDisabled()
+	}
+	if lookupDisabled(it.Metadata) {
+		return errNotScheduled
+	}
+	id := metadataSourceID(provider.Name(), it.Metadata)
+	if id == "" {
+		return fmt.Errorf("scheduled refresh: item has no valid %s id", providerLabel(provider.Name()))
+	}
+	settings, err := s.settings.Get(ctx)
 	if err != nil {
 		return err
 	}
-	candidate, err := s.resolve(ctx, provider, record.Type, it.Title, &record.SourceID, settings, false)
+	details, err := provider.Details(ctx, typ, id, settings.MetadataLanguage, settings.StreamingCountryCode)
 	if err != nil {
 		return err
 	}
-	if candidate == nil {
-		return fmt.Errorf("refresh imported item: %s details missing", providerLabel(record.Provider))
+	if details.SourceID != id {
+		return fmt.Errorf("scheduled refresh: %s returned another id", providerLabel(provider.Name()))
 	}
-
-	now := s.clock.Now()
-	refreshFields := !now.Before(addMonthsClamped(record.FetchedAt, retention.RefreshMonths))
-	refreshPoster := record.AttachmentID == nil || record.PosterFetchedAt == nil ||
-		!now.Before(addMonthsClamped(*record.PosterFetchedAt, retention.RefreshMonths))
+	record, _, err := s.store.Read(ctx, itemID)
+	if err != nil {
+		return err
+	}
+	// The poster is owned when it is the attachment this import fetched. An owned
+	// poster follows TMDB's path; a missing image is filled once, and a user's
+	// image or a poster the user removed is never fetched again.
+	owned := record.AttachmentID != nil && it.Image != nil && it.Image.Source == items.ImageSourceUpload &&
+		it.Image.AttachmentID == *record.AttachmentID
+	refreshPoster := owned && record.PosterPath != details.ImagePath ||
+		!owned && it.Image == nil && record.AttachmentID == nil
 	var poster *images.Processed
-	if refreshPoster && candidate.details.ImagePath != "" {
-		poster, err = s.poster(ctx, provider, candidate.details.ImagePath)
+	if refreshPoster && details.ImagePath != "" {
+		poster, err = s.scheduledPoster(ctx, provider, details.ImagePath)
 		if err != nil {
 			return err
 		}
 	}
 	_, err = s.store.Apply(ctx, ApplyParams{
-		Mode: ModeOwned, ItemID: itemID, ExpectedVersion: expectedVersion, Type: record.Type,
-		Provider: record.Provider, SourceID: candidate.details.SourceID,
-		Title: candidate.details.Title, OriginalTitle: record.OriginalTitle,
-		Fields: candidate.details.Fields, PosterPath: candidate.details.ImagePath, Poster: poster,
-		RefreshFields: refreshFields, RefreshPoster: refreshPoster,
+		Mode: ModeScheduled, ItemID: itemID, ExpectedVersion: expectedVersion, Type: typ,
+		Provider: provider.Name(), SourceID: details.SourceID,
+		Title: details.Title, OriginalTitle: it.Title,
+		Fields: details.Fields, PosterPath: details.ImagePath, Poster: poster,
+		RefreshPoster: refreshPoster,
 	})
 	return err
+}
+
+// scheduledPoster downloads and processes a TMDB poster for the weekly refresh.
+// Unlike poster, a download failure is returned unchanged, so a rate limit can stop
+// the pass; the item's current image is never touched by a failure here.
+func (s *Service) scheduledPoster(ctx context.Context, provider Provider, path string) (*images.Processed, error) {
+	raw, err := provider.DownloadImage(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	processed, err := images.Process(bytes.NewReader(raw))
+	if err != nil {
+		return nil, apperr.UpstreamUnavailable()
+	}
+	return processed, nil
 }
 
 type candidate struct{ details Details }
@@ -376,15 +391,6 @@ func (s *Service) anyEnabled() bool {
 	return false
 }
 
-func (s *Service) providerByName(name string) Provider {
-	for _, p := range s.providers {
-		if p != nil && p.Name() == name {
-			return p
-		}
-	}
-	return nil
-}
-
 // defaultStoreFill adds the workspace's default store, [preferred_store], as a
 // fill-only `stores` value for providers that serve a type with a stores field
 // (Open Library, books; D-096). It applies where the item has no stores yet and
@@ -399,6 +405,17 @@ func defaultStoreFill(provider Provider, fill map[string]any, preferred string) 
 	}
 	out["stores"] = []string{preferred}
 	return out
+}
+
+// lookupDisabled reports the item's lookup_disabled flag. The weekly refresh skips
+// such an item and keeps its values (D-123).
+func lookupDisabled(raw json.RawMessage) bool {
+	var metadata map[string]any
+	if json.Unmarshal(raw, &metadata) != nil {
+		return false
+	}
+	disabled, _ := metadata["lookup_disabled"].(bool)
+	return disabled
 }
 
 // metadataSourceID reads the provider's id from item metadata ("" when absent or invalid).

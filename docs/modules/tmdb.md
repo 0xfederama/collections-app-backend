@@ -32,4 +32,4 @@ Provides an optional, bounded, server-side TMDB client for movie and TV search, 
 - Extra calls: `Details` makes one call plus one `/person` call per non-Latin director (at most 3 per Details). `Search` makes one extra `en-US` search only when a result has a non-Latin localized title. Search suggestions keep the raw TMDB `original_title`.
 - Requests have timeouts and response-size bounds, are paced, honour retry-after, do not follow redirects, and search results are briefly cached.
 - Attribution: an [approved TMDB logo and notice](https://www.themoviedb.org/about/logos-attribution) in About; [watch-provider data](https://developer.themoviedb.org/reference/tv-series-watch-providers) also needs JustWatch credit.
-- TMDB data and posters must expire within six months ([TMDB API terms](https://www.themoviedb.org/api-terms-of-use)). Retention is in [lookup](lookup.md).
+- Movie and TV data is refreshed weekly by [lookup](lookup.md) (D-123), which replaces the six-month expiry for those items. Backups that contain TMDB data must still be retired within six months ([TMDB API terms](https://www.themoviedb.org/api-terms-of-use)).

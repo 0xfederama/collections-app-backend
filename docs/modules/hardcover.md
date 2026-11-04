@@ -22,7 +22,7 @@ An optional, bounded, server-side Hardcover GraphQL client, used as a best-effor
 
 ## Gotchas
 
-- Automatic book lookup only. Explicit `lookup: true` or `source_id` requests, refresh and retention never use it.
+- Automatic book lookup only. Explicit `lookup: true` or `source_id` requests and the weekly refresh never use it.
 - Gap fill: the chosen Open Library work lacks `author` or `pages` and has an ISBN, so one ISBN search fills only the missing field. It never overwrites, and never sets the title or cover.
 - Title-only create: Open Library returned nothing or failed (not a cancel). Accepted only on an exact normalised match of the typed title against `title` or `alternative_titles`. The item keeps the typed title.
 - A Hardcover-only match uses `ModeCreateUntracked`: no `lookup_imports` row (its provider CHECK allows only `tmdb` and `openlibrary`) and no `openlibrary_id`.

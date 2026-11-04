@@ -118,9 +118,9 @@ func TestT2b_RefreshRejectsStaleExpectedVersion(t *testing.T) {
 	id := e.addItem("Matrix", nil)
 	e.repo.edit(id, func(it *fakeItem) { it.version = 3 })
 	_, err := e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeRefresh, ItemID: id, ExpectedVersion: 2, Type: "movie", Provider: ProviderTMDB, SourceID: "603",
+		Mode: ModeRematch, ItemID: id, ExpectedVersion: 2, Type: "movie", Provider: ProviderTMDB, SourceID: "603",
 		Title: "The Matrix", OriginalTitle: "Matrix", Fields: map[string]any{"release_year": 1999},
-		PosterPath: "/stale.jpg", Poster: processedPoster("stale"), RefreshFields: true, RefreshPoster: true,
+		PosterPath: "/stale.jpg", Poster: processedPoster("stale"), RefreshPoster: true,
 	})
 	var conflict *apperr.VersionConflictError
 	if !errors.As(err, &conflict) || conflict.Current != 3 {
@@ -146,7 +146,7 @@ func TestT2b_PosterDiscardedWhenItemHasImage(t *testing.T) {
 	if _, err := e.store.Apply(t.Context(), ApplyParams{
 		Mode: ModeFill, ItemID: id, ExpectedVersion: 1, Type: "movie", Provider: ProviderTMDB, SourceID: "603",
 		Title: "The Matrix", OriginalTitle: "Matrix", Fields: map[string]any{"release_year": 1999},
-		PosterPath: "/fill.jpg", Poster: processedPoster("fill"), RefreshFields: true, RefreshPoster: true,
+		PosterPath: "/fill.jpg", Poster: processedPoster("fill"), RefreshPoster: true,
 	}); err != nil {
 		t.Fatal(err)
 	}

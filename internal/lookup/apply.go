@@ -184,12 +184,8 @@ func (s *DBStore) applyExisting(ctx context.Context, r Repo, p ApplyParams, post
 	candidate := cloneLookupMap(p.Fields)
 	candidate[idKey] = idValue
 	merged, snapshots := mergeMetadata(p.Mode, metadata, candidate, old, hasOld, idKey)
-	if p.Mode == ModeFill || p.Mode == ModeRematch || p.Mode == ModeRefresh {
+	if p.Mode == ModeFill || p.Mode == ModeRematch {
 		fillOnly(merged, p.FillOnly, true)
-	}
-	if p.Mode == ModeOwned && !p.RefreshFields && hasOld {
-		merged = cloneLookupMap(metadata)
-		snapshots = cloneLookupMap(old.ImportedFields)
 	}
 	fields, err := typeFields(cur.Type)
 	if err != nil {
@@ -206,9 +202,6 @@ func (s *DBStore) applyExisting(ctx context.Context, r Repo, p ApplyParams, post
 	}
 
 	title, importedTitle, originalTitle := mergeTitle(p, cur.Title, old, hasOld)
-	if p.Mode == ModeOwned && !p.RefreshFields && hasOld {
-		title, importedTitle, originalTitle = cur.Title, old.ImportedTitle, old.OriginalTitle
-	}
 	attachmentID := cur.ImageAttachmentID
 	imageURL := cur.ImageURL
 	posterOwned := old.AttachmentID != nil && cur.ImageAttachmentID.Valid && cur.ImageAttachmentID.UUID == *old.AttachmentID
@@ -216,7 +209,7 @@ func (s *DBStore) applyExisting(ctx context.Context, r Repo, p ApplyParams, post
 	var oldAttachment uuid.NullUUID
 	posterFetchedAt := old.PosterFetchedAt
 	posterPath := old.PosterPath
-	if p.Mode == ModeOwned && posterOwned && p.RefreshPoster {
+	if p.Mode == ModeScheduled && posterOwned && p.RefreshPoster {
 		oldAttachment = cur.ImageAttachmentID
 		imageURL = nil
 		if poster != nil {
@@ -231,7 +224,7 @@ func (s *DBStore) applyExisting(ctx context.Context, r Repo, p ApplyParams, post
 			attachmentID = uuid.NullUUID{}
 			posterFetchedAt, posterPath = nil, ""
 		}
-	} else if !cur.ImageAttachmentID.Valid && cur.ImageURL == nil && poster != nil && (p.Mode != ModeOwned || old.AttachmentID == nil) {
+	} else if !cur.ImageAttachmentID.Valid && cur.ImageURL == nil && poster != nil && (p.Mode != ModeScheduled || old.AttachmentID == nil) {
 		if err := s.insertAttachment(ctx, r, poster); err != nil {
 			return false, nil, err
 		}
@@ -253,10 +246,10 @@ func (s *DBStore) applyExisting(ctx context.Context, r Repo, p ApplyParams, post
 		}
 	}
 	fetchedAt := now
-	if hasOld && (p.Mode == ModeFill || (p.Mode == ModeOwned && !p.RefreshFields)) {
+	if hasOld && p.Mode == ModeFill {
 		// Fill does not replace nonempty values, so it cannot certify their
 		// freshness. New empty fields filled in this pass conservatively share
-		// the earlier deadline.
+		// the earlier fetch time, so the weekly refresh counts from the last real one.
 		fetchedAt = old.FetchedAt
 	}
 	if err := s.saveProvenance(ctx, r, p.ItemID, p, originalTitle, snapshots, importedTitle, attachmentID, fetchedAt, usedPoster, posterPath, posterFetchedAt); err != nil {
@@ -276,9 +269,9 @@ func (s *DBStore) applyExisting(ctx context.Context, r Repo, p ApplyParams, post
 func (s *DBStore) saveProvenance(ctx context.Context, r Repo, itemID uuid.UUID, p ApplyParams, originalTitle string, snapshots map[string]any, importedTitle *string, attachmentID uuid.NullUUID, now time.Time, newPoster bool, retainedPosterPath string, posterFetchedAt *time.Time) error {
 	// streaming.country comes from workspace settings and is required whenever
 	// any streaming leaf remains. It is structural context rather than TMDB
-	// content, so retaining it lets a user-edited platform leaf survive expiry.
+	// content, so it is not tracked as an imported value.
 	delete(snapshots, "streaming.country")
-	retention := retentionFor(p.Provider)
+	deadlines := legacyDeadlinesFor(p.Provider)
 	fieldsJSON, err := json.Marshal(snapshots)
 	if err != nil {
 		return fmt.Errorf("encode imported fields: %w", err)
@@ -291,9 +284,9 @@ func (s *DBStore) saveProvenance(ctx context.Context, r Repo, itemID uuid.UUID, 
 			path = p.PosterPath
 		}
 		posterPath = &path
-		if retention != nil {
-			refresh := addMonthsClamped(*posterFetchedAt, retention.RefreshMonths)
-			expires := addMonthsClamped(*posterFetchedAt, retention.ExpireMonths)
+		if deadlines != nil {
+			refresh := addMonthsClamped(*posterFetchedAt, deadlines.RefreshMonths)
+			expires := addMonthsClamped(*posterFetchedAt, deadlines.ExpireMonths)
 			posterRefresh = &refresh
 			posterExpiry = &expires
 		}
@@ -301,11 +294,11 @@ func (s *DBStore) saveProvenance(ctx context.Context, r Repo, itemID uuid.UUID, 
 		attachmentID = uuid.NullUUID{}
 		posterFetchedAt = nil
 	}
-	// Open Library imports carry no retention duty (D-095): no deadlines at all.
+	// Open Library imports carry no deadlines at all (D-095).
 	var refreshAfter, expiresAt *time.Time
-	if retention != nil {
-		refresh := addMonthsClamped(now, retention.RefreshMonths)
-		expires := addMonthsClamped(now, retention.ExpireMonths)
+	if deadlines != nil {
+		refresh := addMonthsClamped(now, deadlines.RefreshMonths)
+		expires := addMonthsClamped(now, deadlines.ExpireMonths)
 		refreshAfter, expiresAt = &refresh, &expires
 	}
 	if err := r.SaveImport(ctx, importSave{

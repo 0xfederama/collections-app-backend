@@ -40,10 +40,18 @@ type BookSuggestionJSON struct {
 	Year     *int    `json:"year" nullable:"true" doc:"First publication year."`
 }
 
+// ListLookupRefreshJSON is the refreshListLookups answer (published as "ListLookupRefresh").
+// Every field is always set.
+type ListLookupRefreshJSON struct {
+	Failed  int `json:"failed" minimum:"0" doc:"Refreshes that failed, plus the items not reached after a rate limit or an outage. Their values are unchanged."`
+	Skipped int `json:"skipped" minimum:"0" doc:"Items not refreshed: books, no TMDB id, lookup_disabled, or changed during the run."`
+	Updated int `json:"updated" minimum:"0" doc:"Items refreshed from TMDB."`
+}
+
 // LookupItemRequest is the body of lookupItemMetadata. Mode nil is fill. The
 // rules (mode values, id formats) are the service's, so no field is constrained here.
 type LookupItemRequest struct {
-	Mode     *string `json:"mode,omitempty" doc:"fill (default) or rematch."`
+	Mode     *string `json:"mode,omitempty" doc:"fill (default), rematch, or refresh (movie and TV only)."`
 	SourceID *string `json:"source_id,omitempty" doc:"Selects a known Open Library work (book items). Without it, the lookup searches by title."`
 	TmdbID   *int    `json:"tmdb_id,omitempty" doc:"Selects a known TMDB match (movie and TV items). Without it, the lookup searches by title."`
 }

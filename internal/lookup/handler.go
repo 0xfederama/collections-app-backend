@@ -50,11 +50,14 @@ func Register(api huma.API, log *slog.Logger, svc *Service, tmdb, books Provider
 	}, httpserver.Op(log, h.bookSuggestions))
 	huma.Register(api, huma.Operation{
 		OperationID: "lookupItemMetadata", Method: http.MethodPost, Path: "/api/v1/items/{id}/lookup", Tags: tmdbTags,
-		Summary: "Fill or replace an item's looked-up metadata",
+		Summary: "Fill, replace or refresh an item's looked-up metadata",
 		Description: "Requires `If-Match` (`\"i-N\"`) and is available only for movie, TV and book items (TMDB for movie and TV, Open Library for books). " +
 			"`fill` preserves every non-empty user value and fills empty fields; `rematch` searches from the current title unless `tmdb_id` " +
 			"(movie and TV) or `source_id` (book) selects a suggestion, then replaces the title and all fields fetched from the provider, " +
-			"user edits to those fields included. All modes preserve an existing item image. A poster or cover is stored through the normal " +
+			"user edits to those fields included. `refresh` (movie and TV only, otherwise `422 validation_failed`) re-fetches the item's TMDB id, " +
+			"or the `tmdb_id` given, and overwrites the title and every fetched field, user edits included, as the weekly refresh does; a field " +
+			"TMDB no longer returns is removed. An item's `lookup_disabled` flag does not stop an explicit refresh. A refresh that fails changes nothing. " +
+			"All modes preserve an existing item image. A poster or cover is stored through the normal " +
 			"image pipeline only when the item has no image. On a book, `fill` also sets `stores` to `[preferred_store]` (the workspace default " +
 			"store) when `stores` is empty; no mode ever removes or replaces the user's store choices. The default mode is `fill`. When a search " +
 			"has no result, the operation returns the unchanged item and its current ETag. An explicit lookup while the integration is disabled " +
@@ -68,6 +71,18 @@ func Register(api huma.API, log *slog.Logger, svc *Service, tmdb, books Provider
 			http.StatusPreconditionRequired, http.StatusServiceUnavailable},
 		Middlewares: huma.Middlewares{httpserver.IfMatchFirst(api, etag.Item)},
 	}, httpserver.Op(log, h.lookupItem))
+	huma.Register(api, huma.Operation{
+		OperationID: "refreshListLookups", Method: http.MethodPost, Path: "/api/v1/lists/{id}/lookup-refresh", Tags: []string{"lookup"},
+		Summary: "Refresh the TMDB details of a list's movie and TV items",
+		Description: "Refreshes every active movie and TV item of the list that has a TMDB id and is not `lookup_disabled`, one at a time through " +
+			"the server's TMDB pacing, with the weekly refresh's rule: the title and every fetched field are overwritten, user edits included, " +
+			"and a user-supplied image is kept. Books, items without a TMDB id and `lookup_disabled` items are skipped. No `If-Match` is needed: " +
+			"each item is versioned internally, and an item changed during the run is counted as skipped. Answers the counts. A TMDB rate limit " +
+			"or outage stops the run, and the items not yet refreshed are counted as failed; a failed item keeps its values. Unknown or trashed " +
+			"lists answer 404. TMDB disabled on the server answers `503 lookup_disabled`.",
+		DefaultStatus: http.StatusOK,
+		Errors:        []int{http.StatusNotFound, http.StatusServiceUnavailable},
+	}, httpserver.Op(log, h.refreshList))
 }
 
 type handler struct {
@@ -177,6 +192,11 @@ type LookupItemInput struct {
 	Body    LookupItemRequest
 }
 
+// ListLookupRefreshOutput is the refreshListLookups answer.
+type ListLookupRefreshOutput struct {
+	Body ListLookupRefreshJSON
+}
+
 // LookupItemOutput is the updated item with its ETag.
 type LookupItemOutput struct {
 	ETag string `header:"ETag"`
@@ -206,4 +226,9 @@ func (h *handler) lookupItem(ctx context.Context, in *LookupItemInput) (*LookupI
 		return nil, err
 	}
 	return &LookupItemOutput{ETag: etag.Format(etag.Item, it.Version), Body: body}, nil
+}
+
+// refreshList is the refreshListLookups operation (stub, replaced in the next commit).
+func (h *handler) refreshList(ctx context.Context, in *IDParam) (*ListLookupRefreshOutput, error) {
+	return nil, huma.Error501NotImplemented("list lookup refresh is not implemented yet")
 }

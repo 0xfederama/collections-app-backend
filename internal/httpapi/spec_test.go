@@ -40,6 +40,7 @@ var apiRoutes = []struct{ method, path string }{
 	{"PATCH", "/api/v1/items/{id}"},
 	{"DELETE", "/api/v1/items/{id}"},
 	{"POST", "/api/v1/items/{id}/lookup"},
+	{"POST", "/api/v1/lists/{id}/lookup-refresh"},
 	{"POST", "/api/v1/items/{id}/move"},
 	{"PUT", "/api/v1/lists/{id}/items/order"},
 	{"PUT", "/api/v1/items/{id}/image"},

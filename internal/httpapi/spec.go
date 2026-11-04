@@ -51,6 +51,7 @@ func specTags() []*huma.Tag {
 		{Name: "items", Description: "Items and their metadata."},
 		{Name: "tmdb", Description: "Optional movie and TV metadata lookup through the server-side TMDB integration, and the item lookup operation shared with books."},
 		{Name: "books", Description: "Book metadata lookup through Open Library (no key needed)."},
+		{Name: "lookup", Description: "Refreshing the TMDB details of movie and TV items, one item or a whole list."},
 		{Name: "image", Description: "Item images (upload or URL) and attachment files."},
 		{Name: "content", Description: "Markdown content of an item and its version history."},
 		{Name: "search", Description: "Title search across all active items."},

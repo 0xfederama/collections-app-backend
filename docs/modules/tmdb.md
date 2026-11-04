@@ -28,6 +28,8 @@ Provides an optional, bounded, server-side TMDB client for movie and TV search, 
 - `TMDB_MOCK_FIXTURE=true` is an E2E-only switch, rejected when `APP_ENV=production`. It also enables the Open Library fixture (see [openlibrary](openlibrary.md)).
 - With the switch, the exact query `[mock] movie name` returns a fixture without HTTP (id `900001`). Other queries keep normal TMDB behaviour.
 - `Details` returns the JustWatch page as `streaming.link`, only for `https` on `justwatch.com` or `www.justwatch.com`. The mock returns `https://www.justwatch.com/<country>/movie/mock`.
+- Titles and movie directors are Latin script when TMDB has one (`names.go`): localized if Latin, then the en-US translation (US first; `Details` uses `append_to_response=translations`), then the Latin original; directors then the first Latin `also_known_as` of `/person/{id}`. A non-Latin value is kept only as a last resort.
+- Extra calls: `Details` makes one call plus one `/person` call per non-Latin director (at most 3 per Details). `Search` makes one extra `en-US` search only when a result has a non-Latin localized title. Search suggestions keep the raw TMDB `original_title`.
 - Requests have timeouts and response-size bounds, are paced, honour retry-after, do not follow redirects, and search results are briefly cached.
 - Attribution: an [approved TMDB logo and notice](https://www.themoviedb.org/about/logos-attribution) in About; [watch-provider data](https://developer.themoviedb.org/reference/tv-series-watch-providers) also needs JustWatch credit.
 - TMDB data and posters must expire within six months ([TMDB API terms](https://www.themoviedb.org/api-terms-of-use)). Retention is in [lookup](lookup.md).

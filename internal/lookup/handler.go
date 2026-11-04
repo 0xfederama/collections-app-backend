@@ -33,7 +33,9 @@ func Register(api huma.API, log *slog.Logger, svc *Service, tmdb, books Provider
 		Summary: "Suggest movie or TV matches",
 		Description: "Searches TMDB using the workspace's `metadata_language`. When the server has no TMDB key, returns " +
 			"`{ \"available\": false, \"results\": [] }`; this endpoint does not fail merely because lookup is disabled. " +
-			"Results retain TMDB's ranking. The returned poster URL is for suggestion display only and is not an item image.",
+			"Results retain TMDB's ranking. Titles are in Latin script: the localized title when it is Latin, else the English title, " +
+			"else the Latin original; a non-Latin title is returned only when TMDB has no Latin form. " +
+			"The returned poster URL is for suggestion display only and is not an item image.",
 		Errors: []int{http.StatusBadRequest, http.StatusServiceUnavailable},
 	}, httpserver.Op(log, h.tmdbSuggestions))
 	huma.Register(api, huma.Operation{

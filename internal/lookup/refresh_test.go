@@ -383,7 +383,7 @@ func TestRefreshList_OneCallIsBoundedAndTakesTheOldestFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != (ListRefreshResult{Updated: listRefreshBatchSize, Skipped: 5}) || len(tmdb.calls) != listRefreshBatchSize {
+	if got != (ListRefreshResult{Updated: listRefreshBatchSize, Remaining: 5}) || len(tmdb.calls) != listRefreshBatchSize {
 		t.Fatalf("result %+v, %d calls", got, len(tmdb.calls))
 	}
 	if tmdb.calls[0] != fmt.Sprint(1000+total-1) {
@@ -438,4 +438,24 @@ func isLookupDisabled(err error) bool {
 func isVersionConflict(err error) bool {
 	var c *apperr.VersionConflictError
 	return errors.As(err, &c)
+}
+
+// A stop inside the batch fails the batch's unreached items; the items beyond the batch
+// stay in Remaining, which is not a failure.
+func TestRefreshList_StopInsideBatchFailsItsRestAndKeepsRemaining(t *testing.T) {
+	e := newApplyEnv(t, refreshNow)
+	const total = listRefreshBatchSize + 2
+	for i := range total {
+		id := addTMDB(e, "Movie", map[string]any{"tmdb_id": 1000 + i}, nil)
+		importedFields(e, id, fmt.Sprint(1000+i), map[string]any{}, refreshNow.Add(-time.Duration(i+1)*time.Hour))
+	}
+	// The oldest fetch is rate limited: the whole batch is unreached.
+	tmdb := &tmdbFake{defaults: true, errs: map[string]error{fmt.Sprint(1000 + total - 1): ErrProviderRateLimited}}
+	got, err := refreshService(e, tmdb).RefreshList(t.Context(), e.list)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != (ListRefreshResult{Failed: listRefreshBatchSize, Remaining: 2}) {
+		t.Fatalf("result = %+v, want the batch failed and 2 remaining", got)
+	}
 }

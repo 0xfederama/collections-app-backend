@@ -43,9 +43,10 @@ type BookSuggestionJSON struct {
 // ListLookupRefreshJSON is the refreshListLookups answer (published as "ListLookupRefresh").
 // Every field is always set.
 type ListLookupRefreshJSON struct {
-	Failed  int `json:"failed" minimum:"0" doc:"Refreshes that failed, plus the items not reached after a rate limit or an outage. Their values are unchanged."`
-	Skipped int `json:"skipped" minimum:"0" doc:"Items not refreshed: books, no TMDB id, lookup_disabled, or changed during the run."`
-	Updated int `json:"updated" minimum:"0" doc:"Items refreshed from TMDB."`
+	Failed    int `json:"failed" minimum:"0" doc:"Refreshes that failed, plus the items not reached after a rate limit or an outage. Their values are unchanged."`
+	Remaining int `json:"remaining" minimum:"0" doc:"Eligible items beyond the 50-item batch of this call. Run again to refresh them."`
+	Skipped   int `json:"skipped" minimum:"0" doc:"Items not refreshed: books, no TMDB id, lookup_disabled, or changed during the run."`
+	Updated   int `json:"updated" minimum:"0" doc:"Items refreshed from TMDB."`
 }
 
 // LookupItemRequest is the body of lookupItemMetadata. Mode nil is fill. The

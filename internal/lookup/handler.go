@@ -77,7 +77,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service, tmdb, books Provider
 		Description: "Refreshes every active movie and TV item of the list that has a TMDB id and is not `lookup_disabled`, one at a time through " +
 			"the server's TMDB pacing, with the weekly refresh's rule: the title and every fetched field are overwritten, user edits included, " +
 			"and a user-supplied image is kept. Books, items without a TMDB id and `lookup_disabled` items are skipped. No `If-Match` is needed: " +
-			"each item is versioned internally, and an item changed during the run is counted as skipped. Answers the counts. A TMDB rate limit " +
+			"each item is versioned internally, and an item changed during the run is counted as skipped. Answers the counts. Each call refreshes at most 50 items, oldest fetch first; `remaining` counts the eligible items left for later calls, so run again until it is 0. A TMDB rate limit " +
 			"or outage stops the run, and the items not yet refreshed are counted as failed; a failed item keeps its values. Unknown or trashed " +
 			"lists answer 404. TMDB disabled on the server answers `503 lookup_disabled`.",
 		DefaultStatus: http.StatusOK,
@@ -237,5 +237,5 @@ func (h *handler) refreshList(ctx context.Context, in *IDParam) (*ListLookupRefr
 	if err != nil {
 		return nil, err
 	}
-	return &ListLookupRefreshOutput{Body: ListLookupRefreshJSON{Failed: result.Failed, Skipped: result.Skipped, Updated: result.Updated}}, nil
+	return &ListLookupRefreshOutput{Body: ListLookupRefreshJSON{Failed: result.Failed, Remaining: result.Remaining, Skipped: result.Skipped, Updated: result.Updated}}, nil
 }

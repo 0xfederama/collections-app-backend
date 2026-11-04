@@ -487,6 +487,11 @@ components:
           format: int64
           minimum: 0
           type: integer
+        remaining:
+          description: Eligible items beyond the 50-item batch of this call. Run again to refresh them.
+          format: int64
+          minimum: 0
+          type: integer
         skipped:
           description: "Items not refreshed: books, no TMDB id, lookup_disabled, or changed during the run."
           format: int64
@@ -499,6 +504,7 @@ components:
           type: integer
       required:
         - failed
+        - remaining
         - skipped
         - updated
       type: object
@@ -3252,7 +3258,7 @@ paths:
         - items
   /api/v1/lists/{id}/lookup-refresh:
     post:
-      description: "Refreshes every active movie and TV item of the list that has a TMDB id and is not `lookup_disabled`, one at a time through the server's TMDB pacing, with the weekly refresh's rule: the title and every fetched field are overwritten, user edits included, and a user-supplied image is kept. Books, items without a TMDB id and `lookup_disabled` items are skipped. No `If-Match` is needed: each item is versioned internally, and an item changed during the run is counted as skipped. Answers the counts. A TMDB rate limit or outage stops the run, and the items not yet refreshed are counted as failed; a failed item keeps its values. Unknown or trashed lists answer 404. TMDB disabled on the server answers `503 lookup_disabled`."
+      description: "Refreshes every active movie and TV item of the list that has a TMDB id and is not `lookup_disabled`, one at a time through the server's TMDB pacing, with the weekly refresh's rule: the title and every fetched field are overwritten, user edits included, and a user-supplied image is kept. Books, items without a TMDB id and `lookup_disabled` items are skipped. No `If-Match` is needed: each item is versioned internally, and an item changed during the run is counted as skipped. Answers the counts. Each call refreshes at most 50 items, oldest fetch first; `remaining` counts the eligible items left for later calls, so run again until it is 0. A TMDB rate limit or outage stops the run, and the items not yet refreshed are counted as failed; a failed item keeps its values. Unknown or trashed lists answer 404. TMDB disabled on the server answers `503 lookup_disabled`."
       operationId: refreshListLookups
       parameters:
         - in: path

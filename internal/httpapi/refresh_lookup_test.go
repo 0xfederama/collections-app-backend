@@ -166,7 +166,7 @@ func TestRefreshList_OverHTTPCountsEveryItem(t *testing.T) {
 	// No If-Match: the call is per item versioned internally.
 	rec := e.call(http.MethodPost, "/api/v1/lists/"+lid+"/lookup-refresh", "", "")
 	wantStatus(t, rec, http.StatusOK)
-	if got := decode(t, rec); got["updated"] != float64(2) || got["skipped"] != float64(2) || got["failed"] != float64(0) {
+	if got := decode(t, rec); got["updated"] != float64(2) || got["skipped"] != float64(2) || got["failed"] != float64(0) || got["remaining"] != float64(0) {
 		t.Fatalf("counts = %v", got)
 	}
 	if e.itemTitle(matrix) != "The Matrix Remastered" || e.itemTitle(reloaded) != "Matrix Reloaded Again" {

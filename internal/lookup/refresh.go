@@ -154,7 +154,9 @@ func (s *Service) scheduledPoster(ctx context.Context, provider Provider, path s
 type ListRefreshResult struct {
 	Updated int
 	Skipped int
-	Failed  int
+	// Remaining counts eligible items beyond the batch of this call: run again to reach them.
+	Remaining int
+	Failed    int
 }
 
 // RefreshList refreshes the movie and TV items of a list that have a TMDB id, one after
@@ -163,8 +165,8 @@ type ListRefreshResult struct {
 // item changed since is skipped and never overwritten.
 //
 // Skipped: every item of a book or untyped list, items without a TMDB id, lookup_disabled
-// items, items changed during the run, and eligible items beyond listRefreshBatchSize
-// (the oldest fetches are taken first, so calling again reaches them).
+// items, and items changed during the run.
+// Remaining: eligible items beyond listRefreshBatchSize, which the next call reaches (the oldest fetches go first).
 // Failed: refreshes that failed, and the eligible items not reached once TMDB rate limited
 // the run or could not be reached. A failed item keeps its values. A cancelled context ends
 // the call with its error; the items refreshed so far stay refreshed.
@@ -196,7 +198,7 @@ func (s *Service) RefreshList(ctx context.Context, listID uuid.UUID) (ListRefres
 		due = append(due, ref)
 	}
 	if len(due) > listRefreshBatchSize {
-		result.Skipped += len(due) - listRefreshBatchSize
+		result.Remaining = len(due) - listRefreshBatchSize
 		due = due[:listRefreshBatchSize]
 	}
 	for i, ref := range due {

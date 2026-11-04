@@ -25,6 +25,9 @@ const (
 	ModeCreateUntracked Mode = "create_untracked"
 	ModeFill            Mode = "fill"
 	ModeRematch         Mode = "rematch"
+	// ModeRefresh is the API's refresh of a movie or TV item: the weekly rule (D-123),
+	// on demand. The store only ever sees ModeScheduled for it.
+	ModeRefresh Mode = "refresh"
 	// ModeScheduled is the weekly maintenance refresh of a movie or TV item (D-123).
 	// It overwrites every fetched field and the title, user edits included, and
 	// keeps a user-supplied image. It is not an API mode.
@@ -91,6 +94,8 @@ type Store interface {
 	ListType(ctx context.Context, listID uuid.UUID) (string, error)
 	Read(ctx context.Context, itemID uuid.UUID) (Record, bool, error)
 	Apply(ctx context.Context, p ApplyParams) (items.Item, error)
+	// ListItems returns the active items of a list, for the list refresh.
+	ListItems(ctx context.Context, listID uuid.UUID) ([]listedItem, error)
 }
 
 // addMonthsClamped applies calendar-month deadlines without rolling a date at

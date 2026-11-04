@@ -77,6 +77,7 @@ func (f *fakeStore) Apply(_ context.Context, p ApplyParams) (items.Item, error) 
 	f.applied = &p
 	return f.result, f.err
 }
+func (f *fakeStore) ListItems(context.Context, uuid.UUID) ([]listedItem, error) { return nil, f.err }
 
 type fakeItems struct {
 	item        items.Item

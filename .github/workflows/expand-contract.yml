@@ -51,13 +51,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Release images are arm64 only; this runner is x86, so run the old API under QEMU.
+      - uses: docker/setup-qemu-action@v3
       - name: Start the previous release's API on the new schema
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/collections-app-backend:${TAG#v}"
-          docker run -d --name prev-api --network host \
+          docker run -d --platform linux/arm64 --name prev-api --network host \
             -e APP_ENV=development -e HTTP_ADDR=127.0.0.1:8090 -e DATA_DIR=/data \
             -e DATABASE_URL -e TMDB_MOCK_FIXTURE=true "$image"
-          for _ in $(seq 60); do
+          for _ in $(seq 120); do
             curl -fsS http://127.0.0.1:8090/readyz >/dev/null 2>&1 && exit 0
             sleep 1
           done

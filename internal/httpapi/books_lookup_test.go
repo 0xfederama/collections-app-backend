@@ -389,7 +389,7 @@ func TestF016B3_LookupFillKeepsUserValuesAndStores(t *testing.T) {
 	}
 }
 
-func TestF016B3_LookupRematchAndRemovedRefreshMode(t *testing.T) {
+func TestF016B3_LookupRematchAndBookRefreshIs422(t *testing.T) {
 	e := newBookEnv(t, bookEnvOptions{})
 	lid := e.bookList()
 	it := e.newItem(lid, `{"title":"hobbit","lookup":false,"metadata":{"stores":["kobo"]}}`)
@@ -401,7 +401,7 @@ func TestF016B3_LookupRematchAndRemovedRefreshMode(t *testing.T) {
 		t.Fatalf("after rematch = %v", got)
 	}
 
-	// refresh is no longer a mode (D-123): the weekly refresh never covers books.
+	// refresh is a mode of movie and TV items only (D-123): a book answers 422, as Open Library data is never refreshed.
 	plain := e.newItem(lid, `{"title":"plain","lookup":false}`)
 	p := wantProblem(t, e.lookupItem(plain, `{"mode":"refresh"}`), http.StatusUnprocessableEntity, "validation_failed")
 	if len(p.Errors) == 0 || p.Errors[0].Field != "mode" {

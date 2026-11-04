@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -29,6 +30,9 @@ type DBStore struct {
 	items       itemReader
 	log         *slog.Logger
 	workspaceID uuid.UUID
+	// retryAt holds the items whose weekly refresh failed, until when they wait
+	// (see maintenance.go). It is in memory on purpose.
+	retryAt map[uuid.UUID]time.Time
 }
 
 var _ Store = (*DBStore)(nil)
@@ -39,7 +43,7 @@ func NewStore(db DB, fileStore storage.FileStore, clk clock.Clock, itemSvc *item
 }
 
 func newStore(repo Repo, fileStore storage.FileStore, clk clock.Clock, itemSvc itemReader, log *slog.Logger, workspaceID uuid.UUID) *DBStore {
-	return &DBStore{repo: repo, store: fileStore, clock: clk, items: itemSvc, log: log, workspaceID: workspaceID}
+	return &DBStore{repo: repo, store: fileStore, clock: clk, items: itemSvc, log: log, workspaceID: workspaceID, retryAt: map[uuid.UUID]time.Time{}}
 }
 
 // ListType returns the type of an active list, "" for a list with no type.

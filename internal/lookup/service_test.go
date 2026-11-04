@@ -27,6 +27,8 @@ type fakeClient struct {
 	searchLanguage string
 	detailsID      string
 	downloadErr    error
+	// image is the poster DownloadImage returns when set (a valid PNG for Process).
+	image []byte
 }
 
 func (f *fakeClient) Name() string {
@@ -51,6 +53,9 @@ func (f *fakeClient) DownloadImage(context.Context, string) ([]byte, error) {
 	f.downloads++
 	if f.downloadErr != nil {
 		return nil, f.downloadErr
+	}
+	if f.image != nil {
+		return f.image, f.err
 	}
 	return nil, f.err
 }
@@ -211,26 +216,14 @@ func TestApplyNoMatchRechecksVersion(t *testing.T) {
 }
 
 func TestApplyRejectsUnsupportedModeBeforeLookup(t *testing.T) {
-	client := &fakeClient{enabled: true}
-	_, err := newService(client, &fakeStore{}, &fakeItems{}).Apply(t.Context(), uuid.New(), 1, ModeCreate, Selection{})
-	var validation *apperr.ValidationError
-	if !errors.As(err, &validation) || client.searchQuery != "" {
-		t.Fatalf("err=%v search=%q", err, client.searchQuery)
-	}
-}
-
-func TestApplyPreservesExistingImageAndUsesStoredTMDBID(t *testing.T) {
-	id := uuid.New()
-	itemSvc := &fakeItems{item: items.Item{
-		ID: id, Title: "Movie", Type: ptr("movie"), Version: 2,
-		Image:    &items.Image{Source: items.ImageSourceURL, URL: "https://user.example/image.jpg"},
-		Metadata: json.RawMessage(`{"tmdb_id":42}`),
-	}}
-	client := &fakeClient{enabled: true, details: Details{SourceID: "42", Title: "Localized", ImagePath: "/poster.jpg"}}
-	store := &fakeStore{result: itemSvc.item}
-	_, err := newService(client, store, itemSvc).Apply(t.Context(), id, 2, ModeRefresh, Selection{})
-	if err != nil || store.applied == nil || store.applied.SourceID != "42" || store.applied.RefreshPoster || client.downloads != 0 {
-		t.Fatalf("err=%v apply=%+v downloads=%d", err, store.applied, client.downloads)
+	// refresh is no longer an API mode (D-123): the weekly refresh replaces it.
+	for _, mode := range []Mode{ModeCreate, ModeScheduled, Mode("refresh")} {
+		client := &fakeClient{enabled: true}
+		_, err := newService(client, &fakeStore{}, &fakeItems{}).Apply(t.Context(), uuid.New(), 1, mode, Selection{})
+		var validation *apperr.ValidationError
+		if !errors.As(err, &validation) || client.searchQuery != "" {
+			t.Errorf("%s: err=%v search=%q", mode, err, client.searchQuery)
+		}
 	}
 }
 
@@ -355,44 +348,6 @@ func TestF016B3_UnservedTypesCreateWithoutLookup(t *testing.T) {
 	}
 }
 
-func TestF016B3_ApplyOnBookRefreshUsesStoredOpenLibraryID(t *testing.T) {
-	id := uuid.New()
-	itemSvc := &fakeItems{item: items.Item{
-		ID: id, Title: "Dune", Type: ptr("book"), Version: 3,
-		Image:    &items.Image{Source: items.ImageSourceURL, URL: "https://user.example/c.jpg"},
-		Metadata: json.RawMessage(`{"openlibrary_id":"OL77W"}`),
-	}}
-	book := bookClient(true)
-	book.details.SourceID = "OL77W"
-	store := &fakeStore{result: itemSvc.item}
-	_, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 3, ModeRefresh, Selection{})
-	if err != nil || store.applied == nil || store.applied.Provider != ProviderOpenLibrary || store.applied.SourceID != "OL77W" || store.applied.RefreshPoster || book.downloads != 0 {
-		t.Fatalf("err=%v apply=%+v downloads=%d", err, store.applied, book.downloads)
-	}
-	if store.applied.Mode != ModeRefresh {
-		t.Errorf("mode = %q", store.applied.Mode)
-	}
-}
-
-func TestF016B3_ApplyRefreshFallsBackToProvenanceThenAsksForAnID(t *testing.T) {
-	id := uuid.New()
-	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "Dune", Type: ptr("book"), Version: 1, Metadata: json.RawMessage(`{}`)}}
-	book := bookClient(true)
-	book.details.SourceID = "OL5W"
-	book.details.ImagePath = ""
-	store := &fakeStore{result: itemSvc.item, found: true, record: Record{Provider: ProviderOpenLibrary, SourceID: "OL5W"}}
-	if _, err := bookService(book, &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 1, ModeRefresh, Selection{}); err != nil || store.applied == nil || store.applied.SourceID != "OL5W" {
-		t.Fatalf("err=%v applied=%+v", err, store.applied)
-	}
-	// A TMDB record on a book item is not a book match.
-	store = &fakeStore{found: true, record: Record{Provider: ProviderTMDB, SourceID: "603"}}
-	_, err := bookService(bookClient(true), &fakeClient{}, store, itemSvc).Apply(t.Context(), id, 1, ModeRefresh, Selection{})
-	var validation *apperr.ValidationError
-	if !errors.As(err, &validation) || validation.Errors[0].Field != "source_id" || store.applied != nil {
-		t.Fatalf("err = %v applied = %v", err, store.applied)
-	}
-}
-
 func TestF016B3_ApplyFillAndRematchPassFillOnlyAndSelectedID(t *testing.T) {
 	id := uuid.New()
 	for _, mode := range []Mode{ModeFill, ModeRematch} {
@@ -455,35 +410,6 @@ func TestF016B3_ProviderErrorMapping(t *testing.T) {
 	yes := true
 	if _, err := bookService(book, &fakeClient{}, &fakeStore{typ: "book"}, &fakeItems{}).Create(t.Context(), uuid.New(), items.CreateInput{Title: "x"}, CreateOptions{Lookup: &yes}); !errors.As(err, &disabled) {
 		t.Fatalf("err = %v", err)
-	}
-}
-
-func TestF016B3_RefreshOwnedIgnoresProvidersWithoutRetention(t *testing.T) {
-	book := bookClient(true)
-	store := &fakeStore{found: true, record: Record{Provider: ProviderOpenLibrary, SourceID: "OL1W", Type: "book"}}
-	itemSvc := &fakeItems{err: errors.New("must not be read")}
-	if err := bookService(book, &fakeClient{}, store, itemSvc).RefreshOwned(t.Context(), uuid.New(), 1); err != nil || book.detailsID != "" || store.applied != nil {
-		t.Fatalf("err=%v details=%q applied=%v", err, book.detailsID, store.applied)
-	}
-}
-
-func TestF013B3_RefreshOwnedStillUsesTheFiveMonthRule(t *testing.T) {
-	id := uuid.New()
-	fetched := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC) // five calendar months before the fake clock (2027-01-01)
-	itemSvc := &fakeItems{item: items.Item{ID: id, Title: "Matrix", Type: ptr("movie"), Version: 2}}
-	client := &fakeClient{enabled: true, details: Details{SourceID: "603", Title: "The Matrix", Fields: map[string]any{"release_year": 1999}}}
-	store := &fakeStore{found: true, result: itemSvc.item, record: Record{Provider: ProviderTMDB, SourceID: "603", Type: "movie", OriginalTitle: "Matrix", FetchedAt: fetched}}
-	if err := newService(client, store, itemSvc).RefreshOwned(t.Context(), id, 2); err != nil || store.applied == nil {
-		t.Fatalf("err=%v", err)
-	}
-	if p := store.applied; p.Mode != ModeOwned || !p.RefreshFields || p.SourceID != "603" || p.Provider != ProviderTMDB {
-		t.Errorf("apply = %+v", p)
-	}
-	// Four months old: poster/fields not due yet.
-	store.record.FetchedAt = time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
-	store.applied = nil
-	if err := newService(client, store, itemSvc).RefreshOwned(t.Context(), id, 2); err != nil || store.applied == nil || store.applied.RefreshFields {
-		t.Fatalf("young record: err=%v applied=%+v", err, store.applied)
 	}
 }
 

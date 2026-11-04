@@ -43,9 +43,9 @@ type BookSuggestionJSON struct {
 // LookupItemRequest is the body of lookupItemMetadata. Mode nil is fill. The
 // rules (mode values, id formats) are the service's, so no field is constrained here.
 type LookupItemRequest struct {
-	Mode     *string `json:"mode,omitempty" doc:"fill (default), rematch or refresh."`
-	SourceID *string `json:"source_id,omitempty" doc:"Selects a known Open Library work (book items). Without it, fill and rematch search by title and refresh uses the stored metadata.openlibrary_id."`
-	TmdbID   *int    `json:"tmdb_id,omitempty" doc:"Selects a known TMDB match (movie and TV items). Without it, fill and rematch search by title and refresh uses the stored metadata.tmdb_id."`
+	Mode     *string `json:"mode,omitempty" doc:"fill (default) or rematch."`
+	SourceID *string `json:"source_id,omitempty" doc:"Selects a known Open Library work (book items). Without it, the lookup searches by title."`
+	TmdbID   *int    `json:"tmdb_id,omitempty" doc:"Selects a known TMDB match (movie and TV items). Without it, the lookup searches by title."`
 }
 
 // tmdbSuggestion converts one provider match to its wire shape. A zero year or an

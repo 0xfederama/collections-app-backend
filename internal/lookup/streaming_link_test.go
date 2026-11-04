@@ -1,11 +1,9 @@
 package lookup
 
 import (
-	"context"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/0xfederama/collections-app-backend/internal/items"
@@ -90,7 +88,7 @@ func TestStreamingLink_TrackedKeptOnPlatformEditAndClientCannotWriteIt(t *testin
 	}
 }
 
-func TestStreamingLink_RefreshReplacesAndExpiryDropsItWithTheImportedValues(t *testing.T) {
+func TestStreamingLink_ScheduledRefreshReplacesAndRemovesTheLink(t *testing.T) {
 	start := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
 	e := newLookupEnv(t, start)
 	it := e.create("Matrix", nil)
@@ -103,8 +101,8 @@ func TestStreamingLink_RefreshReplacesAndExpiryDropsItWithTheImportedValues(t *t
 	}
 	fresh := "https://www.justwatch.com/it/movie/matrix-2"
 	it, err = e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeOwned, ItemID: it.ID, ExpectedVersion: it.Version, Type: "movie", Provider: ProviderTMDB, SourceID: "603",
-		Title: "The Matrix", OriginalTitle: "Matrix", Fields: streamingFields(fresh), RefreshFields: true,
+		Mode: ModeScheduled, ItemID: it.ID, ExpectedVersion: it.Version, Type: "movie", Provider: ProviderTMDB, SourceID: "603",
+		Title: "The Matrix", OriginalTitle: "Matrix", Fields: streamingFields(fresh),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -114,8 +112,8 @@ func TestStreamingLink_RefreshReplacesAndExpiryDropsItWithTheImportedValues(t *t
 	}
 	// A refresh with no link removes the stale one.
 	it, err = e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeOwned, ItemID: it.ID, ExpectedVersion: it.Version, Type: "movie", Provider: ProviderTMDB, SourceID: "603",
-		Title: "The Matrix", OriginalTitle: "Matrix", Fields: streamingFields(""), RefreshFields: true,
+		Mode: ModeScheduled, ItemID: it.ID, ExpectedVersion: it.Version, Type: "movie", Provider: ProviderTMDB, SourceID: "603",
+		Title: "The Matrix", OriginalTitle: "Matrix", Fields: streamingFields(""),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -124,23 +122,11 @@ func TestStreamingLink_RefreshReplacesAndExpiryDropsItWithTheImportedValues(t *t
 		t.Fatalf("link after refresh without link = %v", got)
 	}
 	it, err = e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeOwned, ItemID: it.ID, ExpectedVersion: it.Version, Type: "movie", Provider: ProviderTMDB, SourceID: "603",
-		Title: "The Matrix", OriginalTitle: "Matrix", Fields: streamingFields(fresh), RefreshFields: true,
+		Mode: ModeScheduled, ItemID: it.ID, ExpectedVersion: it.Version, Type: "movie", Provider: ProviderTMDB, SourceID: "603",
+		Title: "The Matrix", OriginalTitle: "Matrix", Fields: streamingFields(fresh),
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	// Retention: expiry removes the link with the other unchanged imported values.
-	e.clock.Set(start.AddDate(1, 0, 0))
-	result, err := e.store.Maintain(t.Context(), func(context.Context, uuid.UUID, int) error { return nil })
-	if err != nil || result.Expired != 1 {
-		t.Fatalf("result=%+v err=%v", result, err)
-	}
-	got, _ := e.items.Get(scope.With(t.Context(), e.ws), it.ID)
-	s, _ := decodeMetadata(t, got.Metadata)["streaming"].(map[string]any)
-	if _, has := s["link"]; has || s["country"] != "IT" {
-		t.Errorf("streaming after expiry = %v, want the link gone and the country kept", s)
 	}
 }
 

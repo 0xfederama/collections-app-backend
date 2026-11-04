@@ -471,7 +471,7 @@ func (c *Client) DownloadPoster(ctx context.Context, posterPath string) ([]byte,
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusTooManyRequests {
 		c.note429(response.Header.Get("Retry-After"))
-		return nil, errors.New("TMDB rate limit exceeded")
+		return nil, ErrRateLimited
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return nil, fmt.Errorf("TMDB image request failed (HTTP %d)", response.StatusCode)

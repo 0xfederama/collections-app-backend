@@ -42,7 +42,7 @@ internal/search        search and recent items
 internal/workspace     bootstrap of the single workspace; settings (Huma)
 internal/httpapi       HTTP composition root: Huma router, probes, Spec() for cmd/specgen (the spec is generated from it)
 cmd/specgen            prints the OpenAPI document for `make spec`
-internal/lookup        metadata lookup (TMDB, Open Library, Hardcover gap-fill): merge rules, provenance, retention (Huma)
+internal/lookup        metadata lookup (TMDB, Open Library, Hardcover gap-fill): merge rules, provenance, weekly TMDB refresh (Huma)
 internal/stores        fixed online store provider keys (Huma)
 internal/integrations  bounded upstream clients: tmdb, openlibrary, hardcover
 api/openapi.yaml       the canonical API contract (spec wins over design-docs/API.md)
@@ -151,7 +151,7 @@ this commit's migrations, starts the latest GitHub Release's image from GHCR on 
 
 ## Configuration
 
-Environment variables are validated at startup. See `.env.example` and `design-docs/BACKUP_AND_DEPLOYMENT.md` §3. TMDB lookup is optional: request a key in [TMDB account API settings](https://www.themoviedb.org/settings/api) and set `TMDB_API_KEY` in the parent repo's `deploy/server/.env`; keep it server-side. A missing key disables lookup, while item creation keeps the typed title. The app must show an [approved TMDB logo and attribution](https://www.themoviedb.org/about/logos-attribution) in About; [TMDB watch-provider results](https://developer.themoviedb.org/reference/tv-series-watch-providers) require JustWatch attribution. Imported metadata and posters expire within six months, preserving user edits. Backups containing TMDB data must also be retired within six months under [TMDB API terms](https://www.themoviedb.org/api-terms-of-use); production backup retention is shorter.
+Environment variables are validated at startup. See `.env.example` and `design-docs/BACKUP_AND_DEPLOYMENT.md` §3. TMDB lookup is optional: request a key in [TMDB account API settings](https://www.themoviedb.org/settings/api) and set `TMDB_API_KEY` in the parent repo's `deploy/server/.env`; keep it server-side. A missing key disables lookup, while item creation keeps the typed title. The app must show an [approved TMDB logo and attribution](https://www.themoviedb.org/about/logos-attribution) in About; [TMDB watch-provider results](https://developer.themoviedb.org/reference/tv-series-watch-providers) require JustWatch attribution. Movie and TV metadata imported from TMDB is refreshed weekly and never expires; user images are kept. Backups containing TMDB data must also be retired within six months under [TMDB API terms](https://www.themoviedb.org/api-terms-of-use); production backup retention is shorter.
 
 ## Troubleshooting
 

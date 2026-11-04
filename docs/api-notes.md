@@ -28,7 +28,7 @@ in step with it.
 | `createItem`, `updateItem` | `website` | at most 2048 characters |
 | `createItem` | `tmdb_id` | at least 1 |
 | `createItem`, `lookupItemMetadata` | `source_id` | `^OL[0-9]+W$`, at most 64 characters |
-| `lookupItemMetadata` | `mode` | one of `fill`, `rematch`, `refresh` (default `fill`) |
+| `lookupItemMetadata` | `mode` | one of `fill`, `rematch` (default `fill`) |
 | `lookupItemMetadata` | `tmdb_id` | at least 1 |
 | `createItem`, `updateItem` | `price` | `amount`, `min`, `max`: `^\d{1,10}\.\d{2}$`; `currency`: `^[A-Z]{3}$` |
 | `updateItemContent` | `body` | at most 1048576 UTF-8 bytes (the service counts bytes; the guard limit is 2 MiB) |

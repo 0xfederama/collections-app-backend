@@ -53,18 +53,15 @@ func Register(api huma.API, log *slog.Logger, svc *Service, tmdb, books Provider
 		Summary: "Fill or replace an item's looked-up metadata",
 		Description: "Requires `If-Match` (`\"i-N\"`) and is available only for movie, TV and book items (TMDB for movie and TV, Open Library for books). " +
 			"`fill` preserves every non-empty user value and fills empty fields; `rematch` searches from the current title unless `tmdb_id` " +
-			"(movie and TV) or `source_id` (book) selects a suggestion, then replaces the title and all fields fetched from the provider; " +
-			"`refresh` uses the stored `metadata.tmdb_id` or `metadata.openlibrary_id` unless the id is supplied and likewise replaces fetched " +
-			"fields. All modes preserve an existing item image. A poster or cover is stored through the normal image pipeline only when the item " +
-			"has no image. On a book, `fill` also sets `stores` to `[preferred_store]` (the workspace default store) when `stores` is empty; no mode " +
-			"ever removes or replaces the user's store choices. The default mode is `fill`. When a search has no result, the operation returns the " +
-			"unchanged item and its current ETag. An explicit lookup while the integration is disabled or the provider cannot be reached returns " +
-			"`503 lookup_disabled` or `503 upstream_unavailable` respectively. Imported fields and lookup-owned posters retain server-side " +
-			"provenance, for every provider, so that fill, rematch and refresh never overwrite user edits. TMDB data has a retention rule: " +
-			"maintenance refreshes owned values after five calendar months; at six months, a value that still cannot be refreshed is removed only " +
-			"when it still equals its imported snapshot. User edits and user-supplied images are preserved. Poster age is tracked separately from " +
-			"metadata age. An item's `lookup_disabled` flag stops automatic refresh and lets its owned values expire under the same rules. Open " +
-			"Library data has no retention duty: it is kept until the user changes it.",
+			"(movie and TV) or `source_id` (book) selects a suggestion, then replaces the title and all fields fetched from the provider, " +
+			"user edits to those fields included. All modes preserve an existing item image. A poster or cover is stored through the normal " +
+			"image pipeline only when the item has no image. On a book, `fill` also sets `stores` to `[preferred_store]` (the workspace default " +
+			"store) when `stores` is empty; no mode ever removes or replaces the user's store choices. The default mode is `fill`. When a search " +
+			"has no result, the operation returns the unchanged item and its current ETag. An explicit lookup while the integration is disabled " +
+			"or the provider cannot be reached returns `503 lookup_disabled` or `503 upstream_unavailable` respectively. The server keeps the " +
+			"provenance of imported fields and posters. Movie and TV items are also refreshed from TMDB once a week by the server, which " +
+			"overwrites every fetched field and the title and keeps a user-supplied image; an item's `lookup_disabled` flag stops that refresh. " +
+			"Open Library data is never refreshed: it is kept until the user changes it.",
 		DefaultStatus: http.StatusOK,
 		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
 			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,

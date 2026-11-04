@@ -25,14 +25,14 @@ const (
 	ModeCreateUntracked Mode = "create_untracked"
 	ModeFill            Mode = "fill"
 	ModeRematch         Mode = "rematch"
-	ModeRefresh         Mode = "refresh"
-	// ModeOwned is the automatic retention refresh. It may replace only values
-	// that still equal their last imported snapshots.
-	ModeOwned Mode = "owned"
+	// ModeScheduled is the weekly maintenance refresh of a movie or TV item (D-123).
+	// It overwrites every fetched field and the title, user edits included, and
+	// keeps a user-supplied image. It is not an API mode.
+	ModeScheduled Mode = "scheduled"
 )
 
-// Record is the provenance needed to refresh or expire imported data without
-// removing values the user has edited since import.
+// Record is the provenance of an imported item: what was fetched, and the poster
+// that came with it.
 type Record struct {
 	ItemID      uuid.UUID
 	ItemVersion int
@@ -43,12 +43,12 @@ type Record struct {
 	ImportedFields map[string]any
 	ImportedTitle  *string
 	// OriginalTitle is the user title from before TMDB normalized it and is the
-	// fallback if an unchanged imported title expires.
+	// import normalized it. It is kept with the import; the weekly refresh does not change it.
 	OriginalTitle string
 	AttachmentID  *uuid.UUID
 	PosterPath    string
-	// PosterFetchedAt is separate from FetchedAt: refreshing metadata without
-	// replacing the poster must not extend the poster's retention window.
+	// PosterFetchedAt is when the poster was fetched, kept apart from FetchedAt
+	// because a poster can be replaced on its own.
 	PosterFetchedAt *time.Time
 	FetchedAt       time.Time
 }
@@ -64,7 +64,7 @@ type ApplyParams struct {
 	CreateInput     *items.CreateInput // create only; explicit user values win
 
 	// Provider and SourceID identify the match. The provider decides the id's
-	// metadata key and its retention (only TMDB has one, D-089/D-095).
+	// metadata key and whether its rows carry legacy deadlines (TMDB only, D-089/D-095).
 	Provider      string
 	SourceID      string
 	Title         string
@@ -77,13 +77,9 @@ type ApplyParams struct {
 	FillOnly   map[string]any
 	PosterPath string
 	Poster     *images.Processed
-	// RefreshFields is relevant to owned maintenance. False means a poster-only
-	// refresh and must leave field snapshots, title provenance and FetchedAt
-	// unchanged.
-	RefreshFields bool
 	// RefreshPoster distinguishes "preserve the current image" from a checked
-	// TMDB response with no poster. In owned mode the latter removes an expired
-	// lookup-owned poster; manual modes still preserve every existing image.
+	// TMDB response with no poster. In scheduled mode the latter removes a
+	// TMDB-sourced poster; manual modes still preserve every existing image.
 	RefreshPoster bool
 }
 
@@ -97,7 +93,7 @@ type Store interface {
 	Apply(ctx context.Context, p ApplyParams) (items.Item, error)
 }
 
-// addMonthsClamped applies calendar-month retention without rolling a date at
+// addMonthsClamped applies calendar-month deadlines without rolling a date at
 // the end of a long month into the following month.
 func addMonthsClamped(t time.Time, months int) time.Time {
 	first := time.Date(t.Year(), t.Month(), 1, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location()).AddDate(0, months, 0)

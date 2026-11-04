@@ -93,10 +93,10 @@ func run() error {
 	}))
 	lookupSvc := lookup.New(lookup.Providers{types.Movie: tmdbProvider, types.TVShow: tmdbProvider, types.Book: bookProvider}, lookupStore, itemSvc, settingsSvc, clock.System{}, workspaceID).
 		WithHardcover(hardcover.New(cfg.HardcoverAPIKey, cfg.OpenLibraryContact)) // optional gap-filler: disabled without a key
-	if _, err := lookupStore.Maintain(ctx, lookupSvc.RefreshOwned); err != nil {
-		logger.Warn("lookup retention maintenance failed at startup", "err", err)
+	if _, err := lookupStore.Maintain(ctx, lookupSvc.RefreshScheduled); err != nil {
+		logger.Warn("lookup weekly refresh failed at startup", "err", err)
 	}
-	go lookupStore.Run(ctx, 24*time.Hour, lookupSvc.RefreshOwned) // stops when ctx is cancelled on shutdown
+	go lookupStore.Run(ctx, lookup.MaintenanceInterval, lookupSvc.RefreshScheduled) // stops when ctx is cancelled on shutdown
 
 	handler, err := httpapi.NewRouter(httpapi.Deps{
 		DB:                  pool,

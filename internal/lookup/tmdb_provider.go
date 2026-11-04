@@ -8,8 +8,8 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/integrations/tmdb"
 )
 
-// tmdbProvider adapts the TMDB client (movie and TV, retention D-089, streaming
-// providers by country, posters) to Provider.
+// tmdbProvider adapts the TMDB client (movie and TV, streaming providers by
+// country, posters) to Provider.
 type tmdbProvider struct{ client *tmdb.Client }
 
 // NewTMDBProvider wraps a TMDB client; a nil or keyless client is simply disabled.
@@ -54,8 +54,13 @@ func (p tmdbProvider) DownloadImage(ctx context.Context, imagePath string) ([]by
 }
 
 func tmdbError(err error) error {
-	if errors.Is(err, tmdb.ErrDisabled) {
+	switch {
+	case errors.Is(err, tmdb.ErrDisabled):
 		return ErrDisabled
+	case errors.Is(err, tmdb.ErrRateLimited):
+		return ErrProviderRateLimited
+	case errors.Is(err, tmdb.ErrNotFound):
+		return ErrMatchNotFound
 	}
 	return err
 }

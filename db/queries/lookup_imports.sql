@@ -1,6 +1,7 @@
 -- F013-B3 / F-016 lookup import provenance (provider tmdb or openlibrary). Every query is scoped to one workspace.
--- Retention (refresh_after, expires_at, poster_*) exists only for provider 'tmdb' (D-089); Open Library
--- rows have NULL deadlines (D-095), and every maintenance query below filters on provider = 'tmdb'.
+-- Deadlines (refresh_after, expires_at, poster_*) are still written for provider 'tmdb' because
+-- lookup_imports_retention_check requires them. Nothing reads them since D-123 (weekly refresh, no expiry);
+-- the contract migration that drops them is a later release. Open Library rows have NULL deadlines (D-095).
 
 -- name: GetLookupListType :one
 SELECT type FROM lists
@@ -52,46 +53,23 @@ ON CONFLICT (item_id) DO UPDATE SET
   expires_at = EXCLUDED.expires_at
 WHERE lookup_imports.workspace_id = EXCLUDED.workspace_id;
 
--- name: ListDueTMDBImports :many
-SELECT t.*, i.version AS item_version, i.metadata, i.deleted_at, l.type AS current_type
-FROM lookup_imports t
-JOIN items i ON i.id = t.item_id AND i.workspace_id = t.workspace_id
-JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-WHERE t.workspace_id = @workspace_id AND t.provider = 'tmdb'
-  AND (t.refresh_after <= @now OR (t.poster_refresh_after IS NOT NULL AND t.poster_refresh_after <= @now))
-ORDER BY t.expires_at, t.item_id
-LIMIT @batch_limit;
-
--- name: ListExpiredTMDBImportIDs :many
-SELECT item_id FROM lookup_imports
-WHERE workspace_id = @workspace_id AND provider = 'tmdb'
-  AND (expires_at <= @now OR (poster_expires_at IS NOT NULL AND poster_expires_at <= @now))
-ORDER BY LEAST(expires_at, COALESCE(poster_expires_at, expires_at)), item_id
-LIMIT @batch_limit;
-
--- name: LockTMDBImportItem :one
-SELECT i.*, l.type, t.provider, t.source_id, t.imported_fields, t.imported_title, t.original_title,
-       t.attachment_id AS imported_attachment_id
+-- name: ListScheduledTMDBItems :many
+-- The weekly refresh (D-123): movie and TV items with a numeric tmdb_id that are not trashed and not
+-- lookup_disabled, and whose provenance (if any) was fetched before @fetched_before. An item with a typed
+-- tmdb_id and no provenance yet is due at once and sorts first.
+SELECT i.id AS item_id, i.version AS item_version
 FROM items i
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-JOIN lookup_imports t ON t.item_id = i.id AND t.workspace_id = i.workspace_id
-WHERE i.id = @id AND i.workspace_id = @workspace_id
-FOR UPDATE OF i;
-
--- name: ClearTMDBPosterProvenance :exec
-UPDATE lookup_imports
-SET attachment_id = NULL, poster_path = NULL, poster_fetched_at = NULL,
-    poster_refresh_after = NULL, poster_expires_at = NULL
-WHERE item_id = @item_id AND workspace_id = @workspace_id;
-
--- name: RetainTMDBPosterAfterMetadataExpiry :exec
--- Metadata is removed at its own deadline while the independently aged poster remains tracked.
-UPDATE lookup_imports
-SET imported_fields = '{}'::jsonb, imported_title = NULL,
-    fetched_at = poster_fetched_at, refresh_after = poster_refresh_after,
-    expires_at = poster_expires_at
-WHERE item_id = @item_id AND workspace_id = @workspace_id
-  AND poster_fetched_at IS NOT NULL AND poster_refresh_after IS NOT NULL AND poster_expires_at IS NOT NULL;
+LEFT JOIN lookup_imports t ON t.item_id = i.id AND t.workspace_id = i.workspace_id
+WHERE i.workspace_id = @workspace_id
+  AND i.deleted_at IS NULL
+  AND l.deleted_at IS NULL
+  AND l.type IN ('movie', 'tv_show')
+  AND jsonb_typeof(i.metadata -> 'tmdb_id') = 'number'
+  AND i.metadata -> 'lookup_disabled' IS DISTINCT FROM 'true'::jsonb
+  AND (t.item_id IS NULL OR (t.provider = 'tmdb' AND t.fetched_at <= @fetched_before))
+ORDER BY t.fetched_at NULLS FIRST, i.id
+LIMIT @batch_limit;
 
 -- name: UpdateLookupItem :exec
 UPDATE items
@@ -102,7 +80,3 @@ SET title = @title,
     version = version + 1,
     updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id;
-
--- name: DeleteLookupImport :execrows
-DELETE FROM lookup_imports
-WHERE item_id = @item_id AND workspace_id = @workspace_id;

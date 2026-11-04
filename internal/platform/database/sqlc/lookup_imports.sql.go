@@ -13,41 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const clearTMDBPosterProvenance = `-- name: ClearTMDBPosterProvenance :exec
-UPDATE lookup_imports
-SET attachment_id = NULL, poster_path = NULL, poster_fetched_at = NULL,
-    poster_refresh_after = NULL, poster_expires_at = NULL
-WHERE item_id = $1 AND workspace_id = $2
-`
-
-type ClearTMDBPosterProvenanceParams struct {
-	ItemID      uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-func (q *Queries) ClearTMDBPosterProvenance(ctx context.Context, arg ClearTMDBPosterProvenanceParams) error {
-	_, err := q.db.Exec(ctx, clearTMDBPosterProvenance, arg.ItemID, arg.WorkspaceID)
-	return err
-}
-
-const deleteLookupImport = `-- name: DeleteLookupImport :execrows
-DELETE FROM lookup_imports
-WHERE item_id = $1 AND workspace_id = $2
-`
-
-type DeleteLookupImportParams struct {
-	ItemID      uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-func (q *Queries) DeleteLookupImport(ctx context.Context, arg DeleteLookupImportParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteLookupImport, arg.ItemID, arg.WorkspaceID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const getLookupImport = `-- name: GetLookupImport :one
 SELECT t.workspace_id, t.item_id, t.type, t.imported_fields, t.imported_title, t.original_title, t.attachment_id, t.poster_path, t.poster_fetched_at, t.poster_refresh_after, t.poster_expires_at, t.fetched_at, t.refresh_after, t.expires_at, t.provider, t.source_id, i.version AS item_version
 FROM lookup_imports t
@@ -117,8 +82,9 @@ type GetLookupListTypeParams struct {
 }
 
 // F013-B3 / F-016 lookup import provenance (provider tmdb or openlibrary). Every query is scoped to one workspace.
-// Retention (refresh_after, expires_at, poster_*) exists only for provider 'tmdb' (D-089); Open Library
-// rows have NULL deadlines (D-095), and every maintenance query below filters on provider = 'tmdb'.
+// Deadlines (refresh_after, expires_at, poster_*) are still written for provider 'tmdb' because
+// lookup_imports_retention_check requires them. Nothing reads them since D-123 (weekly refresh, no expiry);
+// the contract migration that drops them is a later release. Open Library rows have NULL deadlines (D-095).
 func (q *Queries) GetLookupListType(ctx context.Context, arg GetLookupListTypeParams) (*string, error) {
 	row := q.db.QueryRow(ctx, getLookupListType, arg.ID, arg.WorkspaceID)
 	var type_ *string
@@ -167,114 +133,49 @@ func (q *Queries) InsertLookupItem(ctx context.Context, arg InsertLookupItemPara
 	return id, err
 }
 
-const listDueTMDBImports = `-- name: ListDueTMDBImports :many
-SELECT t.workspace_id, t.item_id, t.type, t.imported_fields, t.imported_title, t.original_title, t.attachment_id, t.poster_path, t.poster_fetched_at, t.poster_refresh_after, t.poster_expires_at, t.fetched_at, t.refresh_after, t.expires_at, t.provider, t.source_id, i.version AS item_version, i.metadata, i.deleted_at, l.type AS current_type
-FROM lookup_imports t
-JOIN items i ON i.id = t.item_id AND i.workspace_id = t.workspace_id
+const listScheduledTMDBItems = `-- name: ListScheduledTMDBItems :many
+SELECT i.id AS item_id, i.version AS item_version
+FROM items i
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-WHERE t.workspace_id = $1 AND t.provider = 'tmdb'
-  AND (t.refresh_after <= $2 OR (t.poster_refresh_after IS NOT NULL AND t.poster_refresh_after <= $2))
-ORDER BY t.expires_at, t.item_id
+LEFT JOIN lookup_imports t ON t.item_id = i.id AND t.workspace_id = i.workspace_id
+WHERE i.workspace_id = $1
+  AND i.deleted_at IS NULL
+  AND l.deleted_at IS NULL
+  AND l.type IN ('movie', 'tv_show')
+  AND jsonb_typeof(i.metadata -> 'tmdb_id') = 'number'
+  AND i.metadata -> 'lookup_disabled' IS DISTINCT FROM 'true'::jsonb
+  AND (t.item_id IS NULL OR (t.provider = 'tmdb' AND t.fetched_at <= $2))
+ORDER BY t.fetched_at NULLS FIRST, i.id
 LIMIT $3
 `
 
-type ListDueTMDBImportsParams struct {
-	WorkspaceID uuid.UUID
-	Now         *time.Time
-	BatchLimit  int32
+type ListScheduledTMDBItemsParams struct {
+	WorkspaceID   uuid.UUID
+	FetchedBefore time.Time
+	BatchLimit    int32
 }
 
-type ListDueTMDBImportsRow struct {
-	WorkspaceID        uuid.UUID
-	ItemID             uuid.UUID
-	Type               string
-	ImportedFields     []byte
-	ImportedTitle      *string
-	OriginalTitle      string
-	AttachmentID       uuid.NullUUID
-	PosterPath         *string
-	PosterFetchedAt    *time.Time
-	PosterRefreshAfter *time.Time
-	PosterExpiresAt    *time.Time
-	FetchedAt          time.Time
-	RefreshAfter       *time.Time
-	ExpiresAt          *time.Time
-	Provider           string
-	SourceID           string
-	ItemVersion        int32
-	Metadata           []byte
-	DeletedAt          *time.Time
-	CurrentType        *string
+type ListScheduledTMDBItemsRow struct {
+	ItemID      uuid.UUID
+	ItemVersion int32
 }
 
-func (q *Queries) ListDueTMDBImports(ctx context.Context, arg ListDueTMDBImportsParams) ([]ListDueTMDBImportsRow, error) {
-	rows, err := q.db.Query(ctx, listDueTMDBImports, arg.WorkspaceID, arg.Now, arg.BatchLimit)
+// The weekly refresh (D-123): movie and TV items with a numeric tmdb_id that are not trashed and not
+// lookup_disabled, and whose provenance (if any) was fetched before @fetched_before. An item with a typed
+// tmdb_id and no provenance yet is due at once and sorts first.
+func (q *Queries) ListScheduledTMDBItems(ctx context.Context, arg ListScheduledTMDBItemsParams) ([]ListScheduledTMDBItemsRow, error) {
+	rows, err := q.db.Query(ctx, listScheduledTMDBItems, arg.WorkspaceID, arg.FetchedBefore, arg.BatchLimit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListDueTMDBImportsRow{}
+	items := []ListScheduledTMDBItemsRow{}
 	for rows.Next() {
-		var i ListDueTMDBImportsRow
-		if err := rows.Scan(
-			&i.WorkspaceID,
-			&i.ItemID,
-			&i.Type,
-			&i.ImportedFields,
-			&i.ImportedTitle,
-			&i.OriginalTitle,
-			&i.AttachmentID,
-			&i.PosterPath,
-			&i.PosterFetchedAt,
-			&i.PosterRefreshAfter,
-			&i.PosterExpiresAt,
-			&i.FetchedAt,
-			&i.RefreshAfter,
-			&i.ExpiresAt,
-			&i.Provider,
-			&i.SourceID,
-			&i.ItemVersion,
-			&i.Metadata,
-			&i.DeletedAt,
-			&i.CurrentType,
-		); err != nil {
+		var i ListScheduledTMDBItemsRow
+		if err := rows.Scan(&i.ItemID, &i.ItemVersion); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listExpiredTMDBImportIDs = `-- name: ListExpiredTMDBImportIDs :many
-SELECT item_id FROM lookup_imports
-WHERE workspace_id = $1 AND provider = 'tmdb'
-  AND (expires_at <= $2 OR (poster_expires_at IS NOT NULL AND poster_expires_at <= $2))
-ORDER BY LEAST(expires_at, COALESCE(poster_expires_at, expires_at)), item_id
-LIMIT $3
-`
-
-type ListExpiredTMDBImportIDsParams struct {
-	WorkspaceID uuid.UUID
-	Now         *time.Time
-	BatchLimit  int32
-}
-
-func (q *Queries) ListExpiredTMDBImportIDs(ctx context.Context, arg ListExpiredTMDBImportIDsParams) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, listExpiredTMDBImportIDs, arg.WorkspaceID, arg.Now, arg.BatchLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []uuid.UUID{}
-	for rows.Next() {
-		var item_id uuid.UUID
-		if err := rows.Scan(&item_id); err != nil {
-			return nil, err
-		}
-		items = append(items, item_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -340,100 +241,6 @@ func (q *Queries) LockLookupItem(ctx context.Context, arg LockLookupItemParams) 
 		&i.Type,
 	)
 	return i, err
-}
-
-const lockTMDBImportItem = `-- name: LockTMDBImportItem :one
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id, l.type, t.provider, t.source_id, t.imported_fields, t.imported_title, t.original_title,
-       t.attachment_id AS imported_attachment_id
-FROM items i
-JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
-JOIN lookup_imports t ON t.item_id = i.id AND t.workspace_id = i.workspace_id
-WHERE i.id = $1 AND i.workspace_id = $2
-FOR UPDATE OF i
-`
-
-type LockTMDBImportItemParams struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-type LockTMDBImportItemRow struct {
-	ID                   uuid.UUID
-	WorkspaceID          uuid.UUID
-	ListID               uuid.UUID
-	Title                string
-	ImageUrl             *string
-	ImageAttachmentID    uuid.NullUUID
-	PriceMin             pgtype.Numeric
-	PriceMax             pgtype.Numeric
-	Currency             *string
-	WebsiteUrl           *string
-	Metadata             []byte
-	SortOrder            int32
-	Version              int32
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
-	DeletedAt            *time.Time
-	TrashBatchID         uuid.NullUUID
-	Type                 *string
-	Provider             string
-	SourceID             string
-	ImportedFields       []byte
-	ImportedTitle        *string
-	OriginalTitle        string
-	ImportedAttachmentID uuid.NullUUID
-}
-
-func (q *Queries) LockTMDBImportItem(ctx context.Context, arg LockTMDBImportItemParams) (LockTMDBImportItemRow, error) {
-	row := q.db.QueryRow(ctx, lockTMDBImportItem, arg.ID, arg.WorkspaceID)
-	var i LockTMDBImportItemRow
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.ListID,
-		&i.Title,
-		&i.ImageUrl,
-		&i.ImageAttachmentID,
-		&i.PriceMin,
-		&i.PriceMax,
-		&i.Currency,
-		&i.WebsiteUrl,
-		&i.Metadata,
-		&i.SortOrder,
-		&i.Version,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-		&i.TrashBatchID,
-		&i.Type,
-		&i.Provider,
-		&i.SourceID,
-		&i.ImportedFields,
-		&i.ImportedTitle,
-		&i.OriginalTitle,
-		&i.ImportedAttachmentID,
-	)
-	return i, err
-}
-
-const retainTMDBPosterAfterMetadataExpiry = `-- name: RetainTMDBPosterAfterMetadataExpiry :exec
-UPDATE lookup_imports
-SET imported_fields = '{}'::jsonb, imported_title = NULL,
-    fetched_at = poster_fetched_at, refresh_after = poster_refresh_after,
-    expires_at = poster_expires_at
-WHERE item_id = $1 AND workspace_id = $2
-  AND poster_fetched_at IS NOT NULL AND poster_refresh_after IS NOT NULL AND poster_expires_at IS NOT NULL
-`
-
-type RetainTMDBPosterAfterMetadataExpiryParams struct {
-	ItemID      uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
-// Metadata is removed at its own deadline while the independently aged poster remains tracked.
-func (q *Queries) RetainTMDBPosterAfterMetadataExpiry(ctx context.Context, arg RetainTMDBPosterAfterMetadataExpiryParams) error {
-	_, err := q.db.Exec(ctx, retainTMDBPosterAfterMetadataExpiry, arg.ItemID, arg.WorkspaceID)
-	return err
 }
 
 const updateLookupItem = `-- name: UpdateLookupItem :exec

@@ -46,7 +46,7 @@ func TestF016B3_BookCreateKeepsProvenanceWithoutRetention(t *testing.T) {
 		Title: "Dune", OriginalTitle: "dune",
 		CreateInput: &items.CreateInput{Title: "dune", Metadata: map[string]any{"pages": 700}},
 		Fields:      bookFields(), FillOnly: map[string]any{"stores": []string{"amazon", "kobo"}},
-		PosterPath: "12547191", Poster: processedPoster("cover"), RefreshFields: true, RefreshPoster: true,
+		PosterPath: "12547191", Poster: processedPoster("cover"), RefreshPoster: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -200,7 +200,7 @@ func TestF016B3_BookCoverIsOnlyAttachedToAnItemWithoutImage(t *testing.T) {
 	}
 	first := it.Image.AttachmentID
 	got, err := e.store.Apply(t.Context(), ApplyParams{
-		Mode: ModeRefresh, ItemID: it.ID, ExpectedVersion: it.Version, Type: "book", Provider: ProviderOpenLibrary, SourceID: "OL1W",
+		Mode: ModeRematch, ItemID: it.ID, ExpectedVersion: it.Version, Type: "book", Provider: ProviderOpenLibrary, SourceID: "OL1W",
 		Title: "Dune", OriginalTitle: it.Title, Fields: bookFields(), PosterPath: "2", Poster: processedPoster("two"), RefreshPoster: true,
 	})
 	if err != nil || got.Image == nil || got.Image.AttachmentID != first {

@@ -28,7 +28,7 @@ type DB interface {
 // (scope). Outside InTx each call is one statement on the pool; inside InTx the
 // calls share one transaction. Errors are returned as the driver gave them,
 // except a missing row, which is apperr.NotFound where the rule needs one.
-// Declared here, next to its Postgres implementation, so the apply and retention
+// Declared here, next to its Postgres implementation, so the apply and maintenance
 // rules run against a fake in tests.
 type Repo interface {
 	// InTx runs fn in one transaction: commit on nil, rollback on error.
@@ -58,24 +58,12 @@ type Repo interface {
 	// DeleteAttachment removes an attachment row and returns its file keys. SEAM: moves to images.
 	DeleteAttachment(ctx context.Context, id uuid.UUID) (images.FileKeys, error)
 
-	// ExpiredImportIDs lists up to limit TMDB imports with a passed metadata or poster deadline.
-	ExpiredImportIDs(ctx context.Context, now time.Time, limit int32) ([]uuid.UUID, error)
-	// DueImports lists up to limit TMDB imports with a due metadata or poster refresh.
-	DueImports(ctx context.Context, now time.Time, limit int32) ([]dueImport, error)
-	// LockImportedItem locks an item that has TMDB provenance (FOR UPDATE). ok is false when there is none.
-	LockImportedItem(ctx context.Context, itemID uuid.UUID) (cur lockedItem, ok bool, err error)
-	// ImportDeadlines returns the metadata and poster expiry of an item's provenance. ok is false when there is none.
-	ImportDeadlines(ctx context.Context, itemID uuid.UUID) (dl importDeadlines, ok bool, err error)
-	// ClearPosterProvenance forgets the poster of an import and keeps its metadata provenance.
-	ClearPosterProvenance(ctx context.Context, itemID uuid.UUID) error
-	// RetainPosterAfterMetadataExpiry empties the imported metadata and moves the provenance deadlines to the poster's.
-	RetainPosterAfterMetadataExpiry(ctx context.Context, itemID uuid.UUID) error
-	// DeleteImport removes the provenance row of an item.
-	DeleteImport(ctx context.Context, itemID uuid.UUID) error
+	// ScheduledItems lists up to limit movie and TV items due for the weekly TMDB refresh (D-123):
+	// fetched before fetchedBefore, or never fetched (a typed tmdb_id), oldest first.
+	ScheduledItems(ctx context.Context, fetchedBefore time.Time, limit int32) ([]scheduledItem, error)
 }
 
-// lockedItem is an item row read under FOR UPDATE. The Imported* fields are set
-// only by LockImportedItem.
+// lockedItem is an item row read under FOR UPDATE.
 type lockedItem struct {
 	Version           int
 	Title             string
@@ -83,11 +71,6 @@ type lockedItem struct {
 	Metadata          []byte
 	ImageURL          *string
 	ImageAttachmentID uuid.NullUUID
-
-	ImportedFields       []byte
-	ImportedTitle        *string
-	OriginalTitle        string
-	ImportedAttachmentID uuid.NullUUID
 }
 
 // newItem is an item created by an import. Price is validated by the caller.
@@ -111,8 +94,8 @@ type itemUpdate struct {
 	Now               time.Time
 }
 
-// importSave is one lookup_imports row. Retention deadlines are nil for a
-// provider without retention.
+// importSave is one lookup_imports row. Deadlines are nil for Open Library (D-095);
+// TMDB rows carry the legacy deadlines (see legacyDeadlines).
 type importSave struct {
 	ItemID          uuid.UUID
 	Provider        string
@@ -132,21 +115,11 @@ type importSave struct {
 	ExpiresAt          *time.Time
 }
 
-// dueImport is a TMDB import whose metadata or poster refresh is due.
-type dueImport struct {
+// scheduledItem is a movie or TV item due for the weekly refresh, with the
+// version the pass read.
+type scheduledItem struct {
 	ItemID      uuid.UUID
 	ItemVersion int
-	Type        string
-	SourceID    string
-	Metadata    []byte
-	DeletedAt   *time.Time
-	CurrentType *string
-}
-
-// importDeadlines are the expiry deadlines of an import (both nil when unset).
-type importDeadlines struct {
-	ExpiresAt       *time.Time
-	PosterExpiresAt *time.Time
 }
 
 // Postgres implements Repo on a pool, and runs InTx on one transaction.
@@ -278,65 +251,16 @@ func (r *repo) DeleteAttachment(ctx context.Context, id uuid.UUID) (images.FileK
 	return images.FileKeys{StorageKey: row.StorageKey, ThumbnailStorageKey: row.ThumbnailStorageKey}, nil
 }
 
-func (r *repo) ExpiredImportIDs(ctx context.Context, now time.Time, limit int32) ([]uuid.UUID, error) {
-	return r.q.ListExpiredTMDBImportIDs(ctx, sqlc.ListExpiredTMDBImportIDsParams{
-		WorkspaceID: scope.WorkspaceID(ctx), Now: &now, BatchLimit: limit,
-	})
-}
-
-func (r *repo) DueImports(ctx context.Context, now time.Time, limit int32) ([]dueImport, error) {
-	rows, err := r.q.ListDueTMDBImports(ctx, sqlc.ListDueTMDBImportsParams{
-		WorkspaceID: scope.WorkspaceID(ctx), Now: &now, BatchLimit: limit,
+func (r *repo) ScheduledItems(ctx context.Context, fetchedBefore time.Time, limit int32) ([]scheduledItem, error) {
+	rows, err := r.q.ListScheduledTMDBItems(ctx, sqlc.ListScheduledTMDBItemsParams{
+		WorkspaceID: scope.WorkspaceID(ctx), FetchedBefore: fetchedBefore, BatchLimit: limit,
 	})
 	if err != nil {
 		return nil, err
 	}
-	out := make([]dueImport, 0, len(rows))
+	out := make([]scheduledItem, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, dueImport{
-			ItemID: row.ItemID, ItemVersion: int(row.ItemVersion), Type: row.Type, SourceID: row.SourceID,
-			Metadata: row.Metadata, DeletedAt: row.DeletedAt, CurrentType: row.CurrentType,
-		})
+		out = append(out, scheduledItem{ItemID: row.ItemID, ItemVersion: int(row.ItemVersion)})
 	}
 	return out, nil
-}
-
-func (r *repo) LockImportedItem(ctx context.Context, itemID uuid.UUID) (lockedItem, bool, error) {
-	row, err := r.q.LockTMDBImportItem(ctx, sqlc.LockTMDBImportItemParams{ID: itemID, WorkspaceID: scope.WorkspaceID(ctx)})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return lockedItem{}, false, nil
-	}
-	if err != nil {
-		return lockedItem{}, false, err
-	}
-	return lockedItem{
-		Version: int(row.Version), Title: row.Title, Type: row.Type, Metadata: row.Metadata,
-		ImageURL: row.ImageUrl, ImageAttachmentID: row.ImageAttachmentID,
-		ImportedFields: row.ImportedFields, ImportedTitle: row.ImportedTitle, OriginalTitle: row.OriginalTitle,
-		ImportedAttachmentID: row.ImportedAttachmentID,
-	}, true, nil
-}
-
-func (r *repo) ImportDeadlines(ctx context.Context, itemID uuid.UUID) (importDeadlines, bool, error) {
-	row, err := r.q.GetLookupImport(ctx, sqlc.GetLookupImportParams{ItemID: itemID, WorkspaceID: scope.WorkspaceID(ctx)})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return importDeadlines{}, false, nil
-	}
-	if err != nil {
-		return importDeadlines{}, false, err
-	}
-	return importDeadlines{ExpiresAt: row.ExpiresAt, PosterExpiresAt: row.PosterExpiresAt}, true, nil
-}
-
-func (r *repo) ClearPosterProvenance(ctx context.Context, itemID uuid.UUID) error {
-	return r.q.ClearTMDBPosterProvenance(ctx, sqlc.ClearTMDBPosterProvenanceParams{ItemID: itemID, WorkspaceID: scope.WorkspaceID(ctx)})
-}
-
-func (r *repo) RetainPosterAfterMetadataExpiry(ctx context.Context, itemID uuid.UUID) error {
-	return r.q.RetainTMDBPosterAfterMetadataExpiry(ctx, sqlc.RetainTMDBPosterAfterMetadataExpiryParams{ItemID: itemID, WorkspaceID: scope.WorkspaceID(ctx)})
-}
-
-func (r *repo) DeleteImport(ctx context.Context, itemID uuid.UUID) error {
-	_, err := r.q.DeleteLookupImport(ctx, sqlc.DeleteLookupImportParams{ItemID: itemID, WorkspaceID: scope.WorkspaceID(ctx)})
-	return err
 }

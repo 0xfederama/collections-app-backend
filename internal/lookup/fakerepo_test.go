@@ -18,11 +18,10 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 )
 
-// fakeRepo is an in-memory Repo for the apply and retention rules. It keeps every
+// fakeRepo is an in-memory Repo for the apply and maintenance rules. It keeps every
 // write in order and the ones made outside a transaction, and it rolls a failed
 // transaction back to the state before it (maps are copied per InTx), like
-// Postgres does. The SQL filters (provider, deadlines, workspace) are mirrored in
-// ExpiredImportIDs and DueImports.
+// Postgres does. The SQL filter of the weekly pass is mirrored in ScheduledItems.
 type fakeRepo struct {
 	inTx    bool
 	commits int
@@ -203,105 +202,59 @@ func (f *fakeRepo) DeleteAttachment(_ context.Context, id uuid.UUID) (images.Fil
 	return images.FileKeys{StorageKey: a.StorageKey, ThumbnailStorageKey: a.ThumbnailStorageKey}, nil
 }
 
-func (f *fakeRepo) ExpiredImportIDs(_ context.Context, now time.Time, limit int32) ([]uuid.UUID, error) {
-	var ids []uuid.UUID
-	for id, row := range f.imports {
-		if row.Provider != ProviderTMDB {
+// ScheduledItems mirrors ListScheduledTMDBItems: movie and TV items with a numeric
+// tmdb_id that are not trashed and not lookup_disabled, and whose provenance (if
+// any) was fetched before fetchedBefore; never-fetched items sort first.
+func (f *fakeRepo) ScheduledItems(_ context.Context, fetchedBefore time.Time, limit int32) ([]scheduledItem, error) {
+	type candidate struct {
+		item      scheduledItem
+		fetchedAt *time.Time
+	}
+	var due []candidate
+	for id, it := range f.items {
+		if it.deleted || (it.typ == nil || (*it.typ != "movie" && *it.typ != "tv_show")) {
 			continue
 		}
-		if (row.ExpiresAt != nil && !row.ExpiresAt.After(now)) || (row.PosterExpiresAt != nil && !row.PosterExpiresAt.After(now)) {
-			ids = append(ids, id)
-		}
-	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i].String() < ids[j].String() })
-	if len(ids) > int(limit) {
-		ids = ids[:limit]
-	}
-	return ids, nil
-}
-
-func (f *fakeRepo) DueImports(_ context.Context, now time.Time, limit int32) ([]dueImport, error) {
-	var out []dueImport
-	for id, row := range f.imports {
-		if row.Provider != ProviderTMDB {
+		var metadata map[string]any
+		if json.Unmarshal(it.metadata, &metadata) != nil {
 			continue
 		}
-		refreshDue := row.RefreshAfter != nil && !row.RefreshAfter.After(now)
-		posterDue := row.PosterRefreshAfter != nil && !row.PosterRefreshAfter.After(now)
-		if !refreshDue && !posterDue {
+		if _, ok := metadata["tmdb_id"].(float64); !ok {
 			continue
 		}
-		it := f.items[id]
-		out = append(out, dueImport{
-			ItemID: id, ItemVersion: it.version, Type: row.Type, SourceID: row.SourceID, Metadata: it.metadata,
-			DeletedAt: deletedAt(it), CurrentType: it.typ,
-		})
+		if disabled, _ := metadata["lookup_disabled"].(bool); disabled {
+			continue
+		}
+		c := candidate{item: scheduledItem{ItemID: id, ItemVersion: it.version}}
+		if row, ok := f.imports[id]; ok {
+			if row.Provider != ProviderTMDB || row.FetchedAt.After(fetchedBefore) {
+				continue
+			}
+			c.fetchedAt = &row.FetchedAt
+		}
+		due = append(due, c)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ItemID.String() < out[j].ItemID.String() })
+	sort.Slice(due, func(i, j int) bool {
+		a, b := due[i].fetchedAt, due[j].fetchedAt
+		switch {
+		case a == nil || b == nil:
+			if a == nil && b == nil {
+				return due[i].item.ItemID.String() < due[j].item.ItemID.String()
+			}
+			return a == nil
+		case !a.Equal(*b):
+			return a.Before(*b)
+		}
+		return due[i].item.ItemID.String() < due[j].item.ItemID.String()
+	})
+	out := make([]scheduledItem, 0, len(due))
+	for _, c := range due {
+		out = append(out, c.item)
+	}
 	if len(out) > int(limit) {
 		out = out[:limit]
 	}
 	return out, nil
-}
-
-func deletedAt(it fakeItem) *time.Time {
-	if !it.deleted {
-		return nil
-	}
-	t := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
-	return &t
-}
-
-func (f *fakeRepo) LockImportedItem(_ context.Context, itemID uuid.UUID) (lockedItem, bool, error) {
-	row, ok := f.imports[itemID]
-	if !ok {
-		return lockedItem{}, false, nil
-	}
-	f.write("lock imported item")
-	it := f.items[itemID]
-	return lockedItem{
-		Version: it.version, Title: it.title, Type: it.typ, Metadata: it.metadata,
-		ImageURL: it.imageURL, ImageAttachmentID: it.imageAttachment,
-		ImportedFields: row.ImportedFields, ImportedTitle: row.ImportedTitle, OriginalTitle: row.OriginalTitle,
-		ImportedAttachmentID: row.AttachmentID,
-	}, true, nil
-}
-
-func (f *fakeRepo) ImportDeadlines(_ context.Context, itemID uuid.UUID) (importDeadlines, bool, error) {
-	row, ok := f.imports[itemID]
-	return importDeadlines{ExpiresAt: row.ExpiresAt, PosterExpiresAt: row.PosterExpiresAt}, ok, nil
-}
-
-func (f *fakeRepo) ClearPosterProvenance(_ context.Context, itemID uuid.UUID) error {
-	f.write("clear poster provenance")
-	row := f.imports[itemID]
-	row.AttachmentID = uuid.NullUUID{}
-	row.PosterPath, row.PosterFetchedAt, row.PosterRefreshAfter, row.PosterExpiresAt = nil, nil, nil, nil
-	f.imports[itemID] = row
-	return nil
-}
-
-// RetainPosterAfterMetadataExpiry follows the SQL: it applies only when the
-// poster deadlines are all set.
-func (f *fakeRepo) RetainPosterAfterMetadataExpiry(_ context.Context, itemID uuid.UUID) error {
-	f.write("retain poster provenance")
-	row := f.imports[itemID]
-	if row.PosterFetchedAt == nil || row.PosterRefreshAfter == nil || row.PosterExpiresAt == nil {
-		return nil
-	}
-	row.ImportedFields = []byte("{}")
-	row.ImportedTitle = nil
-	row.FetchedAt = *row.PosterFetchedAt
-	row.RefreshAfter = row.PosterRefreshAfter
-	row.ExpiresAt = row.PosterExpiresAt
-	f.imports[itemID] = row
-	return nil
-}
-
-func (f *fakeRepo) DeleteImport(_ context.Context, itemID uuid.UUID) error {
-	f.write("delete import")
-	delete(f.imports, itemID)
-	return nil
 }
 
 // repoItems reads items from the fake after a commit (the itemReader of DBStore).

@@ -229,11 +229,11 @@ func TestTMDBMockFixtureStillWorksThroughTheAdapter(t *testing.T) {
 	}
 }
 
-func TestRetentionIsDeclaredOnlyByTMDB(t *testing.T) {
-	if r := retentionFor(ProviderTMDB); r == nil || r.RefreshMonths != 5 || r.ExpireMonths != 6 {
-		t.Errorf("tmdb retention = %+v, want 5/6 months (D-089)", r)
+func TestLegacyDeadlinesAreWrittenOnlyForTMDB(t *testing.T) {
+	if r := legacyDeadlinesFor(ProviderTMDB); r == nil || r.RefreshMonths != 5 || r.ExpireMonths != 6 {
+		t.Errorf("tmdb deadlines = %+v, want 5/6 months (D-089, kept for the schema)", r)
 	}
-	if r := retentionFor(ProviderOpenLibrary); r != nil {
-		t.Errorf("openlibrary retention = %+v, want none (D-095)", r)
+	if r := legacyDeadlinesFor(ProviderOpenLibrary); r != nil {
+		t.Errorf("openlibrary deadlines = %+v, want none (D-095)", r)
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"strconv"
 
@@ -166,8 +165,8 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 // before writing.
 func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion int, mode Mode, selection Selection) (items.Item, error) {
 	ctx = scope.With(ctx, s.workspaceID)
-	if mode != ModeFill && mode != ModeRematch {
-		return items.Item{}, apperr.Validation(apperr.FieldError{Field: "mode", Message: "must be fill or rematch"})
+	if mode != ModeFill && mode != ModeRematch && mode != ModeRefresh {
+		return items.Item{}, apperr.Validation(apperr.FieldError{Field: "mode", Message: "must be fill, rematch, or refresh"})
 	}
 	if !s.anyEnabled() {
 		return items.Item{}, apperr.LookupDisabled()
@@ -186,6 +185,9 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 	}
 	if !provider.Enabled() {
 		return items.Item{}, apperr.LookupDisabled()
+	}
+	if mode == ModeRefresh {
+		return s.refreshExplicit(ctx, itemID, it, expectedVersion, provider, selection)
 	}
 	settings, err := s.settings.Get(scope.With(ctx, s.workspaceID))
 	if err != nil {
@@ -221,93 +223,6 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 		PosterPath: candidate.details.ImagePath, Poster: poster,
 		RefreshPoster: refreshPoster,
 	})
-}
-
-// RefreshScheduled is the weekly maintenance refresh of one movie or TV item
-// (D-123). It fetches the TMDB details of the item's stored tmdb_id and overwrites
-// every fetched field and the title, user edits included. A poster is replaced
-// only when TMDB's path changed and the item still carries the poster this
-// refresh fetched (or it has no image at all); a user-supplied image stays.
-// Books and lookup_disabled items are never refreshed. Provider errors come back
-// unchanged (ErrProviderRateLimited, ErrMatchNotFound, others) so the pass in
-// maintenance.go can classify them; nothing is written unless the details fetch
-// and any poster download succeeded.
-func (s *Service) RefreshScheduled(ctx context.Context, itemID uuid.UUID, expectedVersion int) error {
-	ctx = scope.With(ctx, s.workspaceID)
-	it, err := s.items.Get(ctx, itemID)
-	if err != nil {
-		return err
-	}
-	if it.Version != expectedVersion {
-		return apperr.VersionConflict(it.Version)
-	}
-	typ := typeKey(it.Type)
-	provider := s.providers[typ]
-	if provider == nil || provider.Name() != ProviderTMDB {
-		return errNotScheduled // books are never refreshed (D-095, D-123)
-	}
-	if !provider.Enabled() {
-		return apperr.LookupDisabled()
-	}
-	if lookupDisabled(it.Metadata) {
-		return errNotScheduled
-	}
-	id := metadataSourceID(provider.Name(), it.Metadata)
-	if id == "" {
-		return fmt.Errorf("scheduled refresh: item has no valid %s id", providerLabel(provider.Name()))
-	}
-	settings, err := s.settings.Get(ctx)
-	if err != nil {
-		return err
-	}
-	details, err := provider.Details(ctx, typ, id, settings.MetadataLanguage, settings.StreamingCountryCode)
-	if err != nil {
-		return err
-	}
-	if details.SourceID != id {
-		return fmt.Errorf("scheduled refresh: %s returned another id", providerLabel(provider.Name()))
-	}
-	record, _, err := s.store.Read(ctx, itemID)
-	if err != nil {
-		return err
-	}
-	// The poster is owned when it is the attachment this import fetched. An owned
-	// poster follows TMDB's path; a missing image is filled once, and a user's
-	// image or a poster the user removed is never fetched again.
-	owned := record.AttachmentID != nil && it.Image != nil && it.Image.Source == items.ImageSourceUpload &&
-		it.Image.AttachmentID == *record.AttachmentID
-	refreshPoster := owned && record.PosterPath != details.ImagePath ||
-		!owned && it.Image == nil && record.AttachmentID == nil
-	var poster *images.Processed
-	if refreshPoster && details.ImagePath != "" {
-		poster, err = s.scheduledPoster(ctx, provider, details.ImagePath)
-		if err != nil {
-			return err
-		}
-	}
-	_, err = s.store.Apply(ctx, ApplyParams{
-		Mode: ModeScheduled, ItemID: itemID, ExpectedVersion: expectedVersion, Type: typ,
-		Provider: provider.Name(), SourceID: details.SourceID,
-		Title: details.Title, OriginalTitle: it.Title,
-		Fields: details.Fields, PosterPath: details.ImagePath, Poster: poster,
-		RefreshPoster: refreshPoster,
-	})
-	return err
-}
-
-// scheduledPoster downloads and processes a TMDB poster for the weekly refresh.
-// Unlike poster, a download failure is returned unchanged, so a rate limit can stop
-// the pass; the item's current image is never touched by a failure here.
-func (s *Service) scheduledPoster(ctx context.Context, provider Provider, path string) (*images.Processed, error) {
-	raw, err := provider.DownloadImage(ctx, path)
-	if err != nil {
-		return nil, err
-	}
-	processed, err := images.Process(bytes.NewReader(raw))
-	if err != nil {
-		return nil, apperr.UpstreamUnavailable()
-	}
-	return processed, nil
 }
 
 type candidate struct{ details Details }

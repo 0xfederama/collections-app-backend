@@ -228,7 +228,14 @@ func (h *handler) lookupItem(ctx context.Context, in *LookupItemInput) (*LookupI
 	return &LookupItemOutput{ETag: etag.Format(etag.Item, it.Version), Body: body}, nil
 }
 
-// refreshList is the refreshListLookups operation (stub, replaced in the next commit).
+// refreshList is the refreshListLookups operation: the counts of one list refresh.
 func (h *handler) refreshList(ctx context.Context, in *IDParam) (*ListLookupRefreshOutput, error) {
-	return nil, huma.Error501NotImplemented("list lookup refresh is not implemented yet")
+	if h.svc == nil {
+		return nil, apperr.LookupDisabled()
+	}
+	result, err := h.svc.RefreshList(ctx, in.ID)
+	if err != nil {
+		return nil, err
+	}
+	return &ListLookupRefreshOutput{Body: ListLookupRefreshJSON{Failed: result.Failed, Skipped: result.Skipped, Updated: result.Updated}}, nil
 }

@@ -3534,7 +3534,7 @@ paths:
         - settings
   /api/v1/tmdb/suggestions:
     get:
-      description: "Searches TMDB using the workspace's `metadata_language`. When the server has no TMDB key, returns `{ \"available\": false, \"results\": [] }`; this endpoint does not fail merely because lookup is disabled. Results retain TMDB's ranking. The returned poster URL is for suggestion display only and is not an item image."
+      description: "Searches TMDB using the workspace's `metadata_language`. When the server has no TMDB key, returns `{ \"available\": false, \"results\": [] }`; this endpoint does not fail merely because lookup is disabled. Results retain TMDB's ranking. Titles are in Latin script: the localized title when it is Latin, else the English title, else the Latin original; a non-Latin title is returned only when TMDB has no Latin form. The returned poster URL is for suggestion display only and is not an item image."
       operationId: listTmdbSuggestions
       parameters:
         - description: Movie or TV show.

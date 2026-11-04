@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"path"
@@ -28,6 +29,8 @@ const (
 	maxRetryAfter    = time.Hour
 	mockMovieQuery   = "[mock] movie name"
 	mockMovieID      = 900001
+	// maxPersonLookups bounds the /person calls one Details makes for non-Latin directors.
+	maxPersonLookups = 3
 )
 
 var (
@@ -140,31 +143,26 @@ func (c *Client) Search(ctx context.Context, typ, query, language string) ([]Mat
 	if results, ok := c.cached(key); ok {
 		return results, nil
 	}
-	var data struct {
-		Results []struct {
-			ID            int    `json:"id"`
-			Title         string `json:"title"`
-			Name          string `json:"name"`
-			OriginalTitle string `json:"original_title"`
-			OriginalName  string `json:"original_name"`
-			ReleaseDate   string `json:"release_date"`
-			FirstAirDate  string `json:"first_air_date"`
-			PosterPath    string `json:"poster_path"`
-			Overview      string `json:"overview"`
-		} `json:"results"`
-	}
+	var data searchResponse
 	if err := c.getJSON(ctx, "/search/"+endpoint, url.Values{"query": {query}, "language": {language}}, &data); err != nil {
 		return nil, err
 	}
+	// Search has no translations, so a non-Latin localized title costs one extra
+	// en-US search (same query, matched by id), and only when one is needed.
+	var english map[int]string
+	if !strings.EqualFold(language, "en-US") && anyNonLatin(typ, data.Results) {
+		if english, err = c.englishSearchTitles(ctx, typ, endpoint, query); err != nil {
+			return nil, err
+		}
+	}
 	results := make([]Match, 0, len(data.Results))
 	for _, item := range data.Results {
-		title, original, date := item.Title, item.OriginalTitle, item.ReleaseDate
-		if typ == "tv_show" {
-			title, original, date = item.Name, item.OriginalName, item.FirstAirDate
+		localized, original, date := searchNames(typ, item)
+		var titles []string
+		if en, ok := english[item.ID]; ok {
+			titles = []string{en}
 		}
-		if title == "" {
-			title = original
-		}
+		title := chooseTitle(localized, titles, original)
 		if original == "" {
 			original = title
 		}
@@ -172,6 +170,57 @@ func (c *Client) Search(ctx context.Context, typ, query, language string) ([]Mat
 	}
 	c.store(key, results)
 	return results, nil
+}
+
+type searchItem struct {
+	ID            int    `json:"id"`
+	Title         string `json:"title"`
+	Name          string `json:"name"`
+	OriginalTitle string `json:"original_title"`
+	OriginalName  string `json:"original_name"`
+	ReleaseDate   string `json:"release_date"`
+	FirstAirDate  string `json:"first_air_date"`
+	PosterPath    string `json:"poster_path"`
+	Overview      string `json:"overview"`
+}
+
+type searchResponse struct {
+	Results []searchItem `json:"results"`
+}
+
+// searchNames returns the localized title, the original title and the release
+// date of one result, read from the movie or the TV field names.
+func searchNames(typ string, item searchItem) (string, string, string) {
+	if typ == "tv_show" {
+		return item.Name, item.OriginalName, item.FirstAirDate
+	}
+	return item.Title, item.OriginalTitle, item.ReleaseDate
+}
+
+func anyNonLatin(typ string, items []searchItem) bool {
+	for _, item := range items {
+		if localized, _, _ := searchNames(typ, item); !isLatin(localized) {
+			return true
+		}
+	}
+	return false
+}
+
+// englishSearchTitles maps result ids to their en-US title from one search call.
+// TMDB answers an untranslated title with its original, which the chooser skips
+// when it is not Latin.
+func (c *Client) englishSearchTitles(ctx context.Context, typ, endpoint, query string) (map[int]string, error) {
+	var data searchResponse
+	if err := c.getJSON(ctx, "/search/"+endpoint, url.Values{"query": {query}, "language": {"en-US"}}, &data); err != nil {
+		return nil, err
+	}
+	titles := make(map[int]string, len(data.Results))
+	for _, item := range data.Results {
+		if localized, _, _ := searchNames(typ, item); localized != "" {
+			titles[item.ID] = localized
+		}
+	}
+	return titles, nil
 }
 
 // Details fetches localized metadata, credits, IMDb id and regional providers.
@@ -202,6 +251,8 @@ func (c *Client) Details(ctx context.Context, typ string, id int, language, coun
 		ID             int    `json:"id"`
 		Title          string `json:"title"`
 		Name           string `json:"name"`
+		OriginalTitle  string `json:"original_title"`
+		OriginalName   string `json:"original_name"`
 		ReleaseDate    string `json:"release_date"`
 		FirstAirDate   string `json:"first_air_date"`
 		LastAirDate    string `json:"last_air_date"`
@@ -211,11 +262,11 @@ func (c *Client) Details(ctx context.Context, typ string, id int, language, coun
 		Seasons        int    `json:"number_of_seasons"`
 		PosterPath     string `json:"poster_path"`
 		Credits        struct {
-			Crew []struct {
-				Job  string `json:"job"`
-				Name string `json:"name"`
-			} `json:"crew"`
+			Crew []crewMember `json:"crew"`
 		} `json:"credits"`
+		Translations struct {
+			Items []translation `json:"translations"`
+		} `json:"translations"`
 		External struct {
 			IMDBID string `json:"imdb_id"`
 		} `json:"external_ids"`
@@ -230,7 +281,7 @@ func (c *Client) Details(ctx context.Context, typ string, id int, language, coun
 			} `json:"results"`
 		} `json:"watch/providers"`
 	}
-	appendTo := "external_ids,watch/providers"
+	appendTo := "external_ids,watch/providers,translations"
 	if typ == "movie" {
 		appendTo += ",credits"
 	}
@@ -240,10 +291,11 @@ func (c *Client) Details(ctx context.Context, typ string, id int, language, coun
 	if data.ID <= 0 || data.ID != id {
 		return Details{}, errors.New("TMDB returned invalid details")
 	}
-	title, date := data.Title, data.ReleaseDate
+	localized, original, date := data.Title, data.OriginalTitle, data.ReleaseDate
 	if typ == "tv_show" {
-		title, date = data.Name, data.FirstAirDate
+		localized, original, date = data.Name, data.OriginalName, data.FirstAirDate
 	}
+	title := chooseTitle(localized, englishTitles(typ, data.Translations.Items), original)
 	metadata := make(map[string]any)
 	if y := year(date); y != 0 {
 		if typ == "movie" {
@@ -259,12 +311,7 @@ func (c *Client) Details(ctx context.Context, typ string, id int, language, coun
 		if data.Runtime != nil && *data.Runtime > 0 {
 			metadata["runtime_minutes"] = *data.Runtime
 		}
-		directors := make([]string, 0)
-		for _, person := range data.Credits.Crew {
-			if person.Job == "Director" && person.Name != "" && !contains(directors, person.Name) {
-				directors = append(directors, person.Name)
-			}
-		}
+		directors := c.directorNames(ctx, data.Credits.Crew)
 		if len(directors) > 0 {
 			metadata["director"] = strings.Join(directors, ", ")
 		}
@@ -298,6 +345,48 @@ func (c *Client) Details(ctx context.Context, typ string, id int, language, coun
 		return Details{ID: data.ID, Title: title, Metadata: metadata, PosterPath: data.PosterPath, WatchURL: providers.Link}, nil
 	}
 	return Details{ID: data.ID, Title: title, Metadata: metadata, PosterPath: data.PosterPath}, nil
+}
+
+// directorNames returns the distinct directors of a movie in Latin script. Only a
+// non-Latin credit name costs a /person call, and only the first maxPersonLookups
+// of them, so one Details call stays bounded. Any /person failure (429, timeout,
+// 5xx, 404, bad body) keeps the credit name and logs a warning: the name is an
+// enrichment, never a reason to fail the whole Details.
+func (c *Client) directorNames(ctx context.Context, crew []crewMember) []string {
+	names := make([]string, 0)
+	lookups := 0
+	for _, person := range crew {
+		if person.Job != "Director" || person.Name == "" {
+			continue
+		}
+		name := person.Name
+		if !isLatin(name) && person.ID > 0 && lookups < maxPersonLookups {
+			lookups++
+			name = c.latinDirectorName(ctx, person)
+		}
+		if !contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// latinDirectorName returns the Latin name for one director, or the credit name
+// when /person cannot provide one.
+func (c *Client) latinDirectorName(ctx context.Context, person crewMember) string {
+	var detail struct {
+		ID          int      `json:"id"`
+		AlsoKnownAs []string `json:"also_known_as"`
+	}
+	if err := c.getJSON(ctx, "/person/"+strconv.Itoa(person.ID), url.Values{}, &detail); err != nil {
+		slog.WarnContext(ctx, "TMDB person lookup failed; keeping the credit name", "person_id", person.ID, "err", err)
+		return person.Name
+	}
+	if detail.ID != person.ID {
+		slog.WarnContext(ctx, "TMDB person lookup returned another person; keeping the credit name", "person_id", person.ID)
+		return person.Name
+	}
+	return chooseName(person.Name, detail.AlsoKnownAs)
 }
 
 // WatchLink fetches only the JustWatch page of one title for a country, with the
@@ -343,6 +432,12 @@ func justWatchLink(raw string) string {
 		return ""
 	}
 	return raw
+}
+
+type crewMember struct {
+	ID   int    `json:"id"`
+	Job  string `json:"job"`
+	Name string `json:"name"`
 }
 
 type provider struct {

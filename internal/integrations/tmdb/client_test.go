@@ -57,6 +57,10 @@ func TestMockFixtureIsExactAndNeverReplacesManualTMDBQueries(t *testing.T) {
 	if err != nil || details.ID != mockMovieID || details.Title != matches[0].Title || details.Metadata["release_year"] != 2001 || details.Metadata["director"] != "Mock Director" {
 		t.Fatalf("fixture details = %+v, error = %v", details, err)
 	}
+	// The fixture skips HTTP, so its Latin values must already satisfy the real rule.
+	if !isLatin(details.Title) || !isLatin(details.Metadata["director"].(string)) {
+		t.Fatalf("fixture names are not Latin: %q, %v", details.Title, details.Metadata["director"])
+	}
 	mockStreaming, _ := details.Metadata["streaming"].(map[string]any)
 	if mockStreaming["country"] != "US" || mockStreaming["link"] != "https://www.justwatch.com/us/movie/mock" {
 		t.Fatalf("fixture streaming = %#v", mockStreaming)

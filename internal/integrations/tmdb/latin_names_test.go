@@ -139,6 +139,13 @@ func TestLatinScriptDetailsTitlesAndDirectors(t *testing.T) {
 			},
 			typ: "movie", id: 106, title: "Film", director: "Wes Anderson", paths: []string{"/3/movie/106"},
 		},
+		"invalid person details keep the credit name": {
+			responses: map[string]string{
+				"/3/movie/109": `{"id":109,"title":"Film","credits":{"crew":[{"id":9,"job":"Director","name":"山田"}]}}`,
+				"/3/person/9":  `{"id":10,"also_known_as":["Yamada"]}`,
+			},
+			typ: "movie", id: 109, title: "Film", director: "山田", paths: []string{"/3/movie/109", "/3/person/9"},
+		},
 		"person 404 keeps the credit name": {
 			responses: map[string]string{
 				"/3/movie/107": `{"id":107,"title":"Film","credits":{"crew":[{"id":8,"job":"Director","name":"山田"}]}}`,

@@ -77,6 +77,7 @@ func (f *fakeStore) Apply(_ context.Context, p ApplyParams) (items.Item, error) 
 	f.applied = &p
 	return f.result, f.err
 }
+func (f *fakeStore) ListItems(context.Context, uuid.UUID) ([]listedItem, error) { return nil, f.err }
 
 type fakeItems struct {
 	item        items.Item
@@ -216,8 +217,8 @@ func TestApplyNoMatchRechecksVersion(t *testing.T) {
 }
 
 func TestApplyRejectsUnsupportedModeBeforeLookup(t *testing.T) {
-	// refresh is no longer an API mode (D-123): the weekly refresh replaces it.
-	for _, mode := range []Mode{ModeCreate, ModeScheduled, Mode("refresh")} {
+	// The scheduled mode is internal (D-123), and an unknown mode is no API mode.
+	for _, mode := range []Mode{ModeCreate, ModeScheduled, Mode("bogus")} {
 		client := &fakeClient{enabled: true}
 		_, err := newService(client, &fakeStore{}, &fakeItems{}).Apply(t.Context(), uuid.New(), 1, mode, Selection{})
 		var validation *apperr.ValidationError

@@ -14,17 +14,19 @@ Merges values imported from a metadata provider (TMDB for movie and TV, Open Lib
 - `internal/lookup/store.go`: `DBStore`, `ListType`, `Read`, poster preparation
 - `internal/lookup/merge.go`, `paths.go`: pure merge and path rules
 - `internal/lookup/maintenance.go`: the weekly TMDB refresh pass, its retry state and its loop
+- `internal/lookup/refresh.go`: `RefreshScheduled` (the one-item TMDB refresh both paths share), the explicit `refresh` mode and `RefreshList` (the list refresh)
 - `internal/lookup/handler.go`, `wire.go`: Huma operations and their JSON types
 - `db/queries/lookup_imports.sql`: provenance and scheduled-item queries
 
 ## Interfaces
 
 - `New(providers, store, itemSvc, settings, clk, workspaceID) *Service`; `(*Service).WithHardcover(BookGapFiller)`
-- `(*Service).Create`, `Apply` (fill or rematch), `RefreshScheduled` (the weekly refresh of one item)
+- `(*Service).Create`, `Apply` (fill, rematch or refresh), `RefreshScheduled` (the weekly refresh of one item), `RefreshList` (the refresh of a list)
 - `NewStore(db, fileStore, clk, items, log, workspaceID) *DBStore`; `DBStore` implements `Store` (`ListType`, `Read`, `Apply`)
 - `(*DBStore).Maintain` and `Run`; `MaintenanceInterval` (one hour) is the tick. `cmd/api` runs one pass at startup
 - `Register(api, log, svc, tmdb, books, settings)`: `listTmdbSuggestions`, `searchBookSuggestions`, `lookupItemMetadata`
-- `POST /api/v1/items/{id}/lookup`: explicit fill or rematch with item `If-Match`
+- `POST /api/v1/items/{id}/lookup`: explicit fill, rematch or refresh with item `If-Match`
+- `POST /api/v1/lists/{id}/lookup-refresh` (`refreshListLookups`, tag `lookup`): the list refresh, no `If-Match`; answers `{updated, skipped, failed, remaining}`
 
 ## Gotchas
 
@@ -35,7 +37,10 @@ Merges values imported from a metadata provider (TMDB for movie and TV, Open Lib
 - Attachment queries reach `apply` through `Repo` methods, so the merge and apply rules are testable with a fake repository.
 - Poster files are written before the transaction and their rows inside it. Replaced files are deleted after commit.
 - `FillOnly` values (book `stores: [preferred_store]`, D-096) apply only on create and fill, never overwrite chosen stores and are never tracked as imported.
-- `rematch` replaces the fetched fields, user edits to them included. `fill` never replaces a non-empty value. `refresh` is not a mode any more (D-123).
+- `rematch` replaces the fetched fields, user edits to them included. `fill` never replaces a non-empty value.
+- `refresh` (D-123) is the weekly rule on demand, for movie and TV only (a book answers 422). It runs on a `lookup_disabled` item too (the user asked). The id is the stored `tmdb_id`, or the one selected. A provider failure answers the lookup errors (`ProviderError`): 429, 404 and 5xx all answer 503 `upstream_unavailable`, a disabled key 503 `lookup_disabled`; nothing is written.
+- The list refresh (`RefreshList`) takes at most 50 items per call (`listRefreshBatchSize`: about 25 s of TMDB pacing, inside the 60 s write timeout). The oldest fetches go first, so a call again reaches the rest; eligible items beyond the batch are `remaining` (not `skipped`), and the client runs again until it is 0. Books, untyped lists, items without a TMDB id and `lookup_disabled` items are `skipped`; an item changed during the run is `skipped` (its version moved). A 429, a disabled key or a fetch failure other than 404 stops the call, and the eligible items of the batch not yet reached count as `failed` (items beyond the batch stay in `remaining`). A 404 for one item is `failed` and the run goes on. A cancelled request returns its context error; the items already refreshed stay refreshed. No `If-Match`: each item is checked against the version the list read.
+- The list refresh is wired through `Store.ListItems` (the `ListLookupItems` query, the items of one list in refresh order), so the lists feature is not involved.
 - Automatic book lookup (no `source_id`) uses `pickBest`: exact normalised title first, then author and pages, ties in upstream order. TMDB takes the first result.
 - Hardcover is used only by the automatic book path. `ModeCreateUntracked` creates without a provenance row or `openlibrary_id`. Failures are swallowed.
 - `streaming.link` is an ordinary imported leaf. Clients never send it, and a streaming-country change clears it (see [workspace](workspace.md)) without bumping item `version`.

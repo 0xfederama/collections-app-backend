@@ -55,6 +55,11 @@ func (s *DBStore) ListType(ctx context.Context, listID uuid.UUID) (string, error
 	return typeKey(typ), nil
 }
 
+// ListItems returns the active items of a list (see Store).
+func (s *DBStore) ListItems(ctx context.Context, listID uuid.UUID) ([]listedItem, error) {
+	return s.repo.ListItems(scope.With(ctx, s.workspaceID), listID)
+}
+
 // Read returns the current provenance record, including the item's current
 // version. A missing record is not an error.
 func (s *DBStore) Read(ctx context.Context, itemID uuid.UUID) (Record, bool, error) {

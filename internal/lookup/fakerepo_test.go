@@ -257,6 +257,38 @@ func (f *fakeRepo) ScheduledItems(_ context.Context, fetchedBefore time.Time, li
 	return out, nil
 }
 
+// ListItems mirrors ListLookupItems: the active items of the list, the oldest fetch
+// first and never fetched first. Items of one list sort by id here (no sort order in the fake).
+func (f *fakeRepo) ListItems(_ context.Context, listID uuid.UUID) ([]listedItem, error) {
+	var out []listedItem
+	for id, it := range f.items {
+		if it.deleted || it.listID != listID {
+			continue
+		}
+		out = append(out, listedItem{ItemID: id, ItemVersion: it.version, Metadata: it.metadata})
+	}
+	fetched := func(id uuid.UUID) *time.Time {
+		if row, ok := f.imports[id]; ok {
+			return &row.FetchedAt
+		}
+		return nil
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := fetched(out[i].ItemID), fetched(out[j].ItemID)
+		switch {
+		case a == nil || b == nil:
+			if a == nil && b == nil {
+				return out[i].ItemID.String() < out[j].ItemID.String()
+			}
+			return a == nil
+		case !a.Equal(*b):
+			return a.Before(*b)
+		}
+		return out[i].ItemID.String() < out[j].ItemID.String()
+	})
+	return out, nil
+}
+
 // repoItems reads items from the fake after a commit (the itemReader of DBStore).
 type repoItems struct{ repo *fakeRepo }
 

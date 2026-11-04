@@ -61,6 +61,8 @@ type Repo interface {
 	// ScheduledItems lists up to limit movie and TV items due for the weekly TMDB refresh (D-123):
 	// fetched before fetchedBefore, or never fetched (a typed tmdb_id), oldest first.
 	ScheduledItems(ctx context.Context, fetchedBefore time.Time, limit int32) ([]scheduledItem, error)
+	// ListItems returns the active items of a list in refresh order (the list refresh, refreshListLookups).
+	ListItems(ctx context.Context, listID uuid.UUID) ([]listedItem, error)
 }
 
 // lockedItem is an item row read under FOR UPDATE.
@@ -120,6 +122,14 @@ type importSave struct {
 type scheduledItem struct {
 	ItemID      uuid.UUID
 	ItemVersion int
+}
+
+// listedItem is an active item of a list, with the version and metadata the list
+// refresh needs to decide and to refresh it.
+type listedItem struct {
+	ItemID      uuid.UUID
+	ItemVersion int
+	Metadata    []byte
 }
 
 // Postgres implements Repo on a pool, and runs InTx on one transaction.
@@ -249,6 +259,18 @@ func (r *repo) DeleteAttachment(ctx context.Context, id uuid.UUID) (images.FileK
 		return images.FileKeys{}, err
 	}
 	return images.FileKeys{StorageKey: row.StorageKey, ThumbnailStorageKey: row.ThumbnailStorageKey}, nil
+}
+
+func (r *repo) ListItems(ctx context.Context, listID uuid.UUID) ([]listedItem, error) {
+	rows, err := r.q.ListLookupItems(ctx, sqlc.ListLookupItemsParams{WorkspaceID: scope.WorkspaceID(ctx), ListID: listID})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]listedItem, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, listedItem{ItemID: row.ItemID, ItemVersion: int(row.ItemVersion), Metadata: row.Metadata})
+	}
+	return out, nil
 }
 
 func (r *repo) ScheduledItems(ctx context.Context, fetchedBefore time.Time, limit int32) ([]scheduledItem, error) {

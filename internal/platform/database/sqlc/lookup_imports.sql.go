@@ -133,6 +133,49 @@ func (q *Queries) InsertLookupItem(ctx context.Context, arg InsertLookupItemPara
 	return id, err
 }
 
+const listLookupItems = `-- name: ListLookupItems :many
+SELECT i.id AS item_id, i.version AS item_version, i.metadata
+FROM items i
+LEFT JOIN lookup_imports t ON t.item_id = i.id AND t.workspace_id = i.workspace_id
+WHERE i.workspace_id = $1
+  AND i.list_id = $2
+  AND i.deleted_at IS NULL
+ORDER BY t.fetched_at NULLS FIRST, i.sort_order, i.id
+`
+
+type ListLookupItemsParams struct {
+	WorkspaceID uuid.UUID
+	ListID      uuid.UUID
+}
+
+type ListLookupItemsRow struct {
+	ItemID      uuid.UUID
+	ItemVersion int32
+	Metadata    []byte
+}
+
+// The list refresh (refreshListLookups): every active item of one list with its version and metadata, the
+// ones whose provenance was fetched longest ago first (never fetched first), then list order.
+func (q *Queries) ListLookupItems(ctx context.Context, arg ListLookupItemsParams) ([]ListLookupItemsRow, error) {
+	rows, err := q.db.Query(ctx, listLookupItems, arg.WorkspaceID, arg.ListID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLookupItemsRow{}
+	for rows.Next() {
+		var i ListLookupItemsRow
+		if err := rows.Scan(&i.ItemID, &i.ItemVersion, &i.Metadata); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listScheduledTMDBItems = `-- name: ListScheduledTMDBItems :many
 SELECT i.id AS item_id, i.version AS item_version
 FROM items i

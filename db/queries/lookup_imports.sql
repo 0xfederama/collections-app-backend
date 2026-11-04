@@ -80,3 +80,14 @@ SET title = @title,
     version = version + 1,
     updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id;
+
+-- name: ListLookupItems :many
+-- The list refresh (refreshListLookups): every active item of one list with its version and metadata, the
+-- ones whose provenance was fetched longest ago first (never fetched first), then list order.
+SELECT i.id AS item_id, i.version AS item_version, i.metadata
+FROM items i
+LEFT JOIN lookup_imports t ON t.item_id = i.id AND t.workspace_id = i.workspace_id
+WHERE i.workspace_id = @workspace_id
+  AND i.list_id = @list_id
+  AND i.deleted_at IS NULL
+ORDER BY t.fetched_at NULLS FIRST, i.sort_order, i.id;

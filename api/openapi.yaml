@@ -479,6 +479,35 @@ components:
         - created_at
         - updated_at
       type: object
+    ListLookupRefresh:
+      additionalProperties: false
+      properties:
+        failed:
+          description: Refreshes that failed, plus the items not reached after a rate limit or an outage. Their values are unchanged.
+          format: int64
+          minimum: 0
+          type: integer
+        remaining:
+          description: Eligible items beyond the 50-item batch of this call. Run again to refresh them.
+          format: int64
+          minimum: 0
+          type: integer
+        skipped:
+          description: "Items not refreshed: books, no TMDB id, lookup_disabled, or changed during the run."
+          format: int64
+          minimum: 0
+          type: integer
+        updated:
+          description: Items refreshed from TMDB.
+          format: int64
+          minimum: 0
+          type: integer
+      required:
+        - failed
+        - remaining
+        - skipped
+        - updated
+      type: object
     ListWithPath:
       additionalProperties: false
       properties:
@@ -567,7 +596,7 @@ components:
       additionalProperties: false
       properties:
         mode:
-          description: fill (default) or rematch.
+          description: fill (default), rematch, or refresh (movie and TV only).
           type: string
         source_id:
           description: Selects a known Open Library work (book items). Without it, the lookup searches by title.
@@ -2520,7 +2549,7 @@ paths:
         - image
   /api/v1/items/{id}/lookup:
     post:
-      description: "Requires `If-Match` (`\"i-N\"`) and is available only for movie, TV and book items (TMDB for movie and TV, Open Library for books). `fill` preserves every non-empty user value and fills empty fields; `rematch` searches from the current title unless `tmdb_id` (movie and TV) or `source_id` (book) selects a suggestion, then replaces the title and all fields fetched from the provider, user edits to those fields included. All modes preserve an existing item image. A poster or cover is stored through the normal image pipeline only when the item has no image. On a book, `fill` also sets `stores` to `[preferred_store]` (the workspace default store) when `stores` is empty; no mode ever removes or replaces the user's store choices. The default mode is `fill`. When a search has no result, the operation returns the unchanged item and its current ETag. An explicit lookup while the integration is disabled or the provider cannot be reached returns `503 lookup_disabled` or `503 upstream_unavailable` respectively. The server keeps the provenance of imported fields and posters. Movie and TV items are also refreshed from TMDB once a week by the server, which overwrites every fetched field and the title and keeps a user-supplied image; an item's `lookup_disabled` flag stops that refresh. Open Library data is never refreshed: it is kept until the user changes it."
+      description: "Requires `If-Match` (`\"i-N\"`) and is available only for movie, TV and book items (TMDB for movie and TV, Open Library for books). `fill` preserves every non-empty user value and fills empty fields; `rematch` searches from the current title unless `tmdb_id` (movie and TV) or `source_id` (book) selects a suggestion, then replaces the title and all fields fetched from the provider, user edits to those fields included. `refresh` (movie and TV only, otherwise `422 validation_failed`) re-fetches the item's TMDB id, or the `tmdb_id` given, and overwrites the title and every fetched field, user edits included, as the weekly refresh does; a field TMDB no longer returns is removed. An item's `lookup_disabled` flag does not stop an explicit refresh. A refresh that fails changes nothing. All modes preserve an existing item image. A poster or cover is stored through the normal image pipeline only when the item has no image. On a book, `fill` also sets `stores` to `[preferred_store]` (the workspace default store) when `stores` is empty; no mode ever removes or replaces the user's store choices. The default mode is `fill`. When a search has no result, the operation returns the unchanged item and its current ETag. An explicit lookup while the integration is disabled or the provider cannot be reached returns `503 lookup_disabled` or `503 upstream_unavailable` respectively. The server keeps the provenance of imported fields and posters. Movie and TV items are also refreshed from TMDB once a week by the server, which overwrites every fetched field and the title and keeps a user-supplied image; an item's `lookup_disabled` flag stops that refresh. Open Library data is never refreshed: it is kept until the user changes it."
       operationId: lookupItemMetadata
       parameters:
         - in: path
@@ -2600,7 +2629,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
           description: Service Unavailable
-      summary: Fill or replace an item's looked-up metadata
+      summary: Fill, replace or refresh an item's looked-up metadata
       tags:
         - tmdb
   /api/v1/items/{id}/move:
@@ -3227,6 +3256,51 @@ paths:
       summary: Reorder the items of a list
       tags:
         - items
+  /api/v1/lists/{id}/lookup-refresh:
+    post:
+      description: "Refreshes every active movie and TV item of the list that has a TMDB id and is not `lookup_disabled`, one at a time through the server's TMDB pacing, with the weekly refresh's rule: the title and every fetched field are overwritten, user edits included, and a user-supplied image is kept. Books, items without a TMDB id and `lookup_disabled` items are skipped. No `If-Match` is needed: each item is versioned internally, and an item changed during the run is counted as skipped. Answers the counts. Each call refreshes at most 50 items, oldest fetch first; `remaining` counts the eligible items left for later calls, so run again until it is 0. A TMDB rate limit or outage stops the run, and the items not yet refreshed are counted as failed; a failed item keeps its values. Unknown or trashed lists answer 404. TMDB disabled on the server answers `503 lookup_disabled`."
+      operationId: refreshListLookups
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListLookupRefresh"
+          description: OK
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Internal Server Error
+        "503":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Service Unavailable
+      summary: Refresh the TMDB details of a list's movie and TV items
+      tags:
+        - lookup
   /api/v1/lists/{id}/move:
     post:
       description: "Requires `If-Match` (`\"l-N\"`). `folder_id: null` moves it to the root. Appended to the end of the new siblings."
@@ -3874,6 +3948,8 @@ tags:
     name: tmdb
   - description: Book metadata lookup through Open Library (no key needed).
     name: books
+  - description: Refreshing the TMDB details of movie and TV items, one item or a whole list.
+    name: lookup
   - description: Item images (upload or URL) and attachment files.
     name: image
   - description: Markdown content of an item and its version history.

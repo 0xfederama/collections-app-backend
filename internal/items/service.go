@@ -43,10 +43,11 @@ type TypeSource interface {
 	TypeFields(ctx context.Context, typ *string) (TypeDef, []types.Field, error)
 }
 
-// SettingsSource reads the workspace's default store. A workspace without a
-// settings row answers apperr.NotFound("settings").
+// SettingsSource reads the workspace's default store and owned streaming
+// services. A workspace without a settings row answers apperr.NotFound("settings").
 type SettingsSource interface {
 	PreferredStore(ctx context.Context) (string, error)
+	OwnedStreamingServices(ctx context.Context) ([]string, error)
 }
 
 // Service holds the item rules. Structural writes (create, move, reorder) take the
@@ -173,6 +174,14 @@ func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (Ite
 		return ItemPage{}, err
 	}
 	defs := ListDefs{SortMode: info.SortMode, AllowsPrice: def.AllowsPrice, Fields: fields}
+	if p.Availability != "" && streamingType(info.Type) {
+		// No settings row reads as no owned services: every platform counts.
+		owned, err := s.settings.OwnedStreamingServices(ctx)
+		if err != nil && !isNotFound(err) {
+			return ItemPage{}, err
+		}
+		defs.Owned = owned
+	}
 	rows, total, err := Query(all, info.Type, defs, p)
 	if err != nil {
 		return ItemPage{}, err

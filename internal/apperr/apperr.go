@@ -14,6 +14,7 @@ const (
 	CodeDestinationUnavailable Code = "destination_unavailable"
 	CodeOrderStale             Code = "order_stale"
 	CodeTypeMismatch           Code = "type_mismatch"
+	CodeDuplicateTitle         Code = "duplicate_title"
 )
 
 // NotFoundError means the resource is missing or trashed.
@@ -89,6 +90,9 @@ func DestinationUnavailable() error { return &ConflictError{Code: CodeDestinatio
 
 // TypeMismatch reports an item moved to a list of another type (F-007).
 func TypeMismatch() error { return &ConflictError{Code: CodeTypeMismatch} }
+
+// DuplicateTitle reports an item title already used in the target list (F-026).
+func DuplicateTitle() error { return &ConflictError{Code: CodeDuplicateTitle} }
 
 // OrderStale reports a reorder whose id set no longer matches the stored one.
 func OrderStale() error { return &ConflictError{Code: CodeOrderStale} }

@@ -43,15 +43,16 @@ func Register(api huma.API, log *slog.Logger, svc *Service, lk Importer) {
 		OperationID: "listItems", Method: http.MethodGet, Path: "/api/v1/lists/{id}/items", Tags: tags,
 		Summary: "List the items of a list",
 		Description: "Sorted by `sort` (default: the list's `sort_mode`), tie-break `id`. `q` filters by title and, on movie lists, director. " +
-			"`price` sorts by `price.min` and is available only when the type allows price. Field filters combine with `q`.",
+			"`price` sorts by `price.min` and is available only when the type allows price. Field filters and `availability` combine with `q` and each other.",
 		Errors: []int{http.StatusBadRequest, http.StatusNotFound},
 	}, httpserver.Op(log, h.list))
 	huma.Register(api, huma.Operation{
 		OperationID: "createItem", Method: http.MethodPost, Path: "/api/v1/lists/{id}/items", Tags: tags,
 		Summary: "Create an item", DefaultStatus: http.StatusCreated,
 		Description: "Appended to the end of the list. The item's `type` is the list's type (read-only, not accepted in the body). " +
-			"`metadata` is validated against the list's type. A `price` on a type without a price is `422 validation_failed`.",
-		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusRequestEntityTooLarge,
+			"`metadata` is validated against the list's type. A `price` on a type without a price is `422 validation_failed`. " +
+			"A title already used in the list (trimmed, ignoring case and accents) is `409 duplicate_title`.",
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusRequestEntityTooLarge,
 			http.StatusUnprocessableEntity, http.StatusServiceUnavailable},
 	}, httpserver.Op(log, h.create))
 	huma.Register(api, huma.Operation{
@@ -63,8 +64,9 @@ func Register(api huma.API, log *slog.Logger, svc *Service, lk Importer) {
 		OperationID: "updateItem", Method: http.MethodPatch, Path: "/api/v1/items/{id}", Tags: tags,
 		Summary: "Update an item",
 		Description: "Requires `If-Match` (`\"i-N\"`). Any of `title, price, website, metadata`; send `null` to clear a nullable field. " +
-			"`metadata` is validated against the list's type and replaces the stored one. The type cannot be changed here.",
-		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusPreconditionFailed,
+			"`metadata` is validated against the list's type and replaces the stored one. The type cannot be changed here. " +
+			"A new title already used by another item of the list is `409 duplicate_title`.",
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusPreconditionFailed,
 			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity,
 			http.StatusPreconditionRequired},
 		Middlewares: huma.Middlewares{httpserver.IfMatchFirst(api, etag.Item)},
@@ -73,7 +75,8 @@ func Register(api huma.API, log *slog.Logger, svc *Service, lk Importer) {
 		OperationID: "moveItem", Method: http.MethodPost, Path: "/api/v1/items/{id}/move", Tags: tags,
 		Summary: "Move an item to another list",
 		Description: "Requires `If-Match` (`\"i-N\"`). Appended to the end of the destination list. A missing or trashed list returns " +
-			"`409 destination_unavailable`. A destination list of another type returns `409 type_mismatch`.",
+			"`409 destination_unavailable`. A destination list of another type returns `409 type_mismatch`. " +
+			"A destination list that already has the item's title returns `409 duplicate_title`.",
 		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict,
 			http.StatusPreconditionFailed, http.StatusRequestEntityTooLarge,
 			http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
@@ -121,14 +124,15 @@ type ItemPageOutput struct {
 // old rule that a present but empty parameter is a 400.
 type ListItemsInput struct {
 	IDParam
-	Sort        string `query:"sort" minLength:"1" maxLength:"32" doc:"Defaults to the list's sort_mode; may be a field key of the list type."`
-	Q           string `query:"q" minLength:"1" maxLength:"200" doc:"Case-insensitive title filter; on movie lists it also matches metadata.director."`
-	FilterField string `query:"filter_field" minLength:"1" maxLength:"32" doc:"Type field key to filter. Requires value or range parameters matching the field type."`
-	FilterValue string `query:"filter_value" maxLength:"200" doc:"Text/link substring or boolean (true/false) filter value."`
-	FilterMin   string `query:"filter_min" maxLength:"64" doc:"Inclusive lower bound for number or ISO date field filters."`
-	FilterMax   string `query:"filter_max" maxLength:"64" doc:"Inclusive upper bound for number or ISO date field filters."`
-	Limit       int    `query:"limit" default:"50" minimum:"1" maximum:"200" doc:"Page size."`
-	Offset      int    `query:"offset" default:"0" minimum:"0" doc:"Number of rows to skip."`
+	Sort         string `query:"sort" minLength:"1" maxLength:"32" doc:"Defaults to the list's sort_mode; may be a field key of the list type."`
+	Q            string `query:"q" minLength:"1" maxLength:"200" doc:"Case-insensitive title filter; on movie lists it also matches metadata.director."`
+	FilterField  string `query:"filter_field" minLength:"1" maxLength:"32" doc:"Type field key to filter. Requires value or range parameters matching the field type."`
+	FilterValue  string `query:"filter_value" maxLength:"200" doc:"Text/link substring or boolean (true/false) filter value."`
+	FilterMin    string `query:"filter_min" maxLength:"64" doc:"Inclusive lower bound for number or ISO date field filters."`
+	FilterMax    string `query:"filter_max" maxLength:"64" doc:"Inclusive upper bound for number or ISO date field filters."`
+	Availability string `query:"availability" enum:"available,included" doc:"Movie and TV lists only. available: at least one streaming platform on an owned service (any service when settings.owned_streaming_services is empty). included: the same, counting only platforms not paid per title (subscription, free or ads; no rent or buy)."`
+	Limit        int    `query:"limit" default:"50" minimum:"1" maximum:"200" doc:"Page size."`
+	Offset       int    `query:"offset" default:"0" minimum:"0" doc:"Number of rows to skip."`
 }
 
 // emptyRejected are the query parameters the old spec rejected when present and empty.
@@ -151,7 +155,7 @@ func (in *ListItemsInput) Resolve(ctx huma.Context) []error {
 func (h *handler) list(ctx context.Context, in *ListItemsInput) (*ItemPageOutput, error) {
 	page, err := h.svc.List(ctx, in.ID, ListParams{
 		Sort: in.Sort, Q: in.Q, FilterField: in.FilterField, FilterValue: in.FilterValue,
-		FilterMin: in.FilterMin, FilterMax: in.FilterMax, Limit: in.Limit, Offset: in.Offset,
+		FilterMin: in.FilterMin, FilterMax: in.FilterMax, Availability: in.Availability, Limit: in.Limit, Offset: in.Offset,
 	})
 	if err != nil {
 		return nil, queryProblem(err)
@@ -170,6 +174,9 @@ func queryProblem(err error) error {
 	case errors.Is(err, ErrInvalidSort):
 		return problem.New(http.StatusBadRequest, "invalid_parameter", "Invalid parameter",
 			"sort must be manual, title, updated, price (when allowed), or a field key of this list's type.")
+	case errors.Is(err, ErrInvalidAvailability):
+		return problem.New(http.StatusBadRequest, "invalid_parameter", "Invalid parameter",
+			"availability is only available on movie and TV lists.")
 	case errors.Is(err, ErrInvalidFilter):
 		return problem.New(http.StatusBadRequest, "invalid_parameter", "Invalid parameter",
 			"field filter parameters must match a sortable field's type.")

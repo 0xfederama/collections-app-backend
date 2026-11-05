@@ -113,6 +113,14 @@ func (a envSettings) PreferredStore(ctx context.Context) (string, error) {
 	return s.PreferredStore, nil
 }
 
+func (a envSettings) OwnedStreamingServices(ctx context.Context) ([]string, error) {
+	s, err := a.svc.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.OwnedStreamingServices, nil
+}
+
 func (e *lookupEnv) create(title string, metadata map[string]any) items.Item {
 	e.t.Helper()
 	it, err := e.items.Create(scope.With(e.t.Context(), e.ws), e.list, items.CreateInput{Title: title, Metadata: metadata})

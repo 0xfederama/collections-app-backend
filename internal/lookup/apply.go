@@ -120,14 +120,14 @@ func (s *DBStore) applyCreate(ctx context.Context, r Repo, p ApplyParams, poster
 	if err != nil {
 		return uuid.Nil, false, fmt.Errorf("encode lookup metadata: %w", err)
 	}
-	// The new item must not repeat an entry of the list (F-026): same provider
-	// id, or same stored title when one side has no id. The tree lock taken by
+	// The new item must not repeat an entry of the list (F-026): the same
+	// provider id on movie, TV and book lists. The tree lock taken by
 	// Apply makes the check race-free.
 	entries, err := r.ListTitles(ctx, p.ListID)
 	if err != nil {
 		return uuid.Nil, false, fmt.Errorf("list titles: %w", err)
 	}
-	if items.EntryTaken(entries, items.TitleEntry{Title: title, Metadata: metaJSON}) {
+	if items.EntryTaken(typ, entries, items.TitleEntry{Title: title, Metadata: metaJSON}) {
 		return uuid.Nil, false, apperr.DuplicateTitle()
 	}
 	next, err := r.NextSortOrder(ctx, p.ListID)

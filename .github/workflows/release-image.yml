@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   image:
-    runs-on: ubuntu-latest
+    # Native arm64 runner (free for public repos): the arm64 image builds without emulation.
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -30,7 +31,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          # arm64 only: prod (Raspberry Pi) and the dev Mac are arm64. The Dockerfile cross-compiles.
+          # arm64 only: prod (Raspberry Pi) and the dev Mac are arm64. Native runner; the Dockerfile still cross-compiles for any other host.
           platforms: linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

@@ -21,6 +21,7 @@ type ListDefs struct {
 	SortMode    string        // the list's sort_mode, the default sort
 	AllowsPrice bool          // the type's allows_price; false for a list with no type
 	Fields      []types.Field // the type's fields; none for a list with no type
+	Owned       []string      // owned_streaming_services; read only for an availability filter
 }
 
 // Query filters, sorts and pages the active items of one list with the
@@ -28,7 +29,8 @@ type ListDefs struct {
 // and typ its type. It returns the page and the number of matches. Validation
 // runs in this order:
 // price sort, sort field, filter field, filter value; the errors are
-// ErrInvalidSort and ErrInvalidFilter. A list whose type definition is missing
+// ErrInvalidSort and ErrInvalidFilter; an availability filter on a list that
+// is not movie or TV is ErrInvalidAvailability. A list whose type definition is missing
 // is the caller's to report as ErrInvalidSort before it calls Query.
 func Query(all []Item, typ *string, defs ListDefs, p ListParams) ([]Item, int, error) {
 	p = p.Normalized(defs.SortMode)
@@ -54,6 +56,16 @@ func Query(all []Item, typ *string, defs ListDefs, p ListParams) ([]Item, int, e
 	} else if p.FilterValue != "" || p.FilterMin != "" || p.FilterMax != "" {
 		return nil, 0, ErrInvalidFilter
 	}
+	var owned map[string]bool
+	if p.Availability != "" {
+		if !streamingType(typ) {
+			return nil, 0, ErrInvalidAvailability
+		}
+		owned = make(map[string]bool, len(defs.Owned))
+		for _, k := range defs.Owned {
+			owned[k] = true
+		}
+	}
 
 	rows := make([]row, 0, len(all))
 	for _, it := range all {
@@ -62,7 +74,8 @@ func Query(all []Item, typ *string, defs ListDefs, p ListParams) ([]Item, int, e
 			return nil, 0, err
 		}
 		r := row{item: it, meta: meta}
-		if matches(r, typ, p, filterType) {
+		if matches(r, typ, p, filterType) &&
+			(p.Availability == "" || matchesAvailability(meta["streaming"], p.Availability, owned)) {
 			rows = append(rows, r)
 		}
 	}
@@ -79,6 +92,11 @@ func Query(all []Item, typ *string, defs ListDefs, p ListParams) ([]Item, int, e
 		page = append(page, r.item)
 	}
 	return page, total, nil
+}
+
+// streamingType reports whether the list type stores TMDB streaming data.
+func streamingType(typ *string) bool {
+	return typ != nil && (*typ == types.Movie || *typ == types.TVShow)
 }
 
 // row is one item with its decoded metadata and, for a field or price sort, its sort key.

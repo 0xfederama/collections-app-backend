@@ -31,8 +31,9 @@ type fakeDB struct {
 	fields   map[string][]types.Field
 
 	preferred   string
-	noSettings  bool  // no settings row
-	settingsErr error // a failing settings read
+	owned       []string // owned_streaming_services
+	noSettings  bool     // no settings row
+	settingsErr error    // a failing settings read
 
 	calls    []string
 	inTx     bool
@@ -198,6 +199,13 @@ func (f *fakeDB) TypeFields(_ context.Context, typ *string) (items.TypeDef, []ty
 		return items.TypeDef{}, nil, apperr.NotFound("type")
 	}
 	return def, f.fields[*typ], nil
+}
+
+func (f *fakeDB) OwnedStreamingServices(context.Context) ([]string, error) {
+	if f.noSettings {
+		return nil, apperr.NotFound("settings")
+	}
+	return f.owned, f.settingsErr
 }
 
 func (f *fakeDB) PreferredStore(context.Context) (string, error) {

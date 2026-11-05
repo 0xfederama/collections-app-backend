@@ -43,6 +43,9 @@ const (
 // ErrInvalidSort means a sort mode is neither a built-in mode nor a defined field of the list type.
 var ErrInvalidSort = errors.New("items: sort is not available on this list")
 
+// ErrInvalidAvailability means an availability filter on a list whose type has no streaming data.
+var ErrInvalidAvailability = errors.New("items: availability filter is only for movie and TV lists")
+
 // ErrInvalidFilter means a field filter is not valid for the list's type.
 var ErrInvalidFilter = errors.New("items: field filter is not valid for this list")
 
@@ -138,8 +141,10 @@ type ListParams struct {
 	FilterValue string
 	FilterMin   string
 	FilterMax   string
-	Limit       int
-	Offset      int
+	// Availability is "", AvailabilityAvailable or AvailabilityIncluded (movie and TV lists only).
+	Availability string
+	Limit        int
+	Offset       int
 }
 
 // Normalized applies the defaults: an empty Sort is defaultSort (the list's

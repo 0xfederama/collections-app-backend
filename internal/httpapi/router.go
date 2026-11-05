@@ -211,6 +211,17 @@ func (a itemSettings) PreferredStore(ctx context.Context) (string, error) {
 	return s.PreferredStore, nil
 }
 
+func (a itemSettings) OwnedStreamingServices(ctx context.Context) ([]string, error) {
+	if a.svc == nil {
+		return nil, apperr.NotFound("settings")
+	}
+	s, err := a.svc.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.OwnedStreamingServices, nil
+}
+
 // contentDB is the database the content repository runs on, with the same rule as folderDB.
 func contentDB(db Pinger) content.DB {
 	cdb, _ := db.(content.DB)

@@ -30,6 +30,7 @@ func TestCodesCoverEveryEmittedCode(t *testing.T) {
 		apperr.ParentInTrash(apperr.BlockingParent{Type: "folder", ID: "f", Name: "n"}),
 		apperr.DestinationUnavailable(),
 		apperr.TypeMismatch(),
+		apperr.DuplicateTitle(),
 		apperr.OrderStale(),
 		apperr.PayloadTooLarge(10),
 		apperr.UnsupportedMediaType("svg"),

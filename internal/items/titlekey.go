@@ -8,6 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/0xfederama/collections-app-backend/internal/items/types"
+
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -52,23 +54,29 @@ func providerKey(meta []byte) string {
 	return ""
 }
 
-// sameEntry is the duplicate rule (F-026, user 2026-11-05): two items that both
-// have a provider identity are the same when the identity is equal, whatever
-// their titles (remakes may share a title, a refresh never changes the id);
-// otherwise they are the same when their titles have equal keys.
-func sameEntry(a, b TitleEntry) bool {
-	ka, kb := providerKey(a.Metadata), providerKey(b.Metadata)
-	if ka != "" && kb != "" {
-		return ka == kb
+// idTyped reports whether items of the list type carry a provider id
+// (movie and TV: tmdb_id; book: openlibrary_id).
+func idTyped(typ *string) bool {
+	return typ != nil && (*typ == types.Movie || *typ == types.TVShow || *typ == types.Book)
+}
+
+// sameEntry is the duplicate rule (F-026, user 2026-11-05): on a list whose type
+// has a provider id, two items are the same only when both have that id and it
+// is equal (titles never matter: remakes share titles, and an item without an
+// id never clashes); on any other list, when their titles have equal keys.
+func sameEntry(typ *string, a, b TitleEntry) bool {
+	if idTyped(typ) {
+		ka := providerKey(a.Metadata)
+		return ka != "" && ka == providerKey(b.Metadata)
 	}
 	return titleKey(a.Title) == titleKey(b.Title)
 }
 
-// EntryTaken reports whether one of entries is the same as e (sameEntry); the
-// lookup create path uses it on the list's active items.
-func EntryTaken(entries []TitleEntry, e TitleEntry) bool {
+// EntryTaken reports whether one of entries is the same as e (sameEntry) on a
+// list of type typ; the lookup create path uses it on the list's active items.
+func EntryTaken(typ *string, entries []TitleEntry, e TitleEntry) bool {
 	for _, x := range entries {
-		if sameEntry(x, e) {
+		if sameEntry(typ, x, e) {
 			return true
 		}
 	}
@@ -76,9 +84,9 @@ func EntryTaken(entries []TitleEntry, e TitleEntry) bool {
 }
 
 // entryTaken reports whether an item of rows other than skip is the same as e.
-func entryTaken(rows []Item, e TitleEntry, skip uuid.UUID) bool {
+func entryTaken(typ *string, rows []Item, e TitleEntry, skip uuid.UUID) bool {
 	for _, it := range rows {
-		if it.ID != skip && sameEntry(TitleEntry{Title: it.Title, Metadata: it.Metadata}, e) {
+		if it.ID != skip && sameEntry(typ, TitleEntry{Title: it.Title, Metadata: it.Metadata}, e) {
 			return true
 		}
 	}

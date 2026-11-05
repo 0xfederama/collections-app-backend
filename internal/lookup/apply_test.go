@@ -175,10 +175,10 @@ func TestT2b_PosterDiscardedWhenItemHasImage(t *testing.T) {
 	}
 }
 
-// F026-B2: an enriched create checks the stored (provider) title against the list.
+// F026-B2: an enriched create of a TMDB id already in the list is a duplicate.
 func TestF026B2_ApplyCreateRejectsDuplicateTitle(t *testing.T) {
 	e := newApplyEnv(t, time.Date(2026, time.March, 1, 10, 0, 0, 0, time.UTC))
-	e.repo.items[uuid.New()] = fakeItem{listID: e.list, title: " the MATRIX "}
+	e.repo.items[uuid.New()] = fakeItem{listID: e.list, title: "Matrix", metadata: []byte(`{"tmdb_id":603}`)}
 	_, err := e.store.Apply(t.Context(), ApplyParams{
 		Mode: ModeCreate, ListID: e.list, Type: "movie", Provider: ProviderTMDB, SourceID: "603",
 		Title: "The Matrix", OriginalTitle: "matrix",

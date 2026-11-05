@@ -22,9 +22,9 @@ func TestF026B2_Create_UniqueTitle(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := newFakeDB(t)
-			l := db.addList(movie, "manual")
+			l := db.addList(nil, "manual")
 			db.addItem(l, "Amélie", 0, "")
-			other := db.addList(movie, "manual")
+			other := db.addList(nil, "manual")
 			db.addItem(other, "Other", 0, "")
 			_, err := items.NewService(db, db, db, fixedClock{}).Create(t.Context(), l, items.CreateInput{Title: tt.title})
 			if got := describe(err); got != tt.want {
@@ -35,8 +35,8 @@ func TestF026B2_Create_UniqueTitle(t *testing.T) {
 
 	t.Run("the same title in another list is fine", func(t *testing.T) {
 		db := newFakeDB(t)
-		db.addItem(db.addList(movie, "manual"), "Amélie", 0, "")
-		l := db.addList(movie, "manual")
+		db.addItem(db.addList(nil, "manual"), "Amélie", 0, "")
+		l := db.addList(nil, "manual")
 		_, err := items.NewService(db, db, db, fixedClock{}).Create(t.Context(), l, items.CreateInput{Title: "amelie"})
 		if got := describe(err); got != "ok" {
 			t.Fatalf("Create = %s", got)
@@ -60,7 +60,7 @@ func TestF026B2_Update_UniqueTitle(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := newFakeDB(t)
-			l := db.addList(movie, "manual")
+			l := db.addList(nil, "manual")
 			id := db.addItem(l, "a", 0, "")
 			db.addItem(l, "b", 1, "")
 			_, err := items.NewService(db, db, db, fixedClock{}).Update(t.Context(), id, 1, tt.patch)
@@ -89,8 +89,8 @@ func TestF026B2_Move_UniqueTitle(t *testing.T) {
 		want  string
 	}{
 		{"equal title in destination", func(db *fakeDB) (uuid.UUID, uuid.UUID) {
-			id := db.addItem(db.addList(movie, "manual"), "Amélie", 0, "")
-			d := db.addList(movie, "manual")
+			id := db.addItem(db.addList(nil, "manual"), "Amélie", 0, "")
+			d := db.addList(nil, "manual")
 			db.addItem(d, "amelie", 0, "")
 			return id, d
 		}, "conflict:duplicate_title"},

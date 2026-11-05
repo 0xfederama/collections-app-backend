@@ -122,7 +122,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 		if err != nil {
 			return fmt.Errorf("encode metadata: %w", err)
 		}
-		if err := checkTitleFree(ctx, r, listID, TitleEntry{Title: in.Title, Metadata: raw}, uuid.Nil); err != nil {
+		if err := checkTitleFree(ctx, r, listID, info.Type, TitleEntry{Title: in.Title, Metadata: raw}, uuid.Nil); err != nil {
 			return err
 		}
 		next, err := r.NextSortOrder(ctx, listID)
@@ -267,7 +267,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 		}
 		// Checked when the title or the provider identity changes (F-026).
 		if next.Title != cur.Title || providerKey(next.Metadata) != providerKey(cur.Metadata) {
-			if err := checkTitleFree(ctx, r, cur.ListID, TitleEntry{Title: next.Title, Metadata: next.Metadata}, id); err != nil {
+			if err := checkTitleFree(ctx, r, cur.ListID, list.Type, TitleEntry{Title: next.Title, Metadata: next.Metadata}, id); err != nil {
 				return err
 			}
 		}
@@ -310,7 +310,7 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, dest uuid
 		if !sameListType(destList.Type, srcList.Type) {
 			return apperr.TypeMismatch()
 		}
-		if err := checkTitleFree(ctx, r, dest, TitleEntry{Title: cur.Title, Metadata: cur.Metadata}, id); err != nil {
+		if err := checkTitleFree(ctx, r, dest, destList.Type, TitleEntry{Title: cur.Title, Metadata: cur.Metadata}, id); err != nil {
 			return err
 		}
 		next, err := r.NextSortOrder(ctx, dest)
@@ -358,15 +358,16 @@ func (s *Service) Reorder(ctx context.Context, listID uuid.UUID, ids []uuid.UUID
 }
 
 // checkTitleFree answers DuplicateTitle when another active item of the list is
-// the same entry (sameEntry: provider id when both have one, else title).
+// the same entry (sameEntry: the provider id on movie, TV and book lists, the
+// title elsewhere).
 // Existing duplicates are left alone: only writes that set a title are checked.
 // Callers hold the tree lock.
-func checkTitleFree(ctx context.Context, r Repo, listID uuid.UUID, e TitleEntry, self uuid.UUID) error {
+func checkTitleFree(ctx context.Context, r Repo, listID uuid.UUID, typ *string, e TitleEntry, self uuid.UUID) error {
 	rows, err := r.ListByList(ctx, listID)
 	if err != nil {
 		return err
 	}
-	if entryTaken(rows, e, self) {
+	if entryTaken(typ, rows, e, self) {
 		return apperr.DuplicateTitle()
 	}
 	return nil

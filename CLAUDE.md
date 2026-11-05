@@ -56,7 +56,7 @@ Edit the Go registration (operation id, summary, tags, `Errors`, wire struct), r
 - Images: `images.Strip` removes EXIF/GPS/XMP on upload. The sweeper and auto-purge need a workspace-scoped context (`scope.With`): an unscoped sweeper refuses to run.
 - Trash: delete marks folders, then their lists, then those lists' items; restore clears the root first and deletes the batch row last (D-051); purge deletes children before parents and files after commit.
 - Lookup: movie/TV items are refreshed from TMDB weekly, overwriting fetched fields and titles (D-123, no expiry), also on demand (`mode: refresh`, `POST /lists/{id}/lookup-refresh`: 50 items per call, oldest first); books are never refreshed (D-095); Open Library is primary for books, Hardcover only fills gaps (optional `HARDCOVER_API_KEY`); `TMDB_API_KEY` optional; tests use fixtures, never the network; `TMDB_MOCK_FIXTURE` enables `[mock] movie name` / `[mock] book name`.
-- Streaming: `streaming.link` is TMDB's own JustWatch page (imported, never client-written); store and platform links are built by the web.
+- Streaming: `streaming.link` is TMDB's own JustWatch page (imported, never client-written); store and platform links are built by the web. The `availability` filter (F-026) maps stored platform names to `owned_streaming_services` keys through `items/availability.go`, a mirror of the web's `streamingEntries.ts`: update both together.
 - Logs: `LOGS_UI` (default on unless `APP_ENV=production`) serves `/admin/logs` and `/admin/logs/view` with no auth on the API listener; not in the spec.
 - Backup scripts (`scripts/lib/backup-common.sh`): never write `-v appdata:/data` for a one-off container; containers that must not eat stdin need `</dev/null`; wait for Postgres over TCP.
 

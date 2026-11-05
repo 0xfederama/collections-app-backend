@@ -141,7 +141,7 @@ committed spec is stale (`check-spec`) and lints it with Redocly. Constraints th
 ## Releases
 
 Every version tag `vX.Y.Z` runs `.github/workflows/release-image.yml`: it builds the API image for linux/arm64 only
-(cross-compiled, no QEMU: prod and dev are arm64) and pushes it to GHCR as the private package `ghcr.io/0xfederama/collections-app-backend:X.Y.Z`. A tag is
+(on the native ubuntu-24.04-arm runner, no QEMU: prod and dev are arm64) and pushes it to GHCR as the private package `ghcr.io/0xfederama/collections-app-backend:X.Y.Z`. A tag is
 not a deploy. Publishing a GitHub Release (marked latest) for that tag is the prod approval; the Pi then deploys it
 (D-117). Orchestrators may leave a draft release, never publish it.
 

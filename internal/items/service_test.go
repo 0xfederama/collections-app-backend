@@ -32,8 +32,8 @@ type fakeDB struct {
 
 	preferred   string
 	owned       []string // owned_streaming_services
-	noSettings  bool  // no settings row
-	settingsErr error // a failing settings read
+	noSettings  bool     // no settings row
+	settingsErr error    // a failing settings read
 
 	calls    []string
 	inTx     bool

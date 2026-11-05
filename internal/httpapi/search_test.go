@@ -174,9 +174,11 @@ func TestAT12_SearchExcludesTrash(t *testing.T) {
 func TestAT12_SearchRanksExactFirst(t *testing.T) {
 	e := newTreeEnv(t)
 	l := e.list("L", nil)["id"].(string)
-	for _, title := range []string{"The Matrix", "Matrix Reloaded", "Matrix", "Zion Matrix", "matrix"} {
+	for _, title := range []string{"The Matrix", "Matrix Reloaded", "Matrix", "Zion Matrix"} {
 		e.titled(l, title)
 	}
+	// Titles are unique per list (F026-B2): the case variant lives in another list.
+	e.titled(e.list("L2", nil)["id"].(string), "matrix")
 	got := e.search(q("MATRIX")).titles()
 	// Exact (any case) first, ordered by lower(title) then id, then the rest alphabetically.
 	isExact := func(s string) bool { return s == "Matrix" || s == "matrix" }

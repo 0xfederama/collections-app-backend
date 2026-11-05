@@ -124,6 +124,37 @@ func (q *Queries) InsertItemRow(ctx context.Context, arg InsertItemRowParams) (u
 	return id, err
 }
 
+const listActiveItemTitles = `-- name: ListActiveItemTitles :many
+SELECT title FROM items
+WHERE list_id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+`
+
+type ListActiveItemTitlesParams struct {
+	ListID      uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+// The titles of the active items of a list, for the duplicate_title rule of lookup creates (F-026).
+func (q *Queries) ListActiveItemTitles(ctx context.Context, arg ListActiveItemTitlesParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listActiveItemTitles, arg.ListID, arg.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var title string
+		if err := rows.Scan(&title); err != nil {
+			return nil, err
+		}
+		items = append(items, title)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockItem = `-- name: LockItem :one
 
 SELECT id, workspace_id, list_id, title, image_url, image_attachment_id, price_min, price_max, currency, website_url, metadata, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM items

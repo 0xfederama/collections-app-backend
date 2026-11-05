@@ -120,6 +120,15 @@ func (s *DBStore) applyCreate(ctx context.Context, r Repo, p ApplyParams, poster
 	if err != nil {
 		return uuid.Nil, false, fmt.Errorf("encode lookup metadata: %w", err)
 	}
+	// The stored title (the provider's for movie and TV) must be free in the
+	// list (F-026); the tree lock taken by Apply makes the check race-free.
+	titles, err := r.ListTitles(ctx, p.ListID)
+	if err != nil {
+		return uuid.Nil, false, fmt.Errorf("list titles: %w", err)
+	}
+	if items.TitleTaken(titles, title) {
+		return uuid.Nil, false, apperr.DuplicateTitle()
+	}
 	next, err := r.NextSortOrder(ctx, p.ListID)
 	if err != nil {
 		return uuid.Nil, false, fmt.Errorf("next item sort order: %w", err)

@@ -122,6 +122,9 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in CreateInput) 
 		if err != nil {
 			return fmt.Errorf("encode metadata: %w", err)
 		}
+		if err := checkTitleFree(ctx, r, listID, in.Title, uuid.Nil); err != nil {
+			return err
+		}
 		next, err := r.NextSortOrder(ctx, listID)
 		if err != nil {
 			return err
@@ -221,6 +224,13 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 		def, fields, typeErr = s.types.TypeFields(ctx, pre.Type)
 	}
 	err = s.store.InTx(ctx, func(r Repo) error {
+		// A patch with a title takes the tree lock before the row lock, the order Move
+		// uses, so the duplicate check below cannot race a create or a move.
+		if p.Title != nil {
+			if err := r.LockTree(ctx); err != nil {
+				return err
+			}
+		}
 		cur, err := r.GetForUpdate(ctx, id)
 		if err != nil {
 			return err
@@ -254,6 +264,11 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 		}
 		if !changed {
 			return nil
+		}
+		if next.Title != cur.Title {
+			if err := checkTitleFree(ctx, r, cur.ListID, next.Title, id); err != nil {
+				return err
+			}
 		}
 		return r.Update(ctx, Item{
 			ID: id, Title: next.Title, Price: next.Price, Website: next.Website, Metadata: next.Metadata,
@@ -293,6 +308,9 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, dest uuid
 		}
 		if !sameListType(destList.Type, srcList.Type) {
 			return apperr.TypeMismatch()
+		}
+		if err := checkTitleFree(ctx, r, dest, cur.Title, id); err != nil {
+			return err
 		}
 		next, err := r.NextSortOrder(ctx, dest)
 		if err != nil {
@@ -336,6 +354,20 @@ func (s *Service) Reorder(ctx context.Context, listID uuid.UUID, ids []uuid.UUID
 		}
 		return nil
 	})
+}
+
+// checkTitleFree answers DuplicateTitle when another active item of the list has
+// an equal title (titleKey). Existing duplicates are left alone: only writes that
+// set a title are checked. Callers hold the tree lock.
+func checkTitleFree(ctx context.Context, r Repo, listID uuid.UUID, title string, self uuid.UUID) error {
+	rows, err := r.ListByList(ctx, listID)
+	if err != nil {
+		return err
+	}
+	if titleTaken(rows, title, self) {
+		return apperr.DuplicateTitle()
+	}
+	return nil
 }
 
 // load reads an active item with its content version. It has no path.

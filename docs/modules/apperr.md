@@ -19,7 +19,7 @@ Typed domain errors that services return and that `internal/httpapi` maps to pro
 - `DestinationUnavailable() error`: 409 `destination_unavailable`
 - `TypeMismatch() error`: 409 `type_mismatch` (item moved to a list of another type)
 - `OrderStale() error`: 409 `order_stale`
-- `DuplicateTitle() error`: 409 `duplicate_title` (constructor only; no service emits it yet)
+- `DuplicateTitle() error`: 409 `duplicate_title` (items create/update/move, lookup enriched create)
 - `PayloadTooLarge(limit int64) error`: over-limit body or upload
 - `UnsupportedMediaType(detail string) error`: upload not JPEG, PNG or WebP
 

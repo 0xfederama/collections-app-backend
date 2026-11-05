@@ -8,6 +8,9 @@ import (
 
 const priceBody = `{"title":"t","price":{"amount":"12.00","currency":"EUR"}}`
 
+// priceBody2 is priceBody with another title, for a second item in the same list.
+const priceBody2 = `{"title":"t2","price":{"amount":"12.00","currency":"EUR"}}`
+
 // f009NoPriceTypes are the types whose items have no price (F009-B1, subsuming
 // F008-B1 for lists with no type, ""); f009PriceTypes those that do. Since F-018
 // only the wishlist built-in has a price.
@@ -70,7 +73,7 @@ func TestF009B1_PriceOnlyOnPriceTypes(t *testing.T) {
 			}
 			wantStatus(t, e.patchItem(it, `{"price":null}`), 200)
 		}
-		wish := e.newItem(lists["wishlist"], priceBody)
+		wish := e.newItem(lists["wishlist"], priceBody2)
 		wantStatus(t, e.patchItem(wish, `{"price":{"amount":"13.00","currency":"EUR"}}`), 200)
 	})
 }
@@ -104,7 +107,7 @@ func TestF009B1_TypeChangeToTypeWithoutPriceClearsPrice(t *testing.T) {
 	lid := l["id"].(string)
 	priced := e.newItem(lid, priceBody)
 	plain := e.titled(lid, "plain")
-	trashed := e.newItem(lid, priceBody)
+	trashed := e.newItem(lid, priceBody2)
 	other := e.newItem(e.listOfType("Other", nil, "wishlist")["id"].(string), priceBody)
 	e.exec(`UPDATE items SET deleted_at = now(), trash_batch_id = $2 WHERE id = $1`, trashed["id"], e.trashBatch("item", uuid.MustParse(trashed["id"].(string))))
 

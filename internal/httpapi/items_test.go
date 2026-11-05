@@ -77,6 +77,11 @@ func idsJSON(ids ...string) string {
 
 // matrix is the body of a movie item: create it in a list of type movie. Movie
 // items have no price (F009-B1); price behavior is tested on a wishlist list (F-018).
+// matrixTitled is matrix under another title (titles are unique per list, F026-B2).
+func matrixTitled(title string) string {
+	return strings.Replace(matrix, `"title":"The Matrix"`, fmt.Sprintf(`"title":%q`, title), 1)
+}
+
 const matrix = `{"title":"The Matrix","website":"https://www.warnerbros.com/movies/matrix",
 	"metadata":{"release_year":1999,"runtime_minutes":136,"imdb_url":"https://www.imdb.com/title/tt0133093/","streaming":{"country":"IT","platforms":["Netflix","Prime Video"]}}}`
 
@@ -139,7 +144,7 @@ func TestAT05_CreateItem(t *testing.T) {
 	})
 
 	t.Run("TestF002B1_legacy item without paid platforms", func(t *testing.T) {
-		it := e.newItem(lid, matrix)
+		it := e.newItem(lid, matrixTitled("Legacy"))
 		stream := e.fetchItem(it["id"])["metadata"].(map[string]any)["streaming"].(map[string]any)
 		if _, has := stream["paid_platforms"]; has {
 			t.Fatalf("streaming = %v", stream)
@@ -247,13 +252,15 @@ func TestAT05_ItemFieldRules(t *testing.T) {
 		} {
 			wantStatus(t, e.call("POST", "/api/v1/lists/"+lid+"/items", body, ""), 201)
 		}
-		for _, body := range []string{
+		for i, body := range []string{
 			`{"title":"t","price":{"min":"0.00","max":"9999999999.99","currency":"JPY"}}`,
 			`{"title":"t","price":{"min":"5.00","max":"5.00","currency":"EUR"}}`,
 			`{"title":"t","price":{"min":null,"max":"5.00","currency":"EUR"}}`,
 			`{"title":"t","price":{"amount":"5.00","currency":"EUR"}}`,
 			`{"title":"t","price":null,"website":null}`,
 		} {
+			// Titles are unique per list (F026-B2).
+			body = strings.Replace(body, `"title":"t"`, fmt.Sprintf(`"title":"t%d"`, i), 1)
 			wantStatus(t, e.call("POST", "/api/v1/lists/"+bike+"/items", body, ""), 201)
 		}
 	})
@@ -302,7 +309,7 @@ func TestPriceRoundTripIsExact(t *testing.T) {
 	e := newTreeEnv(t)
 	lid := e.listOfType("L", nil, "wishlist")["id"].(string)
 	for _, price := range []string{"1299.00", "0.10", "0.01", "12.30", "9999999999.99", "100.00", "0.00"} {
-		it := e.newItem(lid, fmt.Sprintf(`{"title":"p","price":{"min":%q,"max":%q,"currency":"EUR"}}`, price, price))
+		it := e.newItem(lid, fmt.Sprintf(`{"title":"p `+price+`","price":{"min":%q,"max":%q,"currency":"EUR"}}`, price, price))
 		got := e.fetchItem(it["id"])["price"].(map[string]any)
 		if got["min"] != price || got["max"] != price {
 			t.Errorf("price %s came back as %v", price, got)
@@ -368,7 +375,7 @@ func TestAT05_UpdateItem(t *testing.T) {
 	})
 
 	t.Run("TestF007 type is read-only: a type in the patch is an unknown field", func(t *testing.T) {
-		it := e.newItem(lid, matrix)
+		it := e.newItem(lid, matrixTitled("Typed"))
 		wantProblem(t, e.patchItem(it, `{"type":"vehicle"}`), 400, "unknown_field")
 		for _, gone := range []string{`{"summary":"x"}`, `{"status":"x"}`, `{"official_website_url":"https://example.com"}`} {
 			wantProblem(t, e.patchItem(it, gone), 400, "unknown_field")
@@ -379,7 +386,7 @@ func TestAT05_UpdateItem(t *testing.T) {
 	})
 
 	t.Run("TestF007 metadata is validated against the list type", func(t *testing.T) {
-		it := e.newItem(lid, matrix)
+		it := e.newItem(lid, matrixTitled("Metadata"))
 		p := wantProblem(t, e.patchItem(it, `{"metadata":{"make":"VW"}}`), 400, "unknown_field")
 		if !strings.Contains(p.Detail, "metadata.make") {
 			t.Errorf("detail = %q", p.Detail)
@@ -391,7 +398,7 @@ func TestAT05_UpdateItem(t *testing.T) {
 	})
 
 	t.Run("metadata alone is validated against the current type and replaces it", func(t *testing.T) {
-		it := e.newItem(lid, matrix)
+		it := e.newItem(lid, matrixTitled("Replace"))
 		got := decode(t, e.patchItem(it, `{"metadata":{"runtime_minutes":90}}`))
 		if !reflect.DeepEqual(got["metadata"], map[string]any{"runtime_minutes": float64(90)}) {
 			t.Fatalf("metadata = %v", got["metadata"])
@@ -629,8 +636,7 @@ func TestListItems(t *testing.T) {
 	t.Run("pages are stable and do not overlap", func(t *testing.T) {
 		big := e.list("Big", nil)["id"].(string)
 		for i := range 7 {
-			e.titled(big, "same") // equal titles: the id breaks the tie
-			_ = i
+			e.titled(big, fmt.Sprintf("same %d", i))
 		}
 		seen := map[string]bool{}
 		for off := 0; off < 7; off += 3 {

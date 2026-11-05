@@ -141,11 +141,11 @@ func (f *fakeRepo) NextSortOrder(context.Context, uuid.UUID) (int32, error) {
 	return f.nextOrder, nil
 }
 
-func (f *fakeRepo) ListTitles(_ context.Context, listID uuid.UUID) ([]string, error) {
-	var out []string
+func (f *fakeRepo) ListTitles(_ context.Context, listID uuid.UUID) ([]items.TitleEntry, error) {
+	var out []items.TitleEntry
 	for _, it := range f.items {
 		if it.listID == listID && !it.deleted {
-			out = append(out, it.title)
+			out = append(out, items.TitleEntry{Title: it.title, Metadata: it.metadata})
 		}
 	}
 	return out, nil

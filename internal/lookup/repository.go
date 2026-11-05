@@ -42,8 +42,8 @@ type Repo interface {
 	LockTree(ctx context.Context) error
 	// NextSortOrder returns the sort order after the last item of the list.
 	NextSortOrder(ctx context.Context, listID uuid.UUID) (int32, error)
-	// ListTitles returns the titles of the active items of a list (F-026 duplicate_title).
-	ListTitles(ctx context.Context, listID uuid.UUID) ([]string, error)
+	// ListTitles returns the title and metadata of the active items of a list (F-026 duplicate_title).
+	ListTitles(ctx context.Context, listID uuid.UUID) ([]items.TitleEntry, error)
 	// LockItem locks an active item (FOR UPDATE) with its list type. NotFound when missing.
 	LockItem(ctx context.Context, itemID uuid.UUID) (lockedItem, error)
 	// InsertItem creates an item and returns its id.
@@ -198,8 +198,16 @@ func (r *repo) NextSortOrder(ctx context.Context, listID uuid.UUID) (int32, erro
 	return r.q.NextItemSortOrder(ctx, sqlc.NextItemSortOrderParams{ListID: listID, WorkspaceID: scope.WorkspaceID(ctx)})
 }
 
-func (r *repo) ListTitles(ctx context.Context, listID uuid.UUID) ([]string, error) {
-	return r.q.ListActiveItemTitles(ctx, sqlc.ListActiveItemTitlesParams{ListID: listID, WorkspaceID: scope.WorkspaceID(ctx)})
+func (r *repo) ListTitles(ctx context.Context, listID uuid.UUID) ([]items.TitleEntry, error) {
+	rows, err := r.q.ListActiveItemTitles(ctx, sqlc.ListActiveItemTitlesParams{ListID: listID, WorkspaceID: scope.WorkspaceID(ctx)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]items.TitleEntry, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, items.TitleEntry{Title: row.Title, Metadata: row.Metadata})
+	}
+	return out, nil
 }
 
 func (r *repo) LockItem(ctx context.Context, itemID uuid.UUID) (lockedItem, error) {

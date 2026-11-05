@@ -18,8 +18,8 @@ FROM items
 WHERE list_id = @list_id AND workspace_id = @workspace_id AND deleted_at IS NULL;
 
 -- name: ListActiveItemTitles :many
--- The titles of the active items of a list, for the duplicate_title rule of lookup creates (F-026).
-SELECT title FROM items
+-- The titles and metadata of the active items of a list, for the duplicate_title rule of lookup creates (F-026).
+SELECT title, metadata FROM items
 WHERE list_id = @list_id AND workspace_id = @workspace_id AND deleted_at IS NULL;
 
 -- name: ClearListItemsPrice :execrows

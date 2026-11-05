@@ -17,6 +17,11 @@ SELECT (COALESCE(MAX(sort_order) + 1, 0))::int AS next_order
 FROM items
 WHERE list_id = @list_id AND workspace_id = @workspace_id AND deleted_at IS NULL;
 
+-- name: ListActiveItemTitles :many
+-- The titles of the active items of a list, for the duplicate_title rule of lookup creates (F-026).
+SELECT title FROM items
+WHERE list_id = @list_id AND workspace_id = @workspace_id AND deleted_at IS NULL;
+
 -- name: ClearListItemsPrice :execrows
 -- A type change to a type without a price (or to no type) removes the price of every item of the list (trashed ones too; F008-B1).
 UPDATE items SET price_min = NULL, price_max = NULL, currency = NULL, version = version + 1, updated_at = @now

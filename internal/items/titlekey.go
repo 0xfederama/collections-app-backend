@@ -22,6 +22,18 @@ func titleKey(s string) string {
 	return strings.ToLower(b.String())
 }
 
+// TitleTaken reports whether one of titles has the title's key (F-026); the
+// lookup create path uses it on the list's active titles.
+func TitleTaken(titles []string, title string) bool {
+	key := titleKey(title)
+	for _, t := range titles {
+		if titleKey(t) == key {
+			return true
+		}
+	}
+	return false
+}
+
 // titleTaken reports whether an item of rows other than skip has the title's key.
 func titleTaken(rows []Item, title string, skip uuid.UUID) bool {
 	key := titleKey(title)

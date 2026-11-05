@@ -42,6 +42,8 @@ type Repo interface {
 	LockTree(ctx context.Context) error
 	// NextSortOrder returns the sort order after the last item of the list.
 	NextSortOrder(ctx context.Context, listID uuid.UUID) (int32, error)
+	// ListTitles returns the titles of the active items of a list (F-026 duplicate_title).
+	ListTitles(ctx context.Context, listID uuid.UUID) ([]string, error)
 	// LockItem locks an active item (FOR UPDATE) with its list type. NotFound when missing.
 	LockItem(ctx context.Context, itemID uuid.UUID) (lockedItem, error)
 	// InsertItem creates an item and returns its id.
@@ -194,6 +196,10 @@ func (r *repo) LockTree(ctx context.Context) error {
 
 func (r *repo) NextSortOrder(ctx context.Context, listID uuid.UUID) (int32, error) {
 	return r.q.NextItemSortOrder(ctx, sqlc.NextItemSortOrderParams{ListID: listID, WorkspaceID: scope.WorkspaceID(ctx)})
+}
+
+func (r *repo) ListTitles(ctx context.Context, listID uuid.UUID) ([]string, error) {
+	return r.q.ListActiveItemTitles(ctx, sqlc.ListActiveItemTitlesParams{ListID: listID, WorkspaceID: scope.WorkspaceID(ctx)})
 }
 
 func (r *repo) LockItem(ctx context.Context, itemID uuid.UUID) (lockedItem, error) {

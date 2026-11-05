@@ -141,6 +141,16 @@ func (f *fakeRepo) NextSortOrder(context.Context, uuid.UUID) (int32, error) {
 	return f.nextOrder, nil
 }
 
+func (f *fakeRepo) ListTitles(_ context.Context, listID uuid.UUID) ([]string, error) {
+	var out []string
+	for _, it := range f.items {
+		if it.listID == listID && !it.deleted {
+			out = append(out, it.title)
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeRepo) LockItem(_ context.Context, itemID uuid.UUID) (lockedItem, error) {
 	it, ok := f.items[itemID]
 	if !ok || it.deleted {

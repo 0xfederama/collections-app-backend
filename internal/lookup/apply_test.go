@@ -174,3 +174,18 @@ func TestT2b_PosterDiscardedWhenItemHasImage(t *testing.T) {
 		t.Errorf("files on disk = %d, want 0", n)
 	}
 }
+
+// F026-B2: an enriched create checks the stored (provider) title against the list.
+func TestF026B2_ApplyCreateRejectsDuplicateTitle(t *testing.T) {
+	e := newApplyEnv(t, time.Date(2026, time.March, 1, 10, 0, 0, 0, time.UTC))
+	e.repo.items[uuid.New()] = fakeItem{listID: e.list, title: " the MATRIX "}
+	_, err := e.store.Apply(t.Context(), ApplyParams{
+		Mode: ModeCreate, ListID: e.list, Type: "movie", Provider: ProviderTMDB, SourceID: "603",
+		Title: "The Matrix", OriginalTitle: "matrix",
+		CreateInput: &items.CreateInput{Title: "matrix"},
+	})
+	var c *apperr.ConflictError
+	if !errors.As(err, &c) || c.Code != apperr.CodeDuplicateTitle {
+		t.Fatalf("err = %v, want duplicate_title", err)
+	}
+}

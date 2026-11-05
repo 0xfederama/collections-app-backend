@@ -125,7 +125,7 @@ func (q *Queries) InsertItemRow(ctx context.Context, arg InsertItemRowParams) (u
 }
 
 const listActiveItemTitles = `-- name: ListActiveItemTitles :many
-SELECT title FROM items
+SELECT title, metadata FROM items
 WHERE list_id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 `
 
@@ -134,20 +134,25 @@ type ListActiveItemTitlesParams struct {
 	WorkspaceID uuid.UUID
 }
 
-// The titles of the active items of a list, for the duplicate_title rule of lookup creates (F-026).
-func (q *Queries) ListActiveItemTitles(ctx context.Context, arg ListActiveItemTitlesParams) ([]string, error) {
+type ListActiveItemTitlesRow struct {
+	Title    string
+	Metadata []byte
+}
+
+// The titles and metadata of the active items of a list, for the duplicate_title rule of lookup creates (F-026).
+func (q *Queries) ListActiveItemTitles(ctx context.Context, arg ListActiveItemTitlesParams) ([]ListActiveItemTitlesRow, error) {
 	rows, err := q.db.Query(ctx, listActiveItemTitles, arg.ListID, arg.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []string{}
+	items := []ListActiveItemTitlesRow{}
 	for rows.Next() {
-		var title string
-		if err := rows.Scan(&title); err != nil {
+		var i ListActiveItemTitlesRow
+		if err := rows.Scan(&i.Title, &i.Metadata); err != nil {
 			return nil, err
 		}
-		items = append(items, title)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

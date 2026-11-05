@@ -189,3 +189,23 @@ func TestF026B2_ApplyCreateRejectsDuplicateTitle(t *testing.T) {
 		t.Fatalf("err = %v, want duplicate_title", err)
 	}
 }
+
+// F026-B2: a remake with the same title but another TMDB id is allowed.
+func TestF026B2_ApplyCreateAllowsSameTitleOtherTMDBID(t *testing.T) {
+	e := newApplyEnv(t, time.Date(2026, time.March, 1, 10, 0, 0, 0, time.UTC))
+	e.repo.items[uuid.New()] = fakeItem{listID: e.list, title: "Dune", metadata: []byte(`{"tmdb_id":841}`)}
+	if _, err := e.store.Apply(t.Context(), ApplyParams{
+		Mode: ModeCreate, ListID: e.list, Type: "movie", Provider: ProviderTMDB, SourceID: "438631",
+		Title: "Dune", CreateInput: &items.CreateInput{Title: "Dune"},
+	}); err != nil {
+		t.Fatalf("remake: %v", err)
+	}
+	_, err := e.store.Apply(t.Context(), ApplyParams{
+		Mode: ModeCreate, ListID: e.list, Type: "movie", Provider: ProviderTMDB, SourceID: "841",
+		Title: "Dune (1984)", CreateInput: &items.CreateInput{Title: "dune 84"},
+	})
+	var c *apperr.ConflictError
+	if !errors.As(err, &c) || c.Code != apperr.CodeDuplicateTitle {
+		t.Fatalf("same tmdb id: err = %v, want duplicate_title", err)
+	}
+}

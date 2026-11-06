@@ -18,7 +18,7 @@ Parses and validates the API's environment configuration once at startup. Every 
 - `DATABASE_URL`: required; `postgres://` or `postgresql://` with a host
 - `DB_MAX_CONNS`: integer 1 to 100, default 10
 - `DATA_DIR`: default `/data`; must be an existing, writable directory
-- `WORKSPACE_NAME`: default `Our Collection`
+- `WORKSPACE_NAME`: default `Collections`; used only when the workspace is first created (bootstrap never renames an existing one)
 - `TMDB_API_KEY`: optional server-side TMDB credential; blank disables lookup
 - `TMDB_MOCK_FIXTURE`: `true`/`false`, default false; test stacks only (rejected when `APP_ENV=production`); also enables the `[mock] book name` Open Library fixture
 - `HARDCOVER_API_KEY`: optional Hardcover token (gap-filler of the automatic book lookup); blank disables it, never required, never logged

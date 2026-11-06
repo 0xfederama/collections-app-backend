@@ -22,7 +22,7 @@ type fakeStore struct {
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{cur: workspace.Settings{
-		WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT",
+		WorkspaceName: "Collections", StreamingCountryCode: "IT", MetadataLanguage: "it-IT",
 		MarkdownHistoryLimit: 20, TrashRetentionDays: ptr(7), PreferredStore: "amazon", Version: 1,
 	}}
 }
@@ -141,7 +141,7 @@ func TestService_Update_FakeUnchangedPatchIsNoWrite(t *testing.T) {
 		patch workspace.SettingsPatch
 	}{
 		{"empty patch", workspace.SettingsPatch{}},
-		{"same values", workspace.SettingsPatch{WorkspaceName: ptr(" Our Collection "), StreamingCountryCode: ptr("IT"), MetadataLanguage: ptr("it-IT")}},
+		{"same values", workspace.SettingsPatch{WorkspaceName: ptr(" Collections "), StreamingCountryCode: ptr("IT"), MetadataLanguage: ptr("it-IT")}},
 		{"the stored preferred store", workspace.SettingsPatch{PreferredStore: ptr("amazon")}},
 		{"the stored retention", workspace.SettingsPatch{TrashRetentionDays: workspace.Optional[int]{Set: true, Value: ptr(7)}}},
 	}
@@ -172,10 +172,10 @@ func TestService_Update_FakeWrites(t *testing.T) {
 		wantLinks     int // item and snapshot clears, each
 	}{
 		{"name change updates the workspace name", workspace.SettingsPatch{WorkspaceName: ptr("  Home  ")}, "Home", 1, 0},
-		{"country change clears the links", workspace.SettingsPatch{StreamingCountryCode: ptr("US")}, "Our Collection", 0, 1},
+		{"country change clears the links", workspace.SettingsPatch{StreamingCountryCode: ptr("US")}, "Collections", 0, 1},
 		{"name and country change both apply", workspace.SettingsPatch{WorkspaceName: ptr("Home"), StreamingCountryCode: ptr("US")}, "Home", 1, 1},
-		{"other fields keep the links", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(5)}, "Our Collection", 0, 0},
-		{"retention off keeps the links", workspace.SettingsPatch{TrashRetentionDays: workspace.Optional[int]{Set: true}}, "Our Collection", 0, 0},
+		{"other fields keep the links", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(5)}, "Collections", 0, 0},
+		{"retention off keeps the links", workspace.SettingsPatch{TrashRetentionDays: workspace.Optional[int]{Set: true}}, "Collections", 0, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

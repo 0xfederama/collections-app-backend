@@ -36,7 +36,7 @@ func TestLoad_Defaults(t *testing.T) {
 	if c.DataDir != dir {
 		t.Errorf("DataDir = %q", c.DataDir)
 	}
-	if c.WorkspaceName != "Our Collection" {
+	if c.WorkspaceName != "Collections" {
 		t.Errorf("WorkspaceName = %q", c.WorkspaceName)
 	}
 	if c.TMDBAPIKey != "" {

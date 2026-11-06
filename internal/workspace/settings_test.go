@@ -16,7 +16,7 @@ import (
 func ptr[T any](v T) *T { return &v }
 
 func TestService_Update(t *testing.T) {
-	base := workspace.Settings{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 1}
+	base := workspace.Settings{WorkspaceName: "Collections", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 1}
 	tests := []struct {
 		name  string
 		patch workspace.SettingsPatch
@@ -32,7 +32,7 @@ func TestService_Update(t *testing.T) {
 		{"all fields bump once", workspace.SettingsPatch{WorkspaceName: ptr("X"), StreamingCountryCode: ptr("DE"), MarkdownHistoryLimit: ptr(5)},
 			workspace.Settings{WorkspaceName: "X", StreamingCountryCode: "DE", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 5, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 2}},
 		{"empty patch is a no-op", workspace.SettingsPatch{}, base},
-		{"same values are a no-op", workspace.SettingsPatch{WorkspaceName: ptr(" Our Collection "), StreamingCountryCode: ptr("IT"), MetadataLanguage: ptr("it-IT")}, base},
+		{"same values are a no-op", workspace.SettingsPatch{WorkspaceName: ptr(" Collections "), StreamingCountryCode: ptr("IT"), MetadataLanguage: ptr("it-IT")}, base},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -95,7 +95,7 @@ func TestService_Update_Validation(t *testing.T) {
 			[]string{"workspace_name", "streaming_country_code", "metadata_language", "markdown_history_limit", "preferred_store"}},
 	}
 	pool := newPool(t)
-	id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")
+	id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestService_Update_Validation(t *testing.T) {
 
 func TestService_Update_StaleVersion(t *testing.T) {
 	pool := newPool(t)
-	id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")
+	id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestService_Update_StaleVersion(t *testing.T) {
 // Two PATCHes with the same If-Match race: exactly one wins, the other gets a conflict.
 func TestService_Update_ConcurrentSameVersion(t *testing.T) {
 	pool := newPool(t)
-	id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")
+	id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestF022B3_OwnedStreamingServicesRoundTrip(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pool := newPool(t)
-			id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")
+			id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -242,7 +242,7 @@ func TestF022B3_OwnedStreamingServicesRoundTrip(t *testing.T) {
 // F-022 B3: a new workspace shows every service, so the list is [] and never nil.
 func TestF022B3_OwnedStreamingServicesDefaultEmpty(t *testing.T) {
 	pool := newPool(t)
-	id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")
+	id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +258,7 @@ func TestF022B3_OwnedStreamingServicesDefaultEmpty(t *testing.T) {
 // F-022 B3: an absent list is unchanged, a repeat is a no-op, [] clears it (a version bump).
 func TestF022B3_OwnedStreamingServicesUnchangedRepeatClear(t *testing.T) {
 	pool := newPool(t)
-	id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")
+	id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +311,7 @@ func TestF022B3_OwnedStreamingServicesInvalid(t *testing.T) {
 		{"sixty five entries", keysN(65)},
 	}
 	pool := newPool(t)
-	id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")
+	id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,12 @@
 package tmdb
 
-import "unicode"
+import (
+	"context"
+	"log/slog"
+	"net/url"
+	"strconv"
+	"unicode"
+)
 
 // translation is one entry of TMDB's append_to_response=translations list.
 // Movie titles sit in data.title and TV titles in data.name.
@@ -90,4 +96,46 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// directorNames returns the distinct directors of a movie in Latin script. Only a
+// non-Latin credit name costs a /person call, and only the first maxPersonLookups
+// of them, so one Details call stays bounded. Any /person failure (429, timeout,
+// 5xx, 404, bad body) keeps the credit name and logs a warning: the name is an
+// enrichment, never a reason to fail the whole Details.
+func (c *Client) directorNames(ctx context.Context, crew []crewMember) []string {
+	names := make([]string, 0)
+	lookups := 0
+	for _, person := range crew {
+		if person.Job != "Director" || person.Name == "" {
+			continue
+		}
+		name := person.Name
+		if !isLatin(name) && person.ID > 0 && lookups < maxPersonLookups {
+			lookups++
+			name = c.latinDirectorName(ctx, person)
+		}
+		if !contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// latinDirectorName returns the Latin name for one director, or the credit name
+// when /person cannot provide one.
+func (c *Client) latinDirectorName(ctx context.Context, person crewMember) string {
+	var detail struct {
+		ID          int      `json:"id"`
+		AlsoKnownAs []string `json:"also_known_as"`
+	}
+	if err := c.getJSON(ctx, "/person/"+strconv.Itoa(person.ID), url.Values{}, &detail); err != nil {
+		slog.WarnContext(ctx, "TMDB person lookup failed; keeping the credit name", "person_id", person.ID, "err", err)
+		return person.Name
+	}
+	if detail.ID != person.ID {
+		slog.WarnContext(ctx, "TMDB person lookup returned another person; keeping the credit name", "person_id", person.ID)
+		return person.Name
+	}
+	return chooseName(person.Name, detail.AlsoKnownAs)
 }

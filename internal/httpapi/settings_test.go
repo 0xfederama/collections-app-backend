@@ -31,7 +31,7 @@ type settingsBody struct {
 func settingsRouter(t *testing.T) http.Handler {
 	t.Helper()
 	pool := testdb.NewMigrated(t, sharedPostgres(t))
-	id, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")
+	id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestAT02_GetSettings(t *testing.T) {
 	if got := rec.Header().Get("ETag"); got != `"s-1"` {
 		t.Errorf("ETag = %q, want \"s-1\"", got)
 	}
-	want := settingsBody{WorkspaceName: "Our Collection", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 20, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 1}
+	want := settingsBody{WorkspaceName: "Collections", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 20, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 1}
 	if got := decodeSettings(t, rec); !reflect.DeepEqual(got, want) {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}

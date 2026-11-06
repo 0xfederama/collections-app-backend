@@ -49,7 +49,7 @@ func Load(getenv func(string) string) (Config, error) {
 		HTTPAddr:        get("HTTP_ADDR", ":8080"),
 		DatabaseURL:     get("DATABASE_URL", ""),
 		DataDir:         get("DATA_DIR", "/data"),
-		WorkspaceName:   get("WORKSPACE_NAME", "Our Collection"),
+		WorkspaceName:   get("WORKSPACE_NAME", "Collections"),
 		TMDBAPIKey:      strings.TrimSpace(getenv("TMDB_API_KEY")),
 		TMDBMockFixture: false,
 		LogFormat:       get("LOG_FORMAT", "json"),

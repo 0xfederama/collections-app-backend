@@ -6,7 +6,11 @@ Provides an optional, bounded, server-side TMDB client for movie and TV search, 
 
 ## Key files
 
-- `internal/integrations/tmdb/client.go`: API client, result mapping, cache, pacing, poster download
+- `internal/integrations/tmdb/client.go`: client construction, auth, HTTP calls, pacing and 429 handling
+- `internal/integrations/tmdb/search.go`: search, result cache, localized search titles
+- `internal/integrations/tmdb/details.go`: details and metadata mapping, watch providers
+- `internal/integrations/tmdb/names.go`: Latin-script titles and director names, translations
+- `internal/integrations/tmdb/refresh.go`: JustWatch link (lookup refresh) and poster download
 - `internal/lookup/tmdb_provider.go`: adapter onto the lookup `Provider` interface
 - `internal/lookup/handler.go`, `wire.go`: `listTmdbSuggestions` and its JSON type
 - `internal/platform/config/config.go`: optional `TMDB_API_KEY` and E2E fixture switch

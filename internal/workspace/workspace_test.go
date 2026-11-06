@@ -37,7 +37,7 @@ func count(t *testing.T, pool *pgxpool.Pool, table string) int {
 func TestAT02_BootstrapSequential(t *testing.T) {
 	pool := newPool(t)
 
-	first, err := workspace.Bootstrap(t.Context(), pool, "Our Collection")
+	first, err := workspace.Bootstrap(t.Context(), pool, "Collections")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestAT02_BootstrapConcurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			ids[i], errs[i] = workspace.Bootstrap(t.Context(), pool, "Our Collection")
+			ids[i], errs[i] = workspace.Bootstrap(t.Context(), pool, "Collections")
 		}()
 	}
 	close(start)
@@ -110,7 +110,7 @@ func TestAT02_BootstrapFailsWithTwoWorkspaces(t *testing.T) {
 	if _, err := pool.Exec(t.Context(), "INSERT INTO workspaces (name) VALUES ('A'), ('B')"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := workspace.Bootstrap(t.Context(), pool, "Our Collection"); err == nil {
+	if _, err := workspace.Bootstrap(t.Context(), pool, "Collections"); err == nil {
 		t.Fatal("want an error with two workspaces")
 	}
 }

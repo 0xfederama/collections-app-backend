@@ -1,0 +1,15 @@
+# gitleaks config: the default rules plus two known false positives, so `gitleaks git` reports no leaks.
+[extend]
+useDefault = true
+
+# Generated OpenAPI code with the embedded spec (removed since, still in history): base64 blobs look like keys.
+[[allowlists]]
+description = "generated oapi code with embedded spec"
+paths = ['''^internal/httpapi/oapi/oapi\.gen\.go$''']
+
+# The fake token of the Hardcover client tests (old and current location).
+[[allowlists]]
+description = "fake Hardcover test token"
+condition = "AND"
+paths = ['''^internal/(integrations/)?hardcover/client_test\.go$''']
+regexes = ['''tok-SECRET-123''']

@@ -46,6 +46,9 @@ func TestFrom(t *testing.T) {
 			if len(p.Errors) != 2 || p.Errors[0].Field != "price.max" || p.Errors[1].Message != "required" {
 				t.Errorf("errors = %+v", p.Errors)
 			}
+			if want := "Invalid fields: price.max (must be >= min); title (required)."; p.Detail != want {
+				t.Errorf("R28-detail = %q, want %q", p.Detail, want)
+			}
 		}},
 		{"unknown field", apperr.UnknownField("metadata.runtime"), 400, "unknown_field", func(t *testing.T, p *Problem) {
 			if p.Detail != `Unknown field "metadata.runtime".` {
@@ -149,8 +152,8 @@ func TestFromHuma(t *testing.T) {
 		{"body that is not JSON", 400, []error{detail("body", "invalid character 's' looking for beginning of value")}, 400, "malformed_request", detailNotJSON},
 		{"wrong content type", 415, []error{detail("body", "unknown content type: text/plain")}, 400, "malformed_request", detailUnsupportedContentType},
 		{"body over the limit", 413, []error{errors.New("request body is too large limit=10 bytes")}, 413, "payload_too_large", "The request body exceeds the limit for this route."},
-		{"field rules", 422, []error{detail("body.title", "expected length >= 1"), detail("body.count", "expected number <= 10")}, 422, "validation_failed", "One or more fields are invalid."},
-		{"constraint that starts like a type message stays a field error", 422, []error{detail("body.count", "expected number >= 0")}, 422, "validation_failed", "One or more fields are invalid."},
+		{"field rules", 422, []error{detail("body.title", "expected length >= 1"), detail("body.count", "expected number <= 10")}, 422, "validation_failed", "Invalid fields: title (expected length >= 1); count (expected number <= 10)."},
+		{"constraint that starts like a type message stays a field error", 422, []error{detail("body.count", "expected number >= 0")}, 422, "validation_failed", "Invalid field: count (expected number >= 0)."},
 		{"wrong JSON type on a body field is a malformed request", 422, []error{detail("body.preferred_store", "expected string")}, 400, "malformed_request", detailNotJSON},
 		{"wrong JSON type nested in a body field is a malformed request", 422, []error{detail("body.price.min", "expected string")}, 400, "malformed_request", detailNotJSON},
 		{"wrong JSON type of the body root is a malformed request", 422, []error{detail("body", "expected object")}, 400, "malformed_request", detailNotJSON},
@@ -252,5 +255,16 @@ func assertNoInternals(t *testing.T, body string) {
 		if strings.Contains(body, bad) {
 			t.Errorf("body leaks %q: %s", bad, body)
 		}
+	}
+}
+
+func TestR28ValidationDetailNamesFields(t *testing.T) {
+	one := validationDetail([]FieldError{{Field: "title", Message: "must be 1 to 300 characters."}})
+	if want := "Invalid field: title (must be 1 to 300 characters)."; one != want {
+		t.Errorf("one = %q, want %q", one, want)
+	}
+	many := validationDetail([]FieldError{{Field: "a", Message: "x"}, {Field: "b", Message: "y"}, {Field: "c", Message: "z"}, {Field: "d", Message: "w"}})
+	if want := "Invalid fields: a (x); b (y); c (z); and 1 more."; many != want {
+		t.Errorf("many = %q, want %q", many, want)
 	}
 }

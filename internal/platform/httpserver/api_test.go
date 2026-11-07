@@ -145,7 +145,7 @@ func TestRules_ErrorsAreProblems(t *testing.T) {
 		{"body over the default limit", http.MethodPost, "/items", jsonCT, big, nil,
 			413, "payload_too_large", "The request body exceeds the limit for this route."},
 		{"missing required field", http.MethodPost, "/items", jsonCT, `{}`, nil,
-			422, "validation_failed", "One or more fields are invalid."},
+			422, "validation_failed", "Invalid field: title (expected required property title to be present)."},
 		// Rule 4 (the handler paths): domain errors and unknown errors.
 		{"domain error from a handler", http.MethodGet, "/fail?kind=notfound", "", "", nil,
 			404, "not_found", "Item not found."},

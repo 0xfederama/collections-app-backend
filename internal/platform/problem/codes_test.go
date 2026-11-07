@@ -36,6 +36,7 @@ func TestCodesCoverEveryEmittedCode(t *testing.T) {
 		apperr.UnsupportedMediaType("svg"),
 		apperr.LookupDisabled(),
 		apperr.UpstreamUnavailable(),
+		apperr.FaviconNotFound(),
 		errors.New("unexpected"),
 	} {
 		p, _ := From(err, "req-1")

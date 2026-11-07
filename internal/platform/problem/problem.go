@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -114,23 +115,25 @@ func From(err error, requestID string) (p *Problem, unexpected bool) {
 		badMedia   *apperr.UnsupportedMediaTypeError
 		lookupOff  *apperr.LookupDisabledError
 		upstream   *apperr.UpstreamUnavailableError
+		noFavicon  *apperr.FaviconNotFoundError
 		bodyTooBig *http.MaxBytesError
 	)
 	switch {
 	case errors.As(err, &notFound):
 		return New(http.StatusNotFound, "not_found", "Not found", capitalize(notFound.Resource)+" not found."), false
+	case errors.As(err, &noFavicon):
+		return New(http.StatusNotFound, "favicon_not_found", "Favicon not found", "The site has no favicon."), false
 	case errors.As(err, &stale):
 		p = New(http.StatusPreconditionFailed, "version_conflict", "Resource was modified",
 			"The resource was changed by someone else. Reload and try again.")
 		p.CurrentVersion = &stale.Current
 		return p, false
 	case errors.As(err, &invalid):
-		p = New(http.StatusUnprocessableEntity, "validation_failed", "Validation failed", "One or more fields are invalid.")
-		p.Errors = make([]FieldError, 0, len(invalid.Errors))
+		fields := make([]FieldError, 0, len(invalid.Errors))
 		for _, fe := range invalid.Errors {
-			p.Errors = append(p.Errors, FieldError{Field: fe.Field, Message: fe.Message})
+			fields = append(fields, FieldError{Field: fe.Field, Message: fe.Message})
 		}
-		return p, false
+		return validationProblem(fields), false
 	case errors.As(err, &unknown):
 		return UnknownField(unknown.Path), false
 	case errors.As(err, &conflict):
@@ -274,9 +277,48 @@ func fromHuma(ctx context.Context, status int, errs []error) *Problem {
 		}
 		fields = append(fields, fieldError(d))
 	}
-	p := New(http.StatusUnprocessableEntity, "validation_failed", "Validation failed", "One or more fields are invalid.")
+	return validationProblem(fields)
+}
+
+// maxDetailFields bounds how many fields the validation detail names.
+const maxDetailFields = 3
+
+// validationProblem is the 422 validation_failed. Its detail names the failed
+// fields ("Invalid field: title (must be 1 to 300 characters)."); the full list
+// stays in Errors.
+func validationProblem(fields []FieldError) *Problem {
+	p := New(http.StatusUnprocessableEntity, "validation_failed", "Validation failed", validationDetail(fields))
 	p.Errors = fields
 	return p
+}
+
+func validationDetail(fields []FieldError) string {
+	if len(fields) == 0 {
+		return "One or more fields are invalid."
+	}
+	parts := make([]string, 0, maxDetailFields)
+	for i, fe := range fields {
+		if i == maxDetailFields {
+			break
+		}
+		part := fe.Field
+		if part == "" {
+			part = "body"
+		}
+		if fe.Message != "" {
+			part += " (" + strings.TrimSuffix(fe.Message, ".") + ")"
+		}
+		parts = append(parts, part)
+	}
+	label := "Invalid field: "
+	if len(fields) > 1 {
+		label = "Invalid fields: "
+	}
+	detail := label + strings.Join(parts, "; ")
+	if more := len(fields) - len(parts); more > 0 {
+		detail += "; and " + strconv.Itoa(more) + " more"
+	}
+	return detail + "."
 }
 
 // bodyTypeMessages are Huma's messages for a value of the wrong JSON type.

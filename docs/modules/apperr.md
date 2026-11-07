@@ -22,6 +22,7 @@ Typed domain errors that services return and that `internal/httpapi` maps to pro
 - `DuplicateTitle() error`: 409 `duplicate_title` (items create/update/move, lookup enriched create)
 - `PayloadTooLarge(limit int64) error`: over-limit body or upload
 - `UnsupportedMediaType(detail string) error`: upload not JPEG, PNG or WebP
+- `FaviconNotFound() error`: site without a usable favicon (404 `favicon_not_found`, `*FaviconNotFoundError`)
 
 ## Gotchas
 
@@ -29,4 +30,4 @@ Typed domain errors that services return and that `internal/httpapi` maps to pro
 - `Validation` should get at least one `FieldError`.
 - Only the `CodeParentInTrash` conflict carries `Blocking`; the other codes leave it nil.
 - Messages here are for logs. Clients never see them: `httpapi` maps each type to a fixed title and detail.
-- Add new error kinds here and map them once in `httpapi/problem.go`.
+- Add new error kinds here and map them once in `platform/problem/problem.go`.

@@ -112,10 +112,15 @@ func (s *DBStore) applyCreate(ctx context.Context, r Repo, p ApplyParams, poster
 	if err != nil {
 		return uuid.Nil, false, err
 	}
-	metadata, err = items.ValidateImport(typ, fields, metadata)
+	keep := map[string]bool{idKey: true}
+	for path := range flatten(p.CreateInput.Metadata) {
+		keep[topKey(path)] = true
+	}
+	metadata, dropped, err := validateImport(typ, fields, metadata, nil, keep)
 	if err != nil {
 		return uuid.Nil, false, err
 	}
+	s.warnDropped(dropped)
 	metaJSON, err := json.Marshal(metadata)
 	if err != nil {
 		return uuid.Nil, false, fmt.Errorf("encode lookup metadata: %w", err)
@@ -201,10 +206,11 @@ func (s *DBStore) applyExisting(ctx context.Context, r Repo, p ApplyParams, post
 	if err != nil {
 		return false, nil, err
 	}
-	merged, err = items.ValidateImport(cur.Type, fields, merged)
+	merged, dropped, err := validateImport(cur.Type, fields, merged, metadata, map[string]bool{idKey: true})
 	if err != nil {
 		return false, nil, err
 	}
+	s.warnDropped(dropped)
 	snapshots = snapshotPresent(merged, snapshots)
 	metaJSON, err := json.Marshal(merged)
 	if err != nil {

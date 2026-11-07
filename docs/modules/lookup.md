@@ -13,6 +13,7 @@ Merges values imported from a metadata provider (TMDB for movie and TV, Open Lib
 - `internal/lookup/repository.go`: `Repo` seam and `Postgres`, the only sqlc importer in the package
 - `internal/lookup/store.go`: `DBStore`, `ListType`, `Read`, poster preparation
 - `internal/lookup/merge.go`, `paths.go`: pure merge and path rules
+- `internal/lookup/validate_import.go`: `validateImport`, which drops invalid provider fields instead of failing the write
 - `internal/lookup/maintenance.go`: the weekly TMDB refresh pass, its retry state and its loop
 - `internal/lookup/refresh.go`: `RefreshScheduled` (the one-item TMDB refresh both paths share), the explicit `refresh` mode and `RefreshList` (the list refresh)
 - `internal/lookup/handler.go`, `wire.go`: Huma operations and their JSON types
@@ -44,6 +45,7 @@ Merges values imported from a metadata provider (TMDB for movie and TV, Open Lib
 - Automatic book lookup (no `source_id`) uses `pickBest`: exact normalised title first, then author and pages, ties in upstream order. TMDB takes the first result.
 - Hardcover is used only by the automatic book path. `ModeCreateUntracked` creates without a provenance row or `openlibrary_id`. Failures are swallowed.
 - `streaming.link` is an ordinary imported leaf. Clients never send it, and a streaming-country change clears it (see [workspace](workspace.md)) without bumping item `version`.
+- Provider data never blocks create or refresh (R28): a top-level metadata key that fails the item rules is dropped and logged (`lookup: dropped invalid provider fields`). On an existing item the stored value takes its place when there is one. On create, keys the client sent and the provider id are never dropped; their errors still answer 422.
 - Books keep the typed title on create; movies and TV adopt the provider title (kept in `imported_title`) on create and rematch.
 - A provider with no cover still applies the match, without an image. Manual lookup modes keep the existing image.
 - TMDB backups must be retired within six months under [TMDB API terms](https://www.themoviedb.org/api-terms-of-use).

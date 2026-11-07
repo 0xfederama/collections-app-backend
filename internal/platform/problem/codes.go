@@ -24,6 +24,7 @@ var Codes = []Code{
 	{"payload_too_large", "The body is over the limit of the operation (413)."},
 	{"unsupported_media_type", "An upload is not JPEG, PNG or WebP (415)."},
 	{"not_found", "The resource is missing or trashed, or the endpoint does not exist (404)."},
+	{"favicon_not_found", "The site of a favicon request has no usable icon (404). The web shows its fallback."},
 	{"method_not_allowed", "The path exists but does not accept this method (405)."},
 	{"version_conflict", "The `If-Match` version is stale (412). `current_version` is the stored one."},
 	{"validation_failed", "One or more fields break a rule (422). `errors` lists them."},

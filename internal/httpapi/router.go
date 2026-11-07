@@ -15,6 +15,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/content"
 	"github.com/0xfederama/collections-app-backend/internal/definitions"
+	"github.com/0xfederama/collections-app-backend/internal/favicons"
 	"github.com/0xfederama/collections-app-backend/internal/folders"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/items"
@@ -69,6 +70,9 @@ type Deps struct {
 	// Trash serves the deletes of folders, lists and items, the trash list, restore and purge (F-019-B3f).
 	// The composition root builds it with trash.NewService over the pool and the file store.
 	Trash *trash.Service
+	// Favicons serves GET /favicon. The composition root builds it with favicons.NewService over
+	// favicons.NewHTTPFetcher and the file store.
+	Favicons *favicons.Service
 	// Logs serves the in-memory log buffer and its viewer (LOGS_UI). Nil leaves the routes
 	// unregistered, so a disabled instance answers the normal 404 problem.
 	Logs *logs.Buffer
@@ -128,6 +132,7 @@ func register(api huma.API, d Deps) {
 	search.Register(api, d.Logger, d.Search)
 	lookup.Register(api, d.Logger, d.Lookup, d.TMDB, d.Books, d.Settings)
 	stores.Register(api, d.Logger)
+	favicons.Register(api, d.Logger, d.Favicons)
 	if d.Logs != nil {
 		logs.Register(api, d.Logger, d.Logs)
 	}

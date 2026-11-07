@@ -6,7 +6,37 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
+
+// maxDirectorRunes is the movie `director` text limit (items/types defaultTextMax).
+const maxDirectorRunes = 100
+
+// joinNames joins names with ", " keeping whole names in order and stopping
+// before the result exceeds max runes. A first name that is too long is cut on
+// a rune boundary.
+func joinNames(names []string, max int) string {
+	var b strings.Builder
+	n := 0
+	for i, name := range names {
+		add := utf8.RuneCountInString(name)
+		if i > 0 {
+			add += 2
+		}
+		if n+add > max {
+			if i == 0 {
+				return string([]rune(name)[:max])
+			}
+			break
+		}
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(name)
+		n += add
+	}
+	return b.String()
+}
 
 // Details contains editable metadata and the poster path returned by TMDB.
 type Details struct {
@@ -107,7 +137,7 @@ func (c *Client) Details(ctx context.Context, typ string, id int, language, coun
 		}
 		directors := c.directorNames(ctx, data.Credits.Crew)
 		if len(directors) > 0 {
-			metadata["director"] = strings.Join(directors, ", ")
+			metadata["director"] = joinNames(directors, maxDirectorRunes)
 		}
 	} else {
 		if data.Seasons > 0 {

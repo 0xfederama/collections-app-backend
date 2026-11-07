@@ -18,6 +18,7 @@ var apiRoutes = []struct{ method, path string }{
 	{"GET", "/api/v1/settings"},
 	{"PATCH", "/api/v1/settings"},
 	{"GET", "/api/v1/store-providers"},
+	{"GET", "/api/v1/favicon"},
 	{"GET", "/api/v1/books/suggestions"},
 	{"GET", "/api/v1/types"},
 	{"GET", "/api/v1/tmdb/suggestions"},

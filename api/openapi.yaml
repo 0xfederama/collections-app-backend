@@ -713,6 +713,7 @@ components:
         - `payload_too_large`: The body is over the limit of the operation (413).
         - `unsupported_media_type`: An upload is not JPEG, PNG or WebP (415).
         - `not_found`: The resource is missing or trashed, or the endpoint does not exist (404).
+        - `favicon_not_found`: The site of a favicon request has no usable icon (404). The web shows its fallback.
         - `method_not_allowed`: The path exists but does not accept this method (405).
         - `version_conflict`: The `If-Match` version is stale (412). `current_version` is the stored one.
         - `validation_failed`: One or more fields break a rule (422). `errors` lists them.
@@ -1505,6 +1506,69 @@ paths:
       summary: Suggest book matches
       tags:
         - books
+  /api/v1/favicon:
+    get:
+      description: "The server fetches the icon of the origin of `url` (http or https, at most 2048 characters): the `<link rel=icon>` of its home page, else `/favicon.ico`. It never connects to loopback, private, link-local or other non-public addresses (422 on `url`). Icons are cached on disk for 30 days, \"no icon\" answers for 1 day. PNG, ICO, GIF, JPEG and WebP up to 256 KiB; SVG is refused. 404 `favicon_not_found` means the web shows its fallback."
+      operationId: getFavicon
+      parameters:
+        - description: An absolute http or https URL; only its origin is used.
+          explode: false
+          in: query
+          name: url
+          required: true
+          schema:
+            description: An absolute http or https URL; only its origin is used.
+            type: string
+      responses:
+        "200":
+          content:
+            image/gif:
+              schema:
+                contentMediaType: application/octet-stream
+                format: binary
+                type: string
+            image/jpeg:
+              schema:
+                contentMediaType: application/octet-stream
+                format: binary
+                type: string
+            image/png:
+              schema:
+                contentMediaType: application/octet-stream
+                format: binary
+                type: string
+            image/webp:
+              schema:
+                contentMediaType: application/octet-stream
+                format: binary
+                type: string
+            image/x-icon:
+              schema:
+                contentMediaType: application/octet-stream
+                format: binary
+                type: string
+          description: The icon bytes.
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Internal Server Error
+      summary: Get the favicon of a website
+      tags:
+        - favicon
   /api/v1/folders:
     post:
       description: Appended to the end of its siblings. `parent_folder_id` absent or `null` creates it at the root.

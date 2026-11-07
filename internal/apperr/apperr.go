@@ -133,3 +133,11 @@ func (e *UpstreamUnavailableError) Error() string { return "lookup provider is u
 
 // UpstreamUnavailable reports a failed request to a lookup provider.
 func UpstreamUnavailable() error { return &UpstreamUnavailableError{} }
+
+// FaviconNotFoundError means a site has no usable favicon (404 `favicon_not_found`).
+type FaviconNotFoundError struct{}
+
+func (e *FaviconNotFoundError) Error() string { return "favicon not found" }
+
+// FaviconNotFound reports a site without a favicon, so the web shows its fallback.
+func FaviconNotFound() error { return &FaviconNotFoundError{} }

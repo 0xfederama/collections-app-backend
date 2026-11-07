@@ -115,11 +115,14 @@ func From(err error, requestID string) (p *Problem, unexpected bool) {
 		badMedia   *apperr.UnsupportedMediaTypeError
 		lookupOff  *apperr.LookupDisabledError
 		upstream   *apperr.UpstreamUnavailableError
+		noFavicon  *apperr.FaviconNotFoundError
 		bodyTooBig *http.MaxBytesError
 	)
 	switch {
 	case errors.As(err, &notFound):
 		return New(http.StatusNotFound, "not_found", "Not found", capitalize(notFound.Resource)+" not found."), false
+	case errors.As(err, &noFavicon):
+		return New(http.StatusNotFound, "favicon_not_found", "Favicon not found", "The site has no favicon."), false
 	case errors.As(err, &stale):
 		p = New(http.StatusPreconditionFailed, "version_conflict", "Resource was modified",
 			"The resource was changed by someone else. Reload and try again.")

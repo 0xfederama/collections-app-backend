@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/0xfederama/collections-app-backend/db"
+	"github.com/0xfederama/collections-app-backend/internal/favicons"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/integrations/hardcover"
@@ -114,6 +115,7 @@ func run() error {
 		Search:              search.NewService(search.NewPostgres(pool)),
 		Images:              imageSvc,
 		Trash:               trashSvc,
+		Favicons:            favicons.NewService(favicons.NewHTTPFetcher(favicons.Options{}), store, clock.System{}, logger),
 		Logs:                logBuf,
 	})
 	if err != nil {

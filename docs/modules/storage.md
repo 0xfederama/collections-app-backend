@@ -25,4 +25,4 @@ Keeps binary files (image originals and thumbnails) on the local filesystem unde
 - `Walk` also returns leftover `.tmp-*` files from a crashed `Put`; the image sweeper removes them once they are an hour old.
 - A failed `Put` removes its temp file; a successful one is visible only after the rename.
 - Symlinks that point outside the root are refused by the `os.Root`.
-- Only `internal/images` writes keys (`images/<2 hex>/<2 hex>/<uuid>.<ext>` and `.thumb.jpg`); no user input reaches a key.
+- `internal/images` writes `images/<2 hex>/<2 hex>/<uuid>.<ext>` and `.thumb.jpg`; `internal/favicons` writes `favicons/<sha256 hex>.img` and `.json`. No user input reaches a key.

@@ -20,6 +20,7 @@ Composition root of the HTTP layer. `NewRouter` builds the Huma API over chi, re
 - `GET /healthz`: 200 `ok`, liveness only
 - `GET /readyz`: 200 `ready`, or 503 when the DB ping or the `DATA_DIR` probe fails
 - `NewItems(pool, clk, settings) *items.Service`: built by `cmd/api`, shared with lookup and images
+- `Deps.Favicons`: `favicons.NewService` over `favicons.NewHTTPFetcher` and the file store; mounts `GET /api/v1/favicon`
 
 ## Gotchas
 

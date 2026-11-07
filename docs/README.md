@@ -9,6 +9,7 @@
 - [content](modules/content.md): item Markdown content, versions, restore and retention
 - [database](modules/database.md): pgx pool, schema migrations, sqlc codegen
 - [definitions](modules/definitions.md): `GET /api/v1/types`, the built-in types and fields served from the Go registry; no custom fields, no type writes
+- [favicons](modules/favicons.md): site favicon for item links, fetched server-side through an SSRF-safe client and cached under `DATA_DIR/favicons` (`GET /api/v1/favicon`)
 - [folders](modules/folders.md): folder create, get, rename, move (cycle check) and reorder (Huma)
 - [httpapi](modules/httpapi.md): HTTP composition root: router build, Huma registration of every feature package, health probes, `Spec()`
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping on upload, validation, thumbnails, serving, orphan sweeper

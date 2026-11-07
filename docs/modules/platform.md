@@ -33,6 +33,7 @@ Shared infrastructure under `internal/platform/`, used by feature packages and n
 - `problem.Install` replaces Huma's package-level error constructors once per process (a deliberate global).
 - Register Huma operations through `httpserver.Op`, or unexpected errors are not logged.
 - A new error code goes in `problem.Codes`; `TestCodesCoverEveryEmittedCode` fails otherwise.
+- `validation_failed` detail names up to 3 fields (`validationProblem`, e.g. `Invalid fields: title (...); ...`); the full list stays in `errors`.
 - `Optional` fields need `json:",omitempty"` so Huma does not mark them required.
 - The schema namer strips the `JSON` suffix (`SettingsJSON` becomes `Settings`).
 - Huma's own default body size (1 MiB) is mapped to 64 KiB; declaring exactly 1 MiB gets 64 KiB too.

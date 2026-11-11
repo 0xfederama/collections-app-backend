@@ -35,12 +35,13 @@ type Config struct {
 	// Access application's audience tag. Both set or both empty (F-027).
 	AccessTeamDomain string
 	AccessAUD        string
-	// OwnerEmail is the lower-cased e-mail of the instance owner.
+	// OwnerEmail is the lower-cased e-mail of the instance owner. LAN requests (no Cloudflare edge
+	// header, no token) always act as it (D-150); required in production.
 	OwnerEmail string
-	// LANOwnerFallback serves requests without a Cloudflare edge header as OwnerEmail (emergency switch).
-	LANOwnerFallback bool
 	// DevIdentity enables the fake dev users. Never allowed with APP_ENV=production.
 	DevIdentity bool
+	// Warnings are non-fatal configuration notes the caller logs at startup.
+	Warnings []string
 }
 
 // DevOwnerEmail is the first dev identity when OWNER_EMAIL is unset.
@@ -74,7 +75,7 @@ func parseBoolEnv(getenv func(string) string, key string, errs *[]error) bool {
 	return v
 }
 
-// validateIdentity checks the Access / dev identity / LAN fallback settings (F-027).
+// validateIdentity checks the Access / dev identity / LAN owner settings (F-027, D-150).
 func validateIdentity(c Config) []error {
 	var errs []error
 	if (c.AccessTeamDomain == "") != (c.AccessAUD == "") {
@@ -83,21 +84,21 @@ func validateIdentity(c Config) []error {
 	if c.AccessTeamDomain != "" && (strings.ContainsAny(c.AccessTeamDomain, "/?#@ ") || !strings.Contains(c.AccessTeamDomain, ".")) {
 		errs = append(errs, errors.New("ACCESS_TEAM_DOMAIN must be a host name such as myteam.cloudflareaccess.com"))
 	}
-	if c.LANOwnerFallback && c.OwnerEmail == "" {
-		errs = append(errs, errors.New("LAN_OWNER_FALLBACK=true requires OWNER_EMAIL"))
-	}
 	hasAccess := c.AccessTeamDomain != "" && c.AccessAUD != ""
 	switch c.AppEnv {
 	case "production":
 		if !hasAccess {
 			errs = append(errs, errors.New("APP_ENV=production requires ACCESS_TEAM_DOMAIN and ACCESS_AUD"))
 		}
+		if c.OwnerEmail == "" {
+			errs = append(errs, errors.New("APP_ENV=production requires OWNER_EMAIL"))
+		}
 		if c.DevIdentity {
 			errs = append(errs, errors.New("DEV_IDENTITY cannot be enabled when APP_ENV=production"))
 		}
 	case "development":
-		if !hasAccess && !c.DevIdentity && !c.LANOwnerFallback {
-			errs = append(errs, errors.New("no identity provider: set ACCESS_TEAM_DOMAIN and ACCESS_AUD, DEV_IDENTITY=true or LAN_OWNER_FALLBACK=true"))
+		if !hasAccess && !c.DevIdentity && c.OwnerEmail == "" {
+			errs = append(errs, errors.New("no identity provider: set ACCESS_TEAM_DOMAIN and ACCESS_AUD, DEV_IDENTITY=true or OWNER_EMAIL"))
 		}
 	}
 	return errs
@@ -151,7 +152,10 @@ func Load(getenv func(string) string) (Config, error) {
 	if c.OwnerEmail != "" && !validEmail(c.OwnerEmail) {
 		errs = append(errs, errors.New("OWNER_EMAIL must be an e-mail address"))
 	}
-	c.LANOwnerFallback = parseBoolEnv(getenv, "LAN_OWNER_FALLBACK", &errs)
+	// Removed by D-150 (the LAN is always the owner). A leftover value from an older .env must not block startup.
+	if strings.TrimSpace(getenv("LAN_OWNER_FALLBACK")) != "" {
+		c.Warnings = append(c.Warnings, "LAN_OWNER_FALLBACK is ignored: requests from the home network always act as OWNER_EMAIL (D-150); remove it from the environment")
+	}
 	c.DevIdentity = parseBoolEnv(getenv, "DEV_IDENTITY", &errs)
 	errs = append(errs, validateIdentity(c)...)
 

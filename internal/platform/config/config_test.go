@@ -16,14 +16,14 @@ const validDB = "postgres://db:5432/collection?sslmode=disable"
 // settings do not repeat it; the identity tests use rawEnv.
 func env(m map[string]string) func(string) string {
 	identity := false
-	for _, k := range []string{"ACCESS_TEAM_DOMAIN", "ACCESS_AUD", "OWNER_EMAIL", "LAN_OWNER_FALLBACK", "DEV_IDENTITY"} {
+	for _, k := range []string{"ACCESS_TEAM_DOMAIN", "ACCESS_AUD", "OWNER_EMAIL", "DEV_IDENTITY"} {
 		if _, ok := m[k]; ok {
 			identity = true
 		}
 	}
 	if !identity {
 		if m["APP_ENV"] == "production" {
-			m["ACCESS_TEAM_DOMAIN"], m["ACCESS_AUD"] = "team.cloudflareaccess.com", "aud-tag"
+			m["ACCESS_TEAM_DOMAIN"], m["ACCESS_AUD"], m["OWNER_EMAIL"] = "team.cloudflareaccess.com", "aud-tag", "owner@example.test"
 		} else {
 			m["DEV_IDENTITY"] = "true"
 		}
@@ -318,20 +318,20 @@ func TestLoad_Identity(t *testing.T) {
 		{"development with nothing refuses", map[string]string{}, "no identity provider"},
 		{"development with dev identity", map[string]string{"DEV_IDENTITY": "true"}, ""},
 		{"development with access", map[string]string{"ACCESS_TEAM_DOMAIN": team, "ACCESS_AUD": aud}, ""},
-		{"development with lan fallback", map[string]string{"LAN_OWNER_FALLBACK": "true", "OWNER_EMAIL": "me@example.test"}, ""},
-		{"production with access", map[string]string{"APP_ENV": "production", "ACCESS_TEAM_DOMAIN": team, "ACCESS_AUD": aud}, ""},
-		{"production without access", map[string]string{"APP_ENV": "production"}, "requires ACCESS_TEAM_DOMAIN and ACCESS_AUD"},
+		{"development with owner email only (LAN owner)", map[string]string{"OWNER_EMAIL": "me@example.test"}, ""},
+		{"leftover LAN_OWNER_FALLBACK is ignored", map[string]string{"LAN_OWNER_FALLBACK": "maybe", "DEV_IDENTITY": "true"}, ""},
+		{"production with access and owner", map[string]string{"APP_ENV": "production", "ACCESS_TEAM_DOMAIN": team, "ACCESS_AUD": aud, "OWNER_EMAIL": "me@example.test"}, ""},
+		{"production without owner email", map[string]string{"APP_ENV": "production", "ACCESS_TEAM_DOMAIN": team, "ACCESS_AUD": aud}, "requires OWNER_EMAIL"},
+		{"production without access", map[string]string{"APP_ENV": "production", "OWNER_EMAIL": "me@example.test"}, "requires ACCESS_TEAM_DOMAIN and ACCESS_AUD"},
 		{"production with dev identity only", map[string]string{"APP_ENV": "production", "DEV_IDENTITY": "true"}, "requires ACCESS_TEAM_DOMAIN"},
 		{"production refuses dev identity", map[string]string{"APP_ENV": "production", "ACCESS_TEAM_DOMAIN": team, "ACCESS_AUD": aud, "DEV_IDENTITY": "true"}, "DEV_IDENTITY cannot be enabled"},
-		{"production lan fallback alone", map[string]string{"APP_ENV": "production", "LAN_OWNER_FALLBACK": "true", "OWNER_EMAIL": "me@example.test"}, "requires ACCESS_TEAM_DOMAIN"},
+		{"production owner email alone", map[string]string{"APP_ENV": "production", "OWNER_EMAIL": "me@example.test"}, "requires ACCESS_TEAM_DOMAIN"},
 		{"team without aud", map[string]string{"ACCESS_TEAM_DOMAIN": team, "DEV_IDENTITY": "true"}, "must be set together"},
 		{"aud without team", map[string]string{"ACCESS_AUD": aud, "DEV_IDENTITY": "true"}, "must be set together"},
 		{"team with path", map[string]string{"ACCESS_TEAM_DOMAIN": "team.cloudflareaccess.com/x", "ACCESS_AUD": aud}, "host name"},
 		{"team without dot", map[string]string{"ACCESS_TEAM_DOMAIN": "team", "ACCESS_AUD": aud}, "host name"},
-		{"lan fallback without owner", map[string]string{"LAN_OWNER_FALLBACK": "true", "DEV_IDENTITY": "true"}, "requires OWNER_EMAIL"},
 		{"bad owner email", map[string]string{"OWNER_EMAIL": "nope", "DEV_IDENTITY": "true"}, "OWNER_EMAIL must be an e-mail"},
 		{"owner email with two at signs", map[string]string{"OWNER_EMAIL": "a@b@c", "DEV_IDENTITY": "true"}, "OWNER_EMAIL must be an e-mail"},
-		{"bad lan flag", map[string]string{"LAN_OWNER_FALLBACK": "maybe", "DEV_IDENTITY": "true"}, "LAN_OWNER_FALLBACK must be true or false"},
 		{"bad dev flag", map[string]string{"DEV_IDENTITY": "maybe"}, "DEV_IDENTITY must be true or false"},
 	}
 	for _, tt := range tests {
@@ -354,17 +354,32 @@ func TestLoad_Identity(t *testing.T) {
 	}
 }
 
+// D-150: a leftover LAN_OWNER_FALLBACK (any value) never blocks startup and yields one warning.
+func TestLoad_LegacyLANOwnerFallbackWarns(t *testing.T) {
+	for _, v := range []string{"true", "false", "maybe"} {
+		c, err := config.Load(rawEnv(map[string]string{
+			"DATABASE_URL": validDB, "DATA_DIR": t.TempDir(), "DEV_IDENTITY": "true", "LAN_OWNER_FALLBACK": v,
+		}))
+		if err != nil {
+			t.Fatalf("%s: %v", v, err)
+		}
+		if len(c.Warnings) != 1 || !strings.Contains(c.Warnings[0], "LAN_OWNER_FALLBACK is ignored") {
+			t.Fatalf("%s: warnings = %v", v, c.Warnings)
+		}
+	}
+}
+
 func TestLoad_IdentityValues(t *testing.T) {
 	c, err := config.Load(rawEnv(map[string]string{
 		"DATABASE_URL": validDB, "DATA_DIR": t.TempDir(),
 		"ACCESS_TEAM_DOMAIN": " https://team.cloudflareaccess.com/ ", "ACCESS_AUD": " aud ",
-		"OWNER_EMAIL": " Me@Example.TEST ", "LAN_OWNER_FALLBACK": "true", "DEV_IDENTITY": "true",
+		"OWNER_EMAIL": " Me@Example.TEST ", "DEV_IDENTITY": "true",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if c.AccessTeamDomain != "team.cloudflareaccess.com" || c.AccessAUD != "aud" || c.OwnerEmail != "me@example.test" ||
-		!c.LANOwnerFallback || !c.DevIdentity {
+		!c.DevIdentity || len(c.Warnings) != 0 {
 		t.Fatalf("identity = %+v", c)
 	}
 	if got := c.DevIdentities(); len(got) != 3 || got[0] != "me@example.test" || got[1] != "alice@dev.test" || got[2] != "bob@dev.test" {

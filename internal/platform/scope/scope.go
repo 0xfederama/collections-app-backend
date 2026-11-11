@@ -24,6 +24,29 @@ func UserID(ctx context.Context) (uuid.UUID, bool) {
 	return id, ok && id != uuid.Nil
 }
 
+type sourceKey struct{}
+
+// Identity sources: how the identity middleware resolved the caller (GET /me identity_source, D-151).
+const (
+	SourceAccess = "access" // a verified Cloudflare Access token
+	SourceLAN    = "lan"    // the home network: no Cloudflare edge header, acts as OWNER_EMAIL (D-150)
+	SourceDev    = "dev"    // a dev identity (DEV_IDENTITY=true)
+)
+
+// WithIdentitySource returns ctx carrying how the caller was identified.
+func WithIdentitySource(ctx context.Context, source string) context.Context {
+	return context.WithValue(ctx, sourceKey{}, source)
+}
+
+// IdentitySource returns how the caller was identified. A context without one (tests that inject
+// a user directly) reports SourceAccess, the source that shows the full account UI.
+func IdentitySource(ctx context.Context) string {
+	if s, ok := ctx.Value(sourceKey{}).(string); ok && s != "" {
+		return s
+	}
+	return SourceAccess
+}
+
 // With returns ctx scoped to the workspace.
 func With(ctx context.Context, workspaceID uuid.UUID) context.Context {
 	return context.WithValue(ctx, key{}, workspaceID)

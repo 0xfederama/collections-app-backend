@@ -8,6 +8,8 @@ type MeJSON struct {
 	Email     string    `json:"email" doc:"Lower-cased e-mail, the account key."`
 	Name      *string   `json:"name" nullable:"true" doc:"Display name from the identity provider; null when unknown (show the e-mail)."`
 	AvatarURL *string   `json:"avatar_url" nullable:"true" doc:"Absolute https URL of the avatar; null when unknown."`
+	// IdentitySource tells the web whether the session can log out (only access can, D-151).
+	IdentitySource string `json:"identity_source" enum:"access,lan,dev" doc:"How the caller was identified: access (verified Cloudflare Access token, log out available), lan (home network without Cloudflare, always the owner, D-150; no log out) or dev (dev/test identity)."`
 	// DevIdentities lists the e-mails the dev switcher offers. Null unless the server runs with DEV_IDENTITY.
 	DevIdentities []string `json:"dev_identities" nullable:"true" doc:"Dev/test only: the identities selectable with the X-Dev-User header or the dev_user cookie. Null in production."`
 }

@@ -306,7 +306,7 @@ func TestIdentity_TokenRejected(t *testing.T) {
 func TestIdentity_BadTokenNeverFallsThrough(t *testing.T) {
 	e := newEnv(t, func(o *identity.Options) {
 		o.DevIdentities = []string{"owner@dev.test"}
-		o.LANOwnerEmail = "owner@example.test"
+		o.OwnerEmail = "owner@example.test"
 	})
 	assertUnauthenticated(t, e.do("/api/v1/me", e.jwt(t, "garbage")), "garbage")
 	if len(e.seen) != 0 {
@@ -381,8 +381,8 @@ func TestIdentity_DevHeaderIgnoredWhenDevIdentityOff(t *testing.T) {
 	assertUnauthenticated(t, e.do("/api/v1/me", map[string]string{"X-Dev-User": "alice@dev.test"}), "")
 }
 
-func TestIdentity_LANOwnerFallback(t *testing.T) {
-	on := func(o *identity.Options) { o.LANOwnerEmail = "owner@example.test" }
+func TestIdentity_LANOwner(t *testing.T) {
+	on := func(o *identity.Options) { o.OwnerEmail = "owner@example.test" }
 	tests := []struct {
 		name   string
 		mod    func(*identity.Options)
@@ -393,7 +393,8 @@ func TestIdentity_LANOwnerFallback(t *testing.T) {
 		{"on, Cf-Ray present", on, map[string]string{"Cf-Ray": "abc-MXP"}, false},
 		{"on, Cf-Connecting-Ip present", on, map[string]string{"Cf-Connecting-Ip": "1.2.3.4"}, false},
 		{"on, empty Cf-Ray still counts", on, map[string]string{"Cf-Ray": ""}, false},
-		{"off", nil, nil, false},
+		{"no OWNER_EMAIL", nil, nil, false},
+		{"on, forged plain email header is ignored", on, map[string]string{"Cf-Access-Authenticated-User-Email": "x@example.test"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -413,10 +414,10 @@ func TestIdentity_LANOwnerFallback(t *testing.T) {
 	}
 }
 
-func TestIdentity_DevBeatsLANFallback(t *testing.T) {
+func TestIdentity_DevBeatsLANOwner(t *testing.T) {
 	e := newEnv(t, func(o *identity.Options) {
 		o.DevIdentities = []string{"owner@dev.test"}
-		o.LANOwnerEmail = "owner@example.test"
+		o.OwnerEmail = "owner@example.test"
 	})
 	e.do("/api/v1/me", nil)
 	if got := e.users.emails(); len(got) != 1 || got[0] != "owner@dev.test" {

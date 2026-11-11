@@ -1,5 +1,5 @@
 // Package identity resolves who a request acts as (F-027): a verified Cloudflare Access token,
-// else a dev identity, else the LAN owner fallback, else 401. It is the only place that knows
+// else a dev identity, else the LAN owner (D-150), else 401. It is the only place that knows
 // about Access tokens and the headers Cloudflare adds.
 package identity
 

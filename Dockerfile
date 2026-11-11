@@ -1,6 +1,6 @@
 # Keep the Go tag in step with go.mod (DECISIONS "Toolchain versions").
 # Build on the runner's native platform and cross-compile: no QEMU for the Go build.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24 AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.4-alpine3.24 AS build
 ARG TARGETOS TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./

@@ -59,7 +59,7 @@ distroless runtime image has no shell or curl.
 
 | Tool | Version |
 |---|---|
-| Go | 1.27.3 |
+| Go | 1.27.4 |
 | Docker with Compose v2 | any recent (Docker Desktop 28 tested) |
 | Node | 24+ (for `make lint-api`, which runs Redocly through `npx`; `make check` includes it, so it is needed for the gate) |
 | Git, `gh` | for PRs |

@@ -9,6 +9,17 @@ API_URL="${API_URL%/}"
 API="$API_URL/api/v1"
 RUN="smoke-$$-$(date +%s)"
 
+# F-027: the API needs an identity. A dev/test stack (DEV_IDENTITY=true) answers a request without
+# one as its first dev identity, so nothing is sent by default; SMOKE_DEV_USER=<email> sends it as
+# X-Dev-User. The 2.12.0 API ignores the header. Every curl below goes through this wrapper.
+curl() {
+  if [ -n "${SMOKE_DEV_USER:-}" ]; then
+    command curl -H "X-Dev-User: $SMOKE_DEV_USER" "$@"
+  else
+    command curl "$@"
+  fi
+}
+
 for tool in curl jq base64; do
   command -v "$tool" >/dev/null 2>&1 || { echo "error: $tool is required" >&2; exit 1; }
 done

@@ -12,6 +12,7 @@
 - [favicons](modules/favicons.md): site favicon for item links, fetched server-side through an SSRF-safe client and cached under `DATA_DIR/favicons` (`GET /api/v1/favicon`)
 - [folders](modules/folders.md): folder create, get, rename, move (cycle check) and reorder (Huma)
 - [httpapi](modules/httpapi.md): HTTP composition root: router build, Huma registration of every feature package, health probes, `Spec()`
+- [identity](modules/identity.md): resolves the caller of every `/api/v1` request: Cloudflare Access JWT, dev identities, LAN owner fallback, else 401
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping on upload, validation, thumbnails, serving, orphan sweeper
 - [items](modules/items.md): items create, get, list, patch, move and reorder (Huma); pure metadata, price and list-query rules; per-type rules in `items/types`
 - [lists](modules/lists.md): list create, get with path, update (type change, pure patch planner), move and reorder (Huma)
@@ -27,6 +28,7 @@
 - [trash](modules/trash.md): folder, list and item deletes into trash batches (Huma), trash list, restore, purge, empty trash, retention auto-purge
 - [tree](modules/tree.md): `GET /api/v1/tree`, the flat read of active folders and lists for the sidebar (handler only)
 - [tmdb](modules/tmdb.md): bounded server-side TMDB client for movie and TV suggestions/details (`internal/integrations`)
+- [users](modules/users.md): accounts keyed by lower-cased e-mail, created on first request; `GET /api/v1/me`
 - [workspace](modules/workspace.md): single-workspace bootstrap and settings service (Huma `GET`/`PATCH /api/v1/settings`)
 
 Design docs (canonical): `/Users/federico/Developer/collections-app/design-docs/`

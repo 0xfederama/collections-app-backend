@@ -17,7 +17,7 @@ func Spec() ([]byte, error) {
 }
 
 // specDescription is the info.description of the contract.
-const specDescription = `Private REST API of the Collection App. There is no auth in the MVP, so it must stay on a private network.
+const specDescription = `Private REST API of the Collection App. Every ` + "`/api/v1`" + ` request needs an identity: a Cloudflare Access token (` + "`Cf-Access-Jwt-Assertion`" + `, verified), or on dev/test servers a dev user (` + "`X-Dev-User`" + ` header or ` + "`dev_user`" + ` cookie). Without one the answer is ` + "`401 unauthenticated`" + `. The probes are open.
 
 **Conventions**
 - Bodies are JSON (` + "`application/json`" + `) unless noted. Field names are ` + "`snake_case`" + `, IDs are UUIDs, timestamps are RFC 3339 UTC.
@@ -43,6 +43,7 @@ Item pages: ` + "`limit`" + ` 1–200 (default 50), ` + "`offset`" + ` ≥ 0.
 func specTags() []*huma.Tag {
 	return []*huma.Tag{
 		{Name: "health", Description: "Liveness and readiness probes (outside `/api/v1`)."},
+		{Name: "users", Description: "The signed-in account (created on the first request)."},
 		{Name: "settings", Description: "Workspace name and settings (one resource, one ETag)."},
 		{Name: "types", Description: "The built-in item types and their fields."},
 		{Name: "tree", Description: "The sidebar tree of active folders and lists."},

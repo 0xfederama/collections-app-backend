@@ -23,6 +23,7 @@ var Codes = []Code{
 	{"precondition_required", "A versioned resource is changed without a usable `If-Match` (428)."},
 	{"payload_too_large", "The body is over the limit of the operation (413)."},
 	{"unsupported_media_type", "An upload is not JPEG, PNG or WebP (415)."},
+	{"unauthenticated", "The request carries no valid identity: a missing, invalid or expired Cloudflare Access token, or no identity provider matches (401). Sign in again."},
 	{"not_found", "The resource is missing or trashed, or the endpoint does not exist (404)."},
 	{"favicon_not_found", "The site of a favicon request has no usable icon (404). The web shows its fallback."},
 	{"method_not_allowed", "The path exists but does not accept this method (405)."},

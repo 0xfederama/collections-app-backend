@@ -163,6 +163,16 @@ func MethodNotAllowed(w http.ResponseWriter, _ *http.Request) {
 		"This endpoint does not support that method."))
 }
 
+// Unauthenticated answers the 401 problem. The identity middleware calls it, outside Huma.
+func Unauthenticated(w http.ResponseWriter, r *http.Request) {
+	p := problem.Unauthenticated()
+	p.RequestID = problem.RequestIDFrom(r.Context())
+	writeProblem(w, p)
+}
+
+// WriteProblem sends p as application/problem+json, for middleware that runs outside Huma.
+func WriteProblem(w http.ResponseWriter, p *problem.Problem) { writeProblem(w, p) }
+
 // writeProblem sends p as application/problem+json.
 func writeProblem(w http.ResponseWriter, p *problem.Problem) {
 	w.Header().Set("Content-Type", "application/problem+json")

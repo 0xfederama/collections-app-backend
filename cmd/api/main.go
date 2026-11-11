@@ -17,6 +17,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/db"
 	"github.com/0xfederama/collections-app-backend/internal/favicons"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
+	"github.com/0xfederama/collections-app-backend/internal/identity"
 	"github.com/0xfederama/collections-app-backend/internal/images"
 	"github.com/0xfederama/collections-app-backend/internal/integrations/hardcover"
 	"github.com/0xfederama/collections-app-backend/internal/integrations/openlibrary"
@@ -31,6 +32,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
+	"github.com/0xfederama/collections-app-backend/internal/users"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
@@ -99,6 +101,23 @@ func run() error {
 	}
 	go lookupStore.Run(ctx, lookup.MaintenanceInterval, lookupSvc.RefreshScheduled) // stops when ctx is cancelled on shutdown
 
+	userSvc := users.NewService(users.NewPostgres(pool), clock.System{})
+	idOpts := identity.Options{
+		TeamDomain: cfg.AccessTeamDomain, Audience: cfg.AccessAUD, Users: userSvc, Logger: logger,
+	}
+	var devIdentities []string
+	if cfg.DevIdentity {
+		devIdentities = cfg.DevIdentities()
+		idOpts.DevIdentities = devIdentities
+	}
+	if cfg.LANOwnerFallback {
+		idOpts.LANOwnerEmail = cfg.OwnerEmail
+		logger.Warn("LAN_OWNER_FALLBACK is on: requests without a Cloudflare edge header act as the owner")
+	}
+	if cfg.DevIdentity {
+		logger.Warn("DEV_IDENTITY is on: anyone who can reach the API can act as a dev user")
+	}
+
 	handler, err := httpapi.NewRouter(httpapi.Deps{
 		DB:                  pool,
 		DataDir:             cfg.DataDir,
@@ -117,6 +136,9 @@ func run() error {
 		Trash:               trashSvc,
 		Favicons:            favicons.NewService(favicons.NewHTTPFetcher(favicons.Options{}), store, clock.System{}, logger),
 		Logs:                logBuf,
+		Identity:            identity.New(idOpts),
+		Users:               userSvc,
+		DevIdentities:       devIdentities,
 	})
 	if err != nil {
 		return err

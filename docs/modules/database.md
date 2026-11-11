@@ -13,6 +13,7 @@ Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and 
 - `db/queries/trash.sql`, `search.sql`: trash batch and purge queries, search and recent reads (see [trash](trash.md), [search](search.md))
 - `db/queries/schema.sql`: smoke query, sqlc input
 - `db/queries/workspace.sql`: workspace bootstrap and settings queries (see `workspace` module)
+- `db/migrations/000002_accounts.{up,down}.sql`, `db/queries/users.sql`: the `users` table (see [users](users.md))
 - `db/queries/lookup_imports.sql`: lookup provenance queries (see [lookup](lookup.md))
 - `db/migrations.go`: package `db`, embeds `migrations/*.sql` (`db.Migrations()`); the Dockerfile copies `db/`
 - `internal/platform/database/migrate.go`: `Migrate`, used by `api migrate` and by `testdb`

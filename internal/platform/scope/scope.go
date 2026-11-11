@@ -1,4 +1,4 @@
-// Package scope carries the workspace a request acts on. Repositories read it
+// Package scope carries the workspace and the user a request acts on. Repositories read it
 // from the context, so adding accounts later changes this package, not every query.
 package scope
 
@@ -10,6 +10,19 @@ import (
 )
 
 type key struct{}
+
+type userKey struct{}
+
+// WithUser returns ctx carrying the authenticated user.
+func WithUser(ctx context.Context, userID uuid.UUID) context.Context {
+	return context.WithValue(ctx, userKey{}, userID)
+}
+
+// UserID returns the user of ctx; ok is false when the request has no identity.
+func UserID(ctx context.Context) (uuid.UUID, bool) {
+	id, ok := ctx.Value(userKey{}).(uuid.UUID)
+	return id, ok && id != uuid.Nil
+}
 
 // With returns ctx scoped to the workspace.
 func With(ctx context.Context, workspaceID uuid.UUID) context.Context {

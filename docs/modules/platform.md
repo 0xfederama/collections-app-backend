@@ -13,9 +13,9 @@ Shared infrastructure under `internal/platform/`, used by feature packages and n
 - `internal/platform/httpserver/api.go`: `NewAPI` (Huma on chi), default body limit, `requireContentType`
 - `internal/platform/httpserver/middleware.go`: `Wrap`, request id, security headers, access log, recovery, `NotFound`, `MethodNotAllowed`
 - `internal/platform/httpserver/op.go`, `optional.go`, `wire.go`: `Op`, `Optional[T]`, shared `Page` and `PathSegment`
-- `internal/platform/problem/problem.go`: `From` (apperr to problem), `Install` for Huma errors, request id in ctx
+- `internal/platform/problem/problem.go`: `From` (apperr to problem), `Unauthenticated`, `Install` for Huma errors, request id in ctx
 - `internal/platform/problem/codes.go`: `Codes`, the list rendered into the `Problem` schema
-- `internal/platform/scope/scope.go`: `With`, `WorkspaceID`, `Middleware`
+- `internal/platform/scope/scope.go`: `With`, `WorkspaceID`, `WithUser`, `UserID`, `Middleware`
 - `internal/platform/testdb/testdb.go`: test-only shared Postgres container (see [database](database.md))
 - `internal/platform/archtest/layers_test.go`: layer and cross-feature import rules
 
@@ -24,13 +24,16 @@ Shared infrastructure under `internal/platform/`, used by feature packages and n
 - `httpserver.NewAPI(r chi.Router) huma.API`: installs `problem.Install()` and the default body limit (64 KiB)
 - `httpserver.Op[I, O](log, fn)`: wraps a handler so its error is answered as a problem; logs unexpected errors
 - `httpserver.Wrap(h, log) http.Handler`: request id, security headers, access log, panic recovery
+- `httpserver.Unauthenticated(w, r)`, `httpserver.WriteProblem(w, p)`: problem answers for middleware outside Huma (identity)
 - `httpserver.Optional[T]`: PATCH field with `Set` and `Value`; absent vs explicit null
 - `problem.From(err, requestID) (*Problem, unexpected bool)`: maps `apperr` and Huma errors
 - `scope.With(ctx, id)`, `scope.WorkspaceID(ctx)`: `uuid.Nil` on an unscoped context
+- `scope.WithUser(ctx, id)`, `scope.UserID(ctx) (uuid.UUID, bool)`: the caller, set by [identity](identity.md)
 
 ## Gotchas
 
 - `problem.Install` replaces Huma's package-level error constructors once per process (a deliberate global).
+- `httpserver.documentUnauthenticated` adds a 401 to every `/api/v1/` operation in the spec, since the identity middleware can refuse any of them.
 - Register Huma operations through `httpserver.Op`, or unexpected errors are not logged.
 - A new error code goes in `problem.Codes`; `TestCodesCoverEveryEmittedCode` fails otherwise.
 - `validation_failed` detail names up to 3 fields (`validationProblem`, e.g. `Invalid fields: title (...); ...`); the full list stays in `errors`.

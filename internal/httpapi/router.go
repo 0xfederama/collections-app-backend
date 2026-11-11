@@ -4,6 +4,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/stores"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
 	"github.com/0xfederama/collections-app-backend/internal/tree"
+	"github.com/0xfederama/collections-app-backend/internal/users"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
@@ -76,11 +78,27 @@ type Deps struct {
 	// Logs serves the in-memory log buffer and its viewer (LOGS_UI). Nil leaves the routes
 	// unregistered, so a disabled instance answers the normal 404 problem.
 	Logs *logs.Buffer
+	// Identity resolves the caller of every /api/v1 request (F-027). NewRouter refuses to build
+	// without it, so a missing wire can never serve unauthenticated data. The composition root
+	// builds it with identity.New.
+	Identity IdentityResolver
+	// Users serves GET /me (the same service the Identity resolver creates users with).
+	Users *users.Service
+	// DevIdentities is non-empty only when DEV_IDENTITY is on; GET /me lists it.
+	DevIdentities []string
+}
+
+// IdentityResolver is the identity middleware (identity.Resolver).
+type IdentityResolver interface {
+	Middleware(next http.Handler) http.Handler
 }
 
 // NewRouter builds the HTTP handler: the Huma API on chi, behind request id,
 // security headers, access log and panic recovery.
 func NewRouter(d Deps) (http.Handler, error) {
+	if d.Identity == nil {
+		return nil, errors.New("httpapi: Deps.Identity is required")
+	}
 	r, _ := build(d)
 	return httpserver.Wrap(r, d.Logger), nil
 }
@@ -105,6 +123,11 @@ func build(d Deps) (chi.Router, huma.API) {
 	// The workspace scope is a context value set before any route runs, so it is
 	// the same for every operation, the probes included (they never read it).
 	r.Use(scope.Middleware(d.WorkspaceID))
+	// Identity runs before Huma, so a request without a valid identity never reaches a handler,
+	// not even the body or If-Match checks. It only acts on /api/v1 paths.
+	if d.Identity != nil {
+		r.Use(d.Identity.Middleware)
+	}
 	api := httpserver.NewAPI(r)
 	register(api, d)
 	return r, api
@@ -115,6 +138,7 @@ func build(d Deps) (chi.Router, huma.API) {
 // root gives.
 func register(api huma.API, d Deps) {
 	registerHealth(api, d)
+	users.Register(api, d.Logger, d.Users, d.DevIdentities)
 	workspace.Register(api, d.Logger, d.Settings, d.Settings, workspace.Availability{
 		Lookup:     d.LookupAvailable,
 		BookLookup: d.BookLookupAvailable,

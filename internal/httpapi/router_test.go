@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -22,6 +23,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/items"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
@@ -75,8 +77,24 @@ func newItems(pool *pgxpool.Pool, clk clock.Clock) *items.Service {
 	return httpapi.NewItems(pool, clk, workspace.NewService(workspace.NewPostgres(pool)))
 }
 
+// testUserID is the identity every test router acts as unless the test brings its own
+// Deps.Identity (identity_test.go). It is set in this one helper so the suites that predate
+// accounts keep running unchanged.
+var testUserID = uuid.MustParse("00000000-0000-4000-8000-0000000000aa")
+
+type fixedIdentity struct{ id uuid.UUID }
+
+func (f fixedIdentity) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r.WithContext(scope.WithUser(r.Context(), f.id)))
+	})
+}
+
 func newRouter(t *testing.T, d httpapi.Deps) http.Handler {
 	t.Helper()
+	if d.Identity == nil {
+		d.Identity = fixedIdentity{testUserID}
+	}
 	h, err := httpapi.NewRouter(d)
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)

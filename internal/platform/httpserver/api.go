@@ -35,7 +35,7 @@ func NewAPI(r chi.Router) huma.API {
 	cfg.Components.Schemas = huma.NewMapRegistry("#/components/schemas/", func(t reflect.Type, hint string) string {
 		return strings.TrimSuffix(huma.DefaultSchemaNamer(t, hint), "JSON")
 	})
-	cfg.OnAddOperation = append(cfg.OnAddOperation, defaultBodyLimit)
+	cfg.OnAddOperation = append(cfg.OnAddOperation, defaultBodyLimit, documentUnauthenticated)
 	api := humachi.New(r, cfg)
 	api.UseMiddleware(requireContentType(api))
 	return api
@@ -48,6 +48,28 @@ func defaultBodyLimit(_ *huma.OpenAPI, op *huma.Operation) {
 	if op.MaxBodyBytes == humaDefaultBodyBytes {
 		op.MaxBodyBytes = DefaultMaxBodyBytes
 	}
+}
+
+// documentUnauthenticated adds the 401 answer to every /api/v1 operation: the identity
+// middleware (F-027) can refuse any of them. The body is the Problem every other error uses.
+func documentUnauthenticated(_ *huma.OpenAPI, op *huma.Operation) {
+	if !strings.HasPrefix(op.Path, "/api/v1/") {
+		return
+	}
+	if _, ok := op.Responses["401"]; ok {
+		return
+	}
+	src := op.Responses["500"]
+	if src == nil {
+		src = op.Responses["default"]
+	}
+	if src == nil {
+		return
+	}
+	if op.Responses == nil {
+		op.Responses = map[string]*huma.Response{}
+	}
+	op.Responses["401"] = &huma.Response{Description: http.StatusText(http.StatusUnauthorized), Content: src.Content}
 }
 
 // requireContentType answers 400 for a request that has a body but no

@@ -25,7 +25,7 @@ Composition root of the HTTP layer. `NewRouter` builds the Huma API over chi, re
 - `NewItems(pool, clk, settings) *items.Service`: built by `cmd/api`, shared with lookup and images
 - `Deps.Favicons`: `favicons.NewService` over `favicons.NewHTTPFetcher` and the file store; mounts `GET /api/v1/favicon`
 - `Deps.Identity`: the [identity](identity.md) resolver, run on every request after the scope middleware and before Huma
-- `GET /api/v1/me`: the [users](users.md) account of the caller (`users.Register`)
+- `GET /api/v1/me`, `GET /api/v1/users`: the [users](users.md) account of the caller and the account list (`users.Register`)
 
 ## Gotchas
 

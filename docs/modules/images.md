@@ -33,5 +33,6 @@ Owns item pictures on Huma: sets an item's image from an upload (multipart) or a
 - The stored original is stripped (`Strip`), so its SHA-256 differs from the upload. The thumbnail is re-encoded and has no metadata.
 - JPEG keeps only an Orientation EXIF when it is not 1; PNG and WebP orientation is ignored.
 - `SetURL` trims the URL (http/https, max 2048 characters) and changes nothing when it is unchanged (no version bump). `Delete` without an image also does not bump.
+- Upload, URL set and delete set the item's `updated_by_user_id` to the caller (the no-op cases do not write).
 - A row whose file is missing answers 404 and logs at ERROR. Failed file deletes are logged and left to the sweeper.
 - Filenames are display-only: base name, control characters removed, max 255 characters.

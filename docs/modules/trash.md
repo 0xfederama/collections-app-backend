@@ -33,7 +33,7 @@ Moves folders, lists and items to the trash as one batch per delete, lists the b
 - Batch visibility follows the root's box, trashed roots included. The `{batch_id}` guard answers 404 for another user's batch.
 - Restore without a destination answers 409 `parent_in_trash` (with `blocking_parent`) when the original parent is not active.
 - With a destination, `cycle_detected` (any folder state) is checked before `destination_unavailable`. A destination the caller cannot see is `destination_unavailable`, checked before the transaction.
-- Restore order: root first (appended last, version bumped), then the rest of the batch, then the batch row (D-051).
+- Restore order: root first (appended last, version bumped), then the rest of the batch, then the batch row (D-051). Restore sets `updated_by_user_id` to the caller on each restored row; delete leaves it alone.
 - Purge collects the subtree (folders, lists and items in any state, any batch) and deletes children first; nested batches whose root is gone go too. Image files are deleted after commit; a failure is logged and the images sweeper retries. The `user_top_order` rows of the purged roots are deleted explicitly (no foreign key, D-118).
 - `PurgeAll` and `PurgeExpired` share `purgeBatches` with `Purge`: same rules, one tx under the tree lock.
 - Auto-purge is off unless `trash_retention_days` is set; batches are cut by `deleted_at`. A failed run is logged and retried on the next tick. Its context must carry the workspace (`scope.With`).

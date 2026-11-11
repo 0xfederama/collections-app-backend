@@ -28,7 +28,8 @@ Owns the Markdown body of an item: the current content, saved versions, restore 
 - Save locks the item (`FOR NO KEY UPDATE`) first; a stale `ifMatch` is 412 with the current version.
 - The history limit is read before the transaction; the body checks (413, 422) run before that.
 - A body identical to the current one (sha256) returns the current version with no insert and no `updated_at` bump.
-- A new version bumps `items.updated_at` but never `items.version`.
+- A new version bumps `items.updated_at` and `items.updated_by_user_id` but never `items.version`.
+- `author_user_id` on each version (`Content`, version list) is the caller who saved it; null for version 0 and for versions saved before F-027 B4. Restore saves through the same path, so it records the caller too.
 - Prune deletes versions `<= new - (limit + 1)` using the workspace `markdown_history_limit`. Limit 0 keeps only the latest; lowering the limit prunes on the next save of each item.
 - Restore reads the old body inside the transaction; a pruned or unknown version is 404.
 - Body over 1 MiB of UTF-8 bytes is 413; invalid UTF-8 or a NUL character is 422. The operation's transport limit (2 MiB, `contentBodyBytes`) applies first.

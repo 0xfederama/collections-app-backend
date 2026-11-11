@@ -29,7 +29,7 @@
 - [trash](modules/trash.md): folder, list and item deletes into trash batches (Huma), trash list, restore, purge, empty trash, retention auto-purge
 - [tree](modules/tree.md): `GET /api/v1/tree`, the flat read of active folders and lists for the sidebar (handler only)
 - [tmdb](modules/tmdb.md): bounded server-side TMDB client for movie and TV suggestions/details (`internal/integrations`)
-- [users](modules/users.md): accounts keyed by lower-cased e-mail, created on first request; `GET /api/v1/me`
+- [users](modules/users.md): accounts keyed by lower-cased e-mail, created on first request; `GET /api/v1/me`, `GET /api/v1/users`
 - [workspace](modules/workspace.md): single-workspace bootstrap and settings service (Huma `GET`/`PATCH /api/v1/settings`)
 
 Design docs (canonical): `/Users/federico/Developer/collections-app/design-docs/`

@@ -36,6 +36,7 @@ Merges values imported from a metadata provider (TMDB for movie and TV, Open Lib
 - Books are never refreshed (D-095, D-123). Open Library rows have NULL deadlines.
 - TMDB rows still get `refresh_after`, `expires_at` and the poster deadlines (five and six months after the fetch) because `lookup_imports_retention_check` requires them. Nothing in this release reads them. An older release on the same database (rollback) does read them and would expire TMDB values the weekly refresh no longer touches (`lookup_disabled`, trashed). A later contract migration drops them.
 - Attachment queries reach `apply` through `Repo` methods, so the merge and apply rules are testable with a fake repository.
+- Who changed: an explicit lookup create or apply records the request's user on the item. The weekly refresh runs with no user, so it keeps the item's `updated_by_user_id`.
 - Poster files are written before the transaction and their rows inside it. Replaced files are deleted after commit.
 - `FillOnly` values (book `stores: [preferred_store]`, D-096) apply only on create and fill, never overwrite chosen stores and are never tracked as imported.
 - `rematch` replaces the fetched fields, user edits to them included. `fill` never replaces a non-empty value.

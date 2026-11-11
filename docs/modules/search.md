@@ -19,6 +19,7 @@ Finds active items by title and returns each match with its folder/list path and
 - `(*Service).Search(ctx, Params{Q, Limit, Offset}) (Page, error)`: limit default 50, max 200
 - `Page{Results, Limit, Offset, Total}`; `Result{Item, TypeName, Path}` (`TypeName` nil for a list with no type)
 - `(*Service).Recent(ctx, limit) ([]Result, error)`: limit default 12, max 50, newest `updated_at` first
+- `WithAccess(a Access) *Service`: `Access` is `VisibleListIDs` (see [access](access.md)); `Search` and `Recent` filter on it
 - `ErrInvalidQuery`: `q` is empty after trimming or over 200 characters
 - `Register(api, log, svc)`: `GET /api/v1/search` (200 page), `GET /api/v1/recent-items` (200 `{data}`, not paginated)
 
@@ -26,7 +27,8 @@ Finds active items by title and returns each match with its folder/list path and
 
 - Matches titles only. `%`, `_` and `\` are escaped with `items.EscapeLike`.
 - Order: exact case-insensitive match first, then `lower(title)`, then id.
-- Only active items. Batch cascade (D-004) trashes children with their list or folder, so there is no ancestor check.
+- Only active items, and only in lists the caller may see (`VisibleListIDs`). Batch cascade (D-004) trashes children with their list or folder, so there is no ancestor check.
+- Without `WithAccess` nothing is visible: results are empty, never every user's items.
 - Paths and type names come from all active folders and lists, loaded once per call that has rows. Root folder first, list last.
 - A row whose list vanished between reads is skipped, so a page can hold fewer rows than `limit`. `Total` still counts it (separate count).
 - Whitespace-only `q` is caught by the service (`ErrInvalidQuery` becomes 400 `invalid_parameter`); the schema rejects empty or over-long raw `q`.

@@ -21,6 +21,7 @@ Owns the items of a list: create, get, list, patch, move and reorder. The pure r
 - `NewService(store Store, types TypeSource, settings SettingsSource, clk clock.Clock) *Service`; `NewPostgres(db DB) *Postgres`
 - `Service.Create(ctx, listID, CreateInput) (Item, error)`, `Get(ctx, id)`, `List(ctx, listID, ListParams) (ItemPage, error)`
 - `Service.Update(ctx, id, version, Patch)`, `Move(ctx, id, version, dest)`, `Reorder(ctx, listID, ids) error`
+- `WithAccess(a Access) *Service`: `Access` is `ListVisible` ([access](access.md)); only the move destination is checked, background services stay without it
 - `Query(all, typ, ListDefs, ListParams)`: pure filter, sort and page
 - `ValidateMetadata`, `ValidateImport`, `MergePatch`, `ValidatePrice`, `PriceAllowed`, `PriceParts`: rules used by lookup and clients
 - `Register(api, log, svc, lk Importer)`: `GET`/`POST /api/v1/lists/{id}/items`, `GET`/`PATCH /api/v1/items/{id}`, `POST /api/v1/items/{id}/move`, `PUT /api/v1/lists/{id}/items/order`
@@ -31,7 +32,7 @@ Owns the items of a list: create, get, list, patch, move and reorder. The pure r
 - Create, move and reorder take `LockTree` (D-060) in their transaction. Update does not, but it re-checks the item's list and type under the row lock.
 - Type, preferred store and list info are read before the transaction. A type change in between is 409 `type_mismatch` on create and move, 412 on update.
 - Update order: field rules (422), 404, 412, price (422), metadata (400 or 422). A patch that changes nothing writes nothing and keeps the version.
-- Move order: 404, 412, 409 `destination_unavailable`, then 409 `type_mismatch`. Reorder: `ids` must equal the active items as a set (else 409 `order_stale`); no version bumps.
+- Move order: 404, 412, 409 `destination_unavailable` (also for a list the caller cannot see, checked before the transaction), then 409 `type_mismatch`. Reorder: `ids` must equal the active items as a set (else 409 `order_stale`); no version bumps.
 - List: all active items of the list are loaded in one query and filtered, sorted and paged in Go; `content_version` is read only for the returned page. Unknown sort, filter or availability is 400 `invalid_parameter`.
 - `availability=available|included` (movie and TV lists only, else 400) keeps items with a stored platform that maps to a key in `settings.owned_streaming_services` (all platforms when it is empty or there is no settings row); `included` skips `paid_platforms`. `availability.go` mirrors the web's `streamingEntries.ts`: add a service there and here together.
 - Duplicates per list (`titlekey.go`, F-026): on movie, TV and book lists only the provider id counts (`tmdb_id`, `openlibrary_id`): titles never clash and an item without an id never clashes; on other lists titles compare trimmed, NFD without marks, lower case. Create, rename, an id change and move answer `409 duplicate_title`, checked in the tx under the tree lock (Update takes it only when the patch has a title). Lookup's enriched create checks the id; refresh never changes it. Not checked: lookup `rematch` (unused by the web). Existing duplicates stay.

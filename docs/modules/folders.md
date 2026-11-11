@@ -18,7 +18,8 @@ Owns workspace folders: create, get, rename, move (cycle-checked) and reorder th
 - `NewService(store Store, clk clock.Clock) *Service`; `NewPostgres(db DB) *Postgres`
 - `Service.Create(ctx, name, parent *uuid.UUID) (Folder, error)`: appended last among siblings
 - `Service.Get(ctx, id)`, `Rename(ctx, id, version, name *string)`, `Move(ctx, id, version, parent *uuid.UUID)`
-- `Service.Reorder(ctx, parent *uuid.UUID, ids []uuid.UUID) error`
+- `Service.Reorder(ctx, parent *uuid.UUID, ids []uuid.UUID) error`: at the root, the caller's own order (`SetTopOrder`)
+- `WithAccess(a Access) *Service` (`Access`: `FolderVisible`, `VisibleFolderIDs`, see [access](access.md)); `FolderJSON.owner_user_id`, top-level only
 - `Postgres.ListActive(ctx) ([]Folder, error)`: used by `internal/tree`
 - `POST /api/v1/folders` (201, `Location`), `GET`/`PATCH /api/v1/folders/{id}`, `POST /api/v1/folders/{id}/move`, `PUT /api/v1/folders/order` (204)
 
@@ -27,8 +28,10 @@ Owns workspace folders: create, get, rename, move (cycle-checked) and reorder th
 - Create, move and reorder take `LockTree` first (one advisory lock per workspace, D-060); the cycle check relies on it. Rename does not.
 - Rename and move need `If-Match` (`"f-N"`); a stale version is 412 `version_conflict`, a missing header 428.
 - Move order: 404, 412, 409 `destination_unavailable` (missing or trashed parent), 409 `cycle_detected` (into its own subtree).
-- Create with a missing or trashed parent is 409 `destination_unavailable`.
-- Reorder: `ids` must be exactly the active child folders, else 409 `order_stale`; a missing or trashed parent is 404. It rewrites `sort_order` to 0..n-1 and bumps no versions.
+- Create with a missing or trashed parent is 409 `destination_unavailable`. A parent the caller cannot see gets the same answer; the check runs before the transaction.
+- Reorder: `ids` must be exactly the active child folders, else 409 `order_stale`; a missing, trashed or invisible parent is 404. Below a folder it rewrites the shared `sort_order` to 0..n-1 and bumps no versions.
+- Root reorder is per user: only the caller's visible top-level folders are compared, and only their own `user_top_order` rows are written; other users' positions and the shared `sort_order` stay.
+- Owner: create sets the caller as owner only at the top level; a move into a folder clears it, a move to the top keeps the stored owner or takes the caller's (`folders.sql`).
 - Move and reorder bodies require `parent_folder_id` (`null` = root); absent is a validation error.
 - Rename with no `name` changes nothing and does not bump the version. Names are trimmed to 1 to 200 characters (422 otherwise).
 - Cycle walk is capped at the folder count, so corrupt parent chains still terminate.

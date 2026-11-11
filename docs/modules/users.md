@@ -10,7 +10,7 @@ Owns the accounts of F-027: one row per person who signed in, keyed by lower-cas
 - `internal/users/service.go`: `Service`, `Store`, `EnsureByEmail`, `ProfileDue`, `SaveProfile`, bounded cache
 - `internal/users/repository.go`: `Postgres` store (one query per method, workspace from the context)
 - `internal/users/handler.go`, `wire.go`: `Register`, `getMe`, `MeJSON`, `MeOutput`
-- `db/migrations/000002_accounts.up.sql`: `users` table (unique on workspace and email)
+- `db/migrations/000002_accounts.up.sql`: `users` table (unique on workspace and email); the owner columns and `user_top_order` of the same file belong to [access](access.md)
 - `db/queries/users.sql`: sqlc input; generated code in `internal/platform/database/sqlc/users.sql.go`
 - `internal/users/service_test.go`: validation, cache bounds, profile due rules
 
@@ -31,4 +31,4 @@ Owns the accounts of F-027: one row per person who signed in, keyed by lower-cas
 - The e-mail cache (1 minute TTL, 256 entries, cleared when full) only saves a query; it is per instance.
 - Profile attempts are spaced 5 minutes apart per user, so a failing identity endpoint is not called per request.
 - `GET /me` answers 401 `unauthenticated` when the context has no user; the identity middleware normally prevents that.
-- Migration `000002` is structure only and expand-only (a new table), per D-118.
+- Migration `000002` is expand-only (new tables and nullable columns), per D-118; it moves no data.

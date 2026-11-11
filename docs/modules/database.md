@@ -13,7 +13,7 @@ Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and 
 - `db/queries/trash.sql`, `search.sql`: trash batch and purge queries, search and recent reads (see [trash](trash.md), [search](search.md))
 - `db/queries/schema.sql`: smoke query, sqlc input
 - `db/queries/workspace.sql`: workspace bootstrap and settings queries (see `workspace` module)
-- `db/migrations/000002_accounts.{up,down}.sql`, `db/queries/users.sql`: the `users` table (see [users](users.md))
+- `db/migrations/000002_accounts.{up,down}.sql`, `db/queries/users.sql`: the `users` table (see [users](users.md)), nullable `owner_user_id` on folders and lists, and `user_top_order` (see [access](access.md))
 - `db/queries/lookup_imports.sql`: lookup provenance queries (see [lookup](lookup.md))
 - `db/migrations.go`: package `db`, embeds `migrations/*.sql` (`db.Migrations()`); the Dockerfile copies `db/`
 - `internal/platform/database/migrate.go`: `Migrate`, used by `api migrate` and by `testdb`
@@ -42,4 +42,5 @@ Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and 
 - sqlc errors on an empty `db/queries` dir (hence `schema.sql`). A recursive CTE filtering on a plain `@param` needs `sqlc.arg(x)::uuid`; none remain, trash walks run in Go (`internal/trash/walk.go`).
 - Constraint names follow `<table>_<cols>_{pkey,key,fkey,check,idx}`; tests assert on them.
 - No ON DELETE CASCADE and no triggers in the schema (`schema_test.go` asserts both): code deletes children explicitly, children first (D-051).
+- `user_top_order.entry_id` has no foreign key (D-118): purge and off-top-level moves delete its rows explicitly. Owner columns have no CHECK and no data change in the migration; the startup backfill fills them.
 - Migration tests use the `pgx5://` scheme and one testcontainers database per test; `internal/platform/testdb` shares one container per test binary.

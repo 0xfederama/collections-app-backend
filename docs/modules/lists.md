@@ -23,6 +23,7 @@ Owns lists: create, get (with ancestor folder path), patch, move and reorder. A 
 - `ValidIcon(icon string) bool`: exported icon check; no caller outside `internal/lists` after F-022
 - `Postgres.ListActive(ctx) ([]List, error)`: used by `internal/tree`, fills `ItemCount`
 - `POST /api/v1/lists` (201), `GET`/`PATCH /api/v1/lists/{id}`, `POST /api/v1/lists/{id}/move`, `PUT /api/v1/lists/order` (204)
+- `WithAccess(a Access) *Service` (`Access`: `FolderVisible`, `VisibleListIDs`, see [access](access.md)); `ListJSON.owner_user_id`, top-level only
 
 ## Gotchas
 
@@ -34,6 +35,7 @@ Owns lists: create, get (with ancestor folder path), patch, move and reorder. A 
 - Sort is `manual`, `title`, `updated`, `price` (only if the type allows it) or a field key (never a `stores` field).
 - `icon_color` needs a built-in icon (else 422); changing to an emoji or none clears it.
 - Description is Markdown: over 64 KiB is 413, invalid UTF-8 or NUL is 422, empty clears it. Name is trimmed to 1 to 200 characters.
-- Move: 404, 412, 409 `destination_unavailable`. Create with a missing or trashed folder is also 409.
-- Reorder: a missing folder is 404; `ids` must be exactly the active child lists, else 409 `order_stale`.
+- Move: 404, 412, 409 `destination_unavailable`. Create with a missing or trashed folder is also 409; a folder the caller cannot see is the same 409, checked before the transaction.
+- Reorder: a missing or invisible folder is 404; `ids` must be exactly the active child lists, else 409 `order_stale`. At the root only the caller's visible top-level lists are compared and only their own order is written.
+- Owner: create sets the caller only at the top level; a move into a folder clears it, a move to the top keeps the stored owner or takes the caller's. A move off the top level drops everyone's `user_top_order` row.
 - `GET` path is empty for a root list; `ItemCount` is filled only by `Get` and `ListActive`.

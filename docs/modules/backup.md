@@ -11,6 +11,7 @@ Backs up Postgres and the uploaded images (`appdata` volume) together as one che
 - `scripts/verify-restore.sh`: compares row counts, content hashes and attachment files with the manifest
 - `scripts/lib/backup-common.sh`: shared helpers (`carrier`, `appdata_volume`, `counts_json`, `check_backup_dir`)
 - `scripts/test-backup.sh`: AT-17 round trip on an isolated compose project
+- `scripts/check-accounts-migration.sh`: F-027 upgrade rehearsal from v2.12.0 (seed, migrate, backfill, owner isolation)
 - `Makefile`: `lint-scripts` (shellcheck, part of `make check`), `test-backup`
 
 ## Interfaces
@@ -21,6 +22,7 @@ Backs up Postgres and the uploaded images (`appdata` volume) together as one che
 - `manifest.json` (`format: 1`): `migration_version`, `app_version`, `files.{db,images}.sha256`, `row_counts`, `content_sha256` (item id → body hash)
 - `make test-backup`: AT-17 (`scripts/test-backup.sh`), about a minute; needs Docker, jq, curl, nc
 - `make lint-scripts`: shellcheck over `scripts/` through the pinned `koalaman/shellcheck` image
+- `scripts/check-accounts-migration.sh`: needs Docker Compose v2, git, jq, curl, nc; not part of `make check`; `OLD_IMAGE` overrides the 2.12.0 image
 
 ## Gotchas
 
@@ -34,4 +36,5 @@ Backs up Postgres and the uploaded images (`appdata` volume) together as one che
 - Restored files are chowned to 65532 (the api's nonroot user).
 - `POSTGRES_PASSWORD`, `API_PORT`, `COMPOSE_PROJECT_NAME` come from the environment, else `.env`.
 - Checksums detect corruption, not a forged archive: restore only backups you made. Backups are unencrypted; `backups/` is gitignored.
+- The accounts rehearsal uses its own compose project, volumes and loopback port, never a dev stack. If the old image cannot be pulled, it builds the `v2.12.0` git tag instead.
 - Backups contain imported TMDB data. Retire each backup within six months under [TMDB API terms](https://www.themoviedb.org/api-terms-of-use); production backup retention is configured separately.

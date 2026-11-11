@@ -1,5 +1,6 @@
 # Docs index
 
+- [access](modules/access.md): what the caller may see: ownership of top-level folders and lists (the box), the one visibility rule, startup owner backfill (F-027 B2)
 - [api-contract](modules/api-contract.md): OpenAPI 3.1 contract generated from the Huma operations (`make spec`, `make check-spec`)
 - [api-notes](api-notes.md): what the generated OpenAPI contract leaves out (request constraints kept in services, error statuses the server does not return as listed)
 - [apperr](modules/apperr.md): typed domain errors, no HTTP imports

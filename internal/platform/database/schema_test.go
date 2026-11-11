@@ -113,6 +113,17 @@ func schemaCases() []schemaCase {
 				`INSERT INTO user_top_order (workspace_id, user_id, entry_type, entry_id, sort_order) VALUES ('` + wsA + `', '` + userA + `', 'folder', '` + folderA + `', 0)`},
 		},
 		{
+			name: "F-027 B3 a member of a user of another workspace",
+			stmts: []string{sqlWorkspaces, userSQL(userA, wsA),
+				`INSERT INTO folder_members (workspace_id, folder_id, user_id) VALUES ('` + wsB + `', '` + folderA + `', '` + userA + `')`},
+			wantCode: "23503", wantConstr: "folder_members_user_fk",
+		},
+		{
+			name: "F-027 B3 a member row needs no folder (no foreign key: the previous purge must keep working)",
+			stmts: []string{sqlWorkspaces, userSQL(userA, wsA),
+				`INSERT INTO folder_members (workspace_id, folder_id, user_id) VALUES ('` + wsA + `', '` + folderA + `', '` + userA + `')`},
+		},
+		{
 			name: "list references folder of another workspace",
 			stmts: []string{sqlWorkspaces, sqlFolderB,
 				`INSERT INTO lists (workspace_id, folder_id, name, type, sort_order) VALUES ('` + wsA + `', '` + folderB + `', 'L', 'generic', 0)`},

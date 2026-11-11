@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS folder_members;
 DROP TABLE IF EXISTS user_top_order;
 DROP INDEX IF EXISTS lists_owner_idx;
 ALTER TABLE lists DROP CONSTRAINT IF EXISTS lists_owner_fk;

@@ -48,3 +48,20 @@ CREATE TABLE user_top_order (
     CONSTRAINT user_top_order_user_fk FOREIGN KEY (user_id, workspace_id) REFERENCES users(id, workspace_id)
 );
 CREATE INDEX user_top_order_entry_idx ON user_top_order (workspace_id, entry_id);
+
+-- Shares (F-027 B3, decisions 5-10): the members of a top-level folder, besides its owner.
+-- folder_id has no foreign key to folders on purpose, like user_top_order: the previous release's
+-- purge deletes folder rows without knowing this table, so the new purge deletes the member rows
+-- explicitly (D-118). A row of a folder that is no longer top level, or gone, is inert: the
+-- visibility rule only reads the members of a box's top-level folder.
+CREATE TABLE folder_members (
+    workspace_id uuid NOT NULL,
+    folder_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    added_by_user_id uuid,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    CONSTRAINT folder_members_pkey PRIMARY KEY (folder_id, user_id),
+    CONSTRAINT folder_members_user_fk FOREIGN KEY (user_id, workspace_id) REFERENCES users(id, workspace_id),
+    CONSTRAINT folder_members_added_by_fk FOREIGN KEY (added_by_user_id, workspace_id) REFERENCES users(id, workspace_id)
+);
+CREATE INDEX folder_members_user_idx ON folder_members (user_id);

@@ -12,6 +12,24 @@ type MeJSON struct {
 	DevIdentities []string `json:"dev_identities" nullable:"true" doc:"Dev/test only: the identities selectable with the X-Dev-User header or the dev_user cookie. Null in production."`
 }
 
+// UserJSON is one known user (published as the schema "User").
+type UserJSON struct {
+	ID        uuid.UUID `json:"id" format:"uuid"`
+	Email     string    `json:"email"`
+	Name      *string   `json:"name" nullable:"true"`
+	AvatarURL *string   `json:"avatar_url" nullable:"true"`
+}
+
+// UserListJSON is the listUsers answer (published as "UserList").
+type UserListJSON struct {
+	Data []UserJSON `json:"data" nullable:"false"`
+}
+
+// UserListOutput is the body of GET /users.
+type UserListOutput struct {
+	Body UserListJSON
+}
+
 // MeOutput is the body of GET /me.
 type MeOutput struct {
 	Body MeJSON

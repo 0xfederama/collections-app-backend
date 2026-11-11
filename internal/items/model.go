@@ -66,7 +66,10 @@ type Item struct {
 	Version        int
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
-	Path           []PathSegment
+	// CreatedByID and UpdatedByID are nil when unknown (F-027 decision 12).
+	CreatedByID *uuid.UUID
+	UpdatedByID *uuid.UUID
+	Path        []PathSegment
 }
 
 // Image is the item picture: an external URL or an uploaded attachment.

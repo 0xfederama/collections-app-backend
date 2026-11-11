@@ -103,6 +103,7 @@ func itemOf(r sqlc.SearchItemsRow) items.Item {
 		Price: priceOf(r.PriceMin, r.PriceMax, r.Currency), Website: r.WebsiteUrl,
 		Metadata: json.RawMessage(r.Metadata), ContentVersion: int(r.ContentVersion), SortOrder: int(r.SortOrder),
 		Version: int(r.Version), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		CreatedByID: ptrNull(r.CreatedByUserID), UpdatedByID: ptrNull(r.UpdatedByUserID),
 	}
 	switch {
 	case r.ImageAttachmentID.Valid:
@@ -166,4 +167,11 @@ func ptrUUID(id uuid.NullUUID) *uuid.UUID {
 	}
 	v := id.UUID
 	return &v
+}
+
+func ptrNull(id uuid.NullUUID) *uuid.UUID {
+	if !id.Valid {
+		return nil
+	}
+	return &id.UUID
 }

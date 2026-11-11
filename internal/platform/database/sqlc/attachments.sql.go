@@ -14,18 +14,24 @@ import (
 
 const clearItemImage = `-- name: ClearItemImage :exec
 UPDATE items
-SET image_attachment_id = NULL, image_url = NULL, version = version + 1, updated_at = $1
-WHERE id = $2 AND workspace_id = $3 AND deleted_at IS NULL
+SET image_attachment_id = NULL, image_url = NULL, version = version + 1, updated_at = $1, updated_by_user_id = COALESCE($2::uuid, updated_by_user_id)
+WHERE id = $3 AND workspace_id = $4 AND deleted_at IS NULL
 `
 
 type ClearItemImageParams struct {
-	Now         time.Time
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
+	Now          time.Time
+	CallerUserID uuid.NullUUID
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
 }
 
 func (q *Queries) ClearItemImage(ctx context.Context, arg ClearItemImageParams) error {
-	_, err := q.db.Exec(ctx, clearItemImage, arg.Now, arg.ID, arg.WorkspaceID)
+	_, err := q.db.Exec(ctx, clearItemImage,
+		arg.Now,
+		arg.CallerUserID,
+		arg.ID,
+		arg.WorkspaceID,
+	)
 	return err
 }
 
@@ -189,13 +195,14 @@ func (q *Queries) ListUnreferencedAttachments(ctx context.Context, arg ListUnref
 
 const setItemImageAttachment = `-- name: SetItemImageAttachment :exec
 UPDATE items
-SET image_attachment_id = $1, image_url = NULL, version = version + 1, updated_at = $2
-WHERE id = $3 AND workspace_id = $4 AND deleted_at IS NULL
+SET image_attachment_id = $1, image_url = NULL, version = version + 1, updated_at = $2, updated_by_user_id = COALESCE($3::uuid, updated_by_user_id)
+WHERE id = $4 AND workspace_id = $5 AND deleted_at IS NULL
 `
 
 type SetItemImageAttachmentParams struct {
 	AttachmentID uuid.NullUUID
 	Now          time.Time
+	CallerUserID uuid.NullUUID
 	ID           uuid.UUID
 	WorkspaceID  uuid.UUID
 }
@@ -204,6 +211,7 @@ func (q *Queries) SetItemImageAttachment(ctx context.Context, arg SetItemImageAt
 	_, err := q.db.Exec(ctx, setItemImageAttachment,
 		arg.AttachmentID,
 		arg.Now,
+		arg.CallerUserID,
 		arg.ID,
 		arg.WorkspaceID,
 	)
@@ -212,21 +220,23 @@ func (q *Queries) SetItemImageAttachment(ctx context.Context, arg SetItemImageAt
 
 const setItemImageURL = `-- name: SetItemImageURL :exec
 UPDATE items
-SET image_attachment_id = NULL, image_url = $1, version = version + 1, updated_at = $2
-WHERE id = $3 AND workspace_id = $4 AND deleted_at IS NULL
+SET image_attachment_id = NULL, image_url = $1, version = version + 1, updated_at = $2, updated_by_user_id = COALESCE($3::uuid, updated_by_user_id)
+WHERE id = $4 AND workspace_id = $5 AND deleted_at IS NULL
 `
 
 type SetItemImageURLParams struct {
-	ImageUrl    *string
-	Now         time.Time
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
+	ImageUrl     *string
+	Now          time.Time
+	CallerUserID uuid.NullUUID
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
 }
 
 func (q *Queries) SetItemImageURL(ctx context.Context, arg SetItemImageURLParams) error {
 	_, err := q.db.Exec(ctx, setItemImageURL,
 		arg.ImageUrl,
 		arg.Now,
+		arg.CallerUserID,
 		arg.ID,
 		arg.WorkspaceID,
 	)

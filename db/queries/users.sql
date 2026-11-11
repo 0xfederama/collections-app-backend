@@ -16,3 +16,7 @@ SELECT * FROM users WHERE workspace_id = $1 AND id = $2;
 UPDATE users SET name = $3, avatar_url = $4, profile_fetched_at = $5, updated_at = $5
 WHERE workspace_id = $1 AND id = $2
 RETURNING *;
+
+-- name: ListUsers :many
+-- Every known user of the workspace, for the author names and the sharing picker.
+SELECT * FROM users WHERE workspace_id = $1 ORDER BY email, id;

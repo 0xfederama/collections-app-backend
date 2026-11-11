@@ -62,7 +62,10 @@ type List struct {
 	Version   int
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	Path      []PathFolder
+	// CreatedByID and UpdatedByID are nil when unknown (F-027 decision 12).
+	CreatedByID *uuid.UUID
+	UpdatedByID *uuid.UUID
+	Path        []PathFolder
 }
 
 // PathFolder is one ancestor folder of a list.

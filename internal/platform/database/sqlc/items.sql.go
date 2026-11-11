@@ -14,19 +14,25 @@ import (
 )
 
 const clearListItemsMetadata = `-- name: ClearListItemsMetadata :execrows
-UPDATE items SET metadata = '{}', version = version + 1, updated_at = $1
-WHERE list_id = $2 AND workspace_id = $3 AND metadata <> '{}'
+UPDATE items SET metadata = '{}', version = version + 1, updated_at = $1, updated_by_user_id = COALESCE($2::uuid, updated_by_user_id)
+WHERE list_id = $3 AND workspace_id = $4 AND metadata <> '{}'
 `
 
 type ClearListItemsMetadataParams struct {
-	Now         time.Time
-	ListID      uuid.UUID
-	WorkspaceID uuid.UUID
+	Now          time.Time
+	CallerUserID uuid.NullUUID
+	ListID       uuid.UUID
+	WorkspaceID  uuid.UUID
 }
 
 // A type change empties the type fields of every item of the list (trashed ones too).
 func (q *Queries) ClearListItemsMetadata(ctx context.Context, arg ClearListItemsMetadataParams) (int64, error) {
-	result, err := q.db.Exec(ctx, clearListItemsMetadata, arg.Now, arg.ListID, arg.WorkspaceID)
+	result, err := q.db.Exec(ctx, clearListItemsMetadata,
+		arg.Now,
+		arg.CallerUserID,
+		arg.ListID,
+		arg.WorkspaceID,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -34,19 +40,25 @@ func (q *Queries) ClearListItemsMetadata(ctx context.Context, arg ClearListItems
 }
 
 const clearListItemsPrice = `-- name: ClearListItemsPrice :execrows
-UPDATE items SET price_min = NULL, price_max = NULL, currency = NULL, version = version + 1, updated_at = $1
-WHERE list_id = $2 AND workspace_id = $3 AND (price_min IS NOT NULL OR price_max IS NOT NULL)
+UPDATE items SET price_min = NULL, price_max = NULL, currency = NULL, version = version + 1, updated_at = $1, updated_by_user_id = COALESCE($2::uuid, updated_by_user_id)
+WHERE list_id = $3 AND workspace_id = $4 AND (price_min IS NOT NULL OR price_max IS NOT NULL)
 `
 
 type ClearListItemsPriceParams struct {
-	Now         time.Time
-	ListID      uuid.UUID
-	WorkspaceID uuid.UUID
+	Now          time.Time
+	CallerUserID uuid.NullUUID
+	ListID       uuid.UUID
+	WorkspaceID  uuid.UUID
 }
 
 // A type change to a type without a price (or to no type) removes the price of every item of the list (trashed ones too; F008-B1).
 func (q *Queries) ClearListItemsPrice(ctx context.Context, arg ClearListItemsPriceParams) (int64, error) {
-	result, err := q.db.Exec(ctx, clearListItemsPrice, arg.Now, arg.ListID, arg.WorkspaceID)
+	result, err := q.db.Exec(ctx, clearListItemsPrice,
+		arg.Now,
+		arg.CallerUserID,
+		arg.ListID,
+		arg.WorkspaceID,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -86,23 +98,24 @@ func (q *Queries) GetActiveListForItems(ctx context.Context, arg GetActiveListFo
 
 const insertItemRow = `-- name: InsertItemRow :one
 INSERT INTO items (workspace_id, list_id, title, price_min, price_max, currency,
-                   website_url, metadata, sort_order, created_at, updated_at)
+                   website_url, metadata, sort_order, created_at, updated_at, created_by_user_id, updated_by_user_id)
 VALUES ($1, $2, $3, $4,
-        $5, $6, $7, $8, $9, $10, $10)
+        $5, $6, $7, $8, $9, $10, $10, $11, $11)
 RETURNING id
 `
 
 type InsertItemRowParams struct {
-	WorkspaceID uuid.UUID
-	ListID      uuid.UUID
-	Title       string
-	PriceMin    pgtype.Numeric
-	PriceMax    pgtype.Numeric
-	Currency    *string
-	WebsiteUrl  *string
-	Metadata    []byte
-	SortOrder   int32
-	Now         time.Time
+	WorkspaceID  uuid.UUID
+	ListID       uuid.UUID
+	Title        string
+	PriceMin     pgtype.Numeric
+	PriceMax     pgtype.Numeric
+	Currency     *string
+	WebsiteUrl   *string
+	Metadata     []byte
+	SortOrder    int32
+	Now          time.Time
+	CallerUserID uuid.NullUUID
 }
 
 // The editable columns only; the image columns are B-09's.
@@ -118,6 +131,7 @@ func (q *Queries) InsertItemRow(ctx context.Context, arg InsertItemRowParams) (u
 		arg.Metadata,
 		arg.SortOrder,
 		arg.Now,
+		arg.CallerUserID,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)
@@ -162,7 +176,7 @@ func (q *Queries) ListActiveItemTitles(ctx context.Context, arg ListActiveItemTi
 
 const lockItem = `-- name: LockItem :one
 
-SELECT id, workspace_id, list_id, title, image_url, image_attachment_id, price_min, price_max, currency, website_url, metadata, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM items
+SELECT id, workspace_id, list_id, title, image_url, image_attachment_id, price_min, price_max, currency, website_url, metadata, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, created_by_user_id, updated_by_user_id FROM items
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 FOR UPDATE
 `
@@ -197,12 +211,14 @@ func (q *Queries) LockItem(ctx context.Context, arg LockItemParams) (Item, error
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 	)
 	return i, err
 }
 
 const lockItemRow = `-- name: LockItemRow :one
-SELECT id, workspace_id, list_id, title, image_url, image_attachment_id, price_min, price_max, currency, website_url, metadata, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM items
+SELECT id, workspace_id, list_id, title, image_url, image_attachment_id, price_min, price_max, currency, website_url, metadata, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, created_by_user_id, updated_by_user_id FROM items
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 FOR UPDATE
 `
@@ -234,6 +250,8 @@ func (q *Queries) LockItemRow(ctx context.Context, arg LockItemRowParams) (Item,
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 	)
 	return i, err
 }
@@ -280,17 +298,18 @@ func (q *Queries) MaxItemContentVersions(ctx context.Context, arg MaxItemContent
 
 const moveItemRow = `-- name: MoveItemRow :one
 UPDATE items
-SET list_id = $1, sort_order = $2, version = version + 1, updated_at = $3
-WHERE id = $4 AND workspace_id = $5 AND deleted_at IS NULL
+SET list_id = $1, sort_order = $2, version = version + 1, updated_at = $3, updated_by_user_id = COALESCE($4::uuid, updated_by_user_id)
+WHERE id = $5 AND workspace_id = $6 AND deleted_at IS NULL
 RETURNING id
 `
 
 type MoveItemRowParams struct {
-	ListID      uuid.UUID
-	SortOrder   int32
-	Now         time.Time
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
+	ListID       uuid.UUID
+	SortOrder    int32
+	Now          time.Time
+	CallerUserID uuid.NullUUID
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
 }
 
 func (q *Queries) MoveItemRow(ctx context.Context, arg MoveItemRowParams) (uuid.UUID, error) {
@@ -298,6 +317,7 @@ func (q *Queries) MoveItemRow(ctx context.Context, arg MoveItemRowParams) (uuid.
 		arg.ListID,
 		arg.SortOrder,
 		arg.Now,
+		arg.CallerUserID,
 		arg.ID,
 		arg.WorkspaceID,
 	)
@@ -343,7 +363,7 @@ func (q *Queries) NextItemSortOrderRow(ctx context.Context, arg NextItemSortOrde
 }
 
 const readItem = `-- name: ReadItem :one
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id, i.created_by_user_id, i.updated_by_user_id,
        l.type              AS type,
        a.width             AS image_width,
        a.height            AS image_height,
@@ -377,6 +397,8 @@ type ReadItemRow struct {
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
 	TrashBatchID          uuid.NullUUID
+	CreatedByUserID       uuid.NullUUID
+	UpdatedByUserID       uuid.NullUUID
 	Type                  *string
 	ImageWidth            *int32
 	ImageHeight           *int32
@@ -405,6 +427,8 @@ func (q *Queries) ReadItem(ctx context.Context, arg ReadItemParams) (ReadItemRow
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 		&i.Type,
 		&i.ImageWidth,
 		&i.ImageHeight,
@@ -450,7 +474,7 @@ func (q *Queries) ReadItemListInfo(ctx context.Context, arg ReadItemListInfoPara
 }
 
 const readListItems = `-- name: ReadListItems :many
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id, i.created_by_user_id, i.updated_by_user_id,
        l.type              AS type,
        a.width             AS image_width,
        a.height            AS image_height,
@@ -485,6 +509,8 @@ type ReadListItemsRow struct {
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
 	TrashBatchID          uuid.NullUUID
+	CreatedByUserID       uuid.NullUUID
+	UpdatedByUserID       uuid.NullUUID
 	Type                  *string
 	ImageWidth            *int32
 	ImageHeight           *int32
@@ -519,6 +545,8 @@ func (q *Queries) ReadListItems(ctx context.Context, arg ReadListItemsParams) ([
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.TrashBatchID,
+			&i.CreatedByUserID,
+			&i.UpdatedByUserID,
 			&i.Type,
 			&i.ImageWidth,
 			&i.ImageHeight,
@@ -563,21 +591,22 @@ UPDATE items
 SET title = $1,
     price_min = $2, price_max = $3, currency = $4,
     website_url = $5, metadata = $6,
-    version = version + 1, updated_at = $7
-WHERE id = $8 AND workspace_id = $9 AND deleted_at IS NULL
+    version = version + 1, updated_at = $7, updated_by_user_id = COALESCE($8::uuid, updated_by_user_id)
+WHERE id = $9 AND workspace_id = $10 AND deleted_at IS NULL
 RETURNING id
 `
 
 type UpdateItemRowParams struct {
-	Title       string
-	PriceMin    pgtype.Numeric
-	PriceMax    pgtype.Numeric
-	Currency    *string
-	WebsiteUrl  *string
-	Metadata    []byte
-	Now         time.Time
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
+	Title        string
+	PriceMin     pgtype.Numeric
+	PriceMax     pgtype.Numeric
+	Currency     *string
+	WebsiteUrl   *string
+	Metadata     []byte
+	Now          time.Time
+	CallerUserID uuid.NullUUID
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
 }
 
 // A full replacement of the editable columns; the caller merges the patch first. Image columns are not touched.
@@ -590,6 +619,7 @@ func (q *Queries) UpdateItemRow(ctx context.Context, arg UpdateItemRowParams) (u
 		arg.WebsiteUrl,
 		arg.Metadata,
 		arg.Now,
+		arg.CallerUserID,
 		arg.ID,
 		arg.WorkspaceID,
 	)

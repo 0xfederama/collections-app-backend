@@ -25,6 +25,8 @@ type Content struct {
 	Version   int
 	Body      string
 	UpdatedAt *time.Time
+	// AuthorUserID is who saved this version; nil for version 0 and for versions saved before authorship was recorded.
+	AuthorUserID *uuid.UUID
 }
 
 // VersionInfo describes one saved version without its body.
@@ -32,6 +34,8 @@ type VersionInfo struct {
 	Version   int
 	SizeBytes int
 	CreatedAt time.Time
+	// AuthorUserID is nil when unknown.
+	AuthorUserID *uuid.UUID
 }
 
 // Stored is a saved version with the SHA-256 of its body, which a save compares

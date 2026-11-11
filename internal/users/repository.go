@@ -50,6 +50,18 @@ func (p *Postgres) Get(ctx context.Context, id uuid.UUID) (User, error) {
 	return fromRow(row), nil
 }
 
+func (p *Postgres) List(ctx context.Context) ([]User, error) {
+	rows, err := p.q.ListUsers(ctx, scope.WorkspaceID(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+	out := make([]User, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, fromRow(r))
+	}
+	return out, nil
+}
+
 func (p *Postgres) UpdateProfile(ctx context.Context, id uuid.UUID, pr Profile, at time.Time) (User, error) {
 	row, err := p.q.UpdateUserProfile(ctx, sqlc.UpdateUserProfileParams{
 		WorkspaceID: scope.WorkspaceID(ctx), ID: id, Name: pr.Name, AvatarUrl: pr.AvatarURL, ProfileFetchedAt: &at,

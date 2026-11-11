@@ -26,17 +26,19 @@ type Attachment struct {
 }
 
 type Folder struct {
-	ID             uuid.UUID
-	WorkspaceID    uuid.UUID
-	ParentFolderID uuid.NullUUID
-	Name           string
-	SortOrder      int32
-	Version        int32
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	DeletedAt      *time.Time
-	TrashBatchID   uuid.NullUUID
-	OwnerUserID    uuid.NullUUID
+	ID              uuid.UUID
+	WorkspaceID     uuid.UUID
+	ParentFolderID  uuid.NullUUID
+	Name            string
+	SortOrder       int32
+	Version         int32
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	DeletedAt       *time.Time
+	TrashBatchID    uuid.NullUUID
+	OwnerUserID     uuid.NullUUID
+	CreatedByUserID uuid.NullUUID
+	UpdatedByUserID uuid.NullUUID
 }
 
 type FolderMember struct {
@@ -65,35 +67,40 @@ type Item struct {
 	UpdatedAt         time.Time
 	DeletedAt         *time.Time
 	TrashBatchID      uuid.NullUUID
+	CreatedByUserID   uuid.NullUUID
+	UpdatedByUserID   uuid.NullUUID
 }
 
 type ItemContentVersion struct {
-	ItemID    uuid.UUID
-	Version   int32
-	Body      string
-	SizeBytes int32
-	Sha256    []byte
-	CreatedAt time.Time
+	ItemID       uuid.UUID
+	Version      int32
+	Body         string
+	SizeBytes    int32
+	Sha256       []byte
+	CreatedAt    time.Time
+	AuthorUserID uuid.NullUUID
 }
 
 type List struct {
-	ID           uuid.UUID
-	WorkspaceID  uuid.UUID
-	FolderID     uuid.NullUUID
-	Name         string
-	Description  *string
-	DisplayMode  string
-	SortMode     string
-	SortOrder    int32
-	Version      int32
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	DeletedAt    *time.Time
-	TrashBatchID uuid.NullUUID
-	Type         *string
-	Icon         *string
-	IconColor    *string
-	OwnerUserID  uuid.NullUUID
+	ID              uuid.UUID
+	WorkspaceID     uuid.UUID
+	FolderID        uuid.NullUUID
+	Name            string
+	Description     *string
+	DisplayMode     string
+	SortMode        string
+	SortOrder       int32
+	Version         int32
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	DeletedAt       *time.Time
+	TrashBatchID    uuid.NullUUID
+	Type            *string
+	Icon            *string
+	IconColor       *string
+	OwnerUserID     uuid.NullUUID
+	CreatedByUserID uuid.NullUUID
+	UpdatedByUserID uuid.NullUUID
 }
 
 type LookupImport struct {

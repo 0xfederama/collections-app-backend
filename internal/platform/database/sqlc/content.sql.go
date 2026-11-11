@@ -13,7 +13,7 @@ import (
 )
 
 const getContentVersion = `-- name: GetContentVersion :one
-SELECT item_id, version, body, size_bytes, sha256, created_at FROM item_content_versions
+SELECT item_id, version, body, size_bytes, sha256, created_at, author_user_id FROM item_content_versions
 WHERE item_id = $1 AND version = $2
 `
 
@@ -32,12 +32,13 @@ func (q *Queries) GetContentVersion(ctx context.Context, arg GetContentVersionPa
 		&i.SizeBytes,
 		&i.Sha256,
 		&i.CreatedAt,
+		&i.AuthorUserID,
 	)
 	return i, err
 }
 
 const getLatestContentVersion = `-- name: GetLatestContentVersion :one
-SELECT item_id, version, body, size_bytes, sha256, created_at FROM item_content_versions
+SELECT item_id, version, body, size_bytes, sha256, created_at, author_user_id FROM item_content_versions
 WHERE item_id = $1
 ORDER BY version DESC
 LIMIT 1
@@ -53,22 +54,24 @@ func (q *Queries) GetLatestContentVersion(ctx context.Context, itemID uuid.UUID)
 		&i.SizeBytes,
 		&i.Sha256,
 		&i.CreatedAt,
+		&i.AuthorUserID,
 	)
 	return i, err
 }
 
 const insertContentVersion = `-- name: InsertContentVersion :exec
-INSERT INTO item_content_versions (item_id, version, body, size_bytes, sha256, created_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO item_content_versions (item_id, version, body, size_bytes, sha256, created_at, author_user_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type InsertContentVersionParams struct {
-	ItemID    uuid.UUID
-	Version   int32
-	Body      string
-	SizeBytes int32
-	Sha256    []byte
-	CreatedAt time.Time
+	ItemID       uuid.UUID
+	Version      int32
+	Body         string
+	SizeBytes    int32
+	Sha256       []byte
+	CreatedAt    time.Time
+	AuthorUserID uuid.NullUUID
 }
 
 func (q *Queries) InsertContentVersion(ctx context.Context, arg InsertContentVersionParams) error {
@@ -79,6 +82,7 @@ func (q *Queries) InsertContentVersion(ctx context.Context, arg InsertContentVer
 		arg.SizeBytes,
 		arg.Sha256,
 		arg.CreatedAt,
+		arg.AuthorUserID,
 	)
 	return err
 }
@@ -101,15 +105,16 @@ func (q *Queries) ItemIsActive(ctx context.Context, arg ItemIsActiveParams) (uui
 }
 
 const listContentVersions = `-- name: ListContentVersions :many
-SELECT version, size_bytes, created_at FROM item_content_versions
+SELECT version, size_bytes, created_at, author_user_id FROM item_content_versions
 WHERE item_id = $1
 ORDER BY version DESC
 `
 
 type ListContentVersionsRow struct {
-	Version   int32
-	SizeBytes int32
-	CreatedAt time.Time
+	Version      int32
+	SizeBytes    int32
+	CreatedAt    time.Time
+	AuthorUserID uuid.NullUUID
 }
 
 func (q *Queries) ListContentVersions(ctx context.Context, itemID uuid.UUID) ([]ListContentVersionsRow, error) {
@@ -121,7 +126,12 @@ func (q *Queries) ListContentVersions(ctx context.Context, itemID uuid.UUID) ([]
 	items := []ListContentVersionsRow{}
 	for rows.Next() {
 		var i ListContentVersionsRow
-		if err := rows.Scan(&i.Version, &i.SizeBytes, &i.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&i.Version,
+			&i.SizeBytes,
+			&i.CreatedAt,
+			&i.AuthorUserID,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -171,18 +181,24 @@ func (q *Queries) PruneContentVersions(ctx context.Context, arg PruneContentVers
 }
 
 const touchItemUpdatedAt = `-- name: TouchItemUpdatedAt :exec
-UPDATE items SET updated_at = $1
-WHERE id = $2 AND workspace_id = $3 AND deleted_at IS NULL
+UPDATE items SET updated_at = $1, updated_by_user_id = COALESCE($2::uuid, updated_by_user_id)
+WHERE id = $3 AND workspace_id = $4 AND deleted_at IS NULL
 `
 
 type TouchItemUpdatedAtParams struct {
-	Now         time.Time
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
+	Now          time.Time
+	CallerUserID uuid.NullUUID
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
 }
 
 // A content save bumps updated_at (recently-updated sort) but not items.version.
 func (q *Queries) TouchItemUpdatedAt(ctx context.Context, arg TouchItemUpdatedAtParams) error {
-	_, err := q.db.Exec(ctx, touchItemUpdatedAt, arg.Now, arg.ID, arg.WorkspaceID)
+	_, err := q.db.Exec(ctx, touchItemUpdatedAt,
+		arg.Now,
+		arg.CallerUserID,
+		arg.ID,
+		arg.WorkspaceID,
+	)
 	return err
 }

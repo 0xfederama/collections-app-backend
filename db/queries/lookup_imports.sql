@@ -16,9 +16,9 @@ FOR UPDATE OF i;
 
 -- name: InsertLookupItem :one
 INSERT INTO items (workspace_id, list_id, title, price_min, price_max, currency, website_url, metadata,
-                   image_attachment_id, sort_order, created_at, updated_at)
+                   image_attachment_id, sort_order, created_at, updated_at, created_by_user_id, updated_by_user_id)
 VALUES (@workspace_id, @list_id, @title, sqlc.narg(price_min), sqlc.narg(price_max), sqlc.narg(currency),
-        sqlc.narg(website_url), @metadata, sqlc.narg(image_attachment_id), @sort_order, @now, @now)
+        sqlc.narg(website_url), @metadata, sqlc.narg(image_attachment_id), @sort_order, @now, @now, sqlc.narg(caller_user_id), sqlc.narg(caller_user_id))
 RETURNING id;
 
 -- name: GetLookupImport :one
@@ -78,7 +78,8 @@ SET title = @title,
     image_url = sqlc.narg(image_url),
     image_attachment_id = sqlc.narg(image_attachment_id),
     version = version + 1,
-    updated_at = @now
+    updated_at = @now,
+    updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
 WHERE id = @id AND workspace_id = @workspace_id;
 
 -- name: ListLookupItems :many

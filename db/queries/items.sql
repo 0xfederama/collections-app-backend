@@ -24,12 +24,12 @@ WHERE list_id = @list_id AND workspace_id = @workspace_id AND deleted_at IS NULL
 
 -- name: ClearListItemsPrice :execrows
 -- A type change to a type without a price (or to no type) removes the price of every item of the list (trashed ones too; F008-B1).
-UPDATE items SET price_min = NULL, price_max = NULL, currency = NULL, version = version + 1, updated_at = @now
+UPDATE items SET price_min = NULL, price_max = NULL, currency = NULL, version = version + 1, updated_at = @now, updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
 WHERE list_id = @list_id AND workspace_id = @workspace_id AND (price_min IS NOT NULL OR price_max IS NOT NULL);
 
 -- name: ClearListItemsMetadata :execrows
 -- A type change empties the type fields of every item of the list (trashed ones too).
-UPDATE items SET metadata = '{}', version = version + 1, updated_at = @now
+UPDATE items SET metadata = '{}', version = version + 1, updated_at = @now, updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
 WHERE list_id = @list_id AND workspace_id = @workspace_id AND metadata <> '{}';
 
 -- name: ReadItem :one
@@ -66,9 +66,9 @@ FOR UPDATE;
 -- name: InsertItemRow :one
 -- The editable columns only; the image columns are B-09's.
 INSERT INTO items (workspace_id, list_id, title, price_min, price_max, currency,
-                   website_url, metadata, sort_order, created_at, updated_at)
+                   website_url, metadata, sort_order, created_at, updated_at, created_by_user_id, updated_by_user_id)
 VALUES (@workspace_id, @list_id, @title, sqlc.narg(price_min),
-        sqlc.narg(price_max), sqlc.narg(currency), sqlc.narg(website_url), @metadata, @sort_order, @now, @now)
+        sqlc.narg(price_max), sqlc.narg(currency), sqlc.narg(website_url), @metadata, @sort_order, @now, @now, sqlc.narg(caller_user_id), sqlc.narg(caller_user_id))
 RETURNING id;
 
 -- name: UpdateItemRow :one
@@ -77,13 +77,13 @@ UPDATE items
 SET title = @title,
     price_min = sqlc.narg(price_min), price_max = sqlc.narg(price_max), currency = sqlc.narg(currency),
     website_url = sqlc.narg(website_url), metadata = @metadata,
-    version = version + 1, updated_at = @now
+    version = version + 1, updated_at = @now, updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 RETURNING id;
 
 -- name: MoveItemRow :one
 UPDATE items
-SET list_id = @list_id, sort_order = @sort_order, version = version + 1, updated_at = @now
+SET list_id = @list_id, sort_order = @sort_order, version = version + 1, updated_at = @now, updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 RETURNING id;
 

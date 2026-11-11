@@ -34,7 +34,7 @@ func (q *Queries) CountSearchItems(ctx context.Context, arg CountSearchItemsPara
 }
 
 const listRecentItems = `-- name: ListRecentItems :many
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id, i.created_by_user_id, i.updated_by_user_id,
        l.type              AS type,
        a.width             AS image_width,
        a.height            AS image_height,
@@ -73,6 +73,8 @@ type ListRecentItemsRow struct {
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
 	TrashBatchID          uuid.NullUUID
+	CreatedByUserID       uuid.NullUUID
+	UpdatedByUserID       uuid.NullUUID
 	Type                  *string
 	ImageWidth            *int32
 	ImageHeight           *int32
@@ -110,6 +112,8 @@ func (q *Queries) ListRecentItems(ctx context.Context, arg ListRecentItemsParams
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.TrashBatchID,
+			&i.CreatedByUserID,
+			&i.UpdatedByUserID,
 			&i.Type,
 			&i.ImageWidth,
 			&i.ImageHeight,
@@ -203,7 +207,7 @@ func (q *Queries) ListSearchLists(ctx context.Context, workspaceID uuid.UUID) ([
 
 const searchItems = `-- name: SearchItems :many
 
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id,
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id, i.created_by_user_id, i.updated_by_user_id,
        l.type              AS type,
        a.width             AS image_width,
        a.height            AS image_height,
@@ -246,6 +250,8 @@ type SearchItemsRow struct {
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
 	TrashBatchID          uuid.NullUUID
+	CreatedByUserID       uuid.NullUUID
+	UpdatedByUserID       uuid.NullUUID
 	Type                  *string
 	ImageWidth            *int32
 	ImageHeight           *int32
@@ -291,6 +297,8 @@ func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]Sea
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.TrashBatchID,
+			&i.CreatedByUserID,
+			&i.UpdatedByUserID,
 			&i.Type,
 			&i.ImageWidth,
 			&i.ImageHeight,

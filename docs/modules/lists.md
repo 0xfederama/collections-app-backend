@@ -23,7 +23,7 @@ Owns lists: create, get (with ancestor folder path), patch, move and reorder. A 
 - `ValidIcon(icon string) bool`: exported icon check; no caller outside `internal/lists` after F-022
 - `Postgres.ListActive(ctx) ([]List, error)`: used by `internal/tree`, fills `ItemCount`
 - `POST /api/v1/lists` (201), `GET`/`PATCH /api/v1/lists/{id}`, `POST /api/v1/lists/{id}/move`, `PUT /api/v1/lists/order` (204)
-- `WithAccess(a Access) *Service` (`Access`: `FolderVisible`, `VisibleListIDs`, see [access](access.md)); `ListJSON.owner_user_id`, top-level only
+- `WithAccess(a Access) *Service` (`Access`: `FolderVisible`, `VisibleListIDs`, see [access](access.md)); `ListJSON.owner_user_id`, top-level only; `created_by_user_id`, `updated_by_user_id` (nullable)
 
 ## Gotchas
 
@@ -40,3 +40,4 @@ Owns lists: create, get (with ancestor folder path), patch, move and reorder. A 
 - Owner: create sets the caller only at the top level; a move into a folder clears it, a move to the top keeps the stored owner or takes the caller's. A move off the top level drops everyone's `user_top_order` row.
 - `GET` path is empty for a root list; `ItemCount` is filled only by `Get` and `ListActive`.
 - Move: a top-level list the caller does not own is 403 `forbidden` (after 404, before 412); the list and the destination folder are re-checked for visibility inside the tx (shares can change after the request-level snapshot).
+- Who changed: create sets both fields to the caller; update, move and type change set `updated_by_user_id` (no user keeps the old value). A type change also sets it on each item whose metadata it clears. Reorder leaves both alone.

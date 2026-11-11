@@ -229,14 +229,14 @@ func (r *repo) InsertItem(ctx context.Context, in newItem) (uuid.UUID, error) {
 	return r.q.InsertLookupItem(ctx, sqlc.InsertLookupItemParams{
 		WorkspaceID: scope.WorkspaceID(ctx), ListID: in.ListID, Title: in.Title, WebsiteUrl: in.Website,
 		PriceMin: priceMin, PriceMax: priceMax, Currency: currency, Metadata: in.Metadata,
-		ImageAttachmentID: in.ImageAttachmentID, SortOrder: in.SortOrder, Now: in.Now,
+		ImageAttachmentID: in.ImageAttachmentID, SortOrder: in.SortOrder, Now: in.Now, CallerUserID: callerID(ctx),
 	})
 }
 
 func (r *repo) UpdateItem(ctx context.Context, itemID uuid.UUID, u itemUpdate) error {
 	return r.q.UpdateLookupItem(ctx, sqlc.UpdateLookupItemParams{
 		Title: u.Title, Metadata: u.Metadata, ImageUrl: u.ImageURL, ImageAttachmentID: u.ImageAttachmentID,
-		Now: u.Now, ID: itemID, WorkspaceID: scope.WorkspaceID(ctx),
+		Now: u.Now, ID: itemID, WorkspaceID: scope.WorkspaceID(ctx), CallerUserID: callerID(ctx),
 	})
 }
 
@@ -299,4 +299,11 @@ func (r *repo) ScheduledItems(ctx context.Context, fetchedBefore time.Time, limi
 		out = append(out, scheduledItem{ItemID: row.ItemID, ItemVersion: int(row.ItemVersion)})
 	}
 	return out, nil
+}
+
+// callerID is the user of the request as a nullable id (NULL for jobs and tests); NULL keeps the
+// previous updated-by value on updates.
+func callerID(ctx context.Context) uuid.NullUUID {
+	id, ok := scope.UserID(ctx)
+	return uuid.NullUUID{UUID: id, Valid: ok}
 }

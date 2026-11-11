@@ -13,7 +13,7 @@ import (
 )
 
 const getFolder = `-- name: GetFolder :one
-SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id FROM folders
+SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id, created_by_user_id, updated_by_user_id FROM folders
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 `
 
@@ -37,20 +37,23 @@ func (q *Queries) GetFolder(ctx context.Context, arg GetFolderParams) (Folder, e
 		&i.DeletedAt,
 		&i.TrashBatchID,
 		&i.OwnerUserID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 	)
 	return i, err
 }
 
 const insertFolder = `-- name: InsertFolder :one
-INSERT INTO folders (workspace_id, parent_folder_id, owner_user_id, name, sort_order, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $6)
-RETURNING id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id
+INSERT INTO folders (workspace_id, parent_folder_id, owner_user_id, created_by_user_id, updated_by_user_id, name, sort_order, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $4, $5, $6, $7, $7)
+RETURNING id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id, created_by_user_id, updated_by_user_id
 `
 
 type InsertFolderParams struct {
 	WorkspaceID    uuid.UUID
 	ParentFolderID uuid.NullUUID
 	OwnerUserID    uuid.NullUUID
+	CallerUserID   uuid.NullUUID
 	Name           string
 	SortOrder      int32
 	Now            time.Time
@@ -62,6 +65,7 @@ func (q *Queries) InsertFolder(ctx context.Context, arg InsertFolderParams) (Fol
 		arg.WorkspaceID,
 		arg.ParentFolderID,
 		arg.OwnerUserID,
+		arg.CallerUserID,
 		arg.Name,
 		arg.SortOrder,
 		arg.Now,
@@ -79,12 +83,14 @@ func (q *Queries) InsertFolder(ctx context.Context, arg InsertFolderParams) (Fol
 		&i.DeletedAt,
 		&i.TrashBatchID,
 		&i.OwnerUserID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 	)
 	return i, err
 }
 
 const listActiveFolders = `-- name: ListActiveFolders :many
-SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id FROM folders
+SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id, created_by_user_id, updated_by_user_id FROM folders
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY sort_order, id
 `
@@ -110,6 +116,8 @@ func (q *Queries) ListActiveFolders(ctx context.Context, workspaceID uuid.UUID) 
 			&i.DeletedAt,
 			&i.TrashBatchID,
 			&i.OwnerUserID,
+			&i.CreatedByUserID,
+			&i.UpdatedByUserID,
 		); err != nil {
 			return nil, err
 		}
@@ -154,7 +162,7 @@ func (q *Queries) ListChildFolderIDs(ctx context.Context, arg ListChildFolderIDs
 }
 
 const lockFolder = `-- name: LockFolder :one
-SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id FROM folders
+SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id, created_by_user_id, updated_by_user_id FROM folders
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 FOR UPDATE
 `
@@ -179,6 +187,8 @@ func (q *Queries) LockFolder(ctx context.Context, arg LockFolderParams) (Folder,
 		&i.DeletedAt,
 		&i.TrashBatchID,
 		&i.OwnerUserID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 	)
 	return i, err
 }
@@ -187,9 +197,9 @@ const moveFolder = `-- name: MoveFolder :one
 UPDATE folders
 SET parent_folder_id = $1,
     owner_user_id = CASE WHEN $1::uuid IS NULL THEN COALESCE(owner_user_id, $2::uuid) END,
-    sort_order = $3, version = version + 1, updated_at = $4
+    sort_order = $3, version = version + 1, updated_at = $4, updated_by_user_id = COALESCE($2::uuid, updated_by_user_id)
 WHERE id = $5 AND workspace_id = $6 AND deleted_at IS NULL
-RETURNING id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id
+RETURNING id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id, created_by_user_id, updated_by_user_id
 `
 
 type MoveFolderParams struct {
@@ -225,6 +235,8 @@ func (q *Queries) MoveFolder(ctx context.Context, arg MoveFolderParams) (Folder,
 		&i.DeletedAt,
 		&i.TrashBatchID,
 		&i.OwnerUserID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 	)
 	return i, err
 }
@@ -250,22 +262,24 @@ func (q *Queries) NextFolderSortOrder(ctx context.Context, arg NextFolderSortOrd
 
 const renameFolder = `-- name: RenameFolder :one
 UPDATE folders
-SET name = $1, version = version + 1, updated_at = $2
-WHERE id = $3 AND workspace_id = $4 AND deleted_at IS NULL
-RETURNING id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id
+SET name = $1, version = version + 1, updated_at = $2, updated_by_user_id = COALESCE($3::uuid, updated_by_user_id)
+WHERE id = $4 AND workspace_id = $5 AND deleted_at IS NULL
+RETURNING id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id, created_by_user_id, updated_by_user_id
 `
 
 type RenameFolderParams struct {
-	Name        string
-	Now         time.Time
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
+	Name         string
+	Now          time.Time
+	CallerUserID uuid.NullUUID
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
 }
 
 func (q *Queries) RenameFolder(ctx context.Context, arg RenameFolderParams) (Folder, error) {
 	row := q.db.QueryRow(ctx, renameFolder,
 		arg.Name,
 		arg.Now,
+		arg.CallerUserID,
 		arg.ID,
 		arg.WorkspaceID,
 	)
@@ -282,6 +296,8 @@ func (q *Queries) RenameFolder(ctx context.Context, arg RenameFolderParams) (Fol
 		&i.DeletedAt,
 		&i.TrashBatchID,
 		&i.OwnerUserID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 	)
 	return i, err
 }

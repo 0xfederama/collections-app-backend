@@ -473,7 +473,7 @@ func (r *repo) RestoreListRoot(ctx context.Context, id, batch uuid.UUID, folder 
 // RestoreItemRoot is SEAM: moves to items.
 func (r *repo) RestoreItemRoot(ctx context.Context, id, batch, listID uuid.UUID, sortOrder int, now time.Time) error {
 	if err := r.q.RestoreItemRoot(ctx, sqlc.RestoreItemRootParams{
-		ListID: listID, SortOrder: int32(sortOrder), Now: now, ID: id, WorkspaceID: scope.WorkspaceID(ctx), BatchID: validUUID(batch),
+		ListID: listID, SortOrder: int32(sortOrder), Now: now, ID: id, CallerUserID: callerID(ctx), WorkspaceID: scope.WorkspaceID(ctx), BatchID: validUUID(batch),
 	}); err != nil {
 		return fmt.Errorf("restore item root: %w", err)
 	}

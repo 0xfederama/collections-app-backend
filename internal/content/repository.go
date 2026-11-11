@@ -64,7 +64,7 @@ func (r *repo) Current(ctx context.Context, itemID uuid.UUID) (Stored, error) {
 	if err != nil {
 		return Stored{}, fmt.Errorf("get latest content version: %w", err)
 	}
-	return storedOf(itemID, row.Version, row.Body, row.Sha256, row.CreatedAt), nil
+	return storedOf(itemID, row.Version, row.Body, row.Sha256, row.CreatedAt, row.AuthorUserID), nil
 }
 
 func (r *repo) GetVersion(ctx context.Context, itemID uuid.UUID, version int) (Stored, error) {
@@ -72,7 +72,7 @@ func (r *repo) GetVersion(ctx context.Context, itemID uuid.UUID, version int) (S
 	if err != nil {
 		return Stored{}, notFound(err, "content version")
 	}
-	return storedOf(itemID, row.Version, row.Body, row.Sha256, row.CreatedAt), nil
+	return storedOf(itemID, row.Version, row.Body, row.Sha256, row.CreatedAt, row.AuthorUserID), nil
 }
 
 // ListVersions returns the saved versions, newest first.
@@ -83,14 +83,14 @@ func (r *repo) ListVersions(ctx context.Context, itemID uuid.UUID) ([]VersionInf
 	}
 	out := make([]VersionInfo, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, VersionInfo{Version: int(row.Version), SizeBytes: int(row.SizeBytes), CreatedAt: row.CreatedAt})
+		out = append(out, VersionInfo{Version: int(row.Version), SizeBytes: int(row.SizeBytes), CreatedAt: row.CreatedAt, AuthorUserID: ptrNull(row.AuthorUserID)})
 	}
 	return out, nil
 }
 
 func (r *repo) InsertVersion(ctx context.Context, itemID uuid.UUID, version int, body string, sum []byte, now time.Time) error {
 	if err := r.q.InsertContentVersion(ctx, sqlc.InsertContentVersionParams{
-		ItemID: itemID, Version: int32(version), Body: body, SizeBytes: int32(len(body)), Sha256: sum, CreatedAt: now,
+		ItemID: itemID, Version: int32(version), Body: body, SizeBytes: int32(len(body)), Sha256: sum, CreatedAt: now, AuthorUserID: callerID(ctx),
 	}); err != nil {
 		return fmt.Errorf("insert content version: %w", err)
 	}
@@ -106,16 +106,16 @@ func (r *repo) PruneVersions(ctx context.Context, itemID uuid.UUID, upTo int) er
 }
 
 func (r *repo) TouchItem(ctx context.Context, itemID uuid.UUID, now time.Time) error {
-	if err := r.q.TouchItemUpdatedAt(ctx, sqlc.TouchItemUpdatedAtParams{ID: itemID, WorkspaceID: scope.WorkspaceID(ctx), Now: now}); err != nil {
+	if err := r.q.TouchItemUpdatedAt(ctx, sqlc.TouchItemUpdatedAtParams{ID: itemID, WorkspaceID: scope.WorkspaceID(ctx), Now: now, CallerUserID: callerID(ctx)}); err != nil {
 		return fmt.Errorf("touch item: %w", err)
 	}
 	return nil
 }
 
 // storedOf maps a saved version row. The item id comes from the caller.
-func storedOf(itemID uuid.UUID, version int32, body string, sum []byte, createdAt time.Time) Stored {
+func storedOf(itemID uuid.UUID, version int32, body string, sum []byte, createdAt time.Time, author uuid.NullUUID) Stored {
 	return Stored{
-		Content: Content{ItemID: itemID, Version: int(version), Body: body, UpdatedAt: &createdAt},
+		Content: Content{ItemID: itemID, Version: int(version), Body: body, UpdatedAt: &createdAt, AuthorUserID: ptrNull(author)},
 		SHA256:  sum,
 	}
 }
@@ -125,4 +125,18 @@ func notFound(err error, resource string) error {
 		return apperr.NotFound(resource)
 	}
 	return fmt.Errorf("%s: %w", resource, err)
+}
+
+// callerID is the user of the request as a nullable id (NULL for jobs and tests); NULL keeps the
+// previous updated-by value on updates.
+func callerID(ctx context.Context) uuid.NullUUID {
+	id, ok := scope.UserID(ctx)
+	return uuid.NullUUID{UUID: id, Valid: ok}
+}
+
+func ptrNull(id uuid.NullUUID) *uuid.UUID {
+	if !id.Valid {
+		return nil
+	}
+	return &id.UUID
 }

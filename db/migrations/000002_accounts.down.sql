@@ -1,3 +1,14 @@
+ALTER TABLE item_content_versions DROP CONSTRAINT IF EXISTS item_content_versions_author_fk;
+ALTER TABLE item_content_versions DROP COLUMN IF EXISTS author_user_id;
+ALTER TABLE items DROP CONSTRAINT IF EXISTS items_updated_by_fk;
+ALTER TABLE items DROP CONSTRAINT IF EXISTS items_created_by_fk;
+ALTER TABLE items DROP COLUMN IF EXISTS updated_by_user_id, DROP COLUMN IF EXISTS created_by_user_id;
+ALTER TABLE lists DROP CONSTRAINT IF EXISTS lists_updated_by_fk;
+ALTER TABLE lists DROP CONSTRAINT IF EXISTS lists_created_by_fk;
+ALTER TABLE lists DROP COLUMN IF EXISTS updated_by_user_id, DROP COLUMN IF EXISTS created_by_user_id;
+ALTER TABLE folders DROP CONSTRAINT IF EXISTS folders_updated_by_fk;
+ALTER TABLE folders DROP CONSTRAINT IF EXISTS folders_created_by_fk;
+ALTER TABLE folders DROP COLUMN IF EXISTS updated_by_user_id, DROP COLUMN IF EXISTS created_by_user_id;
 DROP TABLE IF EXISTS folder_members;
 DROP TABLE IF EXISTS user_top_order;
 DROP INDEX IF EXISTS lists_owner_idx;

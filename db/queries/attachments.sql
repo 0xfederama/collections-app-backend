@@ -14,17 +14,17 @@ WHERE id = @id AND workspace_id = @workspace_id;
 
 -- name: SetItemImageAttachment :exec
 UPDATE items
-SET image_attachment_id = @attachment_id, image_url = NULL, version = version + 1, updated_at = @now
+SET image_attachment_id = @attachment_id, image_url = NULL, version = version + 1, updated_at = @now, updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;
 
 -- name: SetItemImageURL :exec
 UPDATE items
-SET image_attachment_id = NULL, image_url = @image_url, version = version + 1, updated_at = @now
+SET image_attachment_id = NULL, image_url = @image_url, version = version + 1, updated_at = @now, updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;
 
 -- name: ClearItemImage :exec
 UPDATE items
-SET image_attachment_id = NULL, image_url = NULL, version = version + 1, updated_at = @now
+SET image_attachment_id = NULL, image_url = NULL, version = version + 1, updated_at = @now, updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;
 
 -- name: DeleteAttachment :one

@@ -102,7 +102,7 @@ func (r *repo) Insert(ctx context.Context, l List, now time.Time) (List, error) 
 	row, err := r.q.InsertList(ctx, sqlc.InsertListParams{
 		WorkspaceID: scope.WorkspaceID(ctx), FolderID: nullUUID(l.FolderID), OwnerUserID: ownerForNew(ctx, l.FolderID), Name: l.Name, Type: l.Type, Description: l.Description,
 		DisplayMode: l.DisplayMode, SortMode: l.SortMode, Icon: l.Icon, IconColor: l.IconColor,
-		SortOrder: int32(l.SortOrder), Now: now,
+		SortOrder: int32(l.SortOrder), Now: now, CallerUserID: callerID(ctx),
 	})
 	if err != nil {
 		return List{}, fmt.Errorf("insert list: %w", err)
@@ -114,7 +114,7 @@ func (r *repo) Update(ctx context.Context, l List, now time.Time) (List, error) 
 	row, err := r.q.UpdateList(ctx, sqlc.UpdateListParams{
 		Name: l.Name, Description: l.Description, DisplayMode: l.DisplayMode, SortMode: l.SortMode,
 		Icon: l.Icon, IconColor: l.IconColor,
-		Now: now, ID: l.ID, WorkspaceID: scope.WorkspaceID(ctx),
+		Now: now, ID: l.ID, WorkspaceID: scope.WorkspaceID(ctx), CallerUserID: callerID(ctx),
 	})
 	if err != nil {
 		return List{}, notFound(err, "list")
@@ -123,7 +123,7 @@ func (r *repo) Update(ctx context.Context, l List, now time.Time) (List, error) 
 }
 
 func (r *repo) UpdateType(ctx context.Context, id uuid.UUID, typ *string, now time.Time) (List, error) {
-	row, err := r.q.UpdateListType(ctx, sqlc.UpdateListTypeParams{Type: typ, Now: now, ID: id, WorkspaceID: scope.WorkspaceID(ctx)})
+	row, err := r.q.UpdateListType(ctx, sqlc.UpdateListTypeParams{Type: typ, Now: now, ID: id, WorkspaceID: scope.WorkspaceID(ctx), CallerUserID: callerID(ctx)})
 	if err != nil {
 		return List{}, notFound(err, "list")
 	}
@@ -259,14 +259,14 @@ func (r *repo) FolderExists(ctx context.Context, id uuid.UUID) (bool, error) {
 }
 
 func (r *repo) ClearItemsMetadata(ctx context.Context, listID uuid.UUID, now time.Time) error {
-	if _, err := r.q.ClearListItemsMetadata(ctx, sqlc.ClearListItemsMetadataParams{Now: now, ListID: listID, WorkspaceID: scope.WorkspaceID(ctx)}); err != nil {
+	if _, err := r.q.ClearListItemsMetadata(ctx, sqlc.ClearListItemsMetadataParams{Now: now, CallerUserID: callerID(ctx), ListID: listID, WorkspaceID: scope.WorkspaceID(ctx)}); err != nil {
 		return fmt.Errorf("clear items metadata: %w", err)
 	}
 	return nil
 }
 
 func (r *repo) ClearItemsPrice(ctx context.Context, listID uuid.UUID, now time.Time) error {
-	if _, err := r.q.ClearListItemsPrice(ctx, sqlc.ClearListItemsPriceParams{Now: now, ListID: listID, WorkspaceID: scope.WorkspaceID(ctx)}); err != nil {
+	if _, err := r.q.ClearListItemsPrice(ctx, sqlc.ClearListItemsPriceParams{Now: now, CallerUserID: callerID(ctx), ListID: listID, WorkspaceID: scope.WorkspaceID(ctx)}); err != nil {
 		return fmt.Errorf("clear items price: %w", err)
 	}
 	return nil
@@ -302,6 +302,7 @@ func fromRow(l sqlc.List) List {
 		ID: l.ID, FolderID: ptrUUID(l.FolderID), OwnerID: ptrUUID(l.OwnerUserID), Name: l.Name, Type: l.Type, Description: l.Description,
 		DisplayMode: l.DisplayMode, SortMode: l.SortMode, Icon: l.Icon, IconColor: l.IconColor,
 		SortOrder: int(l.SortOrder), Version: int(l.Version), CreatedAt: l.CreatedAt.UTC(), UpdatedAt: l.UpdatedAt.UTC(),
+		CreatedByID: ptrUUID(l.CreatedByUserID), UpdatedByID: ptrUUID(l.UpdatedByUserID),
 	}
 }
 
@@ -312,5 +313,6 @@ func fromCountedRow(l sqlc.GetListRow) List {
 		DisplayMode: l.DisplayMode, SortMode: l.SortMode, Icon: l.Icon, IconColor: l.IconColor,
 		SortOrder: int(l.SortOrder), ItemCount: int(l.ItemCount), Version: int(l.Version),
 		CreatedAt: l.CreatedAt.UTC(), UpdatedAt: l.UpdatedAt.UTC(),
+		CreatedByID: ptrUUID(l.CreatedByUserID), UpdatedByID: ptrUUID(l.UpdatedByUserID),
 	}
 }

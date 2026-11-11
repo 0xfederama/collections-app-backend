@@ -14,7 +14,7 @@ import (
 
 const getList = `-- name: GetList :one
 
-SELECT l.id, l.workspace_id, l.folder_id, l.name, l.description, l.display_mode, l.sort_mode, l.sort_order, l.version, l.created_at, l.updated_at, l.deleted_at, l.trash_batch_id, l.type, l.icon, l.icon_color, l.owner_user_id,
+SELECT l.id, l.workspace_id, l.folder_id, l.name, l.description, l.display_mode, l.sort_mode, l.sort_order, l.version, l.created_at, l.updated_at, l.deleted_at, l.trash_batch_id, l.type, l.icon, l.icon_color, l.owner_user_id, l.created_by_user_id, l.updated_by_user_id,
        (SELECT count(*) FROM items i
          WHERE i.list_id = l.id AND i.workspace_id = l.workspace_id AND i.deleted_at IS NULL)::int AS item_count
 FROM lists l
@@ -27,24 +27,26 @@ type GetListParams struct {
 }
 
 type GetListRow struct {
-	ID           uuid.UUID
-	WorkspaceID  uuid.UUID
-	FolderID     uuid.NullUUID
-	Name         string
-	Description  *string
-	DisplayMode  string
-	SortMode     string
-	SortOrder    int32
-	Version      int32
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	DeletedAt    *time.Time
-	TrashBatchID uuid.NullUUID
-	Type         *string
-	Icon         *string
-	IconColor    *string
-	OwnerUserID  uuid.NullUUID
-	ItemCount    int32
+	ID              uuid.UUID
+	WorkspaceID     uuid.UUID
+	FolderID        uuid.NullUUID
+	Name            string
+	Description     *string
+	DisplayMode     string
+	SortMode        string
+	SortOrder       int32
+	Version         int32
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	DeletedAt       *time.Time
+	TrashBatchID    uuid.NullUUID
+	Type            *string
+	Icon            *string
+	IconColor       *string
+	OwnerUserID     uuid.NullUUID
+	CreatedByUserID uuid.NullUUID
+	UpdatedByUserID uuid.NullUUID
+	ItemCount       int32
 }
 
 // item_count is the number of active items (DATA_MODEL §2).
@@ -69,30 +71,33 @@ func (q *Queries) GetList(ctx context.Context, arg GetListParams) (GetListRow, e
 		&i.Icon,
 		&i.IconColor,
 		&i.OwnerUserID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 		&i.ItemCount,
 	)
 	return i, err
 }
 
 const insertList = `-- name: InsertList :one
-INSERT INTO lists (workspace_id, folder_id, owner_user_id, name, type, description, display_mode, sort_mode, icon, icon_color, sort_order, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
-RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, icon, icon_color, owner_user_id
+INSERT INTO lists (workspace_id, folder_id, owner_user_id, created_by_user_id, updated_by_user_id, name, type, description, display_mode, sort_mode, icon, icon_color, sort_order, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
+RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, icon, icon_color, owner_user_id, created_by_user_id, updated_by_user_id
 `
 
 type InsertListParams struct {
-	WorkspaceID uuid.UUID
-	FolderID    uuid.NullUUID
-	OwnerUserID uuid.NullUUID
-	Name        string
-	Type        *string
-	Description *string
-	DisplayMode string
-	SortMode    string
-	Icon        *string
-	IconColor   *string
-	SortOrder   int32
-	Now         time.Time
+	WorkspaceID  uuid.UUID
+	FolderID     uuid.NullUUID
+	OwnerUserID  uuid.NullUUID
+	CallerUserID uuid.NullUUID
+	Name         string
+	Type         *string
+	Description  *string
+	DisplayMode  string
+	SortMode     string
+	Icon         *string
+	IconColor    *string
+	SortOrder    int32
+	Now          time.Time
 }
 
 // Only a top-level list has an owner (the caller).
@@ -101,6 +106,7 @@ func (q *Queries) InsertList(ctx context.Context, arg InsertListParams) (List, e
 		arg.WorkspaceID,
 		arg.FolderID,
 		arg.OwnerUserID,
+		arg.CallerUserID,
 		arg.Name,
 		arg.Type,
 		arg.Description,
@@ -130,6 +136,8 @@ func (q *Queries) InsertList(ctx context.Context, arg InsertListParams) (List, e
 		&i.Icon,
 		&i.IconColor,
 		&i.OwnerUserID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 	)
 	return i, err
 }
@@ -167,7 +175,7 @@ func (q *Queries) ListActiveListIDsByFolder(ctx context.Context, arg ListActiveL
 }
 
 const listActiveLists = `-- name: ListActiveLists :many
-SELECT l.id, l.workspace_id, l.folder_id, l.name, l.description, l.display_mode, l.sort_mode, l.sort_order, l.version, l.created_at, l.updated_at, l.deleted_at, l.trash_batch_id, l.type, l.icon, l.icon_color, l.owner_user_id,
+SELECT l.id, l.workspace_id, l.folder_id, l.name, l.description, l.display_mode, l.sort_mode, l.sort_order, l.version, l.created_at, l.updated_at, l.deleted_at, l.trash_batch_id, l.type, l.icon, l.icon_color, l.owner_user_id, l.created_by_user_id, l.updated_by_user_id,
        (SELECT count(*) FROM items i
          WHERE i.list_id = l.id AND i.workspace_id = l.workspace_id AND i.deleted_at IS NULL)::int AS item_count
 FROM lists l
@@ -176,24 +184,26 @@ ORDER BY l.sort_order, l.id
 `
 
 type ListActiveListsRow struct {
-	ID           uuid.UUID
-	WorkspaceID  uuid.UUID
-	FolderID     uuid.NullUUID
-	Name         string
-	Description  *string
-	DisplayMode  string
-	SortMode     string
-	SortOrder    int32
-	Version      int32
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	DeletedAt    *time.Time
-	TrashBatchID uuid.NullUUID
-	Type         *string
-	Icon         *string
-	IconColor    *string
-	OwnerUserID  uuid.NullUUID
-	ItemCount    int32
+	ID              uuid.UUID
+	WorkspaceID     uuid.UUID
+	FolderID        uuid.NullUUID
+	Name            string
+	Description     *string
+	DisplayMode     string
+	SortMode        string
+	SortOrder       int32
+	Version         int32
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	DeletedAt       *time.Time
+	TrashBatchID    uuid.NullUUID
+	Type            *string
+	Icon            *string
+	IconColor       *string
+	OwnerUserID     uuid.NullUUID
+	CreatedByUserID uuid.NullUUID
+	UpdatedByUserID uuid.NullUUID
+	ItemCount       int32
 }
 
 func (q *Queries) ListActiveLists(ctx context.Context, workspaceID uuid.UUID) ([]ListActiveListsRow, error) {
@@ -223,6 +233,8 @@ func (q *Queries) ListActiveLists(ctx context.Context, workspaceID uuid.UUID) ([
 			&i.Icon,
 			&i.IconColor,
 			&i.OwnerUserID,
+			&i.CreatedByUserID,
+			&i.UpdatedByUserID,
 			&i.ItemCount,
 		); err != nil {
 			return nil, err
@@ -236,7 +248,7 @@ func (q *Queries) ListActiveLists(ctx context.Context, workspaceID uuid.UUID) ([
 }
 
 const lockList = `-- name: LockList :one
-SELECT id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, icon, icon_color, owner_user_id FROM lists
+SELECT id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, icon, icon_color, owner_user_id, created_by_user_id, updated_by_user_id FROM lists
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 FOR UPDATE
 `
@@ -267,6 +279,8 @@ func (q *Queries) LockList(ctx context.Context, arg LockListParams) (List, error
 		&i.Icon,
 		&i.IconColor,
 		&i.OwnerUserID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 	)
 	return i, err
 }
@@ -275,9 +289,9 @@ const moveList = `-- name: MoveList :one
 UPDATE lists
 SET folder_id = $1,
     owner_user_id = CASE WHEN $1::uuid IS NULL THEN COALESCE(owner_user_id, $2::uuid) END,
-    sort_order = $3, version = version + 1, updated_at = $4
+    sort_order = $3, version = version + 1, updated_at = $4, updated_by_user_id = COALESCE($2::uuid, updated_by_user_id)
 WHERE id = $5 AND workspace_id = $6 AND deleted_at IS NULL
-RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, icon, icon_color, owner_user_id
+RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, icon, icon_color, owner_user_id, created_by_user_id, updated_by_user_id
 `
 
 type MoveListParams struct {
@@ -318,6 +332,8 @@ func (q *Queries) MoveList(ctx context.Context, arg MoveListParams) (List, error
 		&i.Icon,
 		&i.IconColor,
 		&i.OwnerUserID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 	)
 	return i, err
 }
@@ -369,21 +385,22 @@ const updateList = `-- name: UpdateList :one
 UPDATE lists
 SET name = $1, description = $2, display_mode = $3, sort_mode = $4,
     icon = $5, icon_color = $6,
-    version = version + 1, updated_at = $7
-WHERE id = $8 AND workspace_id = $9 AND deleted_at IS NULL
-RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, icon, icon_color, owner_user_id
+    version = version + 1, updated_at = $7, updated_by_user_id = COALESCE($8::uuid, updated_by_user_id)
+WHERE id = $9 AND workspace_id = $10 AND deleted_at IS NULL
+RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, icon, icon_color, owner_user_id, created_by_user_id, updated_by_user_id
 `
 
 type UpdateListParams struct {
-	Name        string
-	Description *string
-	DisplayMode string
-	SortMode    string
-	Icon        *string
-	IconColor   *string
-	Now         time.Time
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
+	Name         string
+	Description  *string
+	DisplayMode  string
+	SortMode     string
+	Icon         *string
+	IconColor    *string
+	Now          time.Time
+	CallerUserID uuid.NullUUID
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
 }
 
 // A full replacement of the editable fields (description is Markdown, up to 64 KiB, checked in the service; type has UpdateListType): the service merges the PATCH into the locked row first.
@@ -396,6 +413,7 @@ func (q *Queries) UpdateList(ctx context.Context, arg UpdateListParams) (List, e
 		arg.Icon,
 		arg.IconColor,
 		arg.Now,
+		arg.CallerUserID,
 		arg.ID,
 		arg.WorkspaceID,
 	)
@@ -418,22 +436,25 @@ func (q *Queries) UpdateList(ctx context.Context, arg UpdateListParams) (List, e
 		&i.Icon,
 		&i.IconColor,
 		&i.OwnerUserID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 	)
 	return i, err
 }
 
 const updateListType = `-- name: UpdateListType :one
 UPDATE lists
-SET type = $1, version = version + 1, updated_at = $2
-WHERE id = $3 AND workspace_id = $4 AND deleted_at IS NULL
-RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, icon, icon_color, owner_user_id
+SET type = $1, version = version + 1, updated_at = $2, updated_by_user_id = COALESCE($3::uuid, updated_by_user_id)
+WHERE id = $4 AND workspace_id = $5 AND deleted_at IS NULL
+RETURNING id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, icon, icon_color, owner_user_id, created_by_user_id, updated_by_user_id
 `
 
 type UpdateListTypeParams struct {
-	Type        *string
-	Now         time.Time
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
+	Type         *string
+	Now          time.Time
+	CallerUserID uuid.NullUUID
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
 }
 
 // The service clears the items' type fields (ClearListItemsMetadata) in the same transaction.
@@ -441,6 +462,7 @@ func (q *Queries) UpdateListType(ctx context.Context, arg UpdateListTypeParams) 
 	row := q.db.QueryRow(ctx, updateListType,
 		arg.Type,
 		arg.Now,
+		arg.CallerUserID,
 		arg.ID,
 		arg.WorkspaceID,
 	)
@@ -463,6 +485,8 @@ func (q *Queries) UpdateListType(ctx context.Context, arg UpdateListTypeParams) 
 		&i.Icon,
 		&i.IconColor,
 		&i.OwnerUserID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 	)
 	return i, err
 }

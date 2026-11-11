@@ -42,3 +42,4 @@ Owns the items of a list: create, get, list, patch, move and reorder. The pure r
 - `stores` fields are locked-only and not sortable or filterable. Create fills unset stores with `[preferred_store]`; an explicit value, `[]` included, wins.
 - Price is NUMERIC(12,2) mapped to decimal strings, never floats; amount or min/max, never both, and only on types that allow it.
 - Responses carry no computed link fields (API 0.17.0): the web builds store and platform links.
+- Who changed: create sets `created_by_user_id` and `updated_by_user_id` to the caller; patch, move, content save, image set or clear, lookup apply and the type-change clear set `updated_by_user_id`. Reorder leaves both alone. Calls with no user (lookup's weekly refresh) keep the previous value. Null for rows from before F-027 B4.

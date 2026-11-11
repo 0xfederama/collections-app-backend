@@ -36,14 +36,12 @@ func (q *Queries) ClearStreamingLinkSnapshots(ctx context.Context, workspaceID u
 }
 
 const getSettings = `-- name: GetSettings :one
-SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_store, s.owned_streaming_services, s.version
+SELECT s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_store, s.owned_streaming_services, s.version
 FROM workspace_settings s
-JOIN workspaces w ON w.id = s.workspace_id
 WHERE s.workspace_id = $1
 `
 
 type GetSettingsRow struct {
-	WorkspaceName          string
 	StreamingCountryCode   string
 	MetadataLanguage       string
 	MarkdownHistoryLimit   int32
@@ -57,7 +55,6 @@ func (q *Queries) GetSettings(ctx context.Context, workspaceID uuid.UUID) (GetSe
 	row := q.db.QueryRow(ctx, getSettings, workspaceID)
 	var i GetSettingsRow
 	err := row.Scan(
-		&i.WorkspaceName,
 		&i.StreamingCountryCode,
 		&i.MetadataLanguage,
 		&i.MarkdownHistoryLimit,
@@ -115,15 +112,13 @@ func (q *Queries) ListWorkspaceIDs(ctx context.Context) ([]uuid.UUID, error) {
 }
 
 const lockSettings = `-- name: LockSettings :one
-SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_store, s.owned_streaming_services, s.version
+SELECT s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_store, s.owned_streaming_services, s.version
 FROM workspace_settings s
-JOIN workspaces w ON w.id = s.workspace_id
 WHERE s.workspace_id = $1
 FOR UPDATE OF s
 `
 
 type LockSettingsRow struct {
-	WorkspaceName          string
 	StreamingCountryCode   string
 	MetadataLanguage       string
 	MarkdownHistoryLimit   int32
@@ -138,7 +133,6 @@ func (q *Queries) LockSettings(ctx context.Context, workspaceID uuid.UUID) (Lock
 	row := q.db.QueryRow(ctx, lockSettings, workspaceID)
 	var i LockSettingsRow
 	err := row.Scan(
-		&i.WorkspaceName,
 		&i.StreamingCountryCode,
 		&i.MetadataLanguage,
 		&i.MarkdownHistoryLimit,
@@ -194,21 +188,5 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		arg.PreferredStore,
 		arg.OwnedStreamingServices,
 	)
-	return err
-}
-
-const updateWorkspaceName = `-- name: UpdateWorkspaceName :exec
-UPDATE workspaces
-SET name = $2, version = version + 1, updated_at = now()
-WHERE id = $1
-`
-
-type UpdateWorkspaceNameParams struct {
-	ID   uuid.UUID
-	Name string
-}
-
-func (q *Queries) UpdateWorkspaceName(ctx context.Context, arg UpdateWorkspaceNameParams) error {
-	_, err := q.db.Exec(ctx, updateWorkspaceName, arg.ID, arg.Name)
 	return err
 }

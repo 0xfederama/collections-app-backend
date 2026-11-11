@@ -14,14 +14,14 @@ func TestB3a_SettingsServedByHuma(t *testing.T) {
 		if rec := do(t, h, req{method: "GET", path: "/api/v1/settings"}); rec.Code != 200 || rec.Header().Get("ETag") != `"s-1"` {
 			t.Fatalf("GET: status = %d ETag = %q, body=%s", rec.Code, rec.Header().Get("ETag"), rec.Body)
 		}
-		if rec := patchSettings(t, h, `"s-1"`, `{"workspace_name":"Ours"}`); rec.Code != 200 || rec.Header().Get("ETag") != `"s-2"` {
+		if rec := patchSettings(t, h, `"s-1"`, `{"markdown_history_limit":5}`); rec.Code != 200 || rec.Header().Get("ETag") != `"s-2"` {
 			t.Fatalf("PATCH: status = %d ETag = %q, body=%s", rec.Code, rec.Header().Get("ETag"), rec.Body)
 		}
 	})
 
 	t.Run("undeclared key is 400 unknown_field", func(t *testing.T) {
 		h := settingsRouter(t)
-		p := wantProblem(t, patchSettings(t, h, `"s-1"`, `{"workspace_name":"Ours","version":9}`), 400, "unknown_field")
+		p := wantProblem(t, patchSettings(t, h, `"s-1"`, `{"markdown_history_limit":5,"version":9}`), 400, "unknown_field")
 		if p.Detail != `Unknown field "version".` {
 			t.Errorf("detail = %q, want the field name only", p.Detail)
 		}
@@ -29,7 +29,7 @@ func TestB3a_SettingsServedByHuma(t *testing.T) {
 
 	t.Run("wrong or missing Content-Type is 400 malformed_request and never echoes the body", func(t *testing.T) {
 		h := settingsRouter(t)
-		const body = `{"workspace_name":"Echoed"}`
+		const body = `{"preferred_store":"Echoed"}`
 		tests := []struct {
 			name, contentType string
 		}{
@@ -53,10 +53,10 @@ func TestB3a_SettingsServedByHuma(t *testing.T) {
 
 	t.Run("stale If-Match is 412 with the current version", func(t *testing.T) {
 		h := settingsRouter(t)
-		if rec := patchSettings(t, h, `"s-1"`, `{"workspace_name":"Ours"}`); rec.Code != 200 {
+		if rec := patchSettings(t, h, `"s-1"`, `{"markdown_history_limit":5}`); rec.Code != 200 {
 			t.Fatalf("setup patch: %d %s", rec.Code, rec.Body)
 		}
-		p := wantProblem(t, patchSettings(t, h, `"s-1"`, `{"workspace_name":"Stale"}`), 412, "version_conflict")
+		p := wantProblem(t, patchSettings(t, h, `"s-1"`, `{"markdown_history_limit":6}`), 412, "version_conflict")
 		if p.CurrentVersion == nil || *p.CurrentVersion != 2 {
 			t.Errorf("current_version = %v, want 2", p.CurrentVersion)
 		}
@@ -64,12 +64,12 @@ func TestB3a_SettingsServedByHuma(t *testing.T) {
 
 	t.Run("missing If-Match is 428", func(t *testing.T) {
 		h := settingsRouter(t)
-		wantProblem(t, patchSettings(t, h, "", `{"workspace_name":"Ours"}`), 428, "precondition_required")
+		wantProblem(t, patchSettings(t, h, "", `{"markdown_history_limit":5}`), 428, "precondition_required")
 	})
 
 	t.Run("body over 64 KiB is 413 payload_too_large", func(t *testing.T) {
 		h := settingsRouter(t)
-		body := `{"workspace_name":"` + strings.Repeat("a", 70<<10) + `"}`
+		body := `{"preferred_store":"` + strings.Repeat("a", 70<<10) + `"}`
 		wantProblem(t, patchSettings(t, h, `"s-1"`, body), 413, "payload_too_large")
 	})
 
@@ -79,8 +79,8 @@ func TestB3a_SettingsServedByHuma(t *testing.T) {
 			t.Fatalf("set 7: status = %d ETag = %q, body=%s", rec.Code, rec.Header().Get("ETag"), rec.Body)
 		}
 
-		// Absent: the retention stays, the rename bumps the version.
-		rec := patchSettings(t, h, `"s-2"`, `{"workspace_name":"Ours"}`)
+		// Absent: the retention stays, the limit change bumps the version.
+		rec := patchSettings(t, h, `"s-2"`, `{"markdown_history_limit":5}`)
 		if rec.Code != 200 || decodeSettings(t, rec).TrashRetentionDays != float64(7) {
 			t.Fatalf("absent: status = %d body=%s, want retention kept at 7", rec.Code, rec.Body)
 		}
@@ -98,7 +98,7 @@ func TestB3a_SettingsServedByHuma(t *testing.T) {
 		}
 
 		// Absent again, after null: still off.
-		if rec := patchSettings(t, h, `"s-4"`, `{"workspace_name":"Ours"}`); rec.Code != 200 || decodeSettings(t, rec).TrashRetentionDays != nil {
+		if rec := patchSettings(t, h, `"s-4"`, `{"markdown_history_limit":5}`); rec.Code != 200 || decodeSettings(t, rec).TrashRetentionDays != nil {
 			t.Errorf("absent after null: status = %d body=%s, want retention still null", rec.Code, rec.Body)
 		}
 	})

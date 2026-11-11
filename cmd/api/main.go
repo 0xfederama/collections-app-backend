@@ -72,7 +72,7 @@ func run() error {
 	}
 	defer pool.Close()
 
-	workspaceID, err := workspace.Bootstrap(ctx, pool, cfg.WorkspaceName)
+	workspaceID, err := workspace.Bootstrap(ctx, pool)
 	if err != nil {
 		return err
 	}

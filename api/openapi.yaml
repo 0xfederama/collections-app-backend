@@ -1144,12 +1144,7 @@ components:
         version:
           format: int64
           type: integer
-        workspace_name:
-          maxLength: 200
-          minLength: 1
-          type: string
       required:
-        - workspace_name
         - streaming_country_code
         - metadata_language
         - lookup_available
@@ -1463,8 +1458,6 @@ components:
           type:
             - integer
             - "null"
-        workspace_name:
-          type: string
       type: object
     UploadImage:
       additionalProperties: false
@@ -4154,7 +4147,7 @@ paths:
         - search
   /api/v1/settings:
     get:
-      description: The settings, including the workspace name.
+      description: The workspace settings.
       operationId: getSettings
       responses:
         "200":
@@ -4678,7 +4671,7 @@ tags:
     name: health
   - description: The signed-in account (created on the first request).
     name: users
-  - description: Workspace name and settings (one resource, one ETag).
+  - description: Workspace settings (one resource, one ETag).
     name: settings
   - description: The built-in item types and their fields.
     name: types

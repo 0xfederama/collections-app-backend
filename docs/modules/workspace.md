@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NAME` applies only on first boot) and the workspace settings read and PATCH (`GET`/`PATCH /api/v1/settings`, on Huma), with optimistic locking on `workspace_settings.version`. Data rules: `/Users/federico/Developer/collections-app/design-docs/DATA_MODEL.md` §2/§3, API.md §5.
+Owns the single MVP workspace: an idempotent bootstrap at startup (a new workspace is named "Collections"; the name is not editable, F-027 B5) and the workspace settings read and PATCH (`GET`/`PATCH /api/v1/settings`, on Huma), with optimistic locking on `workspace_settings.version`. Data rules: `/Users/federico/Developer/collections-app/design-docs/DATA_MODEL.md` §2/§3, API.md §5.
 
 ## Key files
 
@@ -17,20 +17,20 @@ Owns the single MVP workspace: an idempotent bootstrap at startup (`WORKSPACE_NA
 
 ## Interfaces
 
-- `Bootstrap(ctx, db database.TxBeginner, name string) (uuid.UUID, error)`: creates the workspace with settings if missing, returns its ID
+- `Bootstrap(ctx, db database.TxBeginner) (uuid.UUID, error)`: creates the workspace (named `Collections`) with settings if missing, returns its ID
 - `NewPostgres(pool *pgxpool.Pool) *Postgres`, `NewService(store Store) *Service`: the store is `InTx` plus `Get`
 - `(*Service).Get(ctx) (Settings, error)`: workspace from `scope.WorkspaceID(ctx)`; `apperr.NotFound("settings")` if no row
 - `(*Service).Update(ctx, ifMatch int, p SettingsPatch) (Settings, error)`: 422 field errors, then 412 `apperr.VersionConflict` on a stale version
 - `Register(api, log, svc, reader, Availability)`: adds the two settings operations to a Huma API
-- `Settings`: name, streaming country, `MetadataLanguage`, markdown history limit, `TrashRetentionDays *int` (nil = off), `PreferredStore`, `OwnedStreamingServices []string` (never nil, `[]` = show all), version
+- `Settings`: streaming country, `MetadataLanguage`, markdown history limit, `TrashRetentionDays *int` (nil = off), `PreferredStore`, `OwnedStreamingServices []string` (never nil, `[]` = show all), version
 - `SettingsPatch`: pointer fields (nil = leave as is); `TrashRetentionDays` is `Optional[int]`
 
 ## Gotchas
 
-- `Bootstrap` runs from `cmd/api/main.go` before the server starts, under `pg_advisory_xact_lock` with a fixed key; a later `WORKSPACE_NAME` does not rename an existing workspace. More than one workspace is an error.
+- `Bootstrap` runs from `cmd/api/main.go` before the server starts, under `pg_advisory_xact_lock` with a fixed key; it never renames an existing workspace. More than one workspace is an error. `workspaces.name` is NOT NULL and stays in the table (expand/contract, D-118), but no API reads or writes it: the name is gone from the settings (F-027 B5).
 - Validation runs before the row lock, so an invalid body answers 422 even when If-Match is stale.
 - A patch that changes nothing returns the current settings with no version bump. Equality compares retention by value.
-- A name change updates `workspaces.name` in the same transaction and bumps its version; the ETag stream is only `workspace_settings.version` (`"s-N"`).
+- The ETag stream is only `workspace_settings.version` (`"s-N"`).
 - `Update` runs in `database.InTx` and locks the settings row `FOR UPDATE`. Repository methods never take a workspace ID; they read it from the context.
 - Changing `streaming_country_code` also clears `streaming.link` on items and snapshots (`ClearItemStreamingLinks`, `ClearStreamingLinkSnapshots`), workspace-wide, in the same transaction. No item version bump.
 - `trash_retention_days` (1 to 365, or null = off; default NULL) is read by the trash auto-purge (`internal/trash`). Setting it purges nothing at once.

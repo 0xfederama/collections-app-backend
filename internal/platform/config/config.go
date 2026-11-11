@@ -20,7 +20,6 @@ type Config struct {
 	DatabaseURL     string
 	DBMaxConns      int32
 	DataDir         string
-	WorkspaceName   string
 	TMDBAPIKey      string
 	TMDBMockFixture bool
 	// OpenLibraryContact (an e-mail) goes into the Open Library User-Agent. Optional: identified clients get 3 requests/second instead of 1.
@@ -120,7 +119,6 @@ func Load(getenv func(string) string) (Config, error) {
 		HTTPAddr:        get("HTTP_ADDR", ":8080"),
 		DatabaseURL:     get("DATABASE_URL", ""),
 		DataDir:         get("DATA_DIR", "/data"),
-		WorkspaceName:   get("WORKSPACE_NAME", "Collections"),
 		TMDBAPIKey:      strings.TrimSpace(getenv("TMDB_API_KEY")),
 		TMDBMockFixture: false,
 		LogFormat:       get("LOG_FORMAT", "json"),

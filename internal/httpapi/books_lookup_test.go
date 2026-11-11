@@ -72,7 +72,7 @@ func newBookEnv(t *testing.T, o bookEnvOptions) *bookEnv {
 	t.Helper()
 	ctx := t.Context()
 	pool := testdb.NewMigrated(t, sharedPostgres(t))
-	ws, err := workspace.Bootstrap(ctx, pool, "W")
+	ws, err := workspace.Bootstrap(ctx, pool)
 	if err != nil {
 		t.Fatal(err)
 	}

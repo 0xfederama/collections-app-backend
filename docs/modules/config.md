@@ -12,14 +12,13 @@ Parses and validates the API's environment configuration once at startup. Every 
 ## Interfaces
 
 - `Load(getenv func(string) string) (Config, error)`: pass `os.Getenv` in production
-- `Config`: `AppEnv`, `HTTPAddr`, `DatabaseURL`, `DBMaxConns`, `DataDir`, `WorkspaceName`, optional `TMDBAPIKey`, `TMDBMockFixture`, optional `OpenLibraryContact`, optional `HardcoverAPIKey`, `LogLevel`, `LogFormat`, `LogsUI`, `AccessTeamDomain`, `AccessAUD`, `OwnerEmail`, `LANOwnerFallback`, `DevIdentity`
+- `Config`: `AppEnv`, `HTTPAddr`, `DatabaseURL`, `DBMaxConns`, `DataDir`, optional `TMDBAPIKey`, `TMDBMockFixture`, optional `OpenLibraryContact`, optional `HardcoverAPIKey`, `LogLevel`, `LogFormat`, `LogsUI`, `AccessTeamDomain`, `AccessAUD`, `OwnerEmail`, `LANOwnerFallback`, `DevIdentity`
 - `(Config).DevIdentities() []string`: owner (`OWNER_EMAIL` or `owner@dev.test`), then `alice@dev.test`, `bob@dev.test`
 - `APP_ENV`: `development` (default) or `production`, case-sensitive
 - `HTTP_ADDR`: `host:port` listen address, default `:8080`
 - `DATABASE_URL`: required; `postgres://` or `postgresql://` with a host
 - `DB_MAX_CONNS`: integer 1 to 100, default 10
 - `DATA_DIR`: default `/data`; must be an existing, writable directory
-- `WORKSPACE_NAME`: default `Collections`; used only when the workspace is first created
 - `TMDB_API_KEY`, `TMDB_MOCK_FIXTURE`, `OPENLIBRARY_CONTACT`, `HARDCOVER_API_KEY`: see [lookup](lookup.md), [tmdb](tmdb.md), [openlibrary](openlibrary.md), [hardcover](hardcover.md)
 - `LOG_LEVEL`, `LOG_FORMAT`, `LOGS_UI`: see [logs](logs.md)
 - `ACCESS_TEAM_DOMAIN`: Cloudflare Access team host (e.g. `myteam.cloudflareaccess.com`); a leading `https://` and trailing `/` are stripped; must contain a dot

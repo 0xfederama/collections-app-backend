@@ -56,9 +56,6 @@ func TestLoad_Defaults(t *testing.T) {
 	if c.DataDir != dir {
 		t.Errorf("DataDir = %q", c.DataDir)
 	}
-	if c.WorkspaceName != "Collections" {
-		t.Errorf("WorkspaceName = %q", c.WorkspaceName)
-	}
 	if c.TMDBAPIKey != "" {
 		t.Errorf("TMDBAPIKey = %q, want empty", c.TMDBAPIKey)
 	}
@@ -76,21 +73,20 @@ func TestLoad_Defaults(t *testing.T) {
 func TestLoad_Overrides(t *testing.T) {
 	dir := t.TempDir()
 	c, err := config.Load(env(map[string]string{
-		"APP_ENV":        "production",
-		"HTTP_ADDR":      "127.0.0.1:9000",
-		"DATABASE_URL":   "postgresql://localhost/db",
-		"DB_MAX_CONNS":   "25",
-		"DATA_DIR":       dir,
-		"WORKSPACE_NAME": "Fede & Co",
-		"TMDB_API_KEY":   "  secret-key  ",
-		"LOG_LEVEL":      "debug",
-		"LOG_FORMAT":     "text",
+		"APP_ENV":      "production",
+		"HTTP_ADDR":    "127.0.0.1:9000",
+		"DATABASE_URL": "postgresql://localhost/db",
+		"DB_MAX_CONNS": "25",
+		"DATA_DIR":     dir,
+		"TMDB_API_KEY": "  secret-key  ",
+		"LOG_LEVEL":    "debug",
+		"LOG_FORMAT":   "text",
 	}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if c.AppEnv != "production" || c.HTTPAddr != "127.0.0.1:9000" || c.DBMaxConns != 25 ||
-		c.WorkspaceName != "Fede & Co" || c.TMDBAPIKey != "secret-key" || c.LogLevel != slog.LevelDebug || c.LogFormat != "text" {
+		c.TMDBAPIKey != "secret-key" || c.LogLevel != slog.LevelDebug || c.LogFormat != "text" {
 		t.Errorf("overrides not applied: %+v", c)
 	}
 }

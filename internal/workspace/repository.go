@@ -58,13 +58,6 @@ func (r *repo) LockSettings(ctx context.Context) (Settings, error) {
 	return fromLockRow(row)
 }
 
-func (r *repo) UpdateWorkspaceName(ctx context.Context, name string) error {
-	if err := r.q.UpdateWorkspaceName(ctx, sqlc.UpdateWorkspaceNameParams{ID: scope.WorkspaceID(ctx), Name: name}); err != nil {
-		return fmt.Errorf("update workspace name: %w", err)
-	}
-	return nil
-}
-
 func (r *repo) UpdateSettings(ctx context.Context, s Settings) error {
 	owned, err := streamingKeysToDB(s.OwnedStreamingServices)
 	if err != nil {
@@ -142,7 +135,6 @@ func fromGetRow(r sqlc.GetSettingsRow) (Settings, error) {
 		return Settings{}, err
 	}
 	return Settings{
-		WorkspaceName:          r.WorkspaceName,
 		StreamingCountryCode:   r.StreamingCountryCode,
 		MetadataLanguage:       r.MetadataLanguage,
 		MarkdownHistoryLimit:   int(r.MarkdownHistoryLimit),
@@ -159,7 +151,6 @@ func fromLockRow(r sqlc.LockSettingsRow) (Settings, error) {
 		return Settings{}, err
 	}
 	return Settings{
-		WorkspaceName:          r.WorkspaceName,
 		StreamingCountryCode:   r.StreamingCountryCode,
 		MetadataLanguage:       r.MetadataLanguage,
 		MarkdownHistoryLimit:   int(r.MarkdownHistoryLimit),

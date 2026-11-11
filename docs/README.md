@@ -13,7 +13,7 @@
 - [favicons](modules/favicons.md): site favicon for item links, fetched server-side through an SSRF-safe client and cached under `DATA_DIR/favicons` (`GET /api/v1/favicon`)
 - [folders](modules/folders.md): folder create, get, rename, move (cycle check) and reorder (Huma)
 - [httpapi](modules/httpapi.md): HTTP composition root: router build, Huma registration of every feature package, health probes, `Spec()`
-- [identity](modules/identity.md): resolves the caller of every `/api/v1` request: Cloudflare Access JWT, dev identities, LAN owner fallback, else 401
+- [identity](modules/identity.md): resolves the caller of every `/api/v1` request: Cloudflare Access JWT, dev identities, LAN owner (always on, D-150), else 401
 - [images](modules/images.md): item image upload/URL/delete, metadata stripping on upload, validation, thumbnails, serving, orphan sweeper
 - [items](modules/items.md): items create, get, list, patch, move and reorder (Huma); pure metadata, price and list-query rules; per-type rules in `items/types`
 - [lists](modules/lists.md): list create, get with path, update (type change, pure patch planner), move and reorder (Huma)

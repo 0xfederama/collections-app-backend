@@ -753,6 +753,13 @@ components:
         id:
           format: uuid
           type: string
+        identity_source:
+          description: "How the caller was identified: access (verified Cloudflare Access token, log out available), lan (home network without Cloudflare, always the owner, D-150; no log out) or dev (dev/test identity)."
+          enum:
+            - access
+            - lan
+            - dev
+          type: string
         name:
           description: Display name from the identity provider; null when unknown (show the e-mail).
           type:
@@ -763,6 +770,7 @@ components:
         - email
         - name
         - avatar_url
+        - identity_source
         - dev_identities
       type: object
     MoveFolderRequest:

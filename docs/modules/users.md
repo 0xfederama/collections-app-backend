@@ -23,7 +23,7 @@ Owns the accounts of F-027: one row per person who signed in, keyed by lower-cas
 - `(*Service).SaveProfile(ctx, id, Profile) error`: stores name and avatar and stamps `profile_fetched_at`
 - `Register(api, log, svc Reader, devIdentities []string)`: adds `GET /api/v1/me` (`getMe`) and `GET /api/v1/users` (`listUsers`)
 - `(*Service).List(ctx) ([]User, error)`: every account of the workspace, ordered by e-mail
-- `MeJSON`: `id`, `email`, `name` and `avatar_url` (nullable), `dev_identities` (nullable, set only with `DEV_IDENTITY`)
+- `MeJSON`: `id`, `email`, `name` and `avatar_url` (nullable), `identity_source` (`access` | `lan` | `dev`, from `scope.IdentitySource`; a context without one reports `access`; the web hides Log out unless `access`, D-151), `dev_identities` (nullable, set only with `DEV_IDENTITY`)
 - `UserListJSON`: `{data: [UserJSON]}` with `id`, `email`, `name`, `avatar_url`; the schema names are `User` and `UserList`
 
 ## Gotchas

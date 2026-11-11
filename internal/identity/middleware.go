@@ -41,11 +41,12 @@ type Options struct {
 	TeamDomain, Audience string
 	// DevIdentities, when non-empty, enables the dev identity provider; the first is the default.
 	DevIdentities []string
-	// LANOwnerEmail, when non-empty, enables the LAN owner fallback.
-	LANOwnerEmail string
-	Users         Users
-	Logger        *slog.Logger
-	Clock         clock.Clock
+	// OwnerEmail, when non-empty, is who a LAN request (no Cloudflare edge header, no token) acts as:
+	// always on, no switch (D-150).
+	OwnerEmail string
+	Users      Users
+	Logger     *slog.Logger
+	Clock      clock.Clock
 	// HTTPClient serves the key fetch and the profile fetch. Nil uses a client with timeouts.
 	HTTPClient *http.Client
 }
@@ -87,7 +88,7 @@ func (r *Resolver) Wait() { r.profiles.Wait() }
 
 // Middleware resolves the caller of every /api/v1 request, in this order: (1) a
 // Cf-Access-Jwt-Assertion header is verified and nothing else is tried; (2) the dev identity;
-// (3) the LAN owner fallback, only without a Cloudflare edge header; (4) 401. The plain
+// (3) the LAN owner (OwnerEmail), only without a Cloudflare edge header (D-150); (4) 401. The plain
 // Cf-Access-Authenticated-User-Email header is never read. Probes and /admin are not touched.
 func (r *Resolver) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -95,7 +96,7 @@ func (r *Resolver) Middleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, req)
 			return
 		}
-		email, token, ok := r.resolveEmail(req)
+		email, token, source, ok := r.resolveEmail(req)
 		if !ok {
 			httpserver.Unauthenticated(w, req)
 			return
@@ -112,27 +113,30 @@ func (r *Resolver) Middleware(next http.Handler) http.Handler {
 		if token != "" && r.o.Users.ProfileDue(u) {
 			r.refreshProfile(req.Context(), u, token)
 		}
-		next.ServeHTTP(w, req.WithContext(scope.WithUser(req.Context(), u.ID)))
+		ctx := scope.WithIdentitySource(scope.WithUser(req.Context(), u.ID), source)
+		next.ServeHTTP(w, req.WithContext(ctx))
 	})
 }
 
-// resolveEmail applies the identity order. token is set only for a verified Access token.
-func (r *Resolver) resolveEmail(req *http.Request) (email, token string, ok bool) {
+// resolveEmail applies the identity order. token is set only for a verified Access token;
+// source is one of the scope.Source* values.
+func (r *Resolver) resolveEmail(req *http.Request) (email, token, source string, ok bool) {
 	if vals, present := req.Header[headerAccessJWT]; present {
 		if r.verifier == nil || len(vals) != 1 {
-			return "", "", false
+			return "", "", "", false
 		}
 		email, ok = r.verify(req.Context(), vals[0])
-		return email, vals[0], ok
+		return email, vals[0], scope.SourceAccess, ok
 	}
 	if len(r.o.DevIdentities) > 0 {
 		email, ok = r.devIdentity(req)
-		return email, "", ok
+		return email, "", scope.SourceDev, ok
 	}
-	if r.o.LANOwnerEmail != "" && !hasEdgeHeader(req) {
-		return r.o.LANOwnerEmail, "", true
+	// Fail closed: a request that came through Cloudflare must carry a valid token.
+	if r.o.OwnerEmail != "" && !hasEdgeHeader(req) {
+		return r.o.OwnerEmail, "", scope.SourceLAN, true
 	}
-	return "", "", false
+	return "", "", "", false
 }
 
 // verify checks the token and returns its non-empty email claim.

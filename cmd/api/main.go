@@ -62,6 +62,9 @@ func run() error {
 	}
 	logger := newLogger(cfg, logBuf)
 	slog.SetDefault(logger)
+	for _, w := range cfg.Warnings {
+		logger.Warn(w)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -122,10 +125,8 @@ func run() error {
 		devIdentities = cfg.DevIdentities()
 		idOpts.DevIdentities = devIdentities
 	}
-	if cfg.LANOwnerFallback {
-		idOpts.LANOwnerEmail = cfg.OwnerEmail
-		logger.Warn("LAN_OWNER_FALLBACK is on: requests without a Cloudflare edge header act as the owner")
-	}
+	// D-150: requests without a Cloudflare edge header and without a token always act as the owner.
+	idOpts.OwnerEmail = cfg.OwnerEmail
 	if cfg.DevIdentity {
 		logger.Warn("DEV_IDENTITY is on: anyone who can reach the API can act as a dev user")
 	}

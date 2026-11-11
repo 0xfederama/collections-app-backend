@@ -85,6 +85,14 @@ echo 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAFUlEQVR4nGI5ISfHgA0wwRhDQw
 step "GET /readyz"
 call 200 GET /readyz
 
+step "GET /me identity_source"
+# D-150/D-151: how the caller was identified. Older releases (expand/contract CI) may lack the field,
+# so only a present value is checked.
+if [ "$(curl -sS -o "$T/body" -w '%{http_code}' "$API_URL/api/v1/me")" = 200 ]; then
+  SRC="$(jq -r '.identity_source // empty' "$T/body")"
+  case "$SRC" in "" | access | lan | dev) ;; *) fail "access, lan or dev" "$SRC" ;; esac
+fi
+
 step "create folder"
 json 201 POST /api/v1/folders -d "{\"name\":\"$RUN folder\"}"
 FOLDER_ID="$(field .id)"

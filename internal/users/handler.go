@@ -50,7 +50,7 @@ func (h *handler) getMe(ctx context.Context, _ *struct{}) (*MeOutput, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &MeOutput{Body: MeJSON{ID: u.ID, Email: u.Email, Name: u.Name, AvatarURL: u.AvatarURL, DevIdentities: h.dev}}, nil
+	return &MeOutput{Body: MeJSON{ID: u.ID, Email: u.Email, Name: u.Name, AvatarURL: u.AvatarURL, IdentitySource: scope.IdentitySource(ctx), DevIdentities: h.dev}}, nil
 }
 
 func (h *handler) listUsers(ctx context.Context, _ *struct{}) (*UserListOutput, error) {

@@ -185,8 +185,10 @@ func TestF027B6_NoValidIdentityIs401OnEveryAPIOperation(t *testing.T) {
 		{"garbage token, dev header and forged email", "dev and lan", map[string]string{
 			"Cf-Access-Jwt-Assertion": "a.b.c", "X-Dev-User": "alice@dev.test", "Cf-Access-Authenticated-User-Email": "alice@dev.test"}},
 		{"empty token, dev identity and LAN on", "dev and lan", map[string]string{"Cf-Access-Jwt-Assertion": ""}},
-		{"LAN fallback behind Cloudflare (Cf-Ray)", "lan only", map[string]string{"Cf-Ray": "abc-MXP"}},
-		{"LAN fallback behind Cloudflare (Cf-Connecting-Ip)", "lan only", map[string]string{"Cf-Connecting-Ip": "203.0.113.9"}},
+		{"LAN owner behind Cloudflare (Cf-Ray), no token", "lan only", map[string]string{"Cf-Ray": "abc-MXP"}},
+		{"LAN owner behind Cloudflare (Cf-Connecting-Ip), no token", "lan only", map[string]string{"Cf-Connecting-Ip": "203.0.113.9"}},
+		{"LAN request with a bad token", "lan only", map[string]string{"Cf-Access-Jwt-Assertion": "a.b.c"}},
+		{"LAN request with an empty token", "lan only", map[string]string{"Cf-Access-Jwt-Assertion": ""}},
 		{"forged email behind Cloudflare, LAN on", "lan only", map[string]string{"Cf-Ray": "x", "Cf-Access-Authenticated-User-Email": "owner@dev.test"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -245,7 +247,7 @@ func TestF027B6_ForgedEmailHeaderNeverActsAsThatUser(t *testing.T) {
 		{"dev identity on, forged known dev user", devRouter, map[string]string{"Cf-Access-Authenticated-User-Email": "bob@dev.test"}, "owner@dev.test"},
 		{"dev identity on, forged stranger", devRouter, map[string]string{"Cf-Access-Authenticated-User-Email": "mallory@evil.test"}, "owner@dev.test"},
 		{"dev identity on, dev header wins", devRouter, map[string]string{"X-Dev-User": "alice@dev.test", "Cf-Access-Authenticated-User-Email": "bob@dev.test"}, "alice@dev.test"},
-		{"LAN fallback on, forged email", lanRouter, map[string]string{"Cf-Access-Authenticated-User-Email": "owner@dev.test"}, "lan-owner@dev.test"},
+		{"LAN owner, forged email", lanRouter, map[string]string{"Cf-Access-Authenticated-User-Email": "owner@dev.test"}, "lan-owner@dev.test"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			code, me := meOf(t, tc.h, tc.headers)
@@ -262,9 +264,10 @@ func TestF027B6_ForgedEmailHeaderNeverActsAsThatUser(t *testing.T) {
 	}
 }
 
-// TestF027B6_LANFallback: with LAN_OWNER_FALLBACK on and DEV_IDENTITY off, a request with no
-// identity acts as OWNER_EMAIL unless it carries a Cloudflare edge header; with it off it is 401.
-func TestF027B6_LANFallback(t *testing.T) {
+// TestF027B6_LANOwner (D-150): with OWNER_EMAIL set and DEV_IDENTITY off, a request with no
+// token acts as the owner, always, unless it carries a Cloudflare edge header (then 401); a
+// present token is verified and never falls back; with no OWNER_EMAIL it is 401.
+func TestF027B6_LANOwner(t *testing.T) {
 	on := identityRouter(t, nil, "owner@lan.test")
 	off := identityRouter(t, nil, "")
 
@@ -274,14 +277,15 @@ func TestF027B6_LANFallback(t *testing.T) {
 		headers map[string]string
 		want    string // "" = 401
 	}{
-		{"on, no headers acts as the owner", on, nil, "owner@lan.test"},
-		{"on, unrelated headers", on, map[string]string{"X-Forwarded-For": "192.168.1.20", "User-Agent": "x"}, "owner@lan.test"},
-		{"on, Cf-Ray", on, map[string]string{"Cf-Ray": "abc-MXP"}, ""},
-		{"on, Cf-Connecting-Ip", on, map[string]string{"Cf-Connecting-Ip": "203.0.113.9"}, ""},
-		{"on, both edge headers", on, map[string]string{"Cf-Ray": "abc", "Cf-Connecting-Ip": "203.0.113.9"}, ""},
-		{"on, X-Dev-User is ignored without dev identity", on, map[string]string{"X-Dev-User": "alice@dev.test"}, "owner@lan.test"},
-		{"off, no headers", off, nil, ""},
-		{"off, Cf-Ray", off, map[string]string{"Cf-Ray": "abc"}, ""},
+		{"no headers acts as the owner", on, nil, "owner@lan.test"},
+		{"unrelated headers", on, map[string]string{"X-Forwarded-For": "192.168.1.20", "User-Agent": "x"}, "owner@lan.test"},
+		{"forged Cf-Ray", on, map[string]string{"Cf-Ray": "abc-MXP"}, ""},
+		{"forged Cf-Connecting-Ip", on, map[string]string{"Cf-Connecting-Ip": "203.0.113.9"}, ""},
+		{"both edge headers (tunnel, no token)", on, map[string]string{"Cf-Ray": "abc", "Cf-Connecting-Ip": "203.0.113.9"}, ""},
+		{"bad token", on, map[string]string{"Cf-Access-Jwt-Assertion": "garbage"}, ""},
+		{"X-Dev-User is ignored without dev identity", on, map[string]string{"X-Dev-User": "alice@dev.test"}, "owner@lan.test"},
+		{"no OWNER_EMAIL, no headers", off, nil, ""},
+		{"no OWNER_EMAIL, Cf-Ray", off, map[string]string{"Cf-Ray": "abc"}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			code, me := meOf(t, tc.h, tc.headers)
@@ -291,10 +295,34 @@ func TestF027B6_LANFallback(t *testing.T) {
 				}
 				return
 			}
-			if code != http.StatusOK || me.Email != tc.want {
-				t.Fatalf("acted as %q (status %d), want %q", me.Email, code, tc.want)
+			if code != http.StatusOK || me.Email != tc.want || me.IdentitySource != "lan" {
+				t.Fatalf("acted as %q via %q (status %d), want %q via lan", me.Email, me.IdentitySource, code, tc.want)
 			}
 		})
+	}
+}
+
+// TestF027B6_LANOwnerHasOwnerRights (D-150): the LAN user is the owner account, so owner-only
+// rules pass: share and unshare a top-level folder, then delete it.
+func TestF027B6_LANOwnerHasOwnerRights(t *testing.T) {
+	h, ensure := identityRouterDB(t, nil, "owner@lan.test")
+	alice := ensure("alice@lan.test")
+	rec := do(t, h, req{method: "POST", path: "/api/v1/folders", body: `{"name":"Home"}`, contentType: jsonCT})
+	wantStatus(t, rec, http.StatusCreated)
+	f := decode(t, rec)
+	id := f["id"].(string)
+
+	rec = do(t, h, req{method: "POST", path: "/api/v1/folders/" + id + "/members", body: `{"email":"alice@lan.test"}`, contentType: jsonCT})
+	wantStatus(t, rec, http.StatusOK)
+	rec = do(t, h, req{method: "DELETE", path: "/api/v1/folders/" + id + "/members/" + alice.ID.String()})
+	if rec.Code != http.StatusOK && rec.Code != http.StatusNoContent {
+		t.Fatalf("unshare: status %d: %s", rec.Code, rec.Body)
+	}
+	got := do(t, h, req{method: "GET", path: "/api/v1/folders/" + id})
+	wantStatus(t, got, http.StatusOK)
+	rec = do(t, h, req{method: "DELETE", path: "/api/v1/folders/" + id, headers: map[string]string{"If-Match": got.Header().Get("ETag")}})
+	if rec.Code != http.StatusOK && rec.Code != http.StatusNoContent {
+		t.Fatalf("delete top-level folder: status %d: %s", rec.Code, rec.Body)
 	}
 }
 

@@ -8,21 +8,33 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/identity"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 	"github.com/0xfederama/collections-app-backend/internal/platform/testdb"
+	"github.com/0xfederama/collections-app-backend/internal/storage"
+	"github.com/0xfederama/collections-app-backend/internal/trash"
 	"github.com/0xfederama/collections-app-backend/internal/users"
 	"github.com/0xfederama/collections-app-backend/internal/workspace"
 )
 
 type meBody struct {
-	ID            string    `json:"id"`
-	Email         string    `json:"email"`
-	Name          *string   `json:"name"`
-	AvatarURL     *string   `json:"avatar_url"`
-	DevIdentities *[]string `json:"dev_identities"`
+	ID             string    `json:"id"`
+	Email          string    `json:"email"`
+	Name           *string   `json:"name"`
+	AvatarURL      *string   `json:"avatar_url"`
+	DevIdentities  *[]string `json:"dev_identities"`
+	IdentitySource string    `json:"identity_source"`
 }
 
 // identityRouter is a router with the real identity middleware over a migrated database.
-func identityRouter(t *testing.T, dev []string, lanOwner string) http.Handler {
+// owner is OWNER_EMAIL: the identity of LAN requests (D-150); "" = none.
+func identityRouter(t *testing.T, dev []string, owner string) http.Handler {
+	t.Helper()
+	h, _ := identityRouterDB(t, dev, owner)
+	return h
+}
+
+// identityRouterDB is identityRouter that also returns a function creating a user of its workspace.
+func identityRouterDB(t *testing.T, dev []string, owner string) (http.Handler, func(email string) users.User) {
 	t.Helper()
 	pool := testdb.NewMigrated(t, sharedPostgres(t))
 	ws, err := workspace.Bootstrap(t.Context(), pool)
@@ -30,12 +42,25 @@ func identityRouter(t *testing.T, dev []string, lanOwner string) http.Handler {
 		t.Fatal(err)
 	}
 	svc := users.NewService(users.NewPostgres(pool), clock.System{})
+	dir := t.TempDir()
+	store, err := storage.NewLocal(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
 	return newRouter(t, httpapi.Deps{
-		DB: pool, DataDir: t.TempDir(), Logger: quietLogger(), WorkspaceID: ws,
-		Settings: workspace.NewService(workspace.NewPostgres(pool)),
-		Identity: identity.New(identity.Options{Users: svc, Logger: quietLogger(), DevIdentities: dev, LANOwnerEmail: lanOwner}),
-		Users:    svc, DevIdentities: dev,
-	})
+			DB: pool, DataDir: dir, Logger: quietLogger(), WorkspaceID: ws,
+			Trash:    trash.NewService(trash.NewPostgres(pool), store, clock.System{}, quietLogger()),
+			Settings: workspace.NewService(workspace.NewPostgres(pool)),
+			Identity: identity.New(identity.Options{Users: svc, Logger: quietLogger(), DevIdentities: dev, OwnerEmail: owner}),
+			Users:    svc, DevIdentities: dev,
+		}), func(email string) users.User {
+			u, err := svc.EnsureByEmail(scope.With(t.Context(), ws), email)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return u
+		}
 }
 
 func TestMe_DevIdentity(t *testing.T) {
@@ -52,6 +77,9 @@ func TestMe_DevIdentity(t *testing.T) {
 	}
 	if me.Email != "owner@dev.test" || me.ID == "" || me.Name != nil || me.AvatarURL != nil {
 		t.Fatalf("me = %+v", me)
+	}
+	if me.IdentitySource != "dev" {
+		t.Fatalf("identity_source = %q, want dev", me.IdentitySource)
 	}
 	if me.DevIdentities == nil || len(*me.DevIdentities) != 3 {
 		t.Fatalf("dev_identities = %v", me.DevIdentities)
@@ -92,8 +120,8 @@ func TestMe_DevIdentitiesNullWhenOff(t *testing.T) {
 	if v, ok := raw["dev_identities"]; !ok || v != nil {
 		t.Fatalf("dev_identities must be present and null: %v", raw)
 	}
-	if raw["email"] != "owner@example.test" {
-		t.Fatalf("email = %v", raw["email"])
+	if raw["email"] != "owner@example.test" || raw["identity_source"] != "lan" {
+		t.Fatalf("email = %v, identity_source = %v", raw["email"], raw["identity_source"])
 	}
 }
 

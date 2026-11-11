@@ -30,6 +30,7 @@ type Store interface {
 	ByEmail(ctx context.Context, email string) (User, error)
 	Upsert(ctx context.Context, email string) (User, error)
 	Get(ctx context.Context, id uuid.UUID) (User, error)
+	List(ctx context.Context) ([]User, error)
 	UpdateProfile(ctx context.Context, id uuid.UUID, p Profile, at time.Time) (User, error)
 }
 
@@ -86,6 +87,11 @@ func (s *Service) EnsureByEmail(ctx context.Context, email string) (User, error)
 // Get returns one user by id.
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (User, error) {
 	return s.store.Get(ctx, id)
+}
+
+// List returns every known user of the workspace, ordered by e-mail.
+func (s *Service) List(ctx context.Context) ([]User, error) {
+	return s.store.List(ctx)
 }
 
 // ProfileDue reports whether u's profile should be fetched now: never fetched or older than

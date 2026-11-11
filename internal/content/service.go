@@ -13,6 +13,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 )
 
 // Store opens transactions. Declared here, where it is used; *Postgres implements
@@ -202,6 +203,9 @@ func (s *Service) write(ctx context.Context, itemID uuid.UUID, ifMatch, limit in
 			return err
 		}
 		out = Content{ItemID: itemID, Version: newVersion, Body: next, UpdatedAt: &now}
+		if user, ok := scope.UserID(ctx); ok {
+			out.AuthorUserID = &user
+		}
 		return nil
 	})
 	if err != nil {

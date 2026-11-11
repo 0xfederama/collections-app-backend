@@ -41,6 +41,14 @@ func (f *fakeStore) Get(_ context.Context, id uuid.UUID) (User, error) {
 	return User{}, apperr.NotFound("user")
 }
 
+func (f *fakeStore) List(context.Context) ([]User, error) {
+	out := make([]User, 0, len(f.rows))
+	for _, u := range f.rows {
+		out = append(out, u)
+	}
+	return out, nil
+}
+
 func (f *fakeStore) UpdateProfile(_ context.Context, id uuid.UUID, p Profile, at time.Time) (User, error) {
 	for e, u := range f.rows {
 		if u.ID == id {

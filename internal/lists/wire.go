@@ -10,21 +10,23 @@ import (
 // outside handler.go so that the tree read can reuse it: the layer rules keep a
 // feature's handler identifiers to itself.
 type ListJSON struct {
-	ID          uuid.UUID  `json:"id" format:"uuid"`
-	FolderID    *uuid.UUID `json:"folder_id" format:"uuid" nullable:"true"`
-	OwnerUserID *uuid.UUID `json:"owner_user_id" format:"uuid" nullable:"true" doc:"The owner of a top-level list; null for a list in a folder, which belongs to the folder's top-level ancestor."`
-	Name        string     `json:"name"`
-	Type        *string    `json:"type" nullable:"true"`
-	Description *string    `json:"description" nullable:"true"`
-	DisplayMode string     `json:"display_mode" enum:"compact,thumbnail,grid"`
-	SortMode    string     `json:"sort_mode"`
-	Icon        *string    `json:"icon" nullable:"true"`
-	IconColor   *string    `json:"icon_color" nullable:"true" enum:"red,orange,amber,green,teal,blue,indigo,purple,pink,gray"`
-	SortOrder   int        `json:"sort_order"`
-	ItemCount   int        `json:"item_count"`
-	Version     int        `json:"version"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID              uuid.UUID  `json:"id" format:"uuid"`
+	FolderID        *uuid.UUID `json:"folder_id" format:"uuid" nullable:"true"`
+	OwnerUserID     *uuid.UUID `json:"owner_user_id" format:"uuid" nullable:"true" doc:"The owner of a top-level list; null for a list in a folder, which belongs to the folder's top-level ancestor."`
+	Name            string     `json:"name"`
+	Type            *string    `json:"type" nullable:"true"`
+	Description     *string    `json:"description" nullable:"true"`
+	DisplayMode     string     `json:"display_mode" enum:"compact,thumbnail,grid"`
+	SortMode        string     `json:"sort_mode"`
+	Icon            *string    `json:"icon" nullable:"true"`
+	IconColor       *string    `json:"icon_color" nullable:"true" enum:"red,orange,amber,green,teal,blue,indigo,purple,pink,gray"`
+	SortOrder       int        `json:"sort_order"`
+	ItemCount       int        `json:"item_count"`
+	Version         int        `json:"version"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	CreatedByUserID *uuid.UUID `json:"created_by_user_id" format:"uuid" nullable:"true" doc:"The user who created it; null when unknown (created before authorship was recorded)."`
+	UpdatedByUserID *uuid.UUID `json:"updated_by_user_id" format:"uuid" nullable:"true" doc:"The user who last changed it; null when unknown. A system refresh keeps the previous value."`
 }
 
 // ToJSON is the wire shape of l.
@@ -33,6 +35,7 @@ func ToJSON(l List) ListJSON {
 		ID: l.ID, FolderID: l.FolderID, OwnerUserID: l.OwnerID, Name: l.Name, Type: l.Type, Description: l.Description,
 		DisplayMode: l.DisplayMode, SortMode: l.SortMode, Icon: l.Icon, IconColor: l.IconColor,
 		SortOrder: l.SortOrder, ItemCount: l.ItemCount, Version: l.Version, CreatedAt: l.CreatedAt, UpdatedAt: l.UpdatedAt,
+		CreatedByUserID: l.CreatedByID, UpdatedByUserID: l.UpdatedByID,
 	}
 	return out
 }

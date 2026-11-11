@@ -19,20 +19,22 @@ import (
 // ItemJSON is the wire shape of an item (published as the schema "Item"). Path is
 // present on getItem only.
 type ItemJSON struct {
-	ContentVersion int                       `json:"content_version"`
-	CreatedAt      time.Time                 `json:"created_at"`
-	ID             uuid.UUID                 `json:"id" format:"uuid"`
-	Image          any                       `json:"image" nullable:"true" doc:"An item image, either an external URL or an uploaded attachment. null when the item has no image."`
-	ListID         uuid.UUID                 `json:"list_id" format:"uuid"`
-	Metadata       map[string]any            `json:"metadata" nullable:"false" doc:"Validated against the list's type; its shape depends on the type."`
-	Path           *[]httpserver.PathSegment `json:"path,omitempty" doc:"Ancestor folders and the list. Present on getItem only."`
-	Price          *PriceJSON                `json:"price"`
-	SortOrder      int                       `json:"sort_order"`
-	Title          string                    `json:"title"`
-	Type           *string                   `json:"type" nullable:"true" doc:"null when the list has no type."`
-	UpdatedAt      time.Time                 `json:"updated_at"`
-	Version        int                       `json:"version"`
-	Website        *string                   `json:"website" nullable:"true"`
+	ContentVersion  int                       `json:"content_version"`
+	CreatedAt       time.Time                 `json:"created_at"`
+	ID              uuid.UUID                 `json:"id" format:"uuid"`
+	Image           any                       `json:"image" nullable:"true" doc:"An item image, either an external URL or an uploaded attachment. null when the item has no image."`
+	ListID          uuid.UUID                 `json:"list_id" format:"uuid"`
+	Metadata        map[string]any            `json:"metadata" nullable:"false" doc:"Validated against the list's type; its shape depends on the type."`
+	Path            *[]httpserver.PathSegment `json:"path,omitempty" doc:"Ancestor folders and the list. Present on getItem only."`
+	Price           *PriceJSON                `json:"price"`
+	SortOrder       int                       `json:"sort_order"`
+	Title           string                    `json:"title"`
+	Type            *string                   `json:"type" nullable:"true" doc:"null when the list has no type."`
+	UpdatedAt       time.Time                 `json:"updated_at"`
+	Version         int                       `json:"version"`
+	Website         *string                   `json:"website" nullable:"true"`
+	CreatedByUserID *uuid.UUID                `json:"created_by_user_id" format:"uuid" nullable:"true" doc:"The user who created it; null when unknown (created before authorship was recorded)."`
+	UpdatedByUserID *uuid.UUID                `json:"updated_by_user_id" format:"uuid" nullable:"true" doc:"The user who last changed it, content saves included; null when unknown. A system refresh keeps the previous value."`
 }
 
 // TransformSchema gives image the schema of its union: an upload, a URL or null.
@@ -66,19 +68,21 @@ func (ItemSummaryJSON) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Sc
 // ItemSummaryJSON is an item row of listItems (published as "ItemSummary"): the
 // same metadata as the full item, and the image reduced.
 type ItemSummaryJSON struct {
-	ContentVersion int               `json:"content_version"`
-	CreatedAt      time.Time         `json:"created_at"`
-	ID             uuid.UUID         `json:"id" format:"uuid"`
-	Image          *ImageSummaryJSON `json:"image"`
-	ListID         uuid.UUID         `json:"list_id" format:"uuid"`
-	Metadata       map[string]any    `json:"metadata" nullable:"false"`
-	Price          *PriceJSON        `json:"price"`
-	SortOrder      int               `json:"sort_order"`
-	Title          string            `json:"title"`
-	Type           *string           `json:"type" nullable:"true"`
-	UpdatedAt      time.Time         `json:"updated_at"`
-	Version        int               `json:"version"`
-	Website        *string           `json:"website" nullable:"true"`
+	ContentVersion  int               `json:"content_version"`
+	CreatedAt       time.Time         `json:"created_at"`
+	ID              uuid.UUID         `json:"id" format:"uuid"`
+	Image           *ImageSummaryJSON `json:"image"`
+	ListID          uuid.UUID         `json:"list_id" format:"uuid"`
+	Metadata        map[string]any    `json:"metadata" nullable:"false"`
+	Price           *PriceJSON        `json:"price"`
+	SortOrder       int               `json:"sort_order"`
+	Title           string            `json:"title"`
+	Type            *string           `json:"type" nullable:"true"`
+	UpdatedAt       time.Time         `json:"updated_at"`
+	Version         int               `json:"version"`
+	Website         *string           `json:"website" nullable:"true"`
+	CreatedByUserID *uuid.UUID        `json:"created_by_user_id" format:"uuid" nullable:"true" doc:"The user who created it; null when unknown (created before authorship was recorded)."`
+	UpdatedByUserID *uuid.UUID        `json:"updated_by_user_id" format:"uuid" nullable:"true" doc:"The user who last changed it, content saves included; null when unknown. A system refresh keeps the previous value."`
 }
 
 // ItemPageJSON is the listItems answer (published as "ItemPage").
@@ -174,6 +178,7 @@ func ToItemJSON(it Item) (ItemJSON, error) {
 		ContentVersion: it.ContentVersion, CreatedAt: it.CreatedAt, ID: it.ID, Image: imageJSON(it.Image),
 		ListID: it.ListID, Metadata: metadata, Price: priceJSON(it.Price), SortOrder: it.SortOrder,
 		Title: it.Title, Type: it.Type, UpdatedAt: it.UpdatedAt, Version: it.Version, Website: it.Website,
+		CreatedByUserID: it.CreatedByID, UpdatedByUserID: it.UpdatedByID,
 	}
 	if it.Path != nil {
 		path := make([]httpserver.PathSegment, 0, len(it.Path))
@@ -197,6 +202,7 @@ func ToItemSummaryJSON(it Item) ItemSummaryJSON {
 		ContentVersion: it.ContentVersion, CreatedAt: it.CreatedAt, ID: it.ID, Image: imageSummaryJSON(it.Image),
 		ListID: it.ListID, Metadata: metadata, Price: priceJSON(it.Price), SortOrder: it.SortOrder,
 		Title: it.Title, Type: it.Type, UpdatedAt: it.UpdatedAt, Version: it.Version, Website: it.Website,
+		CreatedByUserID: it.CreatedByID, UpdatedByUserID: it.UpdatedByID,
 	}
 }
 

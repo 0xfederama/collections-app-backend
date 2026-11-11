@@ -16,6 +16,7 @@ import (
 // Reader is what GET /me reads through.
 type Reader interface {
 	Get(ctx context.Context, id uuid.UUID) (User, error)
+	List(ctx context.Context) ([]User, error)
 }
 
 // Register adds the account operations. devIdentities is non-nil only when DEV_IDENTITY is on.
@@ -27,6 +28,12 @@ func Register(api huma.API, log *slog.Logger, svc Reader, devIdentities []string
 		Description: "The account of the caller, created on the first request. `dev_identities` is only set on dev/test servers.",
 		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError},
 	}, httpserver.Op(log, h.getMe))
+	huma.Register(api, huma.Operation{
+		OperationID: "listUsers", Method: http.MethodGet, Path: "/api/v1/users", Tags: []string{"users"},
+		Summary:     "List the known users",
+		Description: "Every user who has signed in, ordered by e-mail: the names behind `*_user_id` fields and the sharing picker. Any signed-in user may read it.",
+		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError},
+	}, httpserver.Op(log, h.listUsers))
 }
 
 type handler struct {
@@ -44,4 +51,19 @@ func (h *handler) getMe(ctx context.Context, _ *struct{}) (*MeOutput, error) {
 		return nil, err
 	}
 	return &MeOutput{Body: MeJSON{ID: u.ID, Email: u.Email, Name: u.Name, AvatarURL: u.AvatarURL, DevIdentities: h.dev}}, nil
+}
+
+func (h *handler) listUsers(ctx context.Context, _ *struct{}) (*UserListOutput, error) {
+	if _, ok := scope.UserID(ctx); !ok {
+		return nil, problem.Unauthenticated()
+	}
+	us, err := h.svc.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	data := make([]UserJSON, 0, len(us))
+	for _, u := range us {
+		data = append(data, UserJSON{ID: u.ID, Email: u.Email, Name: u.Name, AvatarURL: u.AvatarURL})
+	}
+	return &UserListOutput{Body: UserListJSON{Data: data}}, nil
 }

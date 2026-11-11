@@ -64,6 +64,40 @@ func (q *Queries) GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) 
 	return i, err
 }
 
+const listUsers = `-- name: ListUsers :many
+SELECT id, workspace_id, email, name, avatar_url, profile_fetched_at, created_at, updated_at FROM users WHERE workspace_id = $1 ORDER BY email, id
+`
+
+// Every known user of the workspace, for the author names and the sharing picker.
+func (q *Queries) ListUsers(ctx context.Context, workspaceID uuid.UUID) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsers, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Email,
+			&i.Name,
+			&i.AvatarUrl,
+			&i.ProfileFetchedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE users SET name = $3, avatar_url = $4, profile_fetched_at = $5, updated_at = $5
 WHERE workspace_id = $1 AND id = $2

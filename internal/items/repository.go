@@ -132,6 +132,7 @@ func (r *repo) GetForUpdate(ctx context.Context, id uuid.UUID) (Item, error) {
 		Price: rowPrice(row.PriceMin, row.PriceMax, row.Currency), Website: row.WebsiteUrl,
 		Metadata: json.RawMessage(row.Metadata), SortOrder: int(row.SortOrder), Version: int(row.Version),
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+		CreatedByID: ptrNull(row.CreatedByUserID), UpdatedByID: ptrNull(row.UpdatedByUserID),
 	}, nil
 }
 
@@ -152,7 +153,7 @@ func (r *repo) Insert(ctx context.Context, it Item, now time.Time) (uuid.UUID, e
 	id, err := r.q.InsertItemRow(ctx, sqlc.InsertItemRowParams{
 		WorkspaceID: scope.WorkspaceID(ctx), ListID: it.ListID, Title: it.Title,
 		PriceMin: minV, PriceMax: maxV, Currency: currency, WebsiteUrl: it.Website,
-		Metadata: metadataJSON(it.Metadata), SortOrder: int32(it.SortOrder), Now: now,
+		Metadata: metadataJSON(it.Metadata), SortOrder: int32(it.SortOrder), Now: now, CallerUserID: callerID(ctx),
 	})
 	if err != nil {
 		return uuid.UUID{}, fmt.Errorf("insert item: %w", err)
@@ -164,7 +165,7 @@ func (r *repo) Update(ctx context.Context, it Item, now time.Time) error {
 	minV, maxV, currency := PriceParts(it.Price)
 	_, err := r.q.UpdateItemRow(ctx, sqlc.UpdateItemRowParams{
 		Title: it.Title, PriceMin: minV, PriceMax: maxV, Currency: currency, WebsiteUrl: it.Website,
-		Metadata: metadataJSON(it.Metadata), Now: now, ID: it.ID, WorkspaceID: scope.WorkspaceID(ctx),
+		Metadata: metadataJSON(it.Metadata), Now: now, ID: it.ID, WorkspaceID: scope.WorkspaceID(ctx), CallerUserID: callerID(ctx),
 	})
 	if err != nil {
 		return notFoundOr(err, "item")
@@ -174,7 +175,7 @@ func (r *repo) Update(ctx context.Context, it Item, now time.Time) error {
 
 func (r *repo) Move(ctx context.Context, id, listID uuid.UUID, sortOrder int, now time.Time) error {
 	_, err := r.q.MoveItemRow(ctx, sqlc.MoveItemRowParams{
-		ListID: listID, SortOrder: int32(sortOrder), Now: now, ID: id, WorkspaceID: scope.WorkspaceID(ctx),
+		ListID: listID, SortOrder: int32(sortOrder), Now: now, ID: id, WorkspaceID: scope.WorkspaceID(ctx), CallerUserID: callerID(ctx),
 	})
 	if err != nil {
 		return notFoundOr(err, "item")
@@ -276,6 +277,7 @@ func readItem(r sqlc.ReadItemRow) Item {
 		Price: rowPrice(r.PriceMin, r.PriceMax, r.Currency), Website: r.WebsiteUrl,
 		Metadata: json.RawMessage(r.Metadata), SortOrder: int(r.SortOrder), Version: int(r.Version),
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		CreatedByID: ptrNull(r.CreatedByUserID), UpdatedByID: ptrNull(r.UpdatedByUserID),
 	}
 	switch {
 	case r.ImageAttachmentID.Valid:
@@ -334,4 +336,18 @@ func notFoundOr(err error, resource string) error {
 		return apperr.NotFound(resource)
 	}
 	return fmt.Errorf("%s: %w", resource, err)
+}
+
+// callerID is the user of the request as a nullable id (NULL for jobs and tests); NULL keeps the
+// previous updated-by value on updates.
+func callerID(ctx context.Context) uuid.NullUUID {
+	id, ok := scope.UserID(ctx)
+	return uuid.NullUUID{UUID: id, Valid: ok}
+}
+
+func ptrNull(id uuid.NullUUID) *uuid.UUID {
+	if !id.Valid {
+		return nil
+	}
+	return &id.UUID
 }

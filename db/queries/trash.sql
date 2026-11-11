@@ -57,7 +57,7 @@ UPDATE folders
 SET parent_folder_id = sqlc.narg(parent_folder_id),
     owner_user_id = CASE WHEN sqlc.narg(parent_folder_id)::uuid IS NULL THEN COALESCE(owner_user_id, sqlc.narg(caller_user_id)::uuid) END,
     sort_order = @sort_order, deleted_at = NULL, trash_batch_id = NULL,
-    version = version + 1, updated_at = @now
+    version = version + 1, updated_at = @now, updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
 WHERE id = @id AND workspace_id = @workspace_id AND trash_batch_id = @batch_id;
 
 -- name: RestoreListRoot :exec
@@ -65,13 +65,13 @@ UPDATE lists
 SET folder_id = sqlc.narg(folder_id),
     owner_user_id = CASE WHEN sqlc.narg(folder_id)::uuid IS NULL THEN COALESCE(owner_user_id, sqlc.narg(caller_user_id)::uuid) END,
     sort_order = @sort_order, deleted_at = NULL, trash_batch_id = NULL,
-    version = version + 1, updated_at = @now
+    version = version + 1, updated_at = @now, updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
 WHERE id = @id AND workspace_id = @workspace_id AND trash_batch_id = @batch_id;
 
 -- name: RestoreItemRoot :exec
 UPDATE items
 SET list_id = @list_id, sort_order = @sort_order, deleted_at = NULL, trash_batch_id = NULL,
-    version = version + 1, updated_at = @now
+    version = version + 1, updated_at = @now, updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
 WHERE id = @id AND workspace_id = @workspace_id AND trash_batch_id = @batch_id;
 
 -- name: RestoreBatchFolders :exec

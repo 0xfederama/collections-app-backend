@@ -151,7 +151,7 @@ func (r *repo) LockItem(ctx context.Context, itemID uuid.UUID) (ItemImageState, 
 // SetItemImageAttachment is SEAM: moves to items.
 func (r *repo) SetItemImageAttachment(ctx context.Context, itemID, attachmentID uuid.UUID, now time.Time) error {
 	if err := r.q.SetItemImageAttachment(ctx, sqlc.SetItemImageAttachmentParams{
-		AttachmentID: uuid.NullUUID{UUID: attachmentID, Valid: true}, Now: now, ID: itemID, WorkspaceID: scope.WorkspaceID(ctx),
+		AttachmentID: uuid.NullUUID{UUID: attachmentID, Valid: true}, Now: now, ID: itemID, WorkspaceID: scope.WorkspaceID(ctx), CallerUserID: callerID(ctx),
 	}); err != nil {
 		return fmt.Errorf("set item image: %w", err)
 	}
@@ -160,7 +160,7 @@ func (r *repo) SetItemImageAttachment(ctx context.Context, itemID, attachmentID 
 
 // SetItemImageURL is SEAM: moves to items.
 func (r *repo) SetItemImageURL(ctx context.Context, itemID uuid.UUID, url string, now time.Time) error {
-	if err := r.q.SetItemImageURL(ctx, sqlc.SetItemImageURLParams{ImageUrl: &url, Now: now, ID: itemID, WorkspaceID: scope.WorkspaceID(ctx)}); err != nil {
+	if err := r.q.SetItemImageURL(ctx, sqlc.SetItemImageURLParams{ImageUrl: &url, Now: now, ID: itemID, WorkspaceID: scope.WorkspaceID(ctx), CallerUserID: callerID(ctx)}); err != nil {
 		return fmt.Errorf("set item image url: %w", err)
 	}
 	return nil
@@ -168,7 +168,7 @@ func (r *repo) SetItemImageURL(ctx context.Context, itemID uuid.UUID, url string
 
 // ClearItemImage is SEAM: moves to items.
 func (r *repo) ClearItemImage(ctx context.Context, itemID uuid.UUID, now time.Time) error {
-	if err := r.q.ClearItemImage(ctx, sqlc.ClearItemImageParams{Now: now, ID: itemID, WorkspaceID: scope.WorkspaceID(ctx)}); err != nil {
+	if err := r.q.ClearItemImage(ctx, sqlc.ClearItemImageParams{Now: now, ID: itemID, WorkspaceID: scope.WorkspaceID(ctx), CallerUserID: callerID(ctx)}); err != nil {
 		return fmt.Errorf("clear item image: %w", err)
 	}
 	return nil
@@ -180,4 +180,11 @@ func notFoundOr(err error, resource string) error {
 		return apperr.NotFound(resource)
 	}
 	return fmt.Errorf("%s: %w", resource, err)
+}
+
+// callerID is the user of the request as a nullable id (NULL for jobs and tests); NULL keeps the
+// previous updated-by value on updates.
+func callerID(ctx context.Context) uuid.NullUUID {
+	id, ok := scope.UserID(ctx)
+	return uuid.NullUUID{UUID: id, Valid: ok}
 }

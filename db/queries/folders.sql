@@ -20,13 +20,13 @@ WHERE workspace_id = @workspace_id AND deleted_at IS NULL
 
 -- name: InsertFolder :one
 -- Only a top-level folder has an owner (the caller); a nested one inherits its box's access.
-INSERT INTO folders (workspace_id, parent_folder_id, owner_user_id, name, sort_order, created_at, updated_at)
-VALUES (@workspace_id, sqlc.narg(parent_folder_id), sqlc.narg(owner_user_id), @name, @sort_order, @now, @now)
+INSERT INTO folders (workspace_id, parent_folder_id, owner_user_id, created_by_user_id, updated_by_user_id, name, sort_order, created_at, updated_at)
+VALUES (@workspace_id, sqlc.narg(parent_folder_id), sqlc.narg(owner_user_id), sqlc.narg(caller_user_id), sqlc.narg(caller_user_id), @name, @sort_order, @now, @now)
 RETURNING *;
 
 -- name: RenameFolder :one
 UPDATE folders
-SET name = @name, version = version + 1, updated_at = @now
+SET name = @name, version = version + 1, updated_at = @now, updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 RETURNING *;
 
@@ -36,7 +36,7 @@ RETURNING *;
 UPDATE folders
 SET parent_folder_id = sqlc.narg(parent_folder_id),
     owner_user_id = CASE WHEN sqlc.narg(parent_folder_id)::uuid IS NULL THEN COALESCE(owner_user_id, sqlc.narg(caller_user_id)::uuid) END,
-    sort_order = @sort_order, version = version + 1, updated_at = @now
+    sort_order = @sort_order, version = version + 1, updated_at = @now, updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 RETURNING *;
 

@@ -387,7 +387,7 @@ func (q *Queries) FolderVisibleTo(ctx context.Context, arg FolderVisibleToParams
 }
 
 const getFolderAnyState = `-- name: GetFolderAnyState :one
-SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id FROM folders WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id, created_by_user_id, updated_by_user_id FROM folders WHERE id = $1 AND workspace_id = $2
 `
 
 type GetFolderAnyStateParams struct {
@@ -410,6 +410,8 @@ func (q *Queries) GetFolderAnyState(ctx context.Context, arg GetFolderAnyStatePa
 		&i.DeletedAt,
 		&i.TrashBatchID,
 		&i.OwnerUserID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 	)
 	return i, err
 }

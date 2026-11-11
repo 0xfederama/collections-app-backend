@@ -84,6 +84,12 @@ components:
     Content:
       additionalProperties: false
       properties:
+        author_user_id:
+          description: The user who saved this version. null for version 0 and for versions saved before authorship was recorded.
+          format: uuid
+          type:
+            - string
+            - "null"
         body:
           description: Markdown source, up to 1 MiB UTF-8.
           type: string
@@ -106,10 +112,17 @@ components:
         - version
         - body
         - updated_at
+        - author_user_id
       type: object
     ContentVersionInfo:
       additionalProperties: false
       properties:
+        author_user_id:
+          description: The user who saved this version; null when unknown.
+          format: uuid
+          type:
+            - string
+            - "null"
         created_at:
           format: date-time
           type: string
@@ -124,6 +137,7 @@ components:
         - created_at
         - size_bytes
         - version
+        - author_user_id
       type: object
     ContentVersionList:
       additionalProperties: false
@@ -229,6 +243,12 @@ components:
         created_at:
           format: date-time
           type: string
+        created_by_user_id:
+          description: The user who created it; null when unknown (created before authorship was recorded).
+          format: uuid
+          type:
+            - string
+            - "null"
         id:
           format: uuid
           type: string
@@ -260,6 +280,12 @@ components:
         updated_at:
           format: date-time
           type: string
+        updated_by_user_id:
+          description: The user who last changed it; null when unknown. A system refresh keeps the previous value.
+          format: uuid
+          type:
+            - string
+            - "null"
         version:
           format: int64
           type: integer
@@ -274,6 +300,8 @@ components:
         - version
         - created_at
         - updated_at
+        - created_by_user_id
+        - updated_by_user_id
       type: object
     ImageSummary:
       additionalProperties: false
@@ -295,6 +323,12 @@ components:
         created_at:
           format: date-time
           type: string
+        created_by_user_id:
+          description: The user who created it; null when unknown (created before authorship was recorded).
+          format: uuid
+          type:
+            - string
+            - "null"
         id:
           format: uuid
           type: string
@@ -333,6 +367,12 @@ components:
         updated_at:
           format: date-time
           type: string
+        updated_by_user_id:
+          description: The user who last changed it, content saves included; null when unknown. A system refresh keeps the previous value.
+          format: uuid
+          type:
+            - string
+            - "null"
         version:
           format: int64
           type: integer
@@ -354,6 +394,8 @@ components:
         - updated_at
         - version
         - website
+        - created_by_user_id
+        - updated_by_user_id
       type: object
     ItemPage:
       additionalProperties: false
@@ -377,6 +419,12 @@ components:
         created_at:
           format: date-time
           type: string
+        created_by_user_id:
+          description: The user who created it; null when unknown (created before authorship was recorded).
+          format: uuid
+          type:
+            - string
+            - "null"
         id:
           format: uuid
           type: string
@@ -406,6 +454,12 @@ components:
         updated_at:
           format: date-time
           type: string
+        updated_by_user_id:
+          description: The user who last changed it, content saves included; null when unknown. A system refresh keeps the previous value.
+          format: uuid
+          type:
+            - string
+            - "null"
         version:
           format: int64
           type: integer
@@ -427,6 +481,8 @@ components:
         - updated_at
         - version
         - website
+        - created_by_user_id
+        - updated_by_user_id
       type: object
     List:
       additionalProperties: false
@@ -434,6 +490,12 @@ components:
         created_at:
           format: date-time
           type: string
+        created_by_user_id:
+          description: The user who created it; null when unknown (created before authorship was recorded).
+          format: uuid
+          type:
+            - string
+            - "null"
         description:
           type:
             - string
@@ -494,6 +556,12 @@ components:
         updated_at:
           format: date-time
           type: string
+        updated_by_user_id:
+          description: The user who last changed it; null when unknown. A system refresh keeps the previous value.
+          format: uuid
+          type:
+            - string
+            - "null"
         version:
           format: int64
           type: integer
@@ -513,6 +581,8 @@ components:
         - version
         - created_at
         - updated_at
+        - created_by_user_id
+        - updated_by_user_id
       type: object
     ListLookupRefresh:
       additionalProperties: false
@@ -549,6 +619,12 @@ components:
         created_at:
           format: date-time
           type: string
+        created_by_user_id:
+          description: The user who created it; null when unknown (created before authorship was recorded).
+          format: uuid
+          type:
+            - string
+            - "null"
         description:
           type:
             - string
@@ -613,6 +689,12 @@ components:
         updated_at:
           format: date-time
           type: string
+        updated_by_user_id:
+          description: The user who last changed it; null when unknown. A system refresh keeps the previous value.
+          format: uuid
+          type:
+            - string
+            - "null"
         version:
           format: int64
           type: integer
@@ -633,6 +715,8 @@ components:
         - version
         - created_at
         - updated_at
+        - created_by_user_id
+        - updated_by_user_id
       type: object
     LookupItemRequest:
       additionalProperties: false
@@ -1427,6 +1511,38 @@ components:
       required:
         - source
         - url
+      type: object
+    User:
+      additionalProperties: false
+      properties:
+        avatar_url:
+          type:
+            - string
+            - "null"
+        email:
+          type: string
+        id:
+          format: uuid
+          type: string
+        name:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - email
+        - name
+        - avatar_url
+      type: object
+    UserList:
+      additionalProperties: false
+      properties:
+        data:
+          items:
+            $ref: "#/components/schemas/User"
+          type: array
+      required:
+        - data
       type: object
 info:
   description: |
@@ -4485,6 +4601,32 @@ paths:
       summary: List the built-in types and their fields
       tags:
         - types
+  /api/v1/users:
+    get:
+      description: "Every user who has signed in, ordered by e-mail: the names behind `*_user_id` fields and the sharing picker. Any signed-in user may read it."
+      operationId: listUsers
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserList"
+          description: OK
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Unauthorized
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Internal Server Error
+      summary: List the known users
+      tags:
+        - users
   /healthz:
     get:
       description: 200 if the process is up.

@@ -151,13 +151,13 @@ func (r *repo) NextSortOrder(ctx context.Context, parent *uuid.UUID) (int, error
 func (r *repo) Insert(ctx context.Context, parent *uuid.UUID, name string, sortOrder int, now time.Time) (Folder, error) {
 	row, err := r.q.InsertFolder(ctx, sqlc.InsertFolderParams{
 		WorkspaceID: scope.WorkspaceID(ctx), ParentFolderID: nullUUID(parent), OwnerUserID: ownerForNew(ctx, parent),
-		Name: name, SortOrder: int32(sortOrder), Now: now,
+		Name: name, SortOrder: int32(sortOrder), Now: now, CallerUserID: callerID(ctx),
 	})
 	return fromRow(row), err
 }
 
 func (r *repo) Rename(ctx context.Context, id uuid.UUID, name string, now time.Time) (Folder, error) {
-	row, err := r.q.RenameFolder(ctx, sqlc.RenameFolderParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx), Name: name, Now: now})
+	row, err := r.q.RenameFolder(ctx, sqlc.RenameFolderParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx), Name: name, Now: now, CallerUserID: callerID(ctx)})
 	return r.withMembers(ctx, row, err)
 }
 
@@ -226,6 +226,7 @@ func fromRow(f sqlc.Folder) Folder {
 		parent := f.ParentFolderID.UUID
 		out.ParentID = &parent
 	}
+	out.CreatedByID, out.UpdatedByID = ptrNull(f.CreatedByUserID), ptrNull(f.UpdatedByUserID)
 	if f.OwnerUserID.Valid {
 		owner := f.OwnerUserID.UUID
 		out.OwnerID = &owner
@@ -239,4 +240,11 @@ func notFound(err error) error {
 		return apperr.NotFound("folder")
 	}
 	return err
+}
+
+func ptrNull(id uuid.NullUUID) *uuid.UUID {
+	if !id.Valid {
+		return nil
+	}
+	return &id.UUID
 }

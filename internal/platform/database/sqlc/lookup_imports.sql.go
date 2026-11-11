@@ -94,9 +94,9 @@ func (q *Queries) GetLookupListType(ctx context.Context, arg GetLookupListTypePa
 
 const insertLookupItem = `-- name: InsertLookupItem :one
 INSERT INTO items (workspace_id, list_id, title, price_min, price_max, currency, website_url, metadata,
-                   image_attachment_id, sort_order, created_at, updated_at)
+                   image_attachment_id, sort_order, created_at, updated_at, created_by_user_id, updated_by_user_id)
 VALUES ($1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10, $11, $11)
+        $7, $8, $9, $10, $11, $11, $12, $12)
 RETURNING id
 `
 
@@ -112,6 +112,7 @@ type InsertLookupItemParams struct {
 	ImageAttachmentID uuid.NullUUID
 	SortOrder         int32
 	Now               time.Time
+	CallerUserID      uuid.NullUUID
 }
 
 func (q *Queries) InsertLookupItem(ctx context.Context, arg InsertLookupItemParams) (uuid.UUID, error) {
@@ -127,6 +128,7 @@ func (q *Queries) InsertLookupItem(ctx context.Context, arg InsertLookupItemPara
 		arg.ImageAttachmentID,
 		arg.SortOrder,
 		arg.Now,
+		arg.CallerUserID,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)
@@ -227,7 +229,7 @@ func (q *Queries) ListScheduledTMDBItems(ctx context.Context, arg ListScheduledT
 }
 
 const lockLookupItem = `-- name: LockLookupItem :one
-SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id, l.type
+SELECT i.id, i.workspace_id, i.list_id, i.title, i.image_url, i.image_attachment_id, i.price_min, i.price_max, i.currency, i.website_url, i.metadata, i.sort_order, i.version, i.created_at, i.updated_at, i.deleted_at, i.trash_batch_id, i.created_by_user_id, i.updated_by_user_id, l.type
 FROM items i
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL
@@ -257,6 +259,8 @@ type LockLookupItemRow struct {
 	UpdatedAt         time.Time
 	DeletedAt         *time.Time
 	TrashBatchID      uuid.NullUUID
+	CreatedByUserID   uuid.NullUUID
+	UpdatedByUserID   uuid.NullUUID
 	Type              *string
 }
 
@@ -281,6 +285,8 @@ func (q *Queries) LockLookupItem(ctx context.Context, arg LockLookupItemParams) 
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
 		&i.Type,
 	)
 	return i, err
@@ -293,8 +299,9 @@ SET title = $1,
     image_url = $3,
     image_attachment_id = $4,
     version = version + 1,
-    updated_at = $5
-WHERE id = $6 AND workspace_id = $7
+    updated_at = $5,
+    updated_by_user_id = COALESCE($6::uuid, updated_by_user_id)
+WHERE id = $7 AND workspace_id = $8
 `
 
 type UpdateLookupItemParams struct {
@@ -303,6 +310,7 @@ type UpdateLookupItemParams struct {
 	ImageUrl          *string
 	ImageAttachmentID uuid.NullUUID
 	Now               time.Time
+	CallerUserID      uuid.NullUUID
 	ID                uuid.UUID
 	WorkspaceID       uuid.UUID
 }
@@ -314,6 +322,7 @@ func (q *Queries) UpdateLookupItem(ctx context.Context, arg UpdateLookupItemPara
 		arg.ImageUrl,
 		arg.ImageAttachmentID,
 		arg.Now,
+		arg.CallerUserID,
 		arg.ID,
 		arg.WorkspaceID,
 	)

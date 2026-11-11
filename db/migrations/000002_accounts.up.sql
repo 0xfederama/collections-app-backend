@@ -65,3 +65,29 @@ CREATE TABLE folder_members (
     CONSTRAINT folder_members_added_by_fk FOREIGN KEY (added_by_user_id, workspace_id) REFERENCES users(id, workspace_id)
 );
 CREATE INDEX folder_members_user_idx ON folder_members (user_id);
+
+-- Who changed (F-027 B4, decision 12): the user who created / last changed a folder, list or item,
+-- and the author of a content version. Nullable, no backfill: the author of an existing row is
+-- unknown (D-147), and system paths (lookup refresh, sweeper) leave the previous value.
+ALTER TABLE folders ADD COLUMN created_by_user_id uuid, ADD COLUMN updated_by_user_id uuid;
+ALTER TABLE folders ADD CONSTRAINT folders_created_by_fk
+    FOREIGN KEY (created_by_user_id, workspace_id) REFERENCES users(id, workspace_id);
+ALTER TABLE folders ADD CONSTRAINT folders_updated_by_fk
+    FOREIGN KEY (updated_by_user_id, workspace_id) REFERENCES users(id, workspace_id);
+
+ALTER TABLE lists ADD COLUMN created_by_user_id uuid, ADD COLUMN updated_by_user_id uuid;
+ALTER TABLE lists ADD CONSTRAINT lists_created_by_fk
+    FOREIGN KEY (created_by_user_id, workspace_id) REFERENCES users(id, workspace_id);
+ALTER TABLE lists ADD CONSTRAINT lists_updated_by_fk
+    FOREIGN KEY (updated_by_user_id, workspace_id) REFERENCES users(id, workspace_id);
+
+ALTER TABLE items ADD COLUMN created_by_user_id uuid, ADD COLUMN updated_by_user_id uuid;
+ALTER TABLE items ADD CONSTRAINT items_created_by_fk
+    FOREIGN KEY (created_by_user_id, workspace_id) REFERENCES users(id, workspace_id);
+ALTER TABLE items ADD CONSTRAINT items_updated_by_fk
+    FOREIGN KEY (updated_by_user_id, workspace_id) REFERENCES users(id, workspace_id);
+
+-- item_content_versions carries no workspace_id, so the author is a plain foreign key.
+ALTER TABLE item_content_versions ADD COLUMN author_user_id uuid;
+ALTER TABLE item_content_versions ADD CONSTRAINT item_content_versions_author_fk
+    FOREIGN KEY (author_user_id) REFERENCES users(id);

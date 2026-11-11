@@ -14,6 +14,7 @@ FROM items i
 LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.workspace_id = @workspace_id AND i.deleted_at IS NULL
+  AND i.list_id = ANY(@list_ids::uuid[])
   AND lower(i.title) LIKE '%' || lower(@like_q::text) || '%' ESCAPE '\'
 ORDER BY (lower(i.title) = lower(@q::text)) DESC, lower(i.title), i.id
 LIMIT @page_limit OFFSET @page_offset;
@@ -21,6 +22,7 @@ LIMIT @page_limit OFFSET @page_offset;
 -- name: CountSearchItems :one
 SELECT count(*)::int AS total FROM items i
 WHERE i.workspace_id = @workspace_id AND i.deleted_at IS NULL
+  AND i.list_id = ANY(@list_ids::uuid[])
   AND lower(i.title) LIKE '%' || lower(@like_q::text) || '%' ESCAPE '\';
 
 -- name: ListSearchFolders :many
@@ -48,5 +50,6 @@ FROM items i
 LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.workspace_id = @workspace_id AND i.deleted_at IS NULL
+  AND i.list_id = ANY(@list_ids::uuid[])
 ORDER BY i.updated_at DESC, i.id
 LIMIT @page_limit;

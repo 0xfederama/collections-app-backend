@@ -54,13 +54,17 @@ SELECT name, (deleted_at IS NOT NULL)::bool AS trashed FROM lists WHERE id = @id
 
 -- name: RestoreFolderRoot :exec
 UPDATE folders
-SET parent_folder_id = sqlc.narg(parent_folder_id), sort_order = @sort_order, deleted_at = NULL, trash_batch_id = NULL,
+SET parent_folder_id = sqlc.narg(parent_folder_id),
+    owner_user_id = CASE WHEN sqlc.narg(parent_folder_id)::uuid IS NULL THEN COALESCE(owner_user_id, sqlc.narg(caller_user_id)::uuid) END,
+    sort_order = @sort_order, deleted_at = NULL, trash_batch_id = NULL,
     version = version + 1, updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id AND trash_batch_id = @batch_id;
 
 -- name: RestoreListRoot :exec
 UPDATE lists
-SET folder_id = sqlc.narg(folder_id), sort_order = @sort_order, deleted_at = NULL, trash_batch_id = NULL,
+SET folder_id = sqlc.narg(folder_id),
+    owner_user_id = CASE WHEN sqlc.narg(folder_id)::uuid IS NULL THEN COALESCE(owner_user_id, sqlc.narg(caller_user_id)::uuid) END,
+    sort_order = @sort_order, deleted_at = NULL, trash_batch_id = NULL,
     version = version + 1, updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id AND trash_batch_id = @batch_id;
 
@@ -146,11 +150,14 @@ SELECT b.id, b.root_type, b.root_id, b.root_name, b.former_path, b.deleted_at,
        ) AS restorable_in_place
 FROM trash_batches b
 WHERE b.workspace_id = @workspace_id
+  AND (sqlc.narg(only_ids)::uuid[] IS NULL OR b.id = ANY(sqlc.narg(only_ids)::uuid[]))
 ORDER BY b.deleted_at DESC, b.id DESC
 LIMIT @page_limit OFFSET @page_offset;
 
 -- name: CountBatches :one
-SELECT count(*)::int AS total FROM trash_batches WHERE workspace_id = @workspace_id;
+SELECT count(*)::int AS total FROM trash_batches
+WHERE workspace_id = @workspace_id
+  AND (sqlc.narg(only_ids)::uuid[] IS NULL OR id = ANY(sqlc.narg(only_ids)::uuid[]));
 
 -- name: ListFolderStates :many
 -- Every folder of the workspace in any state, with its name and trashed flag. The

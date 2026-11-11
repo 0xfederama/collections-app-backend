@@ -16,16 +16,18 @@ import (
 const countSearchItems = `-- name: CountSearchItems :one
 SELECT count(*)::int AS total FROM items i
 WHERE i.workspace_id = $1 AND i.deleted_at IS NULL
-  AND lower(i.title) LIKE '%' || lower($2::text) || '%' ESCAPE '\'
+  AND i.list_id = ANY($2::uuid[])
+  AND lower(i.title) LIKE '%' || lower($3::text) || '%' ESCAPE '\'
 `
 
 type CountSearchItemsParams struct {
 	WorkspaceID uuid.UUID
+	ListIds     []uuid.UUID
 	LikeQ       string
 }
 
 func (q *Queries) CountSearchItems(ctx context.Context, arg CountSearchItemsParams) (int32, error) {
-	row := q.db.QueryRow(ctx, countSearchItems, arg.WorkspaceID, arg.LikeQ)
+	row := q.db.QueryRow(ctx, countSearchItems, arg.WorkspaceID, arg.ListIds, arg.LikeQ)
 	var total int32
 	err := row.Scan(&total)
 	return total, err
@@ -42,12 +44,14 @@ FROM items i
 LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.workspace_id = $1 AND i.deleted_at IS NULL
+  AND i.list_id = ANY($2::uuid[])
 ORDER BY i.updated_at DESC, i.id
-LIMIT $2
+LIMIT $3
 `
 
 type ListRecentItemsParams struct {
 	WorkspaceID uuid.UUID
+	ListIds     []uuid.UUID
 	PageLimit   int32
 }
 
@@ -80,7 +84,7 @@ type ListRecentItemsRow struct {
 // check: an item in a trashed list or folder is trashed itself (batch cascade). Not paginated, so no
 // index: at MVP scale the sort over active items is a few ms (EXPLAIN in the PR).
 func (q *Queries) ListRecentItems(ctx context.Context, arg ListRecentItemsParams) ([]ListRecentItemsRow, error) {
-	rows, err := q.db.Query(ctx, listRecentItems, arg.WorkspaceID, arg.PageLimit)
+	rows, err := q.db.Query(ctx, listRecentItems, arg.WorkspaceID, arg.ListIds, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -209,13 +213,15 @@ FROM items i
 LEFT JOIN attachments a ON a.id = i.image_attachment_id AND a.workspace_id = i.workspace_id
 JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
 WHERE i.workspace_id = $1 AND i.deleted_at IS NULL
-  AND lower(i.title) LIKE '%' || lower($2::text) || '%' ESCAPE '\'
-ORDER BY (lower(i.title) = lower($3::text)) DESC, lower(i.title), i.id
-LIMIT $5 OFFSET $4
+  AND i.list_id = ANY($2::uuid[])
+  AND lower(i.title) LIKE '%' || lower($3::text) || '%' ESCAPE '\'
+ORDER BY (lower(i.title) = lower($4::text)) DESC, lower(i.title), i.id
+LIMIT $6 OFFSET $5
 `
 
 type SearchItemsParams struct {
 	WorkspaceID uuid.UUID
+	ListIds     []uuid.UUID
 	LikeQ       string
 	Q           string
 	PageOffset  int32
@@ -254,6 +260,7 @@ type SearchItemsRow struct {
 func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]SearchItemsRow, error) {
 	rows, err := q.db.Query(ctx, searchItems,
 		arg.WorkspaceID,
+		arg.ListIds,
 		arg.LikeQ,
 		arg.Q,
 		arg.PageOffset,

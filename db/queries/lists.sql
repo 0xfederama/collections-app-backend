@@ -27,8 +27,9 @@ WHERE workspace_id = @workspace_id AND deleted_at IS NULL
   AND folder_id IS NOT DISTINCT FROM sqlc.narg(folder_id)::uuid;
 
 -- name: InsertList :one
-INSERT INTO lists (workspace_id, folder_id, name, type, description, display_mode, sort_mode, icon, icon_color, sort_order, created_at, updated_at)
-VALUES (@workspace_id, sqlc.narg(folder_id), @name, sqlc.narg(type), sqlc.narg(description), @display_mode, @sort_mode, sqlc.narg(icon), sqlc.narg(icon_color), @sort_order, @now, @now)
+-- Only a top-level list has an owner (the caller).
+INSERT INTO lists (workspace_id, folder_id, owner_user_id, name, type, description, display_mode, sort_mode, icon, icon_color, sort_order, created_at, updated_at)
+VALUES (@workspace_id, sqlc.narg(folder_id), sqlc.narg(owner_user_id), @name, sqlc.narg(type), sqlc.narg(description), @display_mode, @sort_mode, sqlc.narg(icon), sqlc.narg(icon_color), @sort_order, @now, @now)
 RETURNING *;
 
 -- name: UpdateList :one
@@ -48,8 +49,11 @@ WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 RETURNING *;
 
 -- name: MoveList :one
+-- Owner rule as in MoveFolder.
 UPDATE lists
-SET folder_id = sqlc.narg(folder_id), sort_order = @sort_order, version = version + 1, updated_at = @now
+SET folder_id = sqlc.narg(folder_id),
+    owner_user_id = CASE WHEN sqlc.narg(folder_id)::uuid IS NULL THEN COALESCE(owner_user_id, sqlc.narg(caller_user_id)::uuid) END,
+    sort_order = @sort_order, version = version + 1, updated_at = @now
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL
 RETURNING *;
 

@@ -13,7 +13,7 @@ import (
 )
 
 const getFolder = `-- name: GetFolder :one
-SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM folders
+SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id FROM folders
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 `
 
@@ -36,28 +36,32 @@ func (q *Queries) GetFolder(ctx context.Context, arg GetFolderParams) (Folder, e
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
+		&i.OwnerUserID,
 	)
 	return i, err
 }
 
 const insertFolder = `-- name: InsertFolder :one
-INSERT INTO folders (workspace_id, parent_folder_id, name, sort_order, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $5)
-RETURNING id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id
+INSERT INTO folders (workspace_id, parent_folder_id, owner_user_id, name, sort_order, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $6)
+RETURNING id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id
 `
 
 type InsertFolderParams struct {
 	WorkspaceID    uuid.UUID
 	ParentFolderID uuid.NullUUID
+	OwnerUserID    uuid.NullUUID
 	Name           string
 	SortOrder      int32
 	Now            time.Time
 }
 
+// Only a top-level folder has an owner (the caller); a nested one inherits its box's access.
 func (q *Queries) InsertFolder(ctx context.Context, arg InsertFolderParams) (Folder, error) {
 	row := q.db.QueryRow(ctx, insertFolder,
 		arg.WorkspaceID,
 		arg.ParentFolderID,
+		arg.OwnerUserID,
 		arg.Name,
 		arg.SortOrder,
 		arg.Now,
@@ -74,12 +78,13 @@ func (q *Queries) InsertFolder(ctx context.Context, arg InsertFolderParams) (Fol
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
+		&i.OwnerUserID,
 	)
 	return i, err
 }
 
 const listActiveFolders = `-- name: ListActiveFolders :many
-SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM folders
+SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id FROM folders
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY sort_order, id
 `
@@ -104,6 +109,7 @@ func (q *Queries) ListActiveFolders(ctx context.Context, workspaceID uuid.UUID) 
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.TrashBatchID,
+			&i.OwnerUserID,
 		); err != nil {
 			return nil, err
 		}
@@ -148,7 +154,7 @@ func (q *Queries) ListChildFolderIDs(ctx context.Context, arg ListChildFolderIDs
 }
 
 const lockFolder = `-- name: LockFolder :one
-SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM folders
+SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id FROM folders
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 FOR UPDATE
 `
@@ -172,28 +178,35 @@ func (q *Queries) LockFolder(ctx context.Context, arg LockFolderParams) (Folder,
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
+		&i.OwnerUserID,
 	)
 	return i, err
 }
 
 const moveFolder = `-- name: MoveFolder :one
 UPDATE folders
-SET parent_folder_id = $1, sort_order = $2, version = version + 1, updated_at = $3
-WHERE id = $4 AND workspace_id = $5 AND deleted_at IS NULL
-RETURNING id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id
+SET parent_folder_id = $1,
+    owner_user_id = CASE WHEN $1::uuid IS NULL THEN COALESCE(owner_user_id, $2::uuid) END,
+    sort_order = $3, version = version + 1, updated_at = $4
+WHERE id = $5 AND workspace_id = $6 AND deleted_at IS NULL
+RETURNING id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id
 `
 
 type MoveFolderParams struct {
 	ParentFolderID uuid.NullUUID
+	CallerUserID   uuid.NullUUID
 	SortOrder      int32
 	Now            time.Time
 	ID             uuid.UUID
 	WorkspaceID    uuid.UUID
 }
 
+// Owner rule (F-027 decision 8): into a folder it loses its owner; to the top level it keeps the
+// stored owner, or becomes the caller's when it had none (it came from a folder).
 func (q *Queries) MoveFolder(ctx context.Context, arg MoveFolderParams) (Folder, error) {
 	row := q.db.QueryRow(ctx, moveFolder,
 		arg.ParentFolderID,
+		arg.CallerUserID,
 		arg.SortOrder,
 		arg.Now,
 		arg.ID,
@@ -211,6 +224,7 @@ func (q *Queries) MoveFolder(ctx context.Context, arg MoveFolderParams) (Folder,
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
+		&i.OwnerUserID,
 	)
 	return i, err
 }
@@ -238,7 +252,7 @@ const renameFolder = `-- name: RenameFolder :one
 UPDATE folders
 SET name = $1, version = version + 1, updated_at = $2
 WHERE id = $3 AND workspace_id = $4 AND deleted_at IS NULL
-RETURNING id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id
+RETURNING id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id
 `
 
 type RenameFolderParams struct {
@@ -267,6 +281,7 @@ func (q *Queries) RenameFolder(ctx context.Context, arg RenameFolderParams) (Fol
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
+		&i.OwnerUserID,
 	)
 	return i, err
 }

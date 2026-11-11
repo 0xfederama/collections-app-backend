@@ -31,6 +31,77 @@ type Config struct {
 	LogFormat       string
 	// LogsUI serves the in-memory log buffer and its viewer (/admin/logs). Off by default in production.
 	LogsUI bool
+
+	// AccessTeamDomain is the Cloudflare Access team host (no scheme, no trailing slash), AccessAUD the
+	// Access application's audience tag. Both set or both empty (F-027).
+	AccessTeamDomain string
+	AccessAUD        string
+	// OwnerEmail is the lower-cased e-mail of the instance owner.
+	OwnerEmail string
+	// LANOwnerFallback serves requests without a Cloudflare edge header as OwnerEmail (emergency switch).
+	LANOwnerFallback bool
+	// DevIdentity enables the fake dev users. Never allowed with APP_ENV=production.
+	DevIdentity bool
+}
+
+// DevOwnerEmail is the first dev identity when OWNER_EMAIL is unset.
+const DevOwnerEmail = "owner@dev.test"
+
+// DevIdentities are the e-mails a dev request may act as: the owner first, then two fixed users.
+func (c Config) DevIdentities() []string {
+	owner := c.OwnerEmail
+	if owner == "" {
+		owner = DevOwnerEmail
+	}
+	return []string{owner, "alice@dev.test", "bob@dev.test"}
+}
+
+// NormalizeTeamDomain accepts ACCESS_TEAM_DOMAIN with or without https:// and a trailing slash.
+func NormalizeTeamDomain(raw string) string {
+	s := strings.TrimSpace(raw)
+	s = strings.TrimPrefix(s, "https://")
+	return strings.TrimRight(s, "/")
+}
+
+func parseBoolEnv(getenv func(string) string, key string, errs *[]error) bool {
+	raw := strings.TrimSpace(getenv(key))
+	if raw == "" {
+		return false
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		*errs = append(*errs, fmt.Errorf("%s must be true or false", key))
+	}
+	return v
+}
+
+// validateIdentity checks the Access / dev identity / LAN fallback settings (F-027).
+func validateIdentity(c Config) []error {
+	var errs []error
+	if (c.AccessTeamDomain == "") != (c.AccessAUD == "") {
+		errs = append(errs, errors.New("ACCESS_TEAM_DOMAIN and ACCESS_AUD must be set together"))
+	}
+	if c.AccessTeamDomain != "" && (strings.ContainsAny(c.AccessTeamDomain, "/?#@ ") || !strings.Contains(c.AccessTeamDomain, ".")) {
+		errs = append(errs, errors.New("ACCESS_TEAM_DOMAIN must be a host name such as myteam.cloudflareaccess.com"))
+	}
+	if c.LANOwnerFallback && c.OwnerEmail == "" {
+		errs = append(errs, errors.New("LAN_OWNER_FALLBACK=true requires OWNER_EMAIL"))
+	}
+	hasAccess := c.AccessTeamDomain != "" && c.AccessAUD != ""
+	switch c.AppEnv {
+	case "production":
+		if !hasAccess {
+			errs = append(errs, errors.New("APP_ENV=production requires ACCESS_TEAM_DOMAIN and ACCESS_AUD"))
+		}
+		if c.DevIdentity {
+			errs = append(errs, errors.New("DEV_IDENTITY cannot be enabled when APP_ENV=production"))
+		}
+	case "development":
+		if !hasAccess && !c.DevIdentity && !c.LANOwnerFallback {
+			errs = append(errs, errors.New("no identity provider: set ACCESS_TEAM_DOMAIN and ACCESS_AUD, DEV_IDENTITY=true or LAN_OWNER_FALLBACK=true"))
+		}
+	}
+	return errs
 }
 
 // Load reads configuration through getenv (os.Getenv in production) and returns
@@ -75,6 +146,16 @@ func Load(getenv func(string) string) (Config, error) {
 			c.LogsUI = on
 		}
 	}
+
+	c.AccessTeamDomain = NormalizeTeamDomain(getenv("ACCESS_TEAM_DOMAIN"))
+	c.AccessAUD = strings.TrimSpace(getenv("ACCESS_AUD"))
+	c.OwnerEmail = strings.ToLower(strings.TrimSpace(getenv("OWNER_EMAIL")))
+	if c.OwnerEmail != "" && !validEmail(c.OwnerEmail) {
+		errs = append(errs, errors.New("OWNER_EMAIL must be an e-mail address"))
+	}
+	c.LANOwnerFallback = parseBoolEnv(getenv, "LAN_OWNER_FALLBACK", &errs)
+	c.DevIdentity = parseBoolEnv(getenv, "DEV_IDENTITY", &errs)
+	errs = append(errs, validateIdentity(c)...)
 
 	if c.AppEnv != "development" && c.AppEnv != "production" {
 		errs = append(errs, fmt.Errorf("APP_ENV must be development or production, got %q", c.AppEnv))
@@ -121,4 +202,13 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("invalid configuration: %w", errors.Join(errs...))
 	}
 	return c, nil
+}
+
+// validEmail is a basic check (one @, non-empty parts, no spaces, 3 to 320 characters), not RFC 5322.
+func validEmail(e string) bool {
+	if len(e) < 3 || len(e) > 320 || strings.ContainsAny(e, " \t\r\n") {
+		return false
+	}
+	at := strings.Index(e, "@")
+	return at > 0 && at == strings.LastIndex(e, "@") && at < len(e)-1
 }

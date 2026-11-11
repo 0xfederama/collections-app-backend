@@ -44,6 +44,12 @@ services:
       HARDCOVER_API_KEY: ${HARDCOVER_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-json}
+      # Identity (F-027): local stacks use the dev identities; production uses Cloudflare Access.
+      DEV_IDENTITY: ${DEV_IDENTITY:-true}
+      OWNER_EMAIL: ${OWNER_EMAIL:-}
+      LAN_OWNER_FALLBACK: ${LAN_OWNER_FALLBACK:-false}
+      ACCESS_TEAM_DOMAIN: ${ACCESS_TEAM_DOMAIN:-}
+      ACCESS_AUD: ${ACCESS_AUD:-}
     volumes:
       - appdata:/data
     ports:

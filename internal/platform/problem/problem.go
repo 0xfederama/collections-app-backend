@@ -81,6 +81,12 @@ func PreconditionRequired() *Problem {
 		"Send the resource ETag in the If-Match header.")
 }
 
+// Unauthenticated is the 401 for a request without a valid identity. The text is
+// generic on purpose: it never says why, and never echoes the token.
+func Unauthenticated() *Problem {
+	return New(http.StatusUnauthorized, "unauthenticated", "Unauthenticated", "Authentication is required.")
+}
+
 // PayloadTooLarge is the 413 for a body over the operation's limit.
 func PayloadTooLarge() *Problem {
 	return New(http.StatusRequestEntityTooLarge, "payload_too_large", "Payload too large",

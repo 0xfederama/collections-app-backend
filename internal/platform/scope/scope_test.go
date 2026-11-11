@@ -35,3 +35,17 @@ func TestMiddlewareScopesEveryRequest(t *testing.T) {
 		t.Fatalf("handler saw %v, want %s twice", seen, ws)
 	}
 }
+
+func TestWithUserAndUserID(t *testing.T) {
+	if _, ok := UserID(context.Background()); ok {
+		t.Fatal("UserID on a context without a user must report false")
+	}
+	if _, ok := UserID(WithUser(context.Background(), uuid.Nil)); ok {
+		t.Fatal("a nil user id is no identity")
+	}
+	u := uuid.New()
+	ctx := WithUser(With(context.Background(), uuid.New()), u)
+	if got, ok := UserID(ctx); !ok || got != u {
+		t.Fatalf("UserID = %s, %v; want %s", got, ok, u)
+	}
+}

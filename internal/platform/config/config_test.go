@@ -11,7 +11,27 @@ import (
 
 const validDB = "postgres://db:5432/collection?sslmode=disable"
 
+// env serves m. Unless m names an identity setting, it adds a valid one for the
+// environment (Access in production, dev identities otherwise), so tests of other
+// settings do not repeat it; the identity tests use rawEnv.
 func env(m map[string]string) func(string) string {
+	identity := false
+	for _, k := range []string{"ACCESS_TEAM_DOMAIN", "ACCESS_AUD", "OWNER_EMAIL", "LAN_OWNER_FALLBACK", "DEV_IDENTITY"} {
+		if _, ok := m[k]; ok {
+			identity = true
+		}
+	}
+	if !identity {
+		if m["APP_ENV"] == "production" {
+			m["ACCESS_TEAM_DOMAIN"], m["ACCESS_AUD"] = "team.cloudflareaccess.com", "aud-tag"
+		} else {
+			m["DEV_IDENTITY"] = "true"
+		}
+	}
+	return rawEnv(m)
+}
+
+func rawEnv(m map[string]string) func(string) string {
 	return func(k string) string { return m[k] }
 }
 
@@ -289,5 +309,72 @@ func TestLoad_TMDBMockFixtureDoesNotEnableHardcover(t *testing.T) {
 	}))
 	if err != nil || c.HardcoverAPIKey != "" {
 		t.Fatalf("Load() = %q, %v", c.HardcoverAPIKey, err)
+	}
+}
+
+func TestLoad_Identity(t *testing.T) {
+	const team, aud = "team.cloudflareaccess.com", "aud-tag"
+	tests := []struct {
+		name    string
+		env     map[string]string
+		wantErr string // empty = must succeed
+	}{
+		{"development with nothing refuses", map[string]string{}, "no identity provider"},
+		{"development with dev identity", map[string]string{"DEV_IDENTITY": "true"}, ""},
+		{"development with access", map[string]string{"ACCESS_TEAM_DOMAIN": team, "ACCESS_AUD": aud}, ""},
+		{"development with lan fallback", map[string]string{"LAN_OWNER_FALLBACK": "true", "OWNER_EMAIL": "me@example.test"}, ""},
+		{"production with access", map[string]string{"APP_ENV": "production", "ACCESS_TEAM_DOMAIN": team, "ACCESS_AUD": aud}, ""},
+		{"production without access", map[string]string{"APP_ENV": "production"}, "requires ACCESS_TEAM_DOMAIN and ACCESS_AUD"},
+		{"production with dev identity only", map[string]string{"APP_ENV": "production", "DEV_IDENTITY": "true"}, "requires ACCESS_TEAM_DOMAIN"},
+		{"production refuses dev identity", map[string]string{"APP_ENV": "production", "ACCESS_TEAM_DOMAIN": team, "ACCESS_AUD": aud, "DEV_IDENTITY": "true"}, "DEV_IDENTITY cannot be enabled"},
+		{"production lan fallback alone", map[string]string{"APP_ENV": "production", "LAN_OWNER_FALLBACK": "true", "OWNER_EMAIL": "me@example.test"}, "requires ACCESS_TEAM_DOMAIN"},
+		{"team without aud", map[string]string{"ACCESS_TEAM_DOMAIN": team, "DEV_IDENTITY": "true"}, "must be set together"},
+		{"aud without team", map[string]string{"ACCESS_AUD": aud, "DEV_IDENTITY": "true"}, "must be set together"},
+		{"team with path", map[string]string{"ACCESS_TEAM_DOMAIN": "team.cloudflareaccess.com/x", "ACCESS_AUD": aud}, "host name"},
+		{"team without dot", map[string]string{"ACCESS_TEAM_DOMAIN": "team", "ACCESS_AUD": aud}, "host name"},
+		{"lan fallback without owner", map[string]string{"LAN_OWNER_FALLBACK": "true", "DEV_IDENTITY": "true"}, "requires OWNER_EMAIL"},
+		{"bad owner email", map[string]string{"OWNER_EMAIL": "nope", "DEV_IDENTITY": "true"}, "OWNER_EMAIL must be an e-mail"},
+		{"owner email with two at signs", map[string]string{"OWNER_EMAIL": "a@b@c", "DEV_IDENTITY": "true"}, "OWNER_EMAIL must be an e-mail"},
+		{"bad lan flag", map[string]string{"LAN_OWNER_FALLBACK": "maybe", "DEV_IDENTITY": "true"}, "LAN_OWNER_FALLBACK must be true or false"},
+		{"bad dev flag", map[string]string{"DEV_IDENTITY": "maybe"}, "DEV_IDENTITY must be true or false"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := map[string]string{"DATABASE_URL": validDB, "DATA_DIR": t.TempDir()}
+			for k, v := range tt.env {
+				m[k] = v
+			}
+			_, err := config.Load(rawEnv(m))
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLoad_IdentityValues(t *testing.T) {
+	c, err := config.Load(rawEnv(map[string]string{
+		"DATABASE_URL": validDB, "DATA_DIR": t.TempDir(),
+		"ACCESS_TEAM_DOMAIN": " https://team.cloudflareaccess.com/ ", "ACCESS_AUD": " aud ",
+		"OWNER_EMAIL": " Me@Example.TEST ", "LAN_OWNER_FALLBACK": "true", "DEV_IDENTITY": "true",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.AccessTeamDomain != "team.cloudflareaccess.com" || c.AccessAUD != "aud" || c.OwnerEmail != "me@example.test" ||
+		!c.LANOwnerFallback || !c.DevIdentity {
+		t.Fatalf("identity = %+v", c)
+	}
+	if got := c.DevIdentities(); len(got) != 3 || got[0] != "me@example.test" || got[1] != "alice@dev.test" || got[2] != "bob@dev.test" {
+		t.Errorf("DevIdentities = %v", got)
+	}
+	if got := (config.Config{}).DevIdentities(); got[0] != "owner@dev.test" {
+		t.Errorf("default owner = %v", got)
 	}
 }

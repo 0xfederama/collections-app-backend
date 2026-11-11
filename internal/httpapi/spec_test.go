@@ -15,6 +15,7 @@ import (
 var apiRoutes = []struct{ method, path string }{
 	{"GET", "/healthz"},
 	{"GET", "/readyz"},
+	{"GET", "/api/v1/me"},
 	{"GET", "/api/v1/settings"},
 	{"PATCH", "/api/v1/settings"},
 	{"GET", "/api/v1/store-providers"},

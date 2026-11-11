@@ -84,6 +84,10 @@ type Deps struct {
 	Identity IdentityResolver
 	// Users serves GET /me (the same service the Identity resolver creates users with).
 	Users *users.Service
+	// ProbeOnly lets NewRouter build without a database pool, hence without the access rules. Only for
+	// probe and If-Match tests that serve no data; never set in cmd/api. Without it, a DB that is not
+	// a pool is an error, so a router can never serve unfiltered data.
+	ProbeOnly bool
 	// DevIdentities is non-empty only when DEV_IDENTITY is on; GET /me lists it.
 	DevIdentities []string
 }
@@ -98,6 +102,9 @@ type IdentityResolver interface {
 func NewRouter(d Deps) (http.Handler, error) {
 	if d.Identity == nil {
 		return nil, errors.New("httpapi: Deps.Identity is required")
+	}
+	if !d.ProbeOnly && newAccess(d.DB) == nil {
+		return nil, errors.New("httpapi: Deps.DB must be a database pool (access rules); ProbeOnly is for tests that serve no data")
 	}
 	r, _ := build(d)
 	return httpserver.Wrap(r, d.Logger), nil

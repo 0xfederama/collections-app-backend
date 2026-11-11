@@ -92,6 +92,9 @@ func (f fixedIdentity) Middleware(next http.Handler) http.Handler {
 
 func newRouter(t *testing.T, d httpapi.Deps) http.Handler {
 	t.Helper()
+	if _, fake := d.DB.(fakePinger); fake {
+		d.ProbeOnly = true
+	}
 	if d.Identity == nil {
 		d.Identity = fixedIdentity{testUserID}
 		ensureTestUser(t, d)
@@ -327,5 +330,16 @@ func assertOpaque(t *testing.T, body, dir string) {
 	}
 	if strings.TrimSpace(body) == "" {
 		t.Error("503 body is empty")
+	}
+}
+
+func TestNewRouterFailsClosedWithoutAccessRules(t *testing.T) {
+	d := httpapi.Deps{DB: fakePinger{}, Logger: quietLogger(), Identity: fixedIdentity{testUserID}}
+	if _, err := httpapi.NewRouter(d); err == nil {
+		t.Fatal("NewRouter built without a database pool and without ProbeOnly")
+	}
+	d.ProbeOnly = true
+	if _, err := httpapi.NewRouter(d); err != nil {
+		t.Fatalf("ProbeOnly router: %v", err)
 	}
 }

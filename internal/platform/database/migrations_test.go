@@ -27,10 +27,10 @@ const (
 	migrationsDir = "file://../../../db/migrations"
 )
 
-// schemaTables are the tables created by 000001 (DATA_MODEL §2) and 000002 (users), in FK order.
+// schemaTables are the tables created by 000001 (DATA_MODEL §2) and 000002 (users, user_top_order), in FK order.
 var schemaTables = []string{
 	"workspaces", "workspace_settings", "trash_batches", "folders", "lists",
-	"attachments", "items", "item_content_versions", "lookup_imports", "users",
+	"attachments", "items", "item_content_versions", "lookup_imports", "users", "user_top_order",
 }
 
 var (

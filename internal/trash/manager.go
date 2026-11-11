@@ -20,10 +20,11 @@ import (
 type Store interface {
 	// InTx runs fn with a Repo of one transaction: commit on nil, rollback on error.
 	InTx(ctx context.Context, fn func(Repo) error) error
-	// ListBatches returns one page of batches, newest first, with their counts.
-	ListBatches(ctx context.Context, limit, offset int) ([]Entry, error)
-	// CountBatches returns the number of batches of the workspace.
-	CountBatches(ctx context.Context) (int, error)
+	// ListBatches returns one page of batches, newest first, with their counts. only, when not nil,
+	// restricts the batches to those ids; an empty non-nil slice is none.
+	ListBatches(ctx context.Context, limit, offset int, only []uuid.UUID) ([]Entry, error)
+	// CountBatches returns the number of batches of the workspace, restricted like ListBatches.
+	CountBatches(ctx context.Context, only []uuid.UUID) (int, error)
 	// RetentionDays is the workspace's trash_retention_days (nil = off).
 	RetentionDays(ctx context.Context) (*int, error)
 }
@@ -35,10 +36,41 @@ var _ Store = (*Postgres)(nil)
 // does its reads and writes through the Repo of one transaction. Files are deleted
 // after the commit (ARCHITECTURE §4).
 type Service struct {
-	store Store
-	files storage.FileStore
-	clock clock.Clock
-	log   *slog.Logger
+	store  Store
+	files  storage.FileStore
+	clock  clock.Clock
+	log    *slog.Logger
+	access Access
+}
+
+// Access answers what the caller may see (internal/access, wired in httpapi). It is read before
+// the transaction, never inside it: a second pool connection could stall the pool.
+type Access interface {
+	FolderVisible(ctx context.Context, id uuid.UUID) (bool, error)
+	ListVisible(ctx context.Context, id uuid.UUID) (bool, error)
+	// VisibleBatchIDs returns the batches whose root's box the caller may see. Never nil.
+	VisibleBatchIDs(ctx context.Context) ([]uuid.UUID, error)
+}
+
+// WithAccess returns the service filtering the trash list and "empty trash" to the batches the
+// caller may see, and checking restore destinations. The auto-purge uses the service without it:
+// it works on the whole workspace.
+func (t *Service) WithAccess(a Access) *Service {
+	c := *t
+	c.access = a
+	return &c
+}
+
+// visibleBatches returns the ids the caller may see, or nil for a service without access (no filter).
+func (t *Service) visibleBatches(ctx context.Context) ([]uuid.UUID, error) {
+	if t.access == nil {
+		return nil, nil
+	}
+	ids, err := t.access.VisibleBatchIDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("visible trash batches: %w", err)
+	}
+	return ids, nil
 }
 
 // NewService returns the rules over store. files deletes the image files of purged
@@ -213,11 +245,15 @@ func (t *Service) List(ctx context.Context, limit, offset int) (Page, error) {
 	}
 	limit = min(limit, MaxLimit)
 	offset = max(offset, 0)
-	entries, err := t.store.ListBatches(ctx, limit, offset)
+	only, err := t.visibleBatches(ctx)
 	if err != nil {
 		return Page{}, err
 	}
-	total, err := t.store.CountBatches(ctx)
+	entries, err := t.store.ListBatches(ctx, limit, offset, only)
+	if err != nil {
+		return Page{}, err
+	}
+	total, err := t.store.CountBatches(ctx, only)
 	if err != nil {
 		return Page{}, err
 	}
@@ -236,6 +272,7 @@ func (t *Service) Restore(ctx context.Context, id uuid.UUID, dest *Destination) 
 	if err := requireWorkspace(ctx); err != nil {
 		return Restored{}, err
 	}
+	destErr := t.destinationVisible(ctx, dest)
 	var out Restored
 	err := t.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
@@ -249,11 +286,11 @@ func (t *Service) Restore(ctx context.Context, id uuid.UUID, dest *Destination) 
 		now := t.now()
 		switch b.RootType {
 		case TypeFolder:
-			err = t.restoreFolder(ctx, r, b, dest, now)
+			err = t.restoreFolder(ctx, r, b, dest, destErr, now)
 		case TypeList:
-			err = t.restoreList(ctx, r, b, dest, now)
+			err = t.restoreList(ctx, r, b, dest, destErr, now)
 		case TypeItem:
-			err = t.restoreItem(ctx, r, b, dest, now)
+			err = t.restoreItem(ctx, r, b, dest, destErr, now)
 		default:
 			err = fmt.Errorf("unknown trash root type %q", b.RootType)
 		}
@@ -276,12 +313,12 @@ func (t *Service) Restore(ctx context.Context, id uuid.UUID, dest *Destination) 
 	return out, err
 }
 
-func (t *Service) restoreFolder(ctx context.Context, r Repo, b Batch, dest *Destination, now time.Time) error {
+func (t *Service) restoreFolder(ctx context.Context, r Repo, b Batch, dest *Destination, destErr error, now time.Time) error {
 	root, err := r.GetTrashedFolder(ctx, b.RootID, b.ID)
 	if err != nil {
 		return err
 	}
-	parent, err := t.folderTarget(ctx, r, root.ParentID, dest, &b.RootID)
+	parent, err := t.folderTarget(ctx, r, root.ParentID, dest, destErr, &b.RootID)
 	if err != nil {
 		return err
 	}
@@ -292,12 +329,12 @@ func (t *Service) restoreFolder(ctx context.Context, r Repo, b Batch, dest *Dest
 	return r.RestoreFolderRoot(ctx, b.RootID, b.ID, parent, next, now)
 }
 
-func (t *Service) restoreList(ctx context.Context, r Repo, b Batch, dest *Destination, now time.Time) error {
+func (t *Service) restoreList(ctx context.Context, r Repo, b Batch, dest *Destination, destErr error, now time.Time) error {
 	root, err := r.GetTrashedList(ctx, b.RootID, b.ID)
 	if err != nil {
 		return err
 	}
-	folder, err := t.folderTarget(ctx, r, root.FolderID, dest, nil)
+	folder, err := t.folderTarget(ctx, r, root.FolderID, dest, destErr, nil)
 	if err != nil {
 		return err
 	}
@@ -308,7 +345,7 @@ func (t *Service) restoreList(ctx context.Context, r Repo, b Batch, dest *Destin
 	return r.RestoreListRoot(ctx, b.RootID, b.ID, folder, next, now)
 }
 
-func (t *Service) restoreItem(ctx context.Context, r Repo, b Batch, dest *Destination, now time.Time) error {
+func (t *Service) restoreItem(ctx context.Context, r Repo, b Batch, dest *Destination, destErr error, now time.Time) error {
 	root, err := r.GetTrashedItem(ctx, b.RootID, b.ID)
 	if err != nil {
 		return err
@@ -319,6 +356,9 @@ func (t *Service) restoreItem(ctx context.Context, r Repo, b Batch, dest *Destin
 			return apperr.Validation(*fe)
 		}
 		list = *dest.ListID
+		if destErr != nil {
+			return destErr
+		}
 		if _, err := r.GetActiveList(ctx, list); err != nil {
 			if isNotFound(err) {
 				return apperr.DestinationUnavailable()
@@ -341,7 +381,7 @@ func (t *Service) restoreItem(ctx context.Context, r Repo, b Batch, dest *Destin
 // folderTarget picks the parent folder (nil = workspace root) for a restored
 // folder or list. rootFolder is set for a folder root (cycle check). Without a
 // destination, the original parent must be active.
-func (t *Service) folderTarget(ctx context.Context, r Repo, original *uuid.UUID, dest *Destination, rootFolder *uuid.UUID) (*uuid.UUID, error) {
+func (t *Service) folderTarget(ctx context.Context, r Repo, original *uuid.UUID, dest *Destination, destErr error, rootFolder *uuid.UUID) (*uuid.UUID, error) {
 	if dest == nil {
 		if original == nil {
 			return nil, nil
@@ -375,6 +415,9 @@ func (t *Service) folderTarget(ctx context.Context, r Repo, original *uuid.UUID,
 		if inSubtreeOf(nodes, *parent, *rootFolder) {
 			return nil, apperr.Cycle()
 		}
+	}
+	if destErr != nil {
+		return nil, destErr
 	}
 	if _, err := r.GetActiveFolder(ctx, *parent); err != nil {
 		if isNotFound(err) {
@@ -424,6 +467,33 @@ func checkDestination(rootType string, d *Destination) *apperr.FieldError {
 		return &apperr.FieldError{Field: "destination.list_id", Message: "a " + rootType + " is restored into a folder: use folder_id"}
 	case !d.FolderSet:
 		return &apperr.FieldError{Field: "destination.folder_id", Message: "is required (null restores to the root)"}
+	}
+	return nil
+}
+
+// destinationVisible checks, before the transaction, that the caller may see the folder or list a
+// restore targets. One they cannot see is as unavailable as a missing one; the error is returned
+// inside the transaction at the point where the existence check used to fail. A destination of
+// the wrong shape is left to the field rules (checkDestination).
+func (t *Service) destinationVisible(ctx context.Context, dest *Destination) error {
+	if dest == nil || t.access == nil {
+		return nil
+	}
+	var (
+		ok  = true
+		err error
+	)
+	switch {
+	case dest.ListID != nil:
+		ok, err = t.access.ListVisible(ctx, *dest.ListID)
+	case dest.FolderID != nil:
+		ok, err = t.access.FolderVisible(ctx, *dest.FolderID)
+	}
+	if err != nil {
+		return fmt.Errorf("check destination: %w", err)
+	}
+	if !ok {
+		return apperr.DestinationUnavailable()
 	}
 	return nil
 }

@@ -84,7 +84,8 @@ func (r *repo) NextSortOrder(ctx context.Context, parent *uuid.UUID) (int, error
 
 func (r *repo) Insert(ctx context.Context, parent *uuid.UUID, name string, sortOrder int, now time.Time) (Folder, error) {
 	row, err := r.q.InsertFolder(ctx, sqlc.InsertFolderParams{
-		WorkspaceID: scope.WorkspaceID(ctx), ParentFolderID: nullUUID(parent), Name: name, SortOrder: int32(sortOrder), Now: now,
+		WorkspaceID: scope.WorkspaceID(ctx), ParentFolderID: nullUUID(parent), OwnerUserID: ownerForNew(ctx, parent),
+		Name: name, SortOrder: int32(sortOrder), Now: now,
 	})
 	return fromRow(row), err
 }
@@ -96,9 +97,44 @@ func (r *repo) Rename(ctx context.Context, id uuid.UUID, name string, now time.T
 
 func (r *repo) Move(ctx context.Context, id uuid.UUID, parent *uuid.UUID, sortOrder int, now time.Time) (Folder, error) {
 	row, err := r.q.MoveFolder(ctx, sqlc.MoveFolderParams{
-		ID: id, WorkspaceID: scope.WorkspaceID(ctx), ParentFolderID: nullUUID(parent), SortOrder: int32(sortOrder), Now: now,
+		ID: id, WorkspaceID: scope.WorkspaceID(ctx), ParentFolderID: nullUUID(parent), CallerUserID: callerID(ctx), SortOrder: int32(sortOrder), Now: now,
 	})
-	return fromRow(row), err
+	if err != nil {
+		return Folder{}, err
+	}
+	if parent != nil {
+		// No longer a top-level entry: drop everyone's position of it (it has no foreign key).
+		if err := r.q.DeleteUserTopOrderOf(ctx, sqlc.DeleteUserTopOrderOfParams{WorkspaceID: scope.WorkspaceID(ctx), Ids: []uuid.UUID{id}}); err != nil {
+			return Folder{}, err
+		}
+	}
+	return fromRow(row), nil
+}
+
+// SetTopOrder stores the caller's own position of a top-level folder; the shared sort_order and
+// other users' positions stay.
+func (r *repo) SetTopOrder(ctx context.Context, id uuid.UUID, position int) error {
+	user, ok := scope.UserID(ctx)
+	if !ok {
+		return errors.New("set top-level order: the request has no user")
+	}
+	return r.q.UpsertUserTopOrder(ctx, sqlc.UpsertUserTopOrderParams{
+		WorkspaceID: scope.WorkspaceID(ctx), UserID: user, EntryType: "folder", EntryID: id, SortOrder: int32(position),
+	})
+}
+
+// callerID is the user of the request as a nullable id (NULL without one: tests and jobs).
+func callerID(ctx context.Context) uuid.NullUUID {
+	id, ok := scope.UserID(ctx)
+	return uuid.NullUUID{UUID: id, Valid: ok}
+}
+
+// ownerForNew is the owner of a new folder: the caller at the top level, nobody inside a folder.
+func ownerForNew(ctx context.Context, parent *uuid.UUID) uuid.NullUUID {
+	if parent != nil {
+		return uuid.NullUUID{}
+	}
+	return callerID(ctx)
 }
 
 func (r *repo) SetSortOrder(ctx context.Context, id uuid.UUID, sortOrder int, now time.Time) error {
@@ -123,6 +159,10 @@ func fromRow(f sqlc.Folder) Folder {
 	if f.ParentFolderID.Valid {
 		parent := f.ParentFolderID.UUID
 		out.ParentID = &parent
+	}
+	if f.OwnerUserID.Valid {
+		owner := f.OwnerUserID.UUID
+		out.OwnerID = &owner
 	}
 	return out
 }

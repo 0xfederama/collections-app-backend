@@ -237,7 +237,7 @@ func TestRepoListBatchesAndCount(t *testing.T) {
 	var page []trash.Entry
 	var total int
 	e.must(func(r trash.Repo) (err error) {
-		page, err = r.ListBatches(e.ctx, 2, 0)
+		page, err = r.ListBatches(e.ctx, 2, 0, nil)
 		return err
 	})
 	if len(page) != 2 {
@@ -258,7 +258,7 @@ func TestRepoListBatchesAndCount(t *testing.T) {
 	}
 
 	e.must(func(r trash.Repo) (err error) {
-		page, err = r.ListBatches(e.ctx, 2, 2)
+		page, err = r.ListBatches(e.ctx, 2, 2, nil)
 		return err
 	})
 	if len(page) != 1 || page[0].ID != bP || !page[0].RestorableInPlace {
@@ -266,7 +266,7 @@ func TestRepoListBatchesAndCount(t *testing.T) {
 	}
 
 	e.must(func(r trash.Repo) (err error) {
-		total, err = r.CountBatches(e.ctx)
+		total, err = r.CountBatches(e.ctx, nil)
 		return err
 	})
 	if total != 3 {

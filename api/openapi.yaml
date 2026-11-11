@@ -224,6 +224,12 @@ components:
           type: string
         name:
           type: string
+        owner_user_id:
+          description: The owner of a top-level folder; null for a nested one, which belongs to its top-level ancestor.
+          format: uuid
+          type:
+            - string
+            - "null"
         parent_folder_id:
           format: uuid
           type:
@@ -241,6 +247,7 @@ components:
       required:
         - id
         - parent_folder_id
+        - owner_user_id
         - name
         - sort_order
         - version
@@ -448,6 +455,12 @@ components:
           type: integer
         name:
           type: string
+        owner_user_id:
+          description: The owner of a top-level list; null for a list in a folder, which belongs to the folder's top-level ancestor.
+          format: uuid
+          type:
+            - string
+            - "null"
         sort_mode:
           type: string
         sort_order:
@@ -466,6 +479,7 @@ components:
       required:
         - id
         - folder_id
+        - owner_user_id
         - name
         - type
         - description
@@ -556,6 +570,12 @@ components:
           type: integer
         name:
           type: string
+        owner_user_id:
+          description: The owner of a top-level list; null for a list in a folder, which belongs to the folder's top-level ancestor.
+          format: uuid
+          type:
+            - string
+            - "null"
         path:
           items:
             $ref: "#/components/schemas/PathSegment"
@@ -579,6 +599,7 @@ components:
         - path
         - id
         - folder_id
+        - owner_user_id
         - name
         - type
         - description
@@ -4241,7 +4262,9 @@ paths:
         - trash
   /api/v1/tree:
     get:
-      description: All **active** folders and lists, flat and unpaginated. The client builds the tree.
+      description: |-
+        The **active** folders and lists the caller can see, flat and unpaginated. The client builds the tree.
+        The `sort_order` of a top-level folder or list is the caller's own position (each user orders their top level); nested entries keep the shared order.
       operationId: getTree
       responses:
         "200":

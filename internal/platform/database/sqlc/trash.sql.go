@@ -13,11 +13,18 @@ import (
 )
 
 const countBatches = `-- name: CountBatches :one
-SELECT count(*)::int AS total FROM trash_batches WHERE workspace_id = $1
+SELECT count(*)::int AS total FROM trash_batches
+WHERE workspace_id = $1
+  AND ($2::uuid[] IS NULL OR id = ANY($2::uuid[]))
 `
 
-func (q *Queries) CountBatches(ctx context.Context, workspaceID uuid.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, countBatches, workspaceID)
+type CountBatchesParams struct {
+	WorkspaceID uuid.UUID
+	OnlyIds     []uuid.UUID
+}
+
+func (q *Queries) CountBatches(ctx context.Context, arg CountBatchesParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countBatches, arg.WorkspaceID, arg.OnlyIds)
 	var total int32
 	err := row.Scan(&total)
 	return total, err
@@ -174,7 +181,7 @@ func (q *Queries) GetTrashRetentionDays(ctx context.Context, workspaceID uuid.UU
 }
 
 const getTrashedFolder = `-- name: GetTrashedFolder :one
-SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id FROM folders WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
+SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id FROM folders WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
 `
 
 type GetTrashedFolderParams struct {
@@ -198,6 +205,7 @@ func (q *Queries) GetTrashedFolder(ctx context.Context, arg GetTrashedFolderPara
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.TrashBatchID,
+		&i.OwnerUserID,
 	)
 	return i, err
 }
@@ -238,7 +246,7 @@ func (q *Queries) GetTrashedItem(ctx context.Context, arg GetTrashedItemParams) 
 }
 
 const getTrashedList = `-- name: GetTrashedList :one
-SELECT id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, icon, icon_color FROM lists WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
+SELECT id, workspace_id, folder_id, name, description, display_mode, sort_mode, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, type, icon, icon_color, owner_user_id FROM lists WHERE id = $1 AND workspace_id = $2 AND trash_batch_id = $3 FOR UPDATE
 `
 
 type GetTrashedListParams struct {
@@ -267,6 +275,7 @@ func (q *Queries) GetTrashedList(ctx context.Context, arg GetTrashedListParams) 
 		&i.Type,
 		&i.Icon,
 		&i.IconColor,
+		&i.OwnerUserID,
 	)
 	return i, err
 }
@@ -427,12 +436,14 @@ SELECT b.id, b.root_type, b.root_id, b.root_name, b.former_path, b.deleted_at,
        ) AS restorable_in_place
 FROM trash_batches b
 WHERE b.workspace_id = $1
+  AND ($2::uuid[] IS NULL OR b.id = ANY($2::uuid[]))
 ORDER BY b.deleted_at DESC, b.id DESC
-LIMIT $3 OFFSET $2
+LIMIT $4 OFFSET $3
 `
 
 type ListBatchesParams struct {
 	WorkspaceID uuid.UUID
+	OnlyIds     []uuid.UUID
 	PageOffset  int32
 	PageLimit   int32
 }
@@ -457,7 +468,12 @@ type ListBatchesRow struct {
 // restorable_in_place is true when the root's original parent is the workspace root
 // or still active. The EXISTS subquery is plain SQL, no recursion.
 func (q *Queries) ListBatches(ctx context.Context, arg ListBatchesParams) ([]ListBatchesRow, error) {
-	rows, err := q.db.Query(ctx, listBatches, arg.WorkspaceID, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, listBatches,
+		arg.WorkspaceID,
+		arg.OnlyIds,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -805,13 +821,16 @@ func (q *Queries) RestoreBatchLists(ctx context.Context, arg RestoreBatchListsPa
 
 const restoreFolderRoot = `-- name: RestoreFolderRoot :exec
 UPDATE folders
-SET parent_folder_id = $1, sort_order = $2, deleted_at = NULL, trash_batch_id = NULL,
-    version = version + 1, updated_at = $3
-WHERE id = $4 AND workspace_id = $5 AND trash_batch_id = $6
+SET parent_folder_id = $1,
+    owner_user_id = CASE WHEN $1::uuid IS NULL THEN COALESCE(owner_user_id, $2::uuid) END,
+    sort_order = $3, deleted_at = NULL, trash_batch_id = NULL,
+    version = version + 1, updated_at = $4
+WHERE id = $5 AND workspace_id = $6 AND trash_batch_id = $7
 `
 
 type RestoreFolderRootParams struct {
 	ParentFolderID uuid.NullUUID
+	CallerUserID   uuid.NullUUID
 	SortOrder      int32
 	Now            time.Time
 	ID             uuid.UUID
@@ -822,6 +841,7 @@ type RestoreFolderRootParams struct {
 func (q *Queries) RestoreFolderRoot(ctx context.Context, arg RestoreFolderRootParams) error {
 	_, err := q.db.Exec(ctx, restoreFolderRoot,
 		arg.ParentFolderID,
+		arg.CallerUserID,
 		arg.SortOrder,
 		arg.Now,
 		arg.ID,
@@ -861,23 +881,27 @@ func (q *Queries) RestoreItemRoot(ctx context.Context, arg RestoreItemRootParams
 
 const restoreListRoot = `-- name: RestoreListRoot :exec
 UPDATE lists
-SET folder_id = $1, sort_order = $2, deleted_at = NULL, trash_batch_id = NULL,
-    version = version + 1, updated_at = $3
-WHERE id = $4 AND workspace_id = $5 AND trash_batch_id = $6
+SET folder_id = $1,
+    owner_user_id = CASE WHEN $1::uuid IS NULL THEN COALESCE(owner_user_id, $2::uuid) END,
+    sort_order = $3, deleted_at = NULL, trash_batch_id = NULL,
+    version = version + 1, updated_at = $4
+WHERE id = $5 AND workspace_id = $6 AND trash_batch_id = $7
 `
 
 type RestoreListRootParams struct {
-	FolderID    uuid.NullUUID
-	SortOrder   int32
-	Now         time.Time
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-	BatchID     uuid.NullUUID
+	FolderID     uuid.NullUUID
+	CallerUserID uuid.NullUUID
+	SortOrder    int32
+	Now          time.Time
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	BatchID      uuid.NullUUID
 }
 
 func (q *Queries) RestoreListRoot(ctx context.Context, arg RestoreListRootParams) error {
 	_, err := q.db.Exec(ctx, restoreListRoot,
 		arg.FolderID,
+		arg.CallerUserID,
 		arg.SortOrder,
 		arg.Now,
 		arg.ID,

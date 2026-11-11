@@ -100,7 +100,7 @@ func (r *repo) NextSortOrder(ctx context.Context, folder *uuid.UUID) (int, error
 
 func (r *repo) Insert(ctx context.Context, l List, now time.Time) (List, error) {
 	row, err := r.q.InsertList(ctx, sqlc.InsertListParams{
-		WorkspaceID: scope.WorkspaceID(ctx), FolderID: nullUUID(l.FolderID), Name: l.Name, Type: l.Type, Description: l.Description,
+		WorkspaceID: scope.WorkspaceID(ctx), FolderID: nullUUID(l.FolderID), OwnerUserID: ownerForNew(ctx, l.FolderID), Name: l.Name, Type: l.Type, Description: l.Description,
 		DisplayMode: l.DisplayMode, SortMode: l.SortMode, Icon: l.Icon, IconColor: l.IconColor,
 		SortOrder: int32(l.SortOrder), Now: now,
 	})
@@ -131,11 +131,48 @@ func (r *repo) UpdateType(ctx context.Context, id uuid.UUID, typ *string, now ti
 }
 
 func (r *repo) Move(ctx context.Context, id uuid.UUID, folder *uuid.UUID, sortOrder int, now time.Time) (List, error) {
-	row, err := r.q.MoveList(ctx, sqlc.MoveListParams{FolderID: nullUUID(folder), SortOrder: int32(sortOrder), Now: now, ID: id, WorkspaceID: scope.WorkspaceID(ctx)})
+	row, err := r.q.MoveList(ctx, sqlc.MoveListParams{
+		FolderID: nullUUID(folder), CallerUserID: callerID(ctx), SortOrder: int32(sortOrder), Now: now, ID: id, WorkspaceID: scope.WorkspaceID(ctx),
+	})
 	if err != nil {
 		return List{}, notFound(err, "list")
 	}
+	if folder != nil {
+		// No longer a top-level entry: drop everyone's position of it (it has no foreign key).
+		if err := r.q.DeleteUserTopOrderOf(ctx, sqlc.DeleteUserTopOrderOfParams{WorkspaceID: scope.WorkspaceID(ctx), Ids: []uuid.UUID{id}}); err != nil {
+			return List{}, fmt.Errorf("drop top-level order: %w", err)
+		}
+	}
 	return fromRow(row), nil
+}
+
+// SetTopOrder stores the caller's own position of a top-level list; the shared sort_order and
+// other users' positions stay.
+func (r *repo) SetTopOrder(ctx context.Context, id uuid.UUID, position int) error {
+	user, ok := scope.UserID(ctx)
+	if !ok {
+		return errors.New("set top-level order: the request has no user")
+	}
+	if err := r.q.UpsertUserTopOrder(ctx, sqlc.UpsertUserTopOrderParams{
+		WorkspaceID: scope.WorkspaceID(ctx), UserID: user, EntryType: "list", EntryID: id, SortOrder: int32(position),
+	}); err != nil {
+		return fmt.Errorf("set list top order: %w", err)
+	}
+	return nil
+}
+
+// callerID is the user of the request as a nullable id (NULL without one: tests and jobs).
+func callerID(ctx context.Context) uuid.NullUUID {
+	id, ok := scope.UserID(ctx)
+	return uuid.NullUUID{UUID: id, Valid: ok}
+}
+
+// ownerForNew is the owner of a new list: the caller at the top level, nobody inside a folder.
+func ownerForNew(ctx context.Context, folder *uuid.UUID) uuid.NullUUID {
+	if folder != nil {
+		return uuid.NullUUID{}
+	}
+	return callerID(ctx)
 }
 
 func (r *repo) SetSortOrder(ctx context.Context, id uuid.UUID, sortOrder int, now time.Time) error {
@@ -233,7 +270,7 @@ func notFound(err error, resource string) error {
 // fromRow converts a list row without an item count (the write queries).
 func fromRow(l sqlc.List) List {
 	return List{
-		ID: l.ID, FolderID: ptrUUID(l.FolderID), Name: l.Name, Type: l.Type, Description: l.Description,
+		ID: l.ID, FolderID: ptrUUID(l.FolderID), OwnerID: ptrUUID(l.OwnerUserID), Name: l.Name, Type: l.Type, Description: l.Description,
 		DisplayMode: l.DisplayMode, SortMode: l.SortMode, Icon: l.Icon, IconColor: l.IconColor,
 		SortOrder: int(l.SortOrder), Version: int(l.Version), CreatedAt: l.CreatedAt.UTC(), UpdatedAt: l.UpdatedAt.UTC(),
 	}
@@ -242,7 +279,7 @@ func fromRow(l sqlc.List) List {
 // fromCountedRow converts a list row with its item count (the read queries).
 func fromCountedRow(l sqlc.GetListRow) List {
 	return List{
-		ID: l.ID, FolderID: ptrUUID(l.FolderID), Name: l.Name, Type: l.Type, Description: l.Description,
+		ID: l.ID, FolderID: ptrUUID(l.FolderID), OwnerID: ptrUUID(l.OwnerUserID), Name: l.Name, Type: l.Type, Description: l.Description,
 		DisplayMode: l.DisplayMode, SortMode: l.SortMode, Icon: l.Icon, IconColor: l.IconColor,
 		SortOrder: int(l.SortOrder), ItemCount: int(l.ItemCount), Version: int(l.Version),
 		CreatedAt: l.CreatedAt.UTC(), UpdatedAt: l.UpdatedAt.UTC(),

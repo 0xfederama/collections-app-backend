@@ -46,7 +46,9 @@ type Optional[T any] struct {
 type List struct {
 	ID       uuid.UUID
 	FolderID *uuid.UUID
-	Name     string
+	// OwnerID is set only on a top-level list (F-027): a list in a folder belongs to its top-level ancestor.
+	OwnerID *uuid.UUID
+	Name    string
 	// Type is the one type of every item in the list (F-007); nil is a list with no type.
 	Type        *string
 	Description *string

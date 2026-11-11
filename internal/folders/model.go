@@ -8,8 +8,10 @@ import (
 
 // Folder is a folder as the API shows it. ParentID nil means the root.
 type Folder struct {
-	ID        uuid.UUID
-	ParentID  *uuid.UUID
+	ID       uuid.UUID
+	ParentID *uuid.UUID
+	// OwnerID is set only on a top-level folder (F-027): nested folders inherit access from their top-level ancestor.
+	OwnerID   *uuid.UUID
 	Name      string
 	SortOrder int
 	Version   int

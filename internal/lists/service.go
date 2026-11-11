@@ -3,6 +3,7 @@ package lists
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,6 +17,14 @@ import (
 type Store interface {
 	InTx(ctx context.Context, fn func(Repo) error) error
 	Get(ctx context.Context, id uuid.UUID) (List, error)
+}
+
+// Access answers what the caller may see (internal/access, wired in httpapi). It is read before
+// the transaction, never inside it: a second pool connection could stall the pool.
+type Access interface {
+	FolderVisible(ctx context.Context, id uuid.UUID) (bool, error)
+	// VisibleListIDs returns the active lists the caller may see.
+	VisibleListIDs(ctx context.Context) (map[uuid.UUID]bool, error)
 }
 
 // Repo is the set of queries one transaction may run. Every method is one
@@ -37,6 +46,8 @@ type Repo interface {
 	UpdateType(ctx context.Context, id uuid.UUID, typ *string, now time.Time) (List, error)
 	Move(ctx context.Context, id uuid.UUID, folder *uuid.UUID, sortOrder int, now time.Time) (List, error)
 	SetSortOrder(ctx context.Context, id uuid.UUID, sortOrder int, now time.Time) error
+	// SetTopOrder stores the caller's own position of a top-level list (not the shared sort_order).
+	SetTopOrder(ctx context.Context, id uuid.UUID, position int) error
 	// FolderChain returns the ancestors of folderID and folderID itself, root first. A folder that is not active gives none.
 	FolderChain(ctx context.Context, folderID uuid.UUID) ([]PathFolder, error)
 	FolderExists(ctx context.Context, id uuid.UUID) (bool, error)
@@ -57,9 +68,36 @@ type TypeSource interface {
 // type changes take the tree lock first, so the order of the writes is the same
 // as every other structural write.
 type Service struct {
-	store Store
-	types TypeSource
-	clock clock.Clock
+	store  Store
+	types  TypeSource
+	clock  clock.Clock
+	access Access
+}
+
+// WithAccess returns the service checking destinations and the top-level order against what the
+// caller may see. Without it every folder counts as visible and a root reorder sees all of them
+// (unit tests only: the composition root always sets it).
+func (s *Service) WithAccess(a Access) *Service {
+	c := *s
+	c.access = a
+	return &c
+}
+
+// destination checks, before the transaction, that the caller may see the folder. A folder the
+// caller cannot see is as unavailable as a missing one. The error is returned inside the
+// transaction at the point where the existence check used to fail.
+func (s *Service) destination(ctx context.Context, folder *uuid.UUID) error {
+	if folder == nil || s.access == nil {
+		return nil
+	}
+	ok, err := s.access.FolderVisible(ctx, *folder)
+	if err != nil {
+		return fmt.Errorf("check destination: %w", err)
+	}
+	if !ok {
+		return apperr.DestinationUnavailable()
+	}
+	return nil
 }
 
 func NewService(store Store, types TypeSource, clk clock.Clock) *Service {
@@ -87,6 +125,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (List, error) {
 	// nesting it would hold two pool connections. Its failure is kept and returned
 	// inside the transaction, where it always came (after the tree lock).
 	def, fields, typeErr := s.typeOf(ctx, in.Type)
+	destErr := s.destination(ctx, in.FolderID)
 	var id uuid.UUID
 	err := s.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
@@ -103,6 +142,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (List, error) {
 		}
 		if err := validateDefinitionSort(in.Type, in.SortMode, def.AllowsPrice, fields, "sort_mode"); err != nil {
 			return err
+		}
+		if destErr != nil {
+			return destErr
 		}
 		if err := requireFolder(ctx, r, in.FolderID); err != nil {
 			return err
@@ -240,6 +282,7 @@ func (s *Service) apply(ctx context.Context, r Repo, id uuid.UUID, plan updatePl
 // Move moves a list into a folder (nil = root), appended last. Errors in order:
 // NotFound, VersionConflict, DestinationUnavailable.
 func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, folder *uuid.UUID) (List, error) {
+	destErr := s.destination(ctx, folder)
 	err := s.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return fmt.Errorf("lock tree: %w", err)
@@ -248,8 +291,14 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, folder *u
 		if err != nil {
 			return err
 		}
+		// SEAM (B3): moving a top-level list the caller can see but does not own answers 403
+		// forbidden here. In B2 a box is visible only to its owner, so the path guard (404) already
+		// stopped every other caller.
 		if cur.Version != version {
 			return apperr.VersionConflict(cur.Version)
+		}
+		if destErr != nil {
+			return destErr
 		}
 		if err := requireFolder(ctx, r, folder); err != nil {
 			return err
@@ -270,10 +319,36 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, folder *u
 // Reorder rewrites the order of the child lists of folder (nil = root). ids must
 // be exactly the active children, else OrderStale. A missing or trashed folder is
 // NotFound. The order is the position in ids; versions do not change.
+//
+// At the root the children are the top-level lists the caller can see, and the order is the
+// caller's own (user_top_order): other users' lists and positions are not touched. Inside a
+// folder the shared sort_order is rewritten, as before.
 func (s *Service) Reorder(ctx context.Context, folder *uuid.UUID, ids []uuid.UUID) error {
+	var (
+		visible    map[uuid.UUID]bool
+		folderErr  error
+		rootFilter = folder == nil && s.access != nil
+	)
+	if rootFilter {
+		var err error
+		if visible, err = s.access.VisibleListIDs(ctx); err != nil {
+			return fmt.Errorf("visible lists: %w", err)
+		}
+	} else if folder != nil && s.access != nil {
+		ok, err := s.access.FolderVisible(ctx, *folder)
+		if err != nil {
+			return fmt.Errorf("check folder: %w", err)
+		}
+		if !ok {
+			folderErr = apperr.NotFound("folder")
+		}
+	}
 	return s.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return fmt.Errorf("lock tree: %w", err)
+		}
+		if folderErr != nil {
+			return folderErr
 		}
 		if folder != nil {
 			ok, err := r.FolderExists(ctx, *folder)
@@ -288,12 +363,20 @@ func (s *Service) Reorder(ctx context.Context, folder *uuid.UUID, ids []uuid.UUI
 		if err != nil {
 			return err
 		}
+		if rootFilter {
+			current = slices.DeleteFunc(current, func(id uuid.UUID) bool { return !visible[id] })
+		}
 		if !sameSet(current, ids) {
 			return apperr.OrderStale()
 		}
 		now := s.clock.Now()
 		for i, id := range ids {
-			if err := r.SetSortOrder(ctx, id, i, now); err != nil {
+			if folder == nil && s.access != nil {
+				err = r.SetTopOrder(ctx, id, i)
+			} else {
+				err = r.SetSortOrder(ctx, id, i, now)
+			}
+			if err != nil {
 				return err
 			}
 		}

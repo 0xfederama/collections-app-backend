@@ -7,6 +7,7 @@ Composition root of the HTTP layer. `NewRouter` builds the Huma API over chi, re
 ## Key files
 
 - `internal/httpapi/router.go`: `NewRouter`, `API`, `build`, `register` (one `Register` call per feature), `Deps`, and the adapters that wire services together
+- `internal/httpapi/guard.go`: `guard` Huma middleware, `guardRules` (path prefix to resource kind), `accessCache`, `newAccess`
 - `internal/httpapi/health.go`: `/healthz` and `/readyz` as Huma operations (text/plain)
 - `internal/httpapi/spec.go`: `Spec()`, the document info description and tag list
 - `internal/httpapi/spec_test.go`: spec validity, registration match, route coverage
@@ -14,7 +15,9 @@ Composition root of the HTTP layer. `NewRouter` builds the Huma API over chi, re
 
 ## Interfaces
 
-- `NewRouter(d Deps) (http.Handler, error)`: router behind request id, security headers, access log and recovery; errors when `Deps.Identity` is nil
+- `NewRouter(d Deps) (http.Handler, error)`: router behind request id, security headers, access log and recovery; errors when `Deps.Identity` is nil, or when `Deps.DB` is not a pool and `Deps.ProbeOnly` is unset (fails closed)
+- `Deps.ProbeOnly`: skips the access rules for probe-only test routers; never set in `cmd/api`
+- `guard`: 404 for a `{id}` or `{batch_id}` the caller cannot see (same answer as missing), before `If-Match` and the body; rules in `guardRules` (folders, lists, items, attachments, trash batches)
 - `API(d Deps) huma.API`: all operations registered, used with a zero `Deps` by `Spec`
 - `Spec() ([]byte, error)`: OpenAPI 3.1 YAML of the registered operations
 - `GET /healthz`: 200 `ok`, liveness only
@@ -32,3 +35,5 @@ Composition root of the HTTP layer. `NewRouter` builds the Huma API over chi, re
 - `importer(d)` is nil when lookup is off, so item create takes no lookup path.
 - `internal/httpapi` is in archtest `exemptPackages` (composition root), so it may import every feature.
 - Tests build routers with `newRouter`, which injects a fixed test identity when `Deps.Identity` is nil; the real resolver is used in `identity_test.go`.
+- Every operation with a path parameter must be covered by a `guardRules` entry (`TestGuardCoversEveryPathParam`); a new resource path needs a rule. An id that does not parse is left to Huma (400).
+- The guard and the `WithAccess` wiring exist only when the pool gives access rules; `register` adds the guard before the feature operations because Huma reads middleware at registration.

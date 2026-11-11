@@ -271,7 +271,7 @@ func (r fakeRepo) RetentionDays(ctx context.Context) (*int, error) {
 	return r.db.data.retention, nil
 }
 
-func (r fakeRepo) ListBatches(ctx context.Context, limit, offset int) ([]trash.Entry, error) {
+func (r fakeRepo) ListBatches(ctx context.Context, limit, offset int, _ []uuid.UUID) ([]trash.Entry, error) {
 	ids := r.batchesSorted()
 	slices.Reverse(ids) // newest first
 	slices.SortStableFunc(ids, func(a, b uuid.UUID) int {
@@ -301,7 +301,7 @@ func (r fakeRepo) ListBatches(ctx context.Context, limit, offset int) ([]trash.E
 	return out, nil
 }
 
-func (r fakeRepo) CountBatches(ctx context.Context) (int, error) {
+func (r fakeRepo) CountBatches(ctx context.Context, _ []uuid.UUID) (int, error) {
 	return len(r.db.data.batches), nil
 }
 
@@ -679,6 +679,10 @@ func (r fakeRepo) DeleteFolders(ctx context.Context, folderIDs []uuid.UUID) erro
 	return nil
 }
 
+func (r fakeRepo) DeleteTopOrder(ctx context.Context, ids []uuid.UUID) error {
+	return r.write("DeleteTopOrder")
+}
+
 func (r fakeRepo) DeleteAttachmentRows(ctx context.Context, ids []uuid.UUID) error {
 	return r.write("DeleteAttachmentRows")
 }
@@ -697,12 +701,12 @@ func (s fakeStore) InTx(ctx context.Context, fn func(trash.Repo) error) error {
 	return nil
 }
 
-func (s fakeStore) ListBatches(ctx context.Context, limit, offset int) ([]trash.Entry, error) {
-	return fakeRepo(s).ListBatches(ctx, limit, offset)
+func (s fakeStore) ListBatches(ctx context.Context, limit, offset int, only []uuid.UUID) ([]trash.Entry, error) {
+	return fakeRepo(s).ListBatches(ctx, limit, offset, only)
 }
 
-func (s fakeStore) CountBatches(ctx context.Context) (int, error) {
-	return fakeRepo(s).CountBatches(ctx)
+func (s fakeStore) CountBatches(ctx context.Context, only []uuid.UUID) (int, error) {
+	return fakeRepo(s).CountBatches(ctx, only)
 }
 
 func (s fakeStore) RetentionDays(ctx context.Context) (*int, error) {

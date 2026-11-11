@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -23,6 +24,14 @@ type Store interface {
 	Get(ctx context.Context, id uuid.UUID) (Folder, error)
 }
 
+// Access answers what the caller may see (internal/access, wired in httpapi). It is read before
+// the transaction, never inside it: a second pool connection could stall the pool.
+type Access interface {
+	FolderVisible(ctx context.Context, id uuid.UUID) (bool, error)
+	// VisibleFolderIDs returns the active folders the caller may see.
+	VisibleFolderIDs(ctx context.Context) (map[uuid.UUID]bool, error)
+}
+
 // Repo is the set of queries one transaction may run. Every method is one
 // plain query; the rules that combine them live in Service.
 type Repo interface {
@@ -36,16 +45,45 @@ type Repo interface {
 	Rename(ctx context.Context, id uuid.UUID, name string, now time.Time) (Folder, error)
 	Move(ctx context.Context, id uuid.UUID, parent *uuid.UUID, sortOrder int, now time.Time) (Folder, error)
 	SetSortOrder(ctx context.Context, id uuid.UUID, sortOrder int, now time.Time) error
+	// SetTopOrder stores the caller's own position of a top-level folder (not the shared sort_order).
+	SetTopOrder(ctx context.Context, id uuid.UUID, position int) error
 }
 
 // Service holds the folder rules. Structural writes take the tree lock first
 // so two concurrent moves cannot both pass the cycle check.
 type Service struct {
-	store Store
-	clock clock.Clock
+	store  Store
+	clock  clock.Clock
+	access Access
 }
 
 func NewService(store Store, clk clock.Clock) *Service { return &Service{store: store, clock: clk} }
+
+// WithAccess returns the service checking destinations and the top-level order against what the
+// caller may see. Without it every folder counts as visible and a root reorder sees all of them
+// (unit tests only: the composition root always sets it).
+func (s *Service) WithAccess(a Access) *Service {
+	c := *s
+	c.access = a
+	return &c
+}
+
+// destination checks, before the transaction, that the caller may see the parent folder. A
+// folder the caller cannot see is as unavailable as a missing one. The error is returned inside
+// the transaction at the point where the existence check used to fail.
+func (s *Service) destination(ctx context.Context, parent *uuid.UUID) error {
+	if parent == nil || s.access == nil {
+		return nil
+	}
+	ok, err := s.access.FolderVisible(ctx, *parent)
+	if err != nil {
+		return fmt.Errorf("check destination: %w", err)
+	}
+	if !ok {
+		return apperr.DestinationUnavailable()
+	}
+	return nil
+}
 
 // Create appends a folder after its siblings. A missing or trashed parent is DestinationUnavailable.
 func (s *Service) Create(ctx context.Context, name string, parent *uuid.UUID) (Folder, error) {
@@ -53,10 +91,14 @@ func (s *Service) Create(ctx context.Context, name string, parent *uuid.UUID) (F
 	if err != nil {
 		return Folder{}, err
 	}
+	destErr := s.destination(ctx, parent)
 	var out Folder
 	err = s.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return fmt.Errorf("lock tree: %w", err)
+		}
+		if destErr != nil {
+			return destErr
 		}
 		if err := requireActive(ctx, r, parent); err != nil {
 			return err
@@ -102,13 +144,20 @@ func (s *Service) Rename(ctx context.Context, id uuid.UUID, version int, name *s
 // Move re-parents a folder (nil = root), appended last. Errors in order:
 // NotFound, VersionConflict, DestinationUnavailable, Cycle.
 func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, parent *uuid.UUID) (Folder, error) {
+	destErr := s.destination(ctx, parent)
 	var out Folder
 	err := s.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return fmt.Errorf("lock tree: %w", err)
 		}
+		// SEAM (B3): moving a top-level folder the caller can see but does not own answers 403
+		// forbidden here. In B2 a box is visible only to its owner, so the path guard (404) already
+		// stopped every other caller.
 		if _, err := lock(ctx, r, id, version); err != nil {
 			return err
+		}
+		if destErr != nil {
+			return destErr
 		}
 		if err := requireActive(ctx, r, parent); err != nil {
 			return err
@@ -134,10 +183,36 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, parent *u
 
 // Reorder rewrites the order of the children of parent. ids must be exactly the
 // active children, else OrderStale. A missing or trashed parent is NotFound.
+//
+// At the root the children are the top-level folders the caller can see, and the order is the
+// caller's own (user_top_order): other users' folders and positions are not touched. Below a
+// folder the shared sort_order is rewritten, as before.
 func (s *Service) Reorder(ctx context.Context, parent *uuid.UUID, ids []uuid.UUID) error {
+	var (
+		visible    map[uuid.UUID]bool
+		parentErr  error
+		rootFilter = parent == nil && s.access != nil
+	)
+	if rootFilter {
+		var err error
+		if visible, err = s.access.VisibleFolderIDs(ctx); err != nil {
+			return fmt.Errorf("visible folders: %w", err)
+		}
+	} else if parent != nil && s.access != nil {
+		ok, err := s.access.FolderVisible(ctx, *parent)
+		if err != nil {
+			return fmt.Errorf("check parent: %w", err)
+		}
+		if !ok {
+			parentErr = apperr.NotFound("folder")
+		}
+	}
 	return s.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return fmt.Errorf("lock tree: %w", err)
+		}
+		if parentErr != nil {
+			return parentErr
 		}
 		if parent != nil {
 			if _, err := r.Get(ctx, *parent); err != nil {
@@ -148,12 +223,20 @@ func (s *Service) Reorder(ctx context.Context, parent *uuid.UUID, ids []uuid.UUI
 		if err != nil {
 			return fmt.Errorf("list children: %w", err)
 		}
+		if rootFilter {
+			current = slices.DeleteFunc(current, func(id uuid.UUID) bool { return !visible[id] })
+		}
 		if !sameSet(current, ids) {
 			return apperr.OrderStale()
 		}
 		now := s.clock.Now()
 		for i, id := range ids {
-			if err := r.SetSortOrder(ctx, id, i, now); err != nil {
+			if parent == nil && s.access != nil {
+				err = r.SetTopOrder(ctx, id, i)
+			} else {
+				err = r.SetSortOrder(ctx, id, i, now)
+			}
+			if err != nil {
 				return fmt.Errorf("set sort order: %w", err)
 			}
 		}

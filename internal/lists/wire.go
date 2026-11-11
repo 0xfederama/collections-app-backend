@@ -12,6 +12,7 @@ import (
 type ListJSON struct {
 	ID          uuid.UUID  `json:"id" format:"uuid"`
 	FolderID    *uuid.UUID `json:"folder_id" format:"uuid" nullable:"true"`
+	OwnerUserID *uuid.UUID `json:"owner_user_id" format:"uuid" nullable:"true" doc:"The owner of a top-level list; null for a list in a folder, which belongs to the folder's top-level ancestor."`
 	Name        string     `json:"name"`
 	Type        *string    `json:"type" nullable:"true"`
 	Description *string    `json:"description" nullable:"true"`
@@ -29,7 +30,7 @@ type ListJSON struct {
 // ToJSON is the wire shape of l.
 func ToJSON(l List) ListJSON {
 	out := ListJSON{
-		ID: l.ID, FolderID: l.FolderID, Name: l.Name, Type: l.Type, Description: l.Description,
+		ID: l.ID, FolderID: l.FolderID, OwnerUserID: l.OwnerID, Name: l.Name, Type: l.Type, Description: l.Description,
 		DisplayMode: l.DisplayMode, SortMode: l.SortMode, Icon: l.Icon, IconColor: l.IconColor,
 		SortOrder: l.SortOrder, ItemCount: l.ItemCount, Version: l.Version, CreatedAt: l.CreatedAt, UpdatedAt: l.UpdatedAt,
 	}

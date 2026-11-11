@@ -39,10 +39,11 @@ type Repo interface {
 	// RetentionDays is the workspace's trash_retention_days. Nil when it is off or
 	// when the workspace has no settings row: the auto-purge treats both as off.
 	RetentionDays(ctx context.Context) (*int, error)
-	// ListBatches returns one page of batches, newest first, with their counts.
-	ListBatches(ctx context.Context, limit, offset int) ([]Entry, error)
-	// CountBatches returns the number of batches of the workspace.
-	CountBatches(ctx context.Context) (int, error)
+	// ListBatches returns one page of batches, newest first, with their counts. only, when not nil,
+	// restricts the batches to those ids (the ones the caller may see); an empty non-nil slice is none.
+	ListBatches(ctx context.Context, limit, offset int, only []uuid.UUID) ([]Entry, error)
+	// CountBatches returns the number of batches of the workspace, restricted like ListBatches.
+	CountBatches(ctx context.Context, only []uuid.UUID) (int, error)
 
 	// FolderParents returns every folder of the workspace in any state, for the walks.
 	FolderParents(ctx context.Context) ([]FolderNode, error)
@@ -115,6 +116,9 @@ type Repo interface {
 	DeleteLists(ctx context.Context, listIDs []uuid.UUID) error
 	// DeleteFolders hard-deletes the folders in one statement (the parent check runs at its end). SEAM: moves to folders.
 	DeleteFolders(ctx context.Context, folderIDs []uuid.UUID) error
+	// DeleteTopOrder removes every user's top-level order rows of the given folders and lists. They have
+	// no foreign key, so a purge deletes them explicitly (D-118). SEAM: moves to access.
+	DeleteTopOrder(ctx context.Context, ids []uuid.UUID) error
 	// DeleteAttachmentRows hard-deletes attachment rows, after the items that pointed to them went. SEAM: moves to images.
 	DeleteAttachmentRows(ctx context.Context, ids []uuid.UUID) error
 }
@@ -135,12 +139,12 @@ func NewPostgres(db DB) *Postgres { return &Postgres{db: db} }
 
 func (p *Postgres) reads() *repo { return &repo{q: sqlc.New(p.db)} }
 
-func (p *Postgres) ListBatches(ctx context.Context, limit, offset int) ([]Entry, error) {
-	return p.reads().ListBatches(ctx, limit, offset)
+func (p *Postgres) ListBatches(ctx context.Context, limit, offset int, only []uuid.UUID) ([]Entry, error) {
+	return p.reads().ListBatches(ctx, limit, offset, only)
 }
 
-func (p *Postgres) CountBatches(ctx context.Context) (int, error) {
-	return p.reads().CountBatches(ctx)
+func (p *Postgres) CountBatches(ctx context.Context, only []uuid.UUID) (int, error) {
+	return p.reads().CountBatches(ctx, only)
 }
 
 func (p *Postgres) RetentionDays(ctx context.Context) (*int, error) {
@@ -233,8 +237,8 @@ func (r *repo) RetentionDays(ctx context.Context) (*int, error) {
 	return &v, nil
 }
 
-func (r *repo) ListBatches(ctx context.Context, limit, offset int) ([]Entry, error) {
-	rows, err := r.q.ListBatches(ctx, sqlc.ListBatchesParams{WorkspaceID: scope.WorkspaceID(ctx), PageLimit: int32(limit), PageOffset: int32(offset)})
+func (r *repo) ListBatches(ctx context.Context, limit, offset int, only []uuid.UUID) ([]Entry, error) {
+	rows, err := r.q.ListBatches(ctx, sqlc.ListBatchesParams{WorkspaceID: scope.WorkspaceID(ctx), OnlyIds: only, PageLimit: int32(limit), PageOffset: int32(offset)})
 	if err != nil {
 		return nil, fmt.Errorf("list trash: %w", err)
 	}
@@ -252,8 +256,8 @@ func (r *repo) ListBatches(ctx context.Context, limit, offset int) ([]Entry, err
 	return out, nil
 }
 
-func (r *repo) CountBatches(ctx context.Context) (int, error) {
-	total, err := r.q.CountBatches(ctx, scope.WorkspaceID(ctx))
+func (r *repo) CountBatches(ctx context.Context, only []uuid.UUID) (int, error) {
+	total, err := r.q.CountBatches(ctx, sqlc.CountBatchesParams{WorkspaceID: scope.WorkspaceID(ctx), OnlyIds: only})
 	if err != nil {
 		return 0, fmt.Errorf("count trash: %w", err)
 	}
@@ -437,7 +441,7 @@ func (r *repo) GetTrashedItem(ctx context.Context, id, batch uuid.UUID) (ItemRow
 // RestoreFolderRoot is SEAM: moves to folders.
 func (r *repo) RestoreFolderRoot(ctx context.Context, id, batch uuid.UUID, parent *uuid.UUID, sortOrder int, now time.Time) error {
 	if err := r.q.RestoreFolderRoot(ctx, sqlc.RestoreFolderRootParams{
-		ParentFolderID: toNullUUID(parent), SortOrder: int32(sortOrder), Now: now, ID: id, WorkspaceID: scope.WorkspaceID(ctx), BatchID: validUUID(batch),
+		ParentFolderID: toNullUUID(parent), CallerUserID: callerID(ctx), SortOrder: int32(sortOrder), Now: now, ID: id, WorkspaceID: scope.WorkspaceID(ctx), BatchID: validUUID(batch),
 	}); err != nil {
 		return fmt.Errorf("restore folder root: %w", err)
 	}
@@ -447,7 +451,7 @@ func (r *repo) RestoreFolderRoot(ctx context.Context, id, batch uuid.UUID, paren
 // RestoreListRoot is SEAM: moves to lists.
 func (r *repo) RestoreListRoot(ctx context.Context, id, batch uuid.UUID, folder *uuid.UUID, sortOrder int, now time.Time) error {
 	if err := r.q.RestoreListRoot(ctx, sqlc.RestoreListRootParams{
-		FolderID: toNullUUID(folder), SortOrder: int32(sortOrder), Now: now, ID: id, WorkspaceID: scope.WorkspaceID(ctx), BatchID: validUUID(batch),
+		FolderID: toNullUUID(folder), CallerUserID: callerID(ctx), SortOrder: int32(sortOrder), Now: now, ID: id, WorkspaceID: scope.WorkspaceID(ctx), BatchID: validUUID(batch),
 	}); err != nil {
 		return fmt.Errorf("restore list root: %w", err)
 	}
@@ -550,6 +554,14 @@ func (r *repo) DeleteLists(ctx context.Context, listIDs []uuid.UUID) error {
 	return nil
 }
 
+// DeleteTopOrder is SEAM: moves to access.
+func (r *repo) DeleteTopOrder(ctx context.Context, ids []uuid.UUID) error {
+	if err := r.q.DeleteUserTopOrderOf(ctx, sqlc.DeleteUserTopOrderOfParams{WorkspaceID: scope.WorkspaceID(ctx), Ids: ids}); err != nil {
+		return fmt.Errorf("delete top-level order: %w", err)
+	}
+	return nil
+}
+
 // DeleteFolders is SEAM: moves to folders.
 func (r *repo) DeleteFolders(ctx context.Context, folderIDs []uuid.UUID) error {
 	if err := r.q.DeleteFolders(ctx, sqlc.DeleteFoldersParams{WorkspaceID: scope.WorkspaceID(ctx), FolderIds: folderIDs}); err != nil {
@@ -618,4 +630,11 @@ func mapNotFound(err error, resource string) error {
 		return apperr.NotFound(resource)
 	}
 	return fmt.Errorf("%s: %w", resource, err)
+}
+
+// callerID is the user of the request as a nullable id. A restore to the top level gives the root
+// to this user unless it already has an owner (a root restored in place keeps its stored owner).
+func callerID(ctx context.Context) uuid.NullUUID {
+	id, ok := scope.UserID(ctx)
+	return uuid.NullUUID{UUID: id, Valid: ok}
 }

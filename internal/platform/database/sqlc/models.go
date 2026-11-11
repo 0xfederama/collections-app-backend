@@ -36,6 +36,7 @@ type Folder struct {
 	UpdatedAt      time.Time
 	DeletedAt      *time.Time
 	TrashBatchID   uuid.NullUUID
+	OwnerUserID    uuid.NullUUID
 }
 
 type Item struct {
@@ -84,6 +85,7 @@ type List struct {
 	Type         *string
 	Icon         *string
 	IconColor    *string
+	OwnerUserID  uuid.NullUUID
 }
 
 type LookupImport struct {
@@ -124,6 +126,14 @@ type User struct {
 	ProfileFetchedAt *time.Time
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+}
+
+type UserTopOrder struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	EntryType   string
+	EntryID     uuid.UUID
+	SortOrder   int32
 }
 
 type Workspace struct {

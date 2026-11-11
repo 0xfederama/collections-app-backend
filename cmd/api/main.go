@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/0xfederama/collections-app-backend/db"
+	"github.com/0xfederama/collections-app-backend/internal/access"
 	"github.com/0xfederama/collections-app-backend/internal/favicons"
 	"github.com/0xfederama/collections-app-backend/internal/httpapi"
 	"github.com/0xfederama/collections-app-backend/internal/identity"
@@ -74,6 +75,17 @@ func run() error {
 	workspaceID, err := workspace.Bootstrap(ctx, pool, cfg.WorkspaceName)
 	if err != nil {
 		return err
+	}
+
+	// Existing top-level folders and lists with no owner (a database from before accounts, or rows a
+	// rolled-back release created) go to the owner (F-027 decision 15). Dev stacks without
+	// OWNER_EMAIL use the first dev identity. A fresh database has nothing to adopt and needs neither.
+	backfillEmail := cfg.OwnerEmail
+	if backfillEmail == "" && cfg.DevIdentity {
+		backfillEmail = cfg.DevIdentities()[0]
+	}
+	if err := access.Backfill(scope.With(ctx, workspaceID), access.NewPostgres(pool), backfillEmail, logger); err != nil {
+		return fmt.Errorf("ownership backfill: %w", err)
 	}
 
 	store, err := storage.NewLocal(cfg.DataDir)

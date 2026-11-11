@@ -74,7 +74,10 @@ type imageEnv struct {
 	svc   *images.Service
 }
 
-func newImageEnv(t *testing.T) *imageEnv {
+func newImageEnv(t *testing.T) *imageEnv { return newImageEnvAs(t, nil) }
+
+// newImageEnvAs builds the env with its own identity resolver (nil = the fixed test user).
+func newImageEnvAs(t *testing.T, id httpapi.IdentityResolver) *imageEnv {
 	t.Helper()
 	pool := testdb.NewMigrated(t, sharedPostgres(t))
 	ws := uuid.New()
@@ -92,7 +95,7 @@ func newImageEnv(t *testing.T) *imageEnv {
 	itemSvc := newItems(pool, clk)
 	svc := images.NewService(images.NewPostgres(pool), store, itemSvc, clk, quietLogger())
 	h := newRouter(t, httpapi.Deps{
-		DB: pool, DataDir: dir, Logger: quietLogger(), WorkspaceID: ws,
+		DB: pool, DataDir: dir, Logger: quietLogger(), WorkspaceID: ws, Identity: id,
 		Items: itemSvc, Images: svc,
 		Search: search.NewService(search.NewPostgres(pool)), Trash: trash.NewService(trash.NewPostgres(pool), store, clk, quietLogger()),
 	})

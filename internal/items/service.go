@@ -58,6 +58,22 @@ type Service struct {
 	types    TypeSource
 	settings SettingsSource
 	clock    clock.Clock
+	access   Access
+}
+
+// Access answers what the caller may see (internal/access, wired in httpapi). It is read before
+// the transaction, never inside it: a second pool connection could stall the pool.
+type Access interface {
+	ListVisible(ctx context.Context, id uuid.UUID) (bool, error)
+}
+
+// WithAccess returns the service checking the destination list of a move against what the caller
+// may see. The services the background jobs use (lookup refresh) stay without it: they work on
+// the whole workspace and never move items.
+func (s *Service) WithAccess(a Access) *Service {
+	c := *s
+	c.access = a
+	return &c
 }
 
 // NewService returns the item rules over the given store and sources.
@@ -285,6 +301,18 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, version int, p Patch
 // NotFound item, VersionConflict, DestinationUnavailable, NotFound list, then
 // TypeMismatch when the destination has another type than the item's list (F-007).
 func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, dest uuid.UUID) (Item, error) {
+	// A list the caller cannot see is as unavailable as a missing one; the answer comes at the
+	// point where the list lookup used to fail.
+	var destErr error
+	if s.access != nil {
+		ok, err := s.access.ListVisible(ctx, dest)
+		switch {
+		case err != nil:
+			destErr = fmt.Errorf("check destination: %w", err)
+		case !ok:
+			destErr = apperr.DestinationUnavailable()
+		}
+	}
 	err := s.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return err
@@ -295,6 +323,9 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, dest uuid
 		}
 		if cur.Version != version {
 			return apperr.VersionConflict(cur.Version)
+		}
+		if destErr != nil {
+			return destErr
 		}
 		destList, err := r.ListInfo(ctx, dest)
 		if err != nil {

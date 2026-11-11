@@ -34,6 +34,12 @@ var (
 	sqlAttB = attachmentSQL(attB, "b")
 )
 
+const userA = "00000000-0000-0000-0000-0000000000a1"
+
+func userSQL(id, ws string) string {
+	return `INSERT INTO users (id, workspace_id, email) VALUES ('` + id + `', '` + ws + `', 'a@test.dev')`
+}
+
 func attachmentSQL(id, key string) string {
 	return `INSERT INTO attachments (id, workspace_id, storage_key, thumbnail_storage_key, media_type, size_bytes, width, height, sha256)
 	        VALUES ('` + id + `', '` + wsA + `', 'images/` + key + `.webp', 'images/` + key + `.thumb.jpg', 'image/webp', 10, 1, 1, '\x00')`
@@ -70,6 +76,42 @@ func schemaCases() []schemaCase {
 		return append(append([]string{}, parents...), last)
 	}
 	return []schemaCase{
+		{
+			name: "F-027 folder owned by a user of another workspace",
+			stmts: []string{sqlWorkspaces, userSQL(userA, wsA),
+				`INSERT INTO folders (workspace_id, name, sort_order, owner_user_id) VALUES ('` + wsB + `', 'F', 0, '` + userA + `')`},
+			wantCode: "23503", wantConstr: "folders_owner_fk",
+		},
+		{
+			name: "F-027 list owned by a user of another workspace",
+			stmts: []string{sqlWorkspaces, userSQL(userA, wsA),
+				`INSERT INTO lists (workspace_id, name, type, sort_order, owner_user_id) VALUES ('` + wsB + `', 'L', 'generic', 0, '` + userA + `')`},
+			wantCode: "23503", wantConstr: "lists_owner_fk",
+		},
+		{
+			name: "F-027 an owner is optional (the previous release inserts none) and no check ties it to the parent",
+			stmts: []string{sqlWorkspaces, userSQL(userA, wsA),
+				`INSERT INTO folders (workspace_id, name, sort_order) VALUES ('` + wsA + `', 'old release', 0)`,
+				`INSERT INTO folders (id, workspace_id, name, sort_order, owner_user_id) VALUES ('` + folderA + `', '` + wsA + `', 'top', 0, '` + userA + `')`,
+				`INSERT INTO folders (workspace_id, parent_folder_id, name, sort_order, owner_user_id) VALUES ('` + wsA + `', '` + folderA + `', 'nested', 0, '` + userA + `')`},
+		},
+		{
+			name: "F-027 order row with an unknown entry type",
+			stmts: []string{sqlWorkspaces, userSQL(userA, wsA),
+				`INSERT INTO user_top_order (workspace_id, user_id, entry_type, entry_id, sort_order) VALUES ('` + wsA + `', '` + userA + `', 'item', '` + folderA + `', 0)`},
+			wantCode: "23514", wantConstr: "user_top_order_type_check",
+		},
+		{
+			name: "F-027 order row of a user of another workspace",
+			stmts: []string{sqlWorkspaces, userSQL(userA, wsA),
+				`INSERT INTO user_top_order (workspace_id, user_id, entry_type, entry_id, sort_order) VALUES ('` + wsB + `', '` + userA + `', 'folder', '` + folderA + `', 0)`},
+			wantCode: "23503", wantConstr: "user_top_order_user_fk",
+		},
+		{
+			name: "F-027 an order row needs no folder or list (no foreign key: the previous purge must keep working)",
+			stmts: []string{sqlWorkspaces, userSQL(userA, wsA),
+				`INSERT INTO user_top_order (workspace_id, user_id, entry_type, entry_id, sort_order) VALUES ('` + wsA + `', '` + userA + `', 'folder', '` + folderA + `', 0)`},
+		},
 		{
 			name: "list references folder of another workspace",
 			stmts: []string{sqlWorkspaces, sqlFolderB,

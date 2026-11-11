@@ -94,12 +94,34 @@ func newRouter(t *testing.T, d httpapi.Deps) http.Handler {
 	t.Helper()
 	if d.Identity == nil {
 		d.Identity = fixedIdentity{testUserID}
+		ensureTestUser(t, d)
 	}
 	h, err := httpapi.NewRouter(d)
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
 	}
 	return h
+}
+
+// ensureTestUser creates the fixed test identity as a user of the workspace, so that what the
+// tests create through the API (owned by the caller) satisfies the owner foreign key. Routers
+// without a database pool have nothing to create it in.
+func ensureTestUser(t *testing.T, d httpapi.Deps) {
+	t.Helper()
+	pool, ok := d.DB.(*pgxpool.Pool)
+	if !ok || d.WorkspaceID == uuid.Nil {
+		return
+	}
+	insertUser(t, pool, d.WorkspaceID, testUserID, "test-user@test.dev")
+}
+
+// insertUser adds a user row with a fixed id (idempotent).
+func insertUser(t *testing.T, pool *pgxpool.Pool, ws, id uuid.UUID, email string) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(),
+		`INSERT INTO users (id, workspace_id, email) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, id, ws, email); err != nil {
+		t.Fatalf("insert test user: %v", err)
+	}
 }
 
 func quietLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }

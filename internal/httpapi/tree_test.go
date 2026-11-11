@@ -30,6 +30,8 @@ type treeEnv struct {
 	h    http.Handler
 	pool *pgxpool.Pool
 	ws   uuid.UUID
+	// user, when set, is sent as X-Test-User (accounts_test.go's identity); empty acts as the default user.
+	user string
 }
 
 func newTreeEnv(t *testing.T) *treeEnv {
@@ -54,8 +56,12 @@ func (e *treeEnv) call(method, path, body string, ifMatch string) *httptest.Resp
 	if body != "" {
 		r.contentType = jsonCT
 	}
+	r.headers = map[string]string{}
 	if ifMatch != "" {
-		r.headers = map[string]string{"If-Match": ifMatch}
+		r.headers["If-Match"] = ifMatch
+	}
+	if e.user != "" {
+		r.headers[testUserHeader] = e.user
 	}
 	return do(e.t, e.h, r)
 }
@@ -226,14 +232,24 @@ func TestAT03_HierarchyMoveAndOrder(t *testing.T) {
 		t.Fatalf("move back to root: %v", back)
 	}
 
-	// Reorder root folders: Books before Media. sort_order is 0..n-1 and versions are untouched.
+	// Reorder root folders: Books before Media. At the root the order is the caller's own (the tree
+	// shows it as sort_order 0..n-1); the shared sort_order and the versions are untouched.
 	rec = e.call("PUT", "/api/v1/folders/order", fmt.Sprintf(`{"parent_folder_id":null,"ids":[%q,%q]}`, books["id"], media["id"]), "")
 	wantStatus(t, rec, 204)
-	if b := e.fetch("folders", books["id"].(string)); b["sort_order"].(float64) != 0 || b["version"].(float64) != 1 {
+	if b := e.fetch("folders", books["id"].(string)); b["sort_order"].(float64) != 1 || b["version"].(float64) != 1 {
 		t.Fatalf("books after reorder: %v", b)
 	}
-	if m := e.fetch("folders", media["id"].(string)); m["sort_order"].(float64) != 1 || m["version"].(float64) != 1 {
+	if m := e.fetch("folders", media["id"].(string)); m["sort_order"].(float64) != 0 || m["version"].(float64) != 1 {
 		t.Fatalf("media after reorder: %v", m)
+	}
+	var rootOrder []string
+	for _, f := range e.tree("folders") {
+		if f["parent_folder_id"] == nil {
+			rootOrder = append(rootOrder, f["id"].(string))
+		}
+	}
+	if len(rootOrder) != 2 || rootOrder[0] != books["id"] || rootOrder[1] != media["id"] {
+		t.Fatalf("tree root order = %v, want [books media]", rootOrder)
 	}
 
 	// Reorder lists in Books: [moved-away loose is gone, only Extra]; and a two-list folder.
@@ -372,8 +388,16 @@ func TestAT21_ReorderValidation(t *testing.T) {
 	e.exec("UPDATE folders SET sort_order = sort_order * 10 + 5 WHERE deleted_at IS NULL AND parent_folder_id IS NULL")
 	body, _ := json.Marshal(obj{"parent_folder_id": nil, "ids": []string{id(f2), id(f1)}})
 	wantStatus(t, e.call("PUT", "/api/v1/folders/order", string(body), ""), 204)
-	if a, b := e.fetch("folders", id(f2)), e.fetch("folders", id(f1)); a["sort_order"].(float64) != 0 || b["sort_order"].(float64) != 1 {
-		t.Fatalf("sort_order after reorder: %v %v", a["sort_order"], b["sort_order"])
+	// At the root the caller's own order is written (0..n-1 in the tree); the shared sort_order is not.
+	treePos := map[string]float64{}
+	for _, f := range e.tree("folders") {
+		treePos[f["id"].(string)] = f["sort_order"].(float64)
+	}
+	if treePos[id(f2)] != 0 || treePos[id(f1)] != 1 {
+		t.Fatalf("tree sort_order after reorder: %v", treePos)
+	}
+	if a, b := e.fetch("folders", id(f2)), e.fetch("folders", id(f1)); a["sort_order"].(float64) != 15 || b["sort_order"].(float64) != 5 {
+		t.Fatalf("shared sort_order changed by a root reorder: %v %v", a["sort_order"], b["sort_order"])
 	}
 	// The empty set is valid for a parent without children.
 	body, _ = json.Marshal(obj{"parent_folder_id": id(f2), "ids": []string{}})
@@ -734,11 +758,16 @@ func (noTypeSource) TypeInfo(context.Context, *string) (lists.TypeInfo, []lists.
 	return lists.TypeInfo{}, nil, apperr.NotFound("type")
 }
 
+// userCtx is a context for calling services directly, as the router's test identity.
+func (e *treeEnv) userCtx() context.Context {
+	return scope.WithUser(scope.With(e.t.Context(), e.ws), testUserID)
+}
+
 // descEnv returns a lists service on the env's database and a fresh list with no type.
 func (e *treeEnv) descEnv() (*lists.Service, lists.List) {
 	e.t.Helper()
 	svc := lists.NewService(lists.NewPostgres(e.pool), noTypeSource{}, clock.System{})
-	l, err := svc.Create(scope.With(e.t.Context(), e.ws), lists.CreateInput{Name: "L"})
+	l, err := svc.Create(e.userCtx(), lists.CreateInput{Name: "L"})
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -748,7 +777,7 @@ func (e *treeEnv) descEnv() (*lists.Service, lists.List) {
 func TestF007_ListDescriptionLimitIsBytes(t *testing.T) {
 	e := newTreeEnv(t)
 	svc, l := e.descEnv()
-	ctx := scope.With(t.Context(), e.ws)
+	ctx := e.userCtx()
 	patch := func(v *string) lists.Patch {
 		return lists.Patch{Description: lists.Optional[string]{Set: true, Value: v}}
 	}

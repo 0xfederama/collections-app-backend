@@ -128,6 +128,7 @@ func build(d Deps) (chi.Router, huma.API) {
 	if d.Identity != nil {
 		r.Use(d.Identity.Middleware)
 	}
+	r.Use(accessCache)
 	api := httpserver.NewAPI(r)
 	register(api, d)
 	return r, api
@@ -138,6 +139,23 @@ func build(d Deps) (chi.Router, huma.API) {
 // root gives.
 func register(api huma.API, d Deps) {
 	registerHealth(api, d)
+	// Visibility (F-027 B2). Without a database pool (the probe-only test routers) nothing is
+	// guarded because nothing is served. The guard is registered before the feature operations:
+	// Huma reads the middleware list when an operation is added.
+	acc := newAccess(d.DB)
+	itemSvc, trashSvc, searchSvc := d.Items, d.Trash, d.Search
+	if acc != nil {
+		api.UseMiddleware(guard(api, acc, d.Logger))
+		if itemSvc != nil {
+			itemSvc = itemSvc.WithAccess(acc)
+		}
+		if trashSvc != nil {
+			trashSvc = trashSvc.WithAccess(acc)
+		}
+		if searchSvc != nil {
+			searchSvc = searchSvc.WithAccess(acc)
+		}
+	}
 	users.Register(api, d.Logger, d.Users, d.DevIdentities)
 	workspace.Register(api, d.Logger, d.Settings, d.Settings, workspace.Availability{
 		Lookup:     d.LookupAvailable,
@@ -145,15 +163,21 @@ func register(api huma.API, d Deps) {
 	})
 	folderRepo := folders.NewPostgres(folderDB(d.DB))
 	listRepo := lists.NewPostgres(folderDB(d.DB))
-	folders.Register(api, d.Logger, folders.NewService(folderRepo, d.Clock))
-	lists.Register(api, d.Logger, lists.NewService(listRepo, listTypes{}, d.Clock))
-	tree.Register(api, d.Logger, folderRepo, listRepo)
+	folderSvc := folders.NewService(folderRepo, d.Clock)
+	listSvc := lists.NewService(listRepo, listTypes{}, d.Clock)
+	var treeAccess tree.Access
+	if acc != nil {
+		folderSvc, listSvc, treeAccess = folderSvc.WithAccess(acc), listSvc.WithAccess(acc), acc
+	}
+	folders.Register(api, d.Logger, folderSvc)
+	lists.Register(api, d.Logger, listSvc)
+	tree.Register(api, d.Logger, folderRepo, listRepo, treeAccess)
 	definitions.Register(api, d.Logger)
-	items.Register(api, d.Logger, d.Items, importer(d))
+	items.Register(api, d.Logger, itemSvc, importer(d))
 	content.Register(api, d.Logger, content.NewService(content.NewPostgres(contentDB(d.DB)), contentSettings{settingsService(d)}, d.Clock))
 	images.Register(api, d.Logger, d.Images)
-	trash.Register(api, d.Logger, d.Trash)
-	search.Register(api, d.Logger, d.Search)
+	trash.Register(api, d.Logger, trashSvc)
+	search.Register(api, d.Logger, searchSvc)
 	lookup.Register(api, d.Logger, d.Lookup, d.TMDB, d.Books, d.Settings)
 	stores.Register(api, d.Logger)
 	favicons.Register(api, d.Logger, d.Favicons)

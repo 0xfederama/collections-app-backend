@@ -12,6 +12,7 @@ import (
 type FolderJSON struct {
 	ID             uuid.UUID  `json:"id" format:"uuid"`
 	ParentFolderID *uuid.UUID `json:"parent_folder_id" format:"uuid" nullable:"true"`
+	OwnerUserID    *uuid.UUID `json:"owner_user_id" format:"uuid" nullable:"true" doc:"The owner of a top-level folder; null for a nested one, which belongs to its top-level ancestor."`
 	Name           string     `json:"name"`
 	SortOrder      int        `json:"sort_order"`
 	Version        int        `json:"version"`
@@ -22,7 +23,7 @@ type FolderJSON struct {
 // ToJSON is the wire shape of f.
 func ToJSON(f Folder) FolderJSON {
 	return FolderJSON{
-		ID: f.ID, ParentFolderID: f.ParentID, Name: f.Name, SortOrder: f.SortOrder,
+		ID: f.ID, ParentFolderID: f.ParentID, OwnerUserID: f.OwnerID, Name: f.Name, SortOrder: f.SortOrder,
 		Version: f.Version, CreatedAt: f.CreatedAt, UpdatedAt: f.UpdatedAt,
 	}
 }

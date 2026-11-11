@@ -23,23 +23,57 @@ var ErrInvalidQuery = errors.New("search: q must be 1 to 200 characters")
 type Store interface {
 	// SearchItems returns one page of the items whose title matches like (an escaped LIKE
 	// fragment). Exact matches of q come first, then by title and id.
-	SearchItems(ctx context.Context, like, q string, limit, offset int) ([]items.Item, error)
-	// CountSearchItems counts every item whose title matches like, whatever the page.
-	CountSearchItems(ctx context.Context, like string) (int, error)
+	// Only items of the lists in listIDs are searched (the lists the caller may see).
+	SearchItems(ctx context.Context, listIDs []uuid.UUID, like, q string, limit, offset int) ([]items.Item, error)
+	// CountSearchItems counts every item of listIDs whose title matches like, whatever the page.
+	CountSearchItems(ctx context.Context, listIDs []uuid.UUID, like string) (int, error)
 	// ListSearchFolders returns every active folder.
 	ListSearchFolders(ctx context.Context) ([]Folder, error)
 	// ListSearchLists returns every active list.
 	ListSearchLists(ctx context.Context) ([]List, error)
-	// ListRecentItems returns the active items updated last, newest first (ties by id).
-	ListRecentItems(ctx context.Context, limit int) ([]items.Item, error)
+	// ListRecentItems returns the active items of listIDs updated last, newest first (ties by id).
+	ListRecentItems(ctx context.Context, listIDs []uuid.UUID, limit int) ([]items.Item, error)
+}
+
+// Access answers what the caller may see (internal/access, wired in httpapi).
+type Access interface {
+	// VisibleListIDs returns the active lists the caller may see.
+	VisibleListIDs(ctx context.Context) (map[uuid.UUID]bool, error)
 }
 
 // Service holds the search rules: the query and paging limits, and the path of
 // each result, built from the folders and lists loaded once per request.
-type Service struct{ store Store }
+type Service struct {
+	store  Store
+	access Access
+}
 
 // NewService returns the search rules over the store.
 func NewService(store Store) *Service { return &Service{store: store} }
+
+// WithAccess returns the service limited to the lists the caller may see. Without it nothing is
+// visible: a search that forgot its access answers empty, never every user's items.
+func (s *Service) WithAccess(a Access) *Service {
+	c := *s
+	c.access = a
+	return &c
+}
+
+// visibleLists returns the ids of the lists the caller may search.
+func (s *Service) visibleLists(ctx context.Context) ([]uuid.UUID, error) {
+	ids := []uuid.UUID{}
+	if s.access == nil {
+		return ids, nil
+	}
+	set, err := s.access.VisibleListIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for id := range set {
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
 
 // Search returns the active items whose title contains p.Q (case-insensitive,
 // literal). An exact title match ranks first, then titles alphabetically, then
@@ -60,11 +94,15 @@ func (s *Service) Search(ctx context.Context, p Params) (Page, error) {
 	}
 
 	like := items.EscapeLike(q)
-	rows, err := s.store.SearchItems(ctx, like, q, p.Limit, p.Offset)
+	lists, err := s.visibleLists(ctx)
 	if err != nil {
 		return Page{}, err
 	}
-	total, err := s.store.CountSearchItems(ctx, like)
+	rows, err := s.store.SearchItems(ctx, lists, like, q, p.Limit, p.Offset)
+	if err != nil {
+		return Page{}, err
+	}
+	total, err := s.store.CountSearchItems(ctx, lists, like)
 	if err != nil {
 		return Page{}, err
 	}
@@ -99,7 +137,11 @@ func (s *Service) Recent(ctx context.Context, limit int) ([]Result, error) {
 	if limit > MaxRecentLimit {
 		limit = MaxRecentLimit
 	}
-	rows, err := s.store.ListRecentItems(ctx, limit)
+	lists, err := s.visibleLists(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.store.ListRecentItems(ctx, lists, limit)
 	if err != nil {
 		return nil, err
 	}

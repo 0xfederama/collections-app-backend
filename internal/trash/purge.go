@@ -3,6 +3,7 @@ package trash
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/google/uuid"
 )
@@ -42,17 +43,25 @@ func (t *Service) PurgeAll(ctx context.Context) (int, error) {
 	if err := requireWorkspace(ctx); err != nil {
 		return 0, err
 	}
+	// Only the batches the caller may see: another user's trash stays as it is.
+	visible, err := t.visibleBatches(ctx)
+	if err != nil {
+		return 0, err
+	}
 	var (
 		keys    []string
 		removed int
 	)
-	err := t.store.InTx(ctx, func(r Repo) error {
+	err = t.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return err
 		}
 		ids, err := r.BatchIDs(ctx)
 		if err != nil {
 			return err
+		}
+		if visible != nil {
+			ids = onlyIDs(ids, visible)
 		}
 		keys, err = t.purgeBatches(ctx, r, ids)
 		if err != nil {
@@ -121,6 +130,10 @@ func (t *Service) purgeBatch(ctx context.Context, r Repo, b Batch) ([]string, er
 	if err := r.DeleteFolders(ctx, sub.folders); err != nil {
 		return nil, err
 	}
+	// The per-user order rows have no foreign key, so they go explicitly (D-118).
+	if err := r.DeleteTopOrder(ctx, append(slices.Clone(sub.lists), sub.folders...)); err != nil {
+		return nil, err
+	}
 	ids := make([]uuid.UUID, 0, len(atts))
 	keys := make([]string, 0, 2*len(atts))
 	for _, a := range atts {
@@ -186,4 +199,19 @@ func (t *Service) deleteFiles(ctx context.Context, keys []string) {
 			t.log.WarnContext(context.WithoutCancel(ctx), "image file cleanup after purge failed; the sweeper will retry", "err", err)
 		}
 	}
+}
+
+// onlyIDs keeps the ids of all that are in keep, in the order of all.
+func onlyIDs(all, keep []uuid.UUID) []uuid.UUID {
+	set := make(map[uuid.UUID]bool, len(keep))
+	for _, id := range keep {
+		set[id] = true
+	}
+	out := make([]uuid.UUID, 0, len(all))
+	for _, id := range all {
+		if set[id] {
+			out = append(out, id)
+		}
+	}
+	return out
 }

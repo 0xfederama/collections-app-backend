@@ -151,6 +151,11 @@ func (f *fakeDB) SetSortOrder(_ context.Context, id uuid.UUID, sortOrder int, no
 	return nil
 }
 
+func (f *fakeDB) SetTopOrder(context.Context, uuid.UUID, int) error {
+	f.calls = append(f.calls, "setTopOrder")
+	return nil
+}
+
 func (f *fakeDB) FolderChain(_ context.Context, folderID uuid.UUID) ([]PathFolder, error) {
 	chain := []PathFolder{}
 	for id := &folderID; id != nil; {

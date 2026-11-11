@@ -24,9 +24,9 @@ var _ Store = (*Postgres)(nil)
 // NewPostgres returns the search repository over db (a pool in production).
 func NewPostgres(db sqlc.DBTX) *Postgres { return &Postgres{q: sqlc.New(db)} }
 
-func (p *Postgres) SearchItems(ctx context.Context, like, q string, limit, offset int) ([]items.Item, error) {
+func (p *Postgres) SearchItems(ctx context.Context, listIDs []uuid.UUID, like, q string, limit, offset int) ([]items.Item, error) {
 	rows, err := p.q.SearchItems(ctx, sqlc.SearchItemsParams{
-		WorkspaceID: scope.WorkspaceID(ctx), LikeQ: like, Q: q,
+		WorkspaceID: scope.WorkspaceID(ctx), ListIds: listIDs, LikeQ: like, Q: q,
 		PageLimit: int32(limit), PageOffset: int32(offset), //nolint:gosec // bounded by the service
 	})
 	if err != nil {
@@ -39,8 +39,8 @@ func (p *Postgres) SearchItems(ctx context.Context, like, q string, limit, offse
 	return out, nil
 }
 
-func (p *Postgres) CountSearchItems(ctx context.Context, like string) (int, error) {
-	total, err := p.q.CountSearchItems(ctx, sqlc.CountSearchItemsParams{WorkspaceID: scope.WorkspaceID(ctx), LikeQ: like})
+func (p *Postgres) CountSearchItems(ctx context.Context, listIDs []uuid.UUID, like string) (int, error) {
+	total, err := p.q.CountSearchItems(ctx, sqlc.CountSearchItemsParams{WorkspaceID: scope.WorkspaceID(ctx), ListIds: listIDs, LikeQ: like})
 	if err != nil {
 		return 0, fmt.Errorf("count search items: %w", err)
 	}
@@ -79,9 +79,9 @@ func (p *Postgres) ListSearchLists(ctx context.Context) ([]List, error) {
 	return out, nil
 }
 
-func (p *Postgres) ListRecentItems(ctx context.Context, limit int) ([]items.Item, error) {
+func (p *Postgres) ListRecentItems(ctx context.Context, listIDs []uuid.UUID, limit int) ([]items.Item, error) {
 	rows, err := p.q.ListRecentItems(ctx, sqlc.ListRecentItemsParams{
-		WorkspaceID: scope.WorkspaceID(ctx), PageLimit: int32(limit), //nolint:gosec // bounded by the service
+		WorkspaceID: scope.WorkspaceID(ctx), ListIds: listIDs, PageLimit: int32(limit), //nolint:gosec // bounded by the service
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list recent items: %w", err)

@@ -87,7 +87,9 @@ type FolderRow struct {
 	ID       uuid.UUID
 	Name     string
 	ParentID *uuid.UUID
-	Version  int
+	// OwnerID is set only on a top-level folder.
+	OwnerID *uuid.UUID
+	Version int
 }
 
 // ListRow is the list columns a delete or restore reads. Version is zero when the
@@ -96,7 +98,9 @@ type ListRow struct {
 	ID       uuid.UUID
 	Name     string
 	FolderID *uuid.UUID
-	Version  int
+	// OwnerID is set only on a top-level list.
+	OwnerID *uuid.UUID
+	Version int
 }
 
 // ItemRow is the item columns a delete or restore reads.

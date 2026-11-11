@@ -107,6 +107,17 @@ func (s *Service) ProfileDue(u User) bool {
 	return true
 }
 
+// Lookup returns the user of email (trimmed, lower-cased) when they signed in before. It never
+// creates one.
+func (s *Service) Lookup(ctx context.Context, email string) (User, bool, error) {
+	u, err := s.store.ByEmail(ctx, strings.ToLower(strings.TrimSpace(email)))
+	var missing *apperr.NotFoundError
+	if errors.As(err, &missing) {
+		return User{}, false, nil
+	}
+	return u, err == nil, err
+}
+
 // SaveProfile stores a fetched profile and stamps profile_fetched_at.
 func (s *Service) SaveProfile(ctx context.Context, id uuid.UUID, p Profile) error {
 	u, err := s.store.UpdateProfile(ctx, id, p, s.clk.Now())

@@ -25,6 +25,7 @@ const testUserHeader = "X-Test-User"
 var testUsers = map[string]uuid.UUID{
 	"a": uuid.MustParse("00000000-0000-4000-8000-0000000000a1"),
 	"b": uuid.MustParse("00000000-0000-4000-8000-0000000000b2"),
+	"c": uuid.MustParse("00000000-0000-4000-8000-0000000000c3"),
 }
 
 // headerIdentity acts as the user named by X-Test-User ("a" when absent).
@@ -59,6 +60,7 @@ func newAccountsEnv(t *testing.T) *imageEnv {
 	e := newImageEnvAs(t, headerIdentity{})
 	insertUser(t, e.pool, e.ws, testUsers["a"], "a@test.dev")
 	insertUser(t, e.pool, e.ws, testUsers["b"], "b@test.dev")
+	insertUser(t, e.pool, e.ws, testUsers["c"], "c@test.dev")
 	return e.as("a")
 }
 
@@ -177,10 +179,11 @@ func operationsOf(p *huma.PathItem) map[string]*huma.Operation {
 	return out
 }
 
-// substitute fills every path parameter: the resource id, and 1 for the content version.
+// substitute fills every path parameter: the resource id, a user for a member, and 1 for the content version.
 func substitute(path, id string) string {
 	path = strings.ReplaceAll(path, "{id}", id)
 	path = strings.ReplaceAll(path, "{batch_id}", id)
+	path = strings.ReplaceAll(path, "{user_id}", testUsers["b"].String())
 	return strings.ReplaceAll(path, "{version}", "1")
 }
 

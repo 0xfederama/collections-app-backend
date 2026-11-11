@@ -1,5 +1,15 @@
 components:
   schemas:
+    AddFolderMemberRequest:
+      additionalProperties: false
+      properties:
+        email:
+          maxLength: 320
+          minLength: 3
+          type: string
+      required:
+        - email
+      type: object
     BlockingParent:
       additionalProperties: false
       properties:
@@ -222,6 +232,12 @@ components:
         id:
           format: uuid
           type: string
+        member_user_ids:
+          description: The users a top-level folder is shared with, besides its owner; empty for a nested or an unshared folder.
+          items:
+            format: uuid
+            type: string
+          type: array
         name:
           type: string
         owner_user_id:
@@ -235,6 +251,9 @@ components:
           type:
             - string
             - "null"
+        shared:
+          description: True for a top-level folder shared with at least one other user.
+          type: boolean
         sort_order:
           format: int64
           type: integer
@@ -248,6 +267,8 @@ components:
         - id
         - parent_folder_id
         - owner_user_id
+        - shared
+        - member_user_ids
         - name
         - sort_order
         - version
@@ -767,6 +788,7 @@ components:
         - `payload_too_large`: The body is over the limit of the operation (413).
         - `unsupported_media_type`: An upload is not JPEG, PNG or WebP (415).
         - `unauthenticated`: The request carries no valid identity: a missing, invalid or expired Cloudflare Access token, or no identity provider matches (401). Sign in again.
+        - `forbidden`: You can see this resource, but only its owner may do this (403): delete or move a top-level folder or list, share or unshare a folder.
         - `not_found`: The resource is missing or trashed, or the endpoint does not exist (404).
         - `favicon_not_found`: The site of a favicon request has no usable icon (404). The web shows its fallback.
         - `method_not_allowed`: The path exists but does not accept this method (405).
@@ -775,6 +797,8 @@ components:
         - `cycle_detected`: A folder would be moved into itself or one of its descendants (409).
         - `parent_in_trash`: A restore without a destination whose parent is trashed (409). `blocking_parent` names it.
         - `destination_unavailable`: A move, restore or create targets a folder or list that is missing or trashed (409).
+        - `folder_not_top_level`: Only a top-level folder can be shared (409).
+        - `folder_shared`: A folder shared with others cannot be moved into another folder (409). Stop sharing it first.
         - `type_mismatch`: An item would move to a list of another type (409).
         - `duplicate_title`: An item create, rename or move would repeat a title of the target list, ignoring case, accents and outer spaces (409).
         - `order_stale`: A reorder names an id set that no longer matches the stored one (409).
@@ -1971,9 +1995,147 @@ paths:
       summary: Rename a folder
       tags:
         - folders
+  /api/v1/folders/{id}/members:
+    post:
+      description: "Owner only (403 `forbidden`). The folder must be top level (409 `folder_not_top_level`). The e-mail must belong to a user who has signed in and is not the owner (422 on `email`). Already a member: 200, unchanged. No `If-Match` and no version change."
+      operationId: addFolderMember
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddFolderMemberRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Folder"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type: string
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Conflict
+        "413":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Request Entity Too Large
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Internal Server Error
+      summary: Share a top-level folder with a user
+      tags:
+        - folders
+  /api/v1/folders/{id}/members/{user_id}:
+    delete:
+      description: "The owner may remove anyone; a member may remove only themself. Everything the member added stays in the folder. A user who is not a member: 404."
+      operationId: removeFolderMember
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            format: uuid
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Internal Server Error
+      summary: Stop sharing a folder with a user, or leave a shared folder
+      tags:
+        - folders
   /api/v1/folders/{id}/move:
     post:
-      description: "Requires `If-Match`. `parent_folder_id: null` moves it to the root."
+      description: "Requires `If-Match`. `parent_folder_id: null` moves it to the root. A top-level folder moves only by its owner (403 `forbidden`); a folder with members cannot go into a folder (409 `folder_shared`). Moving out of a shared folder to the top level makes the caller the owner."
       operationId: moveFolder
       parameters:
         - in: path
@@ -2017,6 +2179,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
           description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Forbidden
         "404":
           content:
             application/problem+json:

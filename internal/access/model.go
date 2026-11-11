@@ -1,7 +1,7 @@
 // Package access decides what the caller may see (F-027, D-147). Ownership lives only on
 // top-level folders and lists; anything nested inherits access from its top-level ancestor, the
 // "box". A resource is visible when its box is visible, and Snapshot.Visible is the one place
-// that rule is written (B3 adds the box folders shared with the caller there).
+// that rule is written: the box is the caller's, or its top-level folder is shared with the caller.
 //
 // The package has no HTTP and no business operations: other features reach it through small
 // interfaces they declare, wired in httpapi/router.go. Background jobs (sweeper, auto-purge,
@@ -35,8 +35,8 @@ type Node struct {
 type Box struct {
 	Found bool
 	Owner uuid.UUID
-	// TopFolder is the top-level folder of the box (uuid.Nil when the box is a top-level list).
-	// B3 reads the members of that folder.
+	// TopFolder is the top-level folder of the box (uuid.Nil when the box is a top-level list);
+	// its members see the box.
 	TopFolder uuid.UUID
 }
 
@@ -45,11 +45,20 @@ type Box struct {
 type Snapshot struct {
 	folders map[uuid.UUID]Node
 	lists   map[uuid.UUID]Node
+	members map[Member]bool
 }
 
-// NewSnapshot indexes the folders and lists.
-func NewSnapshot(folders, lists []Node) Snapshot {
-	s := Snapshot{folders: make(map[uuid.UUID]Node, len(folders)), lists: make(map[uuid.UUID]Node, len(lists))}
+// Member is one row of folder_members: User may see the top-level folder Folder.
+type Member struct{ Folder, User uuid.UUID }
+
+// NewSnapshot indexes the folders, lists and memberships. A membership of a folder that is not
+// top level, or does not exist, is kept but never read: the rule only asks for the members of a
+// box's top-level folder, so stale rows are inert.
+func NewSnapshot(folders, lists []Node, members ...Member) Snapshot {
+	s := Snapshot{folders: make(map[uuid.UUID]Node, len(folders)), lists: make(map[uuid.UUID]Node, len(lists)), members: make(map[Member]bool, len(members))}
+	for _, m := range members {
+		s.members[m] = true
+	}
 	for _, f := range folders {
 		s.folders[f.ID] = f
 	}
@@ -87,10 +96,13 @@ func (s Snapshot) ListBox(id uuid.UUID) Box {
 	return s.FolderBox(*l.ParentID)
 }
 
-// Visible is the single visibility rule: user may see the resources of box b. B2: the box is
-// theirs. B3 adds "or a member of the box folder" here and nowhere else.
+// Visible is the single visibility rule: user may see the resources of box b when the box is
+// theirs (they own it), or its top-level folder is shared with them (they are a member).
 func (s Snapshot) Visible(user uuid.UUID, b Box) bool {
-	return b.Found && user != uuid.Nil && b.Owner == user
+	if !b.Found || user == uuid.Nil {
+		return false
+	}
+	return b.Owner == user || (b.TopFolder != uuid.Nil && s.members[Member{b.TopFolder, user}])
 }
 
 // VisibleFolders returns the active folders whose box user may see.

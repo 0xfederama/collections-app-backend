@@ -174,6 +174,10 @@ func (f *fakeDB) FolderExists(_ context.Context, id uuid.UUID) (bool, error) {
 	return ok, nil
 }
 
+// The unit tests run without a user, so the in-transaction visibility checks never run.
+func (f *fakeDB) FolderVisibleToCaller(context.Context, uuid.UUID) (bool, error) { return true, nil }
+func (f *fakeDB) ListVisibleToCaller(context.Context, uuid.UUID) (bool, error)   { return true, nil }
+
 func (f *fakeDB) TypeInfo(_ context.Context, key *string) (TypeInfo, []FieldInfo, error) {
 	if f.inTx {
 		f.typeReadsInTx++

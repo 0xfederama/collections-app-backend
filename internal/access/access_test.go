@@ -254,3 +254,47 @@ func TestService_TopOrderIsTheCallers(t *testing.T) {
 		t.Errorf("TopOrder = %v, %v for %s", f, err, repo.topOrderFor)
 	}
 }
+
+func TestSnapshot_MembersSeeTheTopLevelFolderBox(t *testing.T) {
+	// Bob is a member of alice's top folder 1, and (stale rows) of the nested folder 2, of a
+	// folder that no longer exists, and of folder 5 that nobody owns.
+	s := access.NewSnapshot(
+		[]access.Node{
+			{ID: id(1), Owner: &alice},
+			{ID: id(2), ParentID: ptr(id(1))},
+			{ID: id(4), Owner: &alice},
+			{ID: id(5)},
+			{ID: id(6), ParentID: ptr(id(4))}, // was shared once, now nested in a private folder
+		},
+		[]access.Node{{ID: id(11), ParentID: ptr(id(2))}, {ID: id(12), ParentID: ptr(id(6))}, {ID: id(10), Owner: &alice}},
+		access.Member{Folder: id(1), User: bob},
+		access.Member{Folder: id(2), User: bob},
+		access.Member{Folder: id(6), User: bob},
+		access.Member{Folder: id(99), User: bob},
+	)
+	tests := []struct {
+		name string
+		box  access.Box
+		want bool
+	}{
+		{"the shared top folder", s.FolderBox(id(1)), true},
+		{"a folder inside it", s.FolderBox(id(2)), true},
+		{"a list inside it", s.ListBox(id(11)), true},
+		{"a private top folder", s.FolderBox(id(4)), false},
+		{"a stale member row of a nested folder is inert", s.FolderBox(id(6)), false},
+		{"a list under the stale row", s.ListBox(id(12)), false},
+		{"a top list is never shared", s.ListBox(id(10)), false},
+		{"a missing folder", s.FolderBox(id(99)), false},
+	}
+	for _, tt := range tests {
+		if got := s.Visible(bob, tt.box); got != tt.want {
+			t.Errorf("%s: visible to bob = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+	if !s.Visible(alice, s.FolderBox(id(1))) {
+		t.Error("the owner stops seeing the shared folder")
+	}
+	if got := s.VisibleFolders(bob); len(got) != 2 || !got[id(1)] || !got[id(2)] {
+		t.Errorf("bob's folders = %v", got)
+	}
+}

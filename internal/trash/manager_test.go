@@ -679,6 +679,17 @@ func (r fakeRepo) DeleteFolders(ctx context.Context, folderIDs []uuid.UUID) erro
 	return nil
 }
 
+func (r fakeRepo) DeleteFolderMembers(ctx context.Context, ids []uuid.UUID) error {
+	return r.write("DeleteFolderMembers")
+}
+
+// The unit tests run without a user, so the in-transaction visibility checks never run.
+func (r fakeRepo) FolderVisibleToCaller(context.Context, uuid.UUID) (bool, error) { return true, nil }
+func (r fakeRepo) ListVisibleToCaller(context.Context, uuid.UUID) (bool, error)   { return true, nil }
+func (r fakeRepo) FolderMemberIDs(context.Context, uuid.UUID) ([]uuid.UUID, error) {
+	return nil, nil
+}
+
 func (r fakeRepo) DeleteTopOrder(ctx context.Context, ids []uuid.UUID) error {
 	return r.write("DeleteTopOrder")
 }

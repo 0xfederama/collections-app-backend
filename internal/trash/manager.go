@@ -109,6 +109,48 @@ func ancestorPath(nodes []FolderNode, folder *uuid.UUID) []PathSegment {
 	return activePath(nodes, *folder)
 }
 
+// requireVisibleFolder / requireVisibleList re-read, after the tree lock, whether the caller may
+// see the row (any state). The access snapshot of the request was read before the lock and a
+// share may have been removed since; the answer then is the one for a row the caller never saw.
+// They do nothing without a user in the context (jobs and unit tests).
+func requireVisibleFolder(ctx context.Context, r Repo, id uuid.UUID, resource string) error {
+	if _, ok := scope.UserID(ctx); !ok {
+		return nil
+	}
+	if v, err := r.FolderVisibleToCaller(ctx, id); err != nil {
+		return err
+	} else if !v {
+		return apperr.NotFound(resource)
+	}
+	return nil
+}
+
+func requireVisibleList(ctx context.Context, r Repo, id uuid.UUID, resource string) error {
+	if _, ok := scope.UserID(ctx); !ok {
+		return nil
+	}
+	if v, err := r.ListVisibleToCaller(ctx, id); err != nil {
+		return err
+	} else if !v {
+		return apperr.NotFound(resource)
+	}
+	return nil
+}
+
+// requireOwnerOfTop answers Forbidden for a top-level row (owner != nil position) the caller does
+// not own: deleting or moving a top-level folder or list is the owner's. topLevel is whether the
+// row is at the top level.
+func requireOwnerOfTop(ctx context.Context, topLevel bool, owner *uuid.UUID) error {
+	user, ok := scope.UserID(ctx)
+	if !ok || !topLevel {
+		return nil
+	}
+	if owner == nil || *owner != user {
+		return apperr.Forbidden()
+	}
+	return nil
+}
+
 // ---- delete ----
 
 // DeleteFolder moves an active folder and everything active below it to the
@@ -125,6 +167,12 @@ func (t *Service) DeleteFolder(ctx context.Context, id uuid.UUID, version int) e
 		}
 		cur, err := r.LockFolder(ctx, id)
 		if err != nil {
+			return err
+		}
+		if err := requireVisibleFolder(ctx, r, id, "folder"); err != nil {
+			return err
+		}
+		if err := requireOwnerOfTop(ctx, cur.ParentID == nil, cur.OwnerID); err != nil {
 			return err
 		}
 		if cur.Version != version {
@@ -168,6 +216,12 @@ func (t *Service) DeleteList(ctx context.Context, id uuid.UUID, version int) err
 		if err != nil {
 			return err
 		}
+		if err := requireVisibleList(ctx, r, id, "list"); err != nil {
+			return err
+		}
+		if err := requireOwnerOfTop(ctx, cur.FolderID == nil, cur.OwnerID); err != nil {
+			return err
+		}
 		if cur.Version != version {
 			return apperr.VersionConflict(cur.Version)
 		}
@@ -200,6 +254,9 @@ func (t *Service) DeleteItem(ctx context.Context, id uuid.UUID, version int) err
 		}
 		cur, err := r.LockItem(ctx, id)
 		if err != nil {
+			return err
+		}
+		if err := requireVisibleList(ctx, r, cur.ListID, "item"); err != nil {
 			return err
 		}
 		if cur.Version != version {
@@ -318,6 +375,14 @@ func (t *Service) restoreFolder(ctx context.Context, r Repo, b Batch, dest *Dest
 	if err != nil {
 		return err
 	}
+	if err := requireVisibleFolder(ctx, r, b.RootID, "trash entry"); err != nil {
+		return err
+	}
+	if dest != nil { // a restore with a destination is a move: a top-level folder moves by its owner
+		if err := requireOwnerOfTop(ctx, root.ParentID == nil, root.OwnerID); err != nil {
+			return err
+		}
+	}
 	parent, err := t.folderTarget(ctx, r, root.ParentID, dest, destErr, &b.RootID)
 	if err != nil {
 		return err
@@ -333,6 +398,14 @@ func (t *Service) restoreList(ctx context.Context, r Repo, b Batch, dest *Destin
 	root, err := r.GetTrashedList(ctx, b.RootID, b.ID)
 	if err != nil {
 		return err
+	}
+	if err := requireVisibleList(ctx, r, b.RootID, "trash entry"); err != nil {
+		return err
+	}
+	if dest != nil {
+		if err := requireOwnerOfTop(ctx, root.FolderID == nil, root.OwnerID); err != nil {
+			return err
+		}
 	}
 	folder, err := t.folderTarget(ctx, r, root.FolderID, dest, destErr, nil)
 	if err != nil {
@@ -350,6 +423,9 @@ func (t *Service) restoreItem(ctx context.Context, r Repo, b Batch, dest *Destin
 	if err != nil {
 		return err
 	}
+	if err := requireVisibleList(ctx, r, root.ListID, "trash entry"); err != nil {
+		return err
+	}
 	list := root.ListID
 	if dest != nil {
 		if fe := checkDestination(TypeItem, dest); fe != nil {
@@ -358,6 +434,13 @@ func (t *Service) restoreItem(ctx context.Context, r Repo, b Batch, dest *Destin
 		list = *dest.ListID
 		if destErr != nil {
 			return destErr
+		}
+		if _, ok := scope.UserID(ctx); ok {
+			if v, err := r.ListVisibleToCaller(ctx, list); err != nil {
+				return fmt.Errorf("check destination: %w", err)
+			} else if !v {
+				return apperr.DestinationUnavailable()
+			}
 		}
 		if _, err := r.GetActiveList(ctx, list); err != nil {
 			if isNotFound(err) {
@@ -419,11 +502,28 @@ func (t *Service) folderTarget(ctx context.Context, r Repo, original *uuid.UUID,
 	if destErr != nil {
 		return nil, destErr
 	}
+	if _, ok := scope.UserID(ctx); ok {
+		if v, err := r.FolderVisibleToCaller(ctx, *parent); err != nil {
+			return nil, fmt.Errorf("check destination: %w", err)
+		} else if !v {
+			return nil, apperr.DestinationUnavailable()
+		}
+	}
 	if _, err := r.GetActiveFolder(ctx, *parent); err != nil {
 		if isNotFound(err) {
 			return nil, apperr.DestinationUnavailable()
 		}
 		return nil, fmt.Errorf("destination folder: %w", err)
+	}
+	if rootFolder != nil {
+		// A folder with members stays at the top level.
+		members, err := r.FolderMemberIDs(ctx, *rootFolder)
+		if err != nil {
+			return nil, fmt.Errorf("folder members: %w", err)
+		}
+		if len(members) > 0 {
+			return nil, apperr.FolderShared()
+		}
 	}
 	return parent, nil
 }

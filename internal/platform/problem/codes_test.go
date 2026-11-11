@@ -32,6 +32,9 @@ func TestCodesCoverEveryEmittedCode(t *testing.T) {
 		apperr.TypeMismatch(),
 		apperr.DuplicateTitle(),
 		apperr.OrderStale(),
+		apperr.Forbidden(),
+		apperr.FolderNotTopLevel(),
+		apperr.FolderShared(),
 		apperr.PayloadTooLarge(10),
 		apperr.UnsupportedMediaType("svg"),
 		apperr.LookupDisabled(),
@@ -61,7 +64,7 @@ func TestCodesCoverEveryEmittedCode(t *testing.T) {
 		{422, []error{detail("body", "expected required property title to be present")}},
 		{415, []error{detail("body", "unknown content type")}},
 		{413, nil},
-		{400, nil}, {404, nil}, {409, nil}, {412, nil}, {422, nil}, {428, nil}, {500, nil}, {503, nil},
+		{400, nil}, {403, nil}, {404, nil}, {409, nil}, {412, nil}, {422, nil}, {428, nil}, {500, nil}, {503, nil},
 	} {
 		emitted = append(emitted, fromHuma(context.Background(), c.status, c.errs))
 	}

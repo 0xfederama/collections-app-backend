@@ -17,7 +17,7 @@ Composition root of the HTTP layer. `NewRouter` builds the Huma API over chi, re
 
 - `NewRouter(d Deps) (http.Handler, error)`: router behind request id, security headers, access log and recovery; errors when `Deps.Identity` is nil, or when `Deps.DB` is not a pool and `Deps.ProbeOnly` is unset (fails closed)
 - `Deps.ProbeOnly`: skips the access rules for probe-only test routers; never set in `cmd/api`
-- `guard`: 404 for a `{id}` or `{batch_id}` the caller cannot see (same answer as missing), before `If-Match` and the body; rules in `guardRules` (folders, lists, items, attachments, trash batches)
+- `guard`: 404 for a `{id}` or `{batch_id}` the caller cannot see (same answer as missing), before `If-Match` and the body; rules in `guardRules` (folders, lists, items, attachments, trash batches); `plainParams` (`version`, `user_id`) are not resources
 - `API(d Deps) huma.API`: all operations registered, used with a zero `Deps` by `Spec`
 - `Spec() ([]byte, error)`: OpenAPI 3.1 YAML of the registered operations
 - `GET /healthz`: 200 `ok`, liveness only

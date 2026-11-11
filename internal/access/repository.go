@@ -47,7 +47,15 @@ func (p *Postgres) Snapshot(ctx context.Context) (Snapshot, error) {
 	for _, r := range lrows {
 		lists = append(lists, Node{ID: r.ID, ParentID: ptr(r.FolderID), Owner: ptr(r.OwnerUserID), Trashed: r.Trashed})
 	}
-	return NewSnapshot(folders, lists), nil
+	mrows, err := p.q.AccessMembers(ctx, ws)
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("access members: %w", err)
+	}
+	members := make([]Member, 0, len(mrows))
+	for _, r := range mrows {
+		members = append(members, Member{Folder: r.FolderID, User: r.UserID})
+	}
+	return NewSnapshot(folders, lists, members...), nil
 }
 
 func (p *Postgres) ItemList(ctx context.Context, id uuid.UUID) (uuid.UUID, bool, error) {

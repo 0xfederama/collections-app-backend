@@ -29,6 +29,8 @@ var apiRoutes = []struct{ method, path string }{
 	{"PATCH", "/api/v1/folders/{id}"},
 	{"DELETE", "/api/v1/folders/{id}"},
 	{"POST", "/api/v1/folders/{id}/move"},
+	{"POST", "/api/v1/folders/{id}/members"},
+	{"DELETE", "/api/v1/folders/{id}/members/{user_id}"},
 	{"PUT", "/api/v1/folders/order"},
 	{"POST", "/api/v1/lists"},
 	{"GET", "/api/v1/lists/{id}"},

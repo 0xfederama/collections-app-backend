@@ -127,6 +127,9 @@ func (t *Service) purgeBatch(ctx context.Context, r Repo, b Batch) ([]string, er
 	if err := r.DeleteLists(ctx, sub.lists); err != nil {
 		return nil, err
 	}
+	if err := r.DeleteFolderMembers(ctx, sub.folders); err != nil {
+		return nil, err
+	}
 	if err := r.DeleteFolders(ctx, sub.folders); err != nil {
 		return nil, err
 	}

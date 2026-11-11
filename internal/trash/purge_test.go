@@ -86,7 +86,7 @@ func TestPurgeFolderOrderAndFilesAfterCommit(t *testing.T) {
 	}
 	want := []string{
 		"LockTree", "LockBatch",
-		"DeleteContentVersions", "DeleteLookupImports", "DeleteItems", "DeleteLists", "DeleteFolders", "DeleteTopOrder", "DeleteAttachmentRows",
+		"DeleteContentVersions", "DeleteLookupImports", "DeleteItems", "DeleteLists", "DeleteFolderMembers", "DeleteFolders", "DeleteTopOrder", "DeleteAttachmentRows",
 		"DeleteBatch", "DeleteOrphanBatches",
 		"commit",
 		"delete:" + fx.f1, "delete:" + fx.t1, "delete:" + fx.f2, "delete:" + fx.t2,

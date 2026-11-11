@@ -39,11 +39,31 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 	}, httpserver.Op(log, h.update))
 	huma.Register(api, huma.Operation{
 		OperationID: "moveFolder", Method: http.MethodPost, Path: "/api/v1/folders/{id}/move", Tags: tags,
-		Summary: "Move a folder under another parent", Description: "Requires `If-Match`. `parent_folder_id: null` moves it to the root.",
-		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict,
+		Summary: "Move a folder under another parent",
+		Description: "Requires `If-Match`. `parent_folder_id: null` moves it to the root. A top-level folder moves only by its owner " +
+			"(403 `forbidden`); a folder with members cannot go into a folder (409 `folder_shared`). Moving out of a shared folder " +
+			"to the top level makes the caller the owner.",
+		Errors: []int{http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound, http.StatusConflict,
 			http.StatusPreconditionFailed, http.StatusRequestEntityTooLarge,
 			http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
 	}, httpserver.Op(log, h.move))
+	huma.Register(api, huma.Operation{
+		OperationID: "addFolderMember", Method: http.MethodPost, Path: "/api/v1/folders/{id}/members", Tags: tags,
+		Summary: "Share a top-level folder with a user",
+		Description: "Owner only (403 `forbidden`). The folder must be top level (409 `folder_not_top_level`). The e-mail must belong " +
+			"to a user who has signed in and is not the owner (422 on `email`). Already a member: 200, unchanged. " +
+			"No `If-Match` and no version change.",
+		MaxBodyBytes: 64 << 10,
+		Errors: []int{http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound, http.StatusConflict,
+			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity},
+	}, httpserver.Op(log, h.addMember))
+	huma.Register(api, huma.Operation{
+		OperationID: "removeFolderMember", Method: http.MethodDelete, Path: "/api/v1/folders/{id}/members/{user_id}", Tags: tags,
+		Summary: "Stop sharing a folder with a user, or leave a shared folder", DefaultStatus: http.StatusNoContent,
+		Description: "The owner may remove anyone; a member may remove only themself. Everything the member added stays in the folder. " +
+			"A user who is not a member: 404.",
+		Errors: []int{http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound},
+	}, httpserver.Op(log, h.removeMember))
 	huma.Register(api, huma.Operation{
 		OperationID: "reorderFolders", Method: http.MethodPut, Path: "/api/v1/folders/order", Tags: tags,
 		Summary: "Reorder the child folders of a parent", DefaultStatus: http.StatusNoContent,
@@ -147,6 +167,36 @@ func (h *handler) move(ctx context.Context, in *moveInput) (*FolderOutput, error
 		return nil, err
 	}
 	return output(f), nil
+}
+
+// AddFolderMemberRequest is the body of addFolderMember.
+type AddFolderMemberRequest struct {
+	Email string `json:"email" minLength:"3" maxLength:"320"`
+}
+
+type addMemberInput struct {
+	IDParam
+	Body AddFolderMemberRequest
+}
+
+func (h *handler) addMember(ctx context.Context, in *addMemberInput) (*FolderOutput, error) {
+	f, err := h.svc.AddMember(ctx, in.ID, in.Body.Email)
+	if err != nil {
+		return nil, err
+	}
+	return output(f), nil
+}
+
+type removeMemberInput struct {
+	IDParam
+	UserID uuid.UUID `path:"user_id" format:"uuid"`
+}
+
+func (h *handler) removeMember(ctx context.Context, in *removeMemberInput) (*struct{}, error) {
+	if err := h.svc.RemoveMember(ctx, in.ID, in.UserID); err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
 
 // ReorderFoldersRequest is the body of reorderFolders.

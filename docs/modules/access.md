@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Decides what the caller may see (F-027 B2, D-147). Ownership sits only on top-level folders and lists; a nested resource belongs to its top-level ancestor (its "box"). A resource is visible when its box is, and `Snapshot.Visible` is the one place that rule is written (B3 adds shared box folders there). Features reach it through small interfaces they declare, wired in `httpapi`. Design context: `/Users/federico/Developer/collections-app/design-docs/features/F-027-accounts.md`.
+Decides what the caller may see (F-027 B2, D-147). Ownership sits only on top-level folders and lists; a nested resource belongs to its top-level ancestor (its "box"). A resource is visible when its box is, and `Snapshot.Visible` is the one place that rule is written (a box is visible to its owner and to the members of its top-level folder). Features reach it through small interfaces they declare, wired in `httpapi`. Design context: `/Users/federico/Developer/collections-app/design-docs/features/F-027-accounts.md`.
 
 ## Key files
 
 - `internal/access/model.go`: `Kind`, `Node`, `Box`, `Snapshot`, the visibility rule
 - `internal/access/service.go`: `Service`, the per-request snapshot cache (`WithCache`), the answers the guard and features use
-- `internal/access/repository.go`: `Postgres`, one plain query per read (snapshot, item and batch roots, per-user top order)
+- `internal/access/repository.go`: `Postgres`, one plain query per read (snapshot with the memberships, item and batch roots, per-user top order)
 - `internal/access/backfill.go`: `Backfill`, `ErrOwnerEmailRequired` (startup owner adoption)
 - `db/queries/access.sql`: sqlc inputs for the reads, the order upsert and the backfill
 - `internal/access/access_test.go`, `backfill_test.go`: box rules, cycles, cache, backfill and concurrent startups
@@ -33,3 +33,5 @@ Decides what the caller may see (F-027 B2, D-147). Ownership sits only on top-le
 - Background jobs (sweeper, auto-purge, lookup refresh) do not go through access and work on the whole workspace.
 - Backfill runs at every startup from `cmd/api`: a no-op when nothing is ownerless; the owner is `OWNER_EMAIL`, else the first `DEV_IDENTITY`. With ownerless rows and neither, startup fails (`ErrOwnerEmailRequired`).
 - Backfill adopts every ownerless top-level row, trashed ones included, and creates the owner user when missing.
+- Shares (B3): `Snapshot` also holds every `folder_members` row. The rule reads the members only of a box's top-level folder, so a row of a nested or missing folder is inert. A trashed shared folder keeps its members.
+- The snapshot is read before `LockTree`. Writes that a share can race (move, restore, share, delete) re-read visibility inside their transaction with the sqlc queries `FolderVisibleTo` and `ListBoxRow` (`access.sql`), called from the writing feature's own repository (never another feature's reader inside `InTx`). They run only when the context has a user.

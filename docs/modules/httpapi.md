@@ -14,13 +14,15 @@ Composition root of the HTTP layer. `NewRouter` builds the Huma API over chi, re
 
 ## Interfaces
 
-- `NewRouter(d Deps) (http.Handler, error)`: router behind request id, security headers, access log and recovery
+- `NewRouter(d Deps) (http.Handler, error)`: router behind request id, security headers, access log and recovery; errors when `Deps.Identity` is nil
 - `API(d Deps) huma.API`: all operations registered, used with a zero `Deps` by `Spec`
 - `Spec() ([]byte, error)`: OpenAPI 3.1 YAML of the registered operations
 - `GET /healthz`: 200 `ok`, liveness only
 - `GET /readyz`: 200 `ready`, or 503 when the DB ping or the `DATA_DIR` probe fails
 - `NewItems(pool, clk, settings) *items.Service`: built by `cmd/api`, shared with lookup and images
 - `Deps.Favicons`: `favicons.NewService` over `favicons.NewHTTPFetcher` and the file store; mounts `GET /api/v1/favicon`
+- `Deps.Identity`: the [identity](identity.md) resolver, run on every request after the scope middleware and before Huma
+- `GET /api/v1/me`: the [users](users.md) account of the caller (`users.Register`)
 
 ## Gotchas
 
@@ -29,3 +31,4 @@ Composition root of the HTTP layer. `NewRouter` builds the Huma API over chi, re
 - `folderDB`, `typeDB` and `contentDB` type-assert `Deps.DB` to the pool; a Ping-only fake gets a nil database, so routes that query need a real DB in tests.
 - `importer(d)` is nil when lookup is off, so item create takes no lookup path.
 - `internal/httpapi` is in archtest `exemptPackages` (composition root), so it may import every feature.
+- Tests build routers with `newRouter`, which injects a fixed test identity when `Deps.Identity` is nil; the real resolver is used in `identity_test.go`.

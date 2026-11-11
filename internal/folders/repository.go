@@ -52,13 +52,67 @@ func (r *repo) LockTree(ctx context.Context) error {
 
 func (r *repo) Get(ctx context.Context, id uuid.UUID) (Folder, error) {
 	row, err := r.q.GetFolder(ctx, sqlc.GetFolderParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx)})
-	return fromRow(row), notFound(err)
+	return r.withMembers(ctx, row, notFound(err))
+}
+
+// GetAny reads a folder in any state (leaving a share works on a trashed folder too).
+func (r *repo) GetAny(ctx context.Context, id uuid.UUID) (Folder, error) {
+	row, err := r.q.GetFolderAnyState(ctx, sqlc.GetFolderAnyStateParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx)})
+	return r.withMembers(ctx, row, notFound(err))
+}
+
+// withMembers maps a row and loads the members of a top-level folder. err is the error of the read
+// that produced row, passed through so the callers stay one line.
+func (r *repo) withMembers(ctx context.Context, row sqlc.Folder, err error) (Folder, error) {
+	if err != nil {
+		return Folder{}, err
+	}
+	f := fromRow(row)
+	if f.ParentID != nil {
+		return f, nil
+	}
+	rows, err := r.q.ListFolderMembers(ctx, sqlc.ListFolderMembersParams{WorkspaceID: scope.WorkspaceID(ctx), FolderID: f.ID})
+	if err != nil {
+		return Folder{}, err
+	}
+	for _, m := range rows {
+		f.MemberIDs = append(f.MemberIDs, m.UserID)
+	}
+	return f, nil
+}
+
+// VisibleToCaller re-reads, inside the transaction, whether the caller may see the folder (any
+// state): the request-level snapshot was read before the tree lock and a share may have changed.
+func (r *repo) VisibleToCaller(ctx context.Context, id uuid.UUID) (bool, error) {
+	user, ok := scope.UserID(ctx)
+	if !ok {
+		return false, nil
+	}
+	return r.q.FolderVisibleTo(ctx, sqlc.FolderVisibleToParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx), UserID: user})
+}
+
+func (r *repo) InsertMember(ctx context.Context, id, user uuid.UUID) error {
+	return r.q.InsertFolderMember(ctx, sqlc.InsertFolderMemberParams{
+		WorkspaceID: scope.WorkspaceID(ctx), FolderID: id, UserID: user, AddedByUserID: callerID(ctx),
+	})
+}
+
+func (r *repo) DeleteMember(ctx context.Context, id, user uuid.UUID) (bool, error) {
+	n, err := r.q.DeleteFolderMember(ctx, sqlc.DeleteFolderMemberParams{WorkspaceID: scope.WorkspaceID(ctx), FolderID: id, UserID: user})
+	return n > 0, err
+}
+
+// DeleteTopOrderOf drops one user's position of a top-level folder (no foreign key, D-118).
+func (r *repo) DeleteTopOrderOf(ctx context.Context, id, user uuid.UUID) error {
+	return r.q.DeleteUserTopOrderEntry(ctx, sqlc.DeleteUserTopOrderEntryParams{
+		WorkspaceID: scope.WorkspaceID(ctx), UserID: user, EntryType: "folder", EntryID: id,
+	})
 }
 
 // GetForUpdate locks the row. It is sqlc's LockFolder, which the trash code also uses.
 func (r *repo) GetForUpdate(ctx context.Context, id uuid.UUID) (Folder, error) {
 	row, err := r.q.LockFolder(ctx, sqlc.LockFolderParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx)})
-	return fromRow(row), notFound(err)
+	return r.withMembers(ctx, row, notFound(err))
 }
 
 func (r *repo) ListActive(ctx context.Context) ([]Folder, error) {
@@ -66,9 +120,21 @@ func (r *repo) ListActive(ctx context.Context) ([]Folder, error) {
 	if err != nil {
 		return nil, err
 	}
+	members, err := r.q.ListAllFolderMembers(ctx, scope.WorkspaceID(ctx))
+	if err != nil {
+		return nil, err
+	}
+	byFolder := make(map[uuid.UUID][]uuid.UUID)
+	for _, m := range members {
+		byFolder[m.FolderID] = append(byFolder[m.FolderID], m.UserID)
+	}
 	out := make([]Folder, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, fromRow(row))
+		f := fromRow(row)
+		if f.ParentID == nil { // the rows of a nested folder are inert
+			f.MemberIDs = byFolder[f.ID]
+		}
+		out = append(out, f)
 	}
 	return out, nil
 }
@@ -92,7 +158,7 @@ func (r *repo) Insert(ctx context.Context, parent *uuid.UUID, name string, sortO
 
 func (r *repo) Rename(ctx context.Context, id uuid.UUID, name string, now time.Time) (Folder, error) {
 	row, err := r.q.RenameFolder(ctx, sqlc.RenameFolderParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx), Name: name, Now: now})
-	return fromRow(row), err
+	return r.withMembers(ctx, row, err)
 }
 
 func (r *repo) Move(ctx context.Context, id uuid.UUID, parent *uuid.UUID, sortOrder int, now time.Time) (Folder, error) {
@@ -108,7 +174,7 @@ func (r *repo) Move(ctx context.Context, id uuid.UUID, parent *uuid.UUID, sortOr
 			return Folder{}, err
 		}
 	}
-	return fromRow(row), nil
+	return r.withMembers(ctx, row, nil)
 }
 
 // SetTopOrder stores the caller's own position of a top-level folder; the shared sort_order and

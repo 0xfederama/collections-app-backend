@@ -32,3 +32,4 @@ Owns the accounts of F-027: one row per person who signed in, keyed by lower-cas
 - Profile attempts are spaced 5 minutes apart per user, so a failing identity endpoint is not called per request.
 - `GET /me` answers 401 `unauthenticated` when the context has no user; the identity middleware normally prevents that.
 - Migration `000002` is expand-only (new tables and nullable columns), per D-118; it moves no data.
+- `(*Service).Lookup(ctx, email) (User, bool, error)`: finds a user who signed in without creating one (used to share a folder).

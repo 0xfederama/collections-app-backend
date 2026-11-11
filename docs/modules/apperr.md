@@ -19,6 +19,8 @@ Typed domain errors that services return and that `internal/httpapi` maps to pro
 - `DestinationUnavailable() error`: 409 `destination_unavailable`
 - `TypeMismatch() error`: 409 `type_mismatch` (item moved to a list of another type)
 - `OrderStale() error`: 409 `order_stale`
+- `Forbidden() error`: 403 `forbidden` (`*ForbiddenError`): the caller sees the resource but only its owner may do this
+- `FolderNotTopLevel() error`: 409 `folder_not_top_level`; `FolderShared() error`: 409 `folder_shared`
 - `DuplicateTitle() error`: 409 `duplicate_title` (items create/update/move, lookup enriched create)
 - `PayloadTooLarge(limit int64) error`: over-limit body or upload
 - `UnsupportedMediaType(detail string) error`: upload not JPEG, PNG or WebP

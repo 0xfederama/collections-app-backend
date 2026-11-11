@@ -45,6 +45,15 @@ type Repo interface {
 	// CountBatches returns the number of batches of the workspace, restricted like ListBatches.
 	CountBatches(ctx context.Context, only []uuid.UUID) (int, error)
 
+	// FolderVisibleToCaller and ListVisibleToCaller re-read, inside the transaction and after the tree
+	// lock, whether the caller may see a folder or list (any state): a share may have changed since
+	// the access snapshot of the request.
+	FolderVisibleToCaller(ctx context.Context, id uuid.UUID) (bool, error)
+	ListVisibleToCaller(ctx context.Context, id uuid.UUID) (bool, error)
+	// FolderMemberIDs returns the users a folder is shared with (a restored folder with members
+	// cannot go into another folder).
+	FolderMemberIDs(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error)
+
 	// FolderParents returns every folder of the workspace in any state, for the walks.
 	FolderParents(ctx context.Context) ([]FolderNode, error)
 	// LockFolder locks an active folder row (FOR UPDATE). NotFound when missing or trashed. SEAM: moves to folders.
@@ -116,6 +125,9 @@ type Repo interface {
 	DeleteLists(ctx context.Context, listIDs []uuid.UUID) error
 	// DeleteFolders hard-deletes the folders in one statement (the parent check runs at its end). SEAM: moves to folders.
 	DeleteFolders(ctx context.Context, folderIDs []uuid.UUID) error
+	// DeleteFolderMembers removes the member rows of the given folders. They have no foreign key to
+	// folders, so a purge deletes them explicitly, before the folders (D-118). SEAM: moves to folders.
+	DeleteFolderMembers(ctx context.Context, folderIDs []uuid.UUID) error
 	// DeleteTopOrder removes every user's top-level order rows of the given folders and lists. They have
 	// no foreign key, so a purge deletes them explicitly (D-118). SEAM: moves to access.
 	DeleteTopOrder(ctx context.Context, ids []uuid.UUID) error
@@ -554,6 +566,56 @@ func (r *repo) DeleteLists(ctx context.Context, listIDs []uuid.UUID) error {
 	return nil
 }
 
+// DeleteFolderMembers is SEAM: moves to folders.
+func (r *repo) DeleteFolderMembers(ctx context.Context, folderIDs []uuid.UUID) error {
+	if err := r.q.DeleteFolderMembersOf(ctx, sqlc.DeleteFolderMembersOfParams{WorkspaceID: scope.WorkspaceID(ctx), Ids: folderIDs}); err != nil {
+		return fmt.Errorf("delete folder members: %w", err)
+	}
+	return nil
+}
+
+func (r *repo) FolderVisibleToCaller(ctx context.Context, id uuid.UUID) (bool, error) {
+	user, ok := scope.UserID(ctx)
+	if !ok {
+		return false, nil
+	}
+	v, err := r.q.FolderVisibleTo(ctx, sqlc.FolderVisibleToParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx), UserID: user})
+	if err != nil {
+		return false, fmt.Errorf("folder visible: %w", err)
+	}
+	return v, nil
+}
+
+func (r *repo) ListVisibleToCaller(ctx context.Context, id uuid.UUID) (bool, error) {
+	user, ok := scope.UserID(ctx)
+	if !ok {
+		return false, nil
+	}
+	row, err := r.q.ListBoxRow(ctx, sqlc.ListBoxRowParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx)})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("list box: %w", err)
+	}
+	if row.FolderID.Valid {
+		return r.FolderVisibleToCaller(ctx, row.FolderID.UUID)
+	}
+	return row.OwnerUserID.Valid && row.OwnerUserID.UUID == user, nil
+}
+
+func (r *repo) FolderMemberIDs(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.q.ListFolderMembers(ctx, sqlc.ListFolderMembersParams{WorkspaceID: scope.WorkspaceID(ctx), FolderID: id})
+	if err != nil {
+		return nil, fmt.Errorf("folder members: %w", err)
+	}
+	out := make([]uuid.UUID, 0, len(rows))
+	for _, m := range rows {
+		out = append(out, m.UserID)
+	}
+	return out, nil
+}
+
 // DeleteTopOrder is SEAM: moves to access.
 func (r *repo) DeleteTopOrder(ctx context.Context, ids []uuid.UUID) error {
 	if err := r.q.DeleteUserTopOrderOf(ctx, sqlc.DeleteUserTopOrderOfParams{WorkspaceID: scope.WorkspaceID(ctx), Ids: ids}); err != nil {
@@ -580,12 +642,12 @@ func (r *repo) DeleteAttachmentRows(ctx context.Context, ids []uuid.UUID) error 
 
 // toFolderRow maps a folder row (any read that returns the whole row).
 func toFolderRow(f sqlc.Folder) FolderRow {
-	return FolderRow{ID: f.ID, Name: f.Name, ParentID: fromNullUUID(f.ParentFolderID), Version: int(f.Version)}
+	return FolderRow{ID: f.ID, Name: f.Name, ParentID: fromNullUUID(f.ParentFolderID), OwnerID: fromNullUUID(f.OwnerUserID), Version: int(f.Version)}
 }
 
 // toListRow maps a list row (any read that returns the whole row).
 func toListRow(l sqlc.List) ListRow {
-	return ListRow{ID: l.ID, Name: l.Name, FolderID: fromNullUUID(l.FolderID), Version: int(l.Version)}
+	return ListRow{ID: l.ID, Name: l.Name, FolderID: fromNullUUID(l.FolderID), OwnerID: fromNullUUID(l.OwnerUserID), Version: int(l.Version)}
 }
 
 // toItemRow maps an item row (any read that returns the whole row).

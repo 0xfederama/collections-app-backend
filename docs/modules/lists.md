@@ -39,3 +39,4 @@ Owns lists: create, get (with ancestor folder path), patch, move and reorder. A 
 - Reorder: a missing or invisible folder is 404; `ids` must be exactly the active child lists, else 409 `order_stale`. At the root only the caller's visible top-level lists are compared and only their own order is written.
 - Owner: create sets the caller only at the top level; a move into a folder clears it, a move to the top keeps the stored owner or takes the caller's. A move off the top level drops everyone's `user_top_order` row.
 - `GET` path is empty for a root list; `ItemCount` is filled only by `Get` and `ListActive`.
+- Move: a top-level list the caller does not own is 403 `forbidden` (after 404, before 412); the list and the destination folder are re-checked for visibility inside the tx (shares can change after the request-level snapshot).

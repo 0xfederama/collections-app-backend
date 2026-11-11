@@ -122,11 +122,14 @@ func From(err error, requestID string) (p *Problem, unexpected bool) {
 		lookupOff  *apperr.LookupDisabledError
 		upstream   *apperr.UpstreamUnavailableError
 		noFavicon  *apperr.FaviconNotFoundError
+		forbidden  *apperr.ForbiddenError
 		bodyTooBig *http.MaxBytesError
 	)
 	switch {
 	case errors.As(err, &notFound):
 		return New(http.StatusNotFound, "not_found", "Not found", capitalize(notFound.Resource)+" not found."), false
+	case errors.As(err, &forbidden):
+		return New(http.StatusForbidden, "forbidden", "Forbidden", "You can see this resource, but only its owner may do this."), false
 	case errors.As(err, &noFavicon):
 		return New(http.StatusNotFound, "favicon_not_found", "Favicon not found", "The site has no favicon."), false
 	case errors.As(err, &stale):
@@ -190,6 +193,12 @@ func conflictProblem(c *apperr.ConflictError) *Problem {
 	case apperr.CodeOrderStale:
 		return New(http.StatusConflict, string(c.Code), "Order is stale",
 			"The items changed. Reload and try again.")
+	case apperr.CodeFolderNotTopLevel:
+		return New(http.StatusConflict, string(c.Code), "Folder is not top level",
+			"Only a top-level folder can be shared.")
+	case apperr.CodeFolderShared:
+		return New(http.StatusConflict, string(c.Code), "Folder is shared",
+			"A folder shared with others cannot be moved into another folder. Stop sharing it first.")
 	default:
 		return New(http.StatusConflict, string(c.Code), "Conflict", "The request conflicts with the current state.")
 	}

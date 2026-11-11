@@ -33,8 +33,9 @@ var guardRules = []guardRule{
 	{"/api/v1/trash/{batch_id}", "batch_id", access.KindTrashBatch, "trash entry"},
 }
 
-// plainParams are path parameters that name no resource (a number inside an already guarded path).
-var plainParams = map[string]bool{"version": true}
+// plainParams are path parameters that name no resource of their own: a number inside an already
+// guarded path, or the user of a member of the guarded folder (a user is not a box).
+var plainParams = map[string]bool{"version": true, "user_id": true}
 
 // ruleFor returns the rule of an operation path, if one covers it.
 func ruleFor(path string) (guardRule, bool) {

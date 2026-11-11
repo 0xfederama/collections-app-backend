@@ -129,6 +129,37 @@ func (q *Queries) AccessLists(ctx context.Context, workspaceID uuid.UUID) ([]Acc
 	return items, nil
 }
 
+const accessMembers = `-- name: AccessMembers :many
+SELECT folder_id, user_id FROM folder_members WHERE workspace_id = $1
+`
+
+type AccessMembersRow struct {
+	FolderID uuid.UUID
+	UserID   uuid.UUID
+}
+
+// Every membership of the workspace (a handful of rows). Rows of folders that are not top level
+// or no longer exist are returned too: the visibility rule ignores them.
+func (q *Queries) AccessMembers(ctx context.Context, workspaceID uuid.UUID) ([]AccessMembersRow, error) {
+	rows, err := q.db.Query(ctx, accessMembers, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AccessMembersRow{}
+	for rows.Next() {
+		var i AccessMembersRow
+		if err := rows.Scan(&i.FolderID, &i.UserID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const accessTrashBatch = `-- name: AccessTrashBatch :one
 SELECT root_type, root_id FROM trash_batches WHERE id = $1 AND workspace_id = $2
 `
@@ -250,6 +281,62 @@ func (q *Queries) CountOwnerlessTopLists(ctx context.Context, workspaceID uuid.U
 	return column_1, err
 }
 
+const deleteFolderMember = `-- name: DeleteFolderMember :execrows
+DELETE FROM folder_members WHERE workspace_id = $1 AND folder_id = $2 AND user_id = $3
+`
+
+type DeleteFolderMemberParams struct {
+	WorkspaceID uuid.UUID
+	FolderID    uuid.UUID
+	UserID      uuid.UUID
+}
+
+func (q *Queries) DeleteFolderMember(ctx context.Context, arg DeleteFolderMemberParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteFolderMember, arg.WorkspaceID, arg.FolderID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteFolderMembersOf = `-- name: DeleteFolderMembersOf :exec
+DELETE FROM folder_members WHERE workspace_id = $1 AND folder_id = ANY($2::uuid[])
+`
+
+type DeleteFolderMembersOfParams struct {
+	WorkspaceID uuid.UUID
+	Ids         []uuid.UUID
+}
+
+// Every member row of the given folders (purged). No foreign key, so the purge calls this (D-118).
+func (q *Queries) DeleteFolderMembersOf(ctx context.Context, arg DeleteFolderMembersOfParams) error {
+	_, err := q.db.Exec(ctx, deleteFolderMembersOf, arg.WorkspaceID, arg.Ids)
+	return err
+}
+
+const deleteUserTopOrderEntry = `-- name: DeleteUserTopOrderEntry :exec
+DELETE FROM user_top_order
+WHERE workspace_id = $1 AND user_id = $2 AND entry_type = $3 AND entry_id = $4
+`
+
+type DeleteUserTopOrderEntryParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	EntryType   string
+	EntryID     uuid.UUID
+}
+
+// One user's order row of one entry (a member leaves or is removed).
+func (q *Queries) DeleteUserTopOrderEntry(ctx context.Context, arg DeleteUserTopOrderEntryParams) error {
+	_, err := q.db.Exec(ctx, deleteUserTopOrderEntry,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.EntryType,
+		arg.EntryID,
+	)
+	return err
+}
+
 const deleteUserTopOrderOf = `-- name: DeleteUserTopOrderOf :exec
 DELETE FROM user_top_order WHERE workspace_id = $1 AND entry_id = ANY($2::uuid[])
 `
@@ -264,6 +351,180 @@ type DeleteUserTopOrderOfParams struct {
 func (q *Queries) DeleteUserTopOrderOf(ctx context.Context, arg DeleteUserTopOrderOfParams) error {
 	_, err := q.db.Exec(ctx, deleteUserTopOrderOf, arg.WorkspaceID, arg.Ids)
 	return err
+}
+
+const folderVisibleTo = `-- name: FolderVisibleTo :one
+WITH RECURSIVE chain AS (
+    SELECT f.id, f.parent_folder_id, f.owner_user_id, 0 AS depth
+    FROM folders f WHERE f.id = $2::uuid AND f.workspace_id = $3::uuid
+  UNION ALL
+    SELECT p.id, p.parent_folder_id, p.owner_user_id, chain.depth + 1
+    FROM folders p JOIN chain ON p.id = chain.parent_folder_id
+    WHERE p.workspace_id = $3::uuid AND chain.depth < 1000
+)
+SELECT EXISTS (
+    SELECT 1 FROM chain
+    WHERE chain.parent_folder_id IS NULL
+      AND (chain.owner_user_id = $1::uuid
+           OR EXISTS (SELECT 1 FROM folder_members m WHERE m.folder_id = chain.id AND m.user_id = $1::uuid))
+)::bool AS visible
+`
+
+type FolderVisibleToParams struct {
+	UserID      uuid.UUID
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+// Visibility of a folder in any state, read inside a transaction (after the tree lock) to re-check
+// what the request-level snapshot saw: the box is the user's, or the user is a member of its
+// top-level folder. The depth cap keeps a corrupt cycle finite.
+func (q *Queries) FolderVisibleTo(ctx context.Context, arg FolderVisibleToParams) (bool, error) {
+	row := q.db.QueryRow(ctx, folderVisibleTo, arg.UserID, arg.ID, arg.WorkspaceID)
+	var visible bool
+	err := row.Scan(&visible)
+	return visible, err
+}
+
+const getFolderAnyState = `-- name: GetFolderAnyState :one
+SELECT id, workspace_id, parent_folder_id, name, sort_order, version, created_at, updated_at, deleted_at, trash_batch_id, owner_user_id FROM folders WHERE id = $1 AND workspace_id = $2
+`
+
+type GetFolderAnyStateParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) GetFolderAnyState(ctx context.Context, arg GetFolderAnyStateParams) (Folder, error) {
+	row := q.db.QueryRow(ctx, getFolderAnyState, arg.ID, arg.WorkspaceID)
+	var i Folder
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ParentFolderID,
+		&i.Name,
+		&i.SortOrder,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.TrashBatchID,
+		&i.OwnerUserID,
+	)
+	return i, err
+}
+
+const insertFolderMember = `-- name: InsertFolderMember :exec
+INSERT INTO folder_members (workspace_id, folder_id, user_id, added_by_user_id)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (folder_id, user_id) DO NOTHING
+`
+
+type InsertFolderMemberParams struct {
+	WorkspaceID   uuid.UUID
+	FolderID      uuid.UUID
+	UserID        uuid.UUID
+	AddedByUserID uuid.NullUUID
+}
+
+// Idempotent: an existing member stays as it is.
+func (q *Queries) InsertFolderMember(ctx context.Context, arg InsertFolderMemberParams) error {
+	_, err := q.db.Exec(ctx, insertFolderMember,
+		arg.WorkspaceID,
+		arg.FolderID,
+		arg.UserID,
+		arg.AddedByUserID,
+	)
+	return err
+}
+
+const listAllFolderMembers = `-- name: ListAllFolderMembers :many
+SELECT folder_id, user_id FROM folder_members
+WHERE workspace_id = $1
+ORDER BY created_at, user_id
+`
+
+type ListAllFolderMembersRow struct {
+	FolderID uuid.UUID
+	UserID   uuid.UUID
+}
+
+func (q *Queries) ListAllFolderMembers(ctx context.Context, workspaceID uuid.UUID) ([]ListAllFolderMembersRow, error) {
+	rows, err := q.db.Query(ctx, listAllFolderMembers, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllFolderMembersRow{}
+	for rows.Next() {
+		var i ListAllFolderMembersRow
+		if err := rows.Scan(&i.FolderID, &i.UserID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBoxRow = `-- name: ListBoxRow :one
+SELECT folder_id, owner_user_id FROM lists WHERE id = $1 AND workspace_id = $2
+`
+
+type ListBoxRowParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+type ListBoxRowRow struct {
+	FolderID    uuid.NullUUID
+	OwnerUserID uuid.NullUUID
+}
+
+// The folder and owner of a list in any state, to resolve its box inside a transaction.
+func (q *Queries) ListBoxRow(ctx context.Context, arg ListBoxRowParams) (ListBoxRowRow, error) {
+	row := q.db.QueryRow(ctx, listBoxRow, arg.ID, arg.WorkspaceID)
+	var i ListBoxRowRow
+	err := row.Scan(&i.FolderID, &i.OwnerUserID)
+	return i, err
+}
+
+const listFolderMembers = `-- name: ListFolderMembers :many
+SELECT folder_id, user_id FROM folder_members
+WHERE workspace_id = $1 AND folder_id = $2
+ORDER BY created_at, user_id
+`
+
+type ListFolderMembersParams struct {
+	WorkspaceID uuid.UUID
+	FolderID    uuid.UUID
+}
+
+type ListFolderMembersRow struct {
+	FolderID uuid.UUID
+	UserID   uuid.UUID
+}
+
+func (q *Queries) ListFolderMembers(ctx context.Context, arg ListFolderMembersParams) ([]ListFolderMembersRow, error) {
+	rows, err := q.db.Query(ctx, listFolderMembers, arg.WorkspaceID, arg.FolderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFolderMembersRow{}
+	for rows.Next() {
+		var i ListFolderMembersRow
+		if err := rows.Scan(&i.FolderID, &i.UserID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listUserTopOrder = `-- name: ListUserTopOrder :many

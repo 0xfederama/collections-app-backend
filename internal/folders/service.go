@@ -13,6 +13,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 )
 
 const maxNameLen = 200
@@ -32,12 +33,29 @@ type Access interface {
 	VisibleFolderIDs(ctx context.Context) (map[uuid.UUID]bool, error)
 }
 
+// Users finds a user who signed in before (internal/users, wired in httpapi). It is read before the
+// transaction, never inside it.
+type Users interface {
+	// IDByEmail returns the user of a lower-cased e-mail; ok is false when nobody with it signed in.
+	IDByEmail(ctx context.Context, email string) (id uuid.UUID, ok bool, err error)
+}
+
 // Repo is the set of queries one transaction may run. Every method is one
 // plain query; the rules that combine them live in Service.
 type Repo interface {
 	LockTree(ctx context.Context) error
 	Get(ctx context.Context, id uuid.UUID) (Folder, error)
 	GetForUpdate(ctx context.Context, id uuid.UUID) (Folder, error)
+	// GetAny reads a folder in any state.
+	GetAny(ctx context.Context, id uuid.UUID) (Folder, error)
+	// VisibleToCaller re-reads whether the caller may see the folder (any state), inside the
+	// transaction and after the tree lock.
+	VisibleToCaller(ctx context.Context, id uuid.UUID) (bool, error)
+	InsertMember(ctx context.Context, id, user uuid.UUID) error
+	// DeleteMember reports whether a row was removed.
+	DeleteMember(ctx context.Context, id, user uuid.UUID) (bool, error)
+	// DeleteTopOrderOf drops one user's own position of a top-level folder.
+	DeleteTopOrderOf(ctx context.Context, id, user uuid.UUID) error
 	ListActive(ctx context.Context) ([]Folder, error)
 	ChildIDs(ctx context.Context, parent *uuid.UUID) ([]uuid.UUID, error)
 	NextSortOrder(ctx context.Context, parent *uuid.UUID) (int, error)
@@ -55,6 +73,7 @@ type Service struct {
 	store  Store
 	clock  clock.Clock
 	access Access
+	users  Users
 }
 
 func NewService(store Store, clk clock.Clock) *Service { return &Service{store: store, clock: clk} }
@@ -65,6 +84,13 @@ func NewService(store Store, clk clock.Clock) *Service { return &Service{store: 
 func (s *Service) WithAccess(a Access) *Service {
 	c := *s
 	c.access = a
+	return &c
+}
+
+// WithUsers returns the service that can share a folder with a user found by e-mail.
+func (s *Service) WithUsers(u Users) *Service {
+	c := *s
+	c.users = u
 	return &c
 }
 
@@ -141,26 +167,55 @@ func (s *Service) Rename(ctx context.Context, id uuid.UUID, version int, name *s
 	return out, err
 }
 
-// Move re-parents a folder (nil = root), appended last. Errors in order:
-// NotFound, VersionConflict, DestinationUnavailable, Cycle.
+// Move re-parents a folder (nil = root), appended last. Errors in order: NotFound, Forbidden (a
+// top-level folder the caller does not own), VersionConflict, DestinationUnavailable, FolderShared
+// (a folder with members into a folder), Cycle.
+//
+// The path guard and the destination check read the access snapshot before the transaction; a
+// share can change meanwhile. With a user in the context the folder and the destination are read
+// again here, after the tree lock (which shares also take), so a move racing an unshare ends as
+// if it ran after it: NotFound / DestinationUnavailable.
 func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, parent *uuid.UUID) (Folder, error) {
 	destErr := s.destination(ctx, parent)
+	user, hasUser := scope.UserID(ctx)
 	var out Folder
 	err := s.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return fmt.Errorf("lock tree: %w", err)
 		}
-		// SEAM (B3): moving a top-level folder the caller can see but does not own answers 403
-		// forbidden here. In B2 a box is visible only to its owner, so the path guard (404) already
-		// stopped every other caller.
-		if _, err := lock(ctx, r, id, version); err != nil {
+		cur, err := r.GetForUpdate(ctx, id)
+		if err != nil {
 			return err
+		}
+		if hasUser {
+			if ok, err := r.VisibleToCaller(ctx, id); err != nil {
+				return fmt.Errorf("check folder: %w", err)
+			} else if !ok {
+				return apperr.NotFound("folder")
+			}
+			// Only the owner moves a top-level folder; a member may do everything inside it.
+			if cur.ParentID == nil && (cur.OwnerID == nil || *cur.OwnerID != user) {
+				return apperr.Forbidden()
+			}
+		}
+		if cur.Version != version {
+			return apperr.VersionConflict(cur.Version)
 		}
 		if destErr != nil {
 			return destErr
 		}
+		if hasUser && parent != nil {
+			if ok, err := r.VisibleToCaller(ctx, *parent); err != nil {
+				return fmt.Errorf("check destination: %w", err)
+			} else if !ok {
+				return apperr.DestinationUnavailable()
+			}
+		}
 		if err := requireActive(ctx, r, parent); err != nil {
 			return err
+		}
+		if parent != nil && len(cur.MemberIDs) > 0 {
+			return apperr.FolderShared()
 		}
 		if parent != nil {
 			all, err := r.ListActive(ctx)
@@ -179,6 +234,99 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, parent *u
 		return wrap("move folder", err)
 	})
 	return out, err
+}
+
+// AddMember shares a top-level folder with the user of email (known: they signed in once). Only
+// the owner may; the folder must be top level and active. Sharing again is a no-op. No version
+// bump: a share is not an edit of the folder.
+func (s *Service) AddMember(ctx context.Context, id uuid.UUID, email string) (Folder, error) {
+	user, ok := scope.UserID(ctx)
+	if !ok {
+		return Folder{}, errors.New("share folder: the request has no user")
+	}
+	email = strings.ToLower(strings.TrimSpace(email))
+	var (
+		target    uuid.UUID
+		known     bool
+		lookupErr error
+	)
+	if s.users != nil {
+		target, known, lookupErr = s.users.IDByEmail(ctx, email)
+	}
+	var out Folder
+	err := s.store.InTx(ctx, func(r Repo) error {
+		if err := r.LockTree(ctx); err != nil {
+			return fmt.Errorf("lock tree: %w", err)
+		}
+		f, err := r.GetForUpdate(ctx, id)
+		if err != nil {
+			return err
+		}
+		if ok, err := r.VisibleToCaller(ctx, id); err != nil {
+			return fmt.Errorf("check folder: %w", err)
+		} else if !ok {
+			return apperr.NotFound("folder")
+		}
+		if f.ParentID != nil {
+			return apperr.FolderNotTopLevel()
+		}
+		if f.OwnerID == nil || *f.OwnerID != user {
+			return apperr.Forbidden()
+		}
+		if lookupErr != nil {
+			return fmt.Errorf("find user: %w", lookupErr)
+		}
+		if !known {
+			return apperr.Validation(apperr.FieldError{Field: "email", Message: "no user with this email has signed in yet"})
+		}
+		if target == user {
+			return apperr.Validation(apperr.FieldError{Field: "email", Message: "you already own this folder"})
+		}
+		if err := r.InsertMember(ctx, id, target); err != nil {
+			return fmt.Errorf("insert member: %w", err)
+		}
+		out, err = r.Get(ctx, id)
+		return err
+	})
+	return out, err
+}
+
+// RemoveMember stops sharing a folder with one user. The owner removes anyone; a member removes
+// only themself (leave). The folder may be trashed. The removed user's own position of the folder
+// goes too. Everything they added stays in the folder.
+func (s *Service) RemoveMember(ctx context.Context, id, member uuid.UUID) error {
+	user, ok := scope.UserID(ctx)
+	if !ok {
+		return errors.New("unshare folder: the request has no user")
+	}
+	return s.store.InTx(ctx, func(r Repo) error {
+		if err := r.LockTree(ctx); err != nil {
+			return fmt.Errorf("lock tree: %w", err)
+		}
+		f, err := r.GetAny(ctx, id)
+		if err != nil {
+			return err
+		}
+		if ok, err := r.VisibleToCaller(ctx, id); err != nil {
+			return fmt.Errorf("check folder: %w", err)
+		} else if !ok {
+			return apperr.NotFound("folder")
+		}
+		owner := f.ParentID == nil && f.OwnerID != nil && *f.OwnerID == user
+		if !owner && member != user {
+			return apperr.Forbidden()
+		}
+		if f.ParentID != nil || !slices.Contains(f.MemberIDs, member) {
+			return apperr.NotFound("member")
+		}
+		if _, err := r.DeleteMember(ctx, id, member); err != nil {
+			return fmt.Errorf("delete member: %w", err)
+		}
+		if err := r.DeleteTopOrderOf(ctx, id, member); err != nil {
+			return fmt.Errorf("delete top order: %w", err)
+		}
+		return nil
+	})
 }
 
 // Reorder rewrites the order of the children of parent. ids must be exactly the

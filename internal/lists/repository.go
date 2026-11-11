@@ -218,6 +218,35 @@ func folderChain(rows []sqlc.Folder, folderID uuid.UUID) []PathFolder {
 	return chain
 }
 
+// FolderVisibleToCaller re-reads, inside the transaction, whether the caller may see the folder
+// (any state): the request-level snapshot was read before the tree lock and a share may have changed.
+func (r *repo) FolderVisibleToCaller(ctx context.Context, id uuid.UUID) (bool, error) {
+	user, ok := scope.UserID(ctx)
+	if !ok {
+		return false, nil
+	}
+	return r.q.FolderVisibleTo(ctx, sqlc.FolderVisibleToParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx), UserID: user})
+}
+
+// ListVisibleToCaller is the same for a list (any state): its folder's box, or its owner at the top.
+func (r *repo) ListVisibleToCaller(ctx context.Context, id uuid.UUID) (bool, error) {
+	user, ok := scope.UserID(ctx)
+	if !ok {
+		return false, nil
+	}
+	row, err := r.q.ListBoxRow(ctx, sqlc.ListBoxRowParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx)})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("get list box: %w", err)
+	}
+	if row.FolderID.Valid {
+		return r.FolderVisibleToCaller(ctx, row.FolderID.UUID)
+	}
+	return row.OwnerUserID.Valid && row.OwnerUserID.UUID == user, nil
+}
+
 func (r *repo) FolderExists(ctx context.Context, id uuid.UUID) (bool, error) {
 	_, err := r.q.GetFolder(ctx, sqlc.GetFolderParams{ID: id, WorkspaceID: scope.WorkspaceID(ctx)})
 	if errors.Is(err, pgx.ErrNoRows) {

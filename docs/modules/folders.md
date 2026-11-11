@@ -21,6 +21,8 @@ Owns workspace folders: create, get, rename, move (cycle-checked) and reorder th
 - `Service.Reorder(ctx, parent *uuid.UUID, ids []uuid.UUID) error`: at the root, the caller's own order (`SetTopOrder`)
 - `WithAccess(a Access) *Service` (`Access`: `FolderVisible`, `VisibleFolderIDs`, see [access](access.md)); `FolderJSON.owner_user_id`, top-level only
 - `Postgres.ListActive(ctx) ([]Folder, error)`: used by `internal/tree`
+- `AddMember(ctx, id, email)`, `RemoveMember(ctx, id, user)`; `WithUsers(u Users)` (`IDByEmail`, wired to `users.Service.Lookup`); `FolderJSON.shared`, `member_user_ids` (empty for nested or unshared)
+- `POST /api/v1/folders/{id}/members` (200 Folder), `DELETE /api/v1/folders/{id}/members/{user_id}` (204), both under `LockTree`, no `If-Match`, no version bump
 - `POST /api/v1/folders` (201, `Location`), `GET`/`PATCH /api/v1/folders/{id}`, `POST /api/v1/folders/{id}/move`, `PUT /api/v1/folders/order` (204)
 
 ## Gotchas
@@ -35,3 +37,5 @@ Owns workspace folders: create, get, rename, move (cycle-checked) and reorder th
 - Move and reorder bodies require `parent_folder_id` (`null` = root); absent is a validation error.
 - Rename with no `name` changes nothing and does not bump the version. Names are trimmed to 1 to 200 characters (422 otherwise).
 - Cycle walk is capped at the folder count, so corrupt parent chains still terminate.
+- Share order of errors: 404 (guard, or not visible in the tx), 409 `folder_not_top_level`, 403 `forbidden` (not the owner), 422 on `email` (unknown user, or the owner). Already a member: 200 unchanged. Unshare: owner removes anyone, a member only themself (403 otherwise), not a member 404; it also deletes that user's `user_top_order` row and works on a trashed folder.
+- Move: 404, 403 `forbidden` (top-level folder the caller does not own), 412, 409 `destination_unavailable`, 409 `folder_shared` (a folder with members into a folder), 409 `cycle_detected`. The folder and the destination are re-checked for visibility inside the tx.

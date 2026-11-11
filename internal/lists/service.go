@@ -10,6 +10,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
+	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 )
 
 // Store opens transactions and reads single lists. Declared here, where it is
@@ -51,6 +52,10 @@ type Repo interface {
 	// FolderChain returns the ancestors of folderID and folderID itself, root first. A folder that is not active gives none.
 	FolderChain(ctx context.Context, folderID uuid.UUID) ([]PathFolder, error)
 	FolderExists(ctx context.Context, id uuid.UUID) (bool, error)
+	// FolderVisibleToCaller and ListVisibleToCaller re-read, inside the transaction and after the
+	// tree lock, whether the caller may see a folder or list (any state).
+	FolderVisibleToCaller(ctx context.Context, id uuid.UUID) (bool, error)
+	ListVisibleToCaller(ctx context.Context, id uuid.UUID) (bool, error)
 	// SEAM: moves to items (the item rows are written here until the items feature takes it).
 	ClearItemsMetadata(ctx context.Context, listID uuid.UUID, now time.Time) error
 	// SEAM: moves to items.
@@ -279,10 +284,13 @@ func (s *Service) apply(ctx context.Context, r Repo, id uuid.UUID, plan updatePl
 	return err
 }
 
-// Move moves a list into a folder (nil = root), appended last. Errors in order:
-// NotFound, VersionConflict, DestinationUnavailable.
+// Move moves a list into a folder (nil = root), appended last. Errors in order: NotFound,
+// Forbidden (a top-level list the caller does not own), VersionConflict, DestinationUnavailable.
+// With a user in the context the list and the destination are read again after the tree lock, so
+// a move racing an unshare ends as if it ran after it.
 func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, folder *uuid.UUID) (List, error) {
 	destErr := s.destination(ctx, folder)
+	user, hasUser := scope.UserID(ctx)
 	err := s.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
 			return fmt.Errorf("lock tree: %w", err)
@@ -291,14 +299,28 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, folder *u
 		if err != nil {
 			return err
 		}
-		// SEAM (B3): moving a top-level list the caller can see but does not own answers 403
-		// forbidden here. In B2 a box is visible only to its owner, so the path guard (404) already
-		// stopped every other caller.
+		if hasUser {
+			if ok, err := r.ListVisibleToCaller(ctx, id); err != nil {
+				return fmt.Errorf("check list: %w", err)
+			} else if !ok {
+				return apperr.NotFound("list")
+			}
+			if cur.FolderID == nil && (cur.OwnerID == nil || *cur.OwnerID != user) {
+				return apperr.Forbidden()
+			}
+		}
 		if cur.Version != version {
 			return apperr.VersionConflict(cur.Version)
 		}
 		if destErr != nil {
 			return destErr
+		}
+		if hasUser && folder != nil {
+			if ok, err := r.FolderVisibleToCaller(ctx, *folder); err != nil {
+				return fmt.Errorf("check destination: %w", err)
+			} else if !ok {
+				return apperr.DestinationUnavailable()
+			}
 		}
 		if err := requireFolder(ctx, r, folder); err != nil {
 			return err

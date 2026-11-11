@@ -32,6 +32,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/search"
 	"github.com/0xfederama/collections-app-backend/internal/storage"
 	"github.com/0xfederama/collections-app-backend/internal/trash"
+	"github.com/0xfederama/collections-app-backend/internal/users"
 )
 
 // testClock is the images service clock: tests move it past the sweeper's 1 h
@@ -96,7 +97,7 @@ func newImageEnvAs(t *testing.T, id httpapi.IdentityResolver) *imageEnv {
 	svc := images.NewService(images.NewPostgres(pool), store, itemSvc, clk, quietLogger())
 	h := newRouter(t, httpapi.Deps{
 		DB: pool, DataDir: dir, Logger: quietLogger(), WorkspaceID: ws, Identity: id,
-		Items: itemSvc, Images: svc,
+		Items: itemSvc, Images: svc, Users: users.NewService(users.NewPostgres(pool), clk),
 		Search: search.NewService(search.NewPostgres(pool)), Trash: trash.NewService(trash.NewPostgres(pool), store, clk, quietLogger()),
 	})
 	return &imageEnv{treeEnv: &treeEnv{t: t, h: h, pool: pool, ws: ws}, dir: dir, clk: clk, store: store, svc: svc}

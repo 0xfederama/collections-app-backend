@@ -15,6 +15,8 @@ const (
 	CodeOrderStale             Code = "order_stale"
 	CodeTypeMismatch           Code = "type_mismatch"
 	CodeDuplicateTitle         Code = "duplicate_title"
+	CodeFolderNotTopLevel      Code = "folder_not_top_level"
+	CodeFolderShared           Code = "folder_shared"
 )
 
 // NotFoundError means the resource is missing or trashed.
@@ -24,6 +26,14 @@ func (e *NotFoundError) Error() string { return e.Resource + " not found" }
 
 // NotFound reports a missing (or trashed) resource such as "folder" or "item".
 func NotFound(resource string) error { return &NotFoundError{Resource: resource} }
+
+// ForbiddenError means the caller can see the resource but only its owner may do this (403).
+type ForbiddenError struct{}
+
+func (e *ForbiddenError) Error() string { return "forbidden: only the owner may do this" }
+
+// Forbidden reports an owner-only operation attempted by another user who can see the resource.
+func Forbidden() error { return &ForbiddenError{} }
 
 // VersionConflictError means a stale If-Match; Current is the stored version.
 type VersionConflictError struct{ Current int }
@@ -141,3 +151,9 @@ func (e *FaviconNotFoundError) Error() string { return "favicon not found" }
 
 // FaviconNotFound reports a site without a favicon, so the web shows its fallback.
 func FaviconNotFound() error { return &FaviconNotFoundError{} }
+
+// FolderNotTopLevel reports a share request for a folder that is not at the top level.
+func FolderNotTopLevel() error { return &ConflictError{Code: CodeFolderNotTopLevel} }
+
+// FolderShared reports a folder with members moved into another folder.
+func FolderShared() error { return &ConflictError{Code: CodeFolderShared} }

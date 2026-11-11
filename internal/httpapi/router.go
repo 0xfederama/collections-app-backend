@@ -171,6 +171,9 @@ func register(api huma.API, d Deps) {
 	folderRepo := folders.NewPostgres(folderDB(d.DB))
 	listRepo := lists.NewPostgres(folderDB(d.DB))
 	folderSvc := folders.NewService(folderRepo, d.Clock)
+	if d.Users != nil {
+		folderSvc = folderSvc.WithUsers(userLookup{d.Users})
+	}
 	listSvc := lists.NewService(listRepo, listTypes{}, d.Clock)
 	var treeAccess tree.Access
 	if acc != nil {
@@ -191,6 +194,14 @@ func register(api huma.API, d Deps) {
 	if d.Logs != nil {
 		logs.Register(api, d.Logger, d.Logs)
 	}
+}
+
+// userLookup is the folders.Users: it finds a user by e-mail without creating one.
+type userLookup struct{ svc *users.Service }
+
+func (u userLookup) IDByEmail(ctx context.Context, email string) (uuid.UUID, bool, error) {
+	user, ok, err := u.svc.Lookup(ctx, email)
+	return user.ID, ok, err
 }
 
 // folderDB is the database the folder repository runs on. Deps.DB is the pool in

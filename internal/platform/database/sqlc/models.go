@@ -39,6 +39,14 @@ type Folder struct {
 	OwnerUserID    uuid.NullUUID
 }
 
+type FolderMember struct {
+	WorkspaceID   uuid.UUID
+	FolderID      uuid.UUID
+	UserID        uuid.UUID
+	AddedByUserID uuid.NullUUID
+	CreatedAt     time.Time
+}
+
 type Item struct {
 	ID                uuid.UUID
 	WorkspaceID       uuid.UUID

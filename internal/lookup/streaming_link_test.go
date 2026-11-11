@@ -142,13 +142,13 @@ func TestStreamingLink_CountryChangeClearsItemsAndSnapshots(t *testing.T) {
 	}
 	svc := workspace.NewService(workspace.NewPostgres(e.db.(*pgxpool.Pool)))
 	// A change that is not the country keeps the link.
-	name := "Renamed"
-	if _, err := svc.Update(scope.With(t.Context(), e.ws), 1, workspace.SettingsPatch{WorkspaceName: &name}); err != nil {
+	limit := 5
+	if _, err := svc.Update(scope.With(t.Context(), e.ws), 1, workspace.SettingsPatch{MarkdownHistoryLimit: &limit}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := e.items.Get(scope.With(t.Context(), e.ws), it.ID)
 	if linkOf(t, got.Metadata) != matrixLink {
-		t.Fatal("link cleared by a change of the name")
+		t.Fatal("link cleared by a change that is not the country")
 	}
 	gb := "GB"
 	if _, err := svc.Update(scope.With(t.Context(), e.ws), 2, workspace.SettingsPatch{StreamingCountryCode: &gb}); err != nil {

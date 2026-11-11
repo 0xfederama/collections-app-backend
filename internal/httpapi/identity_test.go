@@ -25,7 +25,7 @@ type meBody struct {
 func identityRouter(t *testing.T, dev []string, lanOwner string) http.Handler {
 	t.Helper()
 	pool := testdb.NewMigrated(t, sharedPostgres(t))
-	ws, err := workspace.Bootstrap(t.Context(), pool, "Collections")
+	ws, err := workspace.Bootstrap(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
 	}

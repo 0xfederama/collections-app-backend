@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
-	"unicode/utf8"
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/stores"
@@ -22,7 +20,6 @@ type Store interface {
 // plain query on the workspace of the context; the rules live in Service.
 type Repo interface {
 	LockSettings(ctx context.Context) (Settings, error)
-	UpdateWorkspaceName(ctx context.Context, name string) error
 	UpdateSettings(ctx context.Context, s Settings) error
 	ClearItemStreamingLinks(ctx context.Context) error
 	ClearStreamingLinkSnapshots(ctx context.Context) error
@@ -43,8 +40,6 @@ func (s *Service) Get(ctx context.Context) (Settings, error) { return s.store.Ge
 // fields first (422), then locks the settings row so concurrent PATCHes are
 // serialised, and compares the version (412 with the current one). A patch that
 // changes nothing returns the current settings without bumping the version.
-// A name change updates workspaces.name in the same transaction and bumps the
-// same version.
 func (s *Service) Update(ctx context.Context, ifMatch int, p SettingsPatch) (Settings, error) {
 	p, err := p.validate()
 	if err != nil {
@@ -65,11 +60,6 @@ func (s *Service) Update(ctx context.Context, ifMatch int, p SettingsPatch) (Set
 		if next.equal(cur) {
 			out = cur
 			return nil
-		}
-		if next.WorkspaceName != cur.WorkspaceName {
-			if err := r.UpdateWorkspaceName(ctx, next.WorkspaceName); err != nil {
-				return err
-			}
 		}
 		if err := r.UpdateSettings(ctx, next); err != nil {
 			return err
@@ -93,16 +83,9 @@ func (s *Service) Update(ctx context.Context, ifMatch int, p SettingsPatch) (Set
 	return out, nil
 }
 
-// validate trims the name and checks every supplied field, collecting all failures.
+// validate checks every supplied field, collecting all failures.
 func (p SettingsPatch) validate() (SettingsPatch, error) {
 	var errs []apperr.FieldError
-	if p.WorkspaceName != nil {
-		name := strings.TrimSpace(*p.WorkspaceName)
-		p.WorkspaceName = &name
-		if n := utf8.RuneCountInString(name); n < 1 || n > 200 {
-			errs = append(errs, apperr.FieldError{Field: "workspace_name", Message: "must be 1 to 200 characters"})
-		}
-	}
 	if p.StreamingCountryCode != nil && !isUpperAlpha(*p.StreamingCountryCode, 2) {
 		errs = append(errs, apperr.FieldError{Field: "streaming_country_code", Message: "must be 2 uppercase letters (ISO 3166-1 alpha-2)"})
 	}
@@ -190,9 +173,6 @@ func isMetadataLanguage(s string) bool {
 }
 
 func (p SettingsPatch) applyTo(s Settings) Settings {
-	if p.WorkspaceName != nil {
-		s.WorkspaceName = *p.WorkspaceName
-	}
 	if p.StreamingCountryCode != nil {
 		s.StreamingCountryCode = *p.StreamingCountryCode
 	}
@@ -217,7 +197,7 @@ func (p SettingsPatch) applyTo(s Settings) Settings {
 // equal reports whether two settings hold the same values. The retention is a
 // pointer, so it is compared by value: a PATCH that repeats the stored value changes nothing.
 func (s Settings) equal(o Settings) bool {
-	return s.WorkspaceName == o.WorkspaceName && s.StreamingCountryCode == o.StreamingCountryCode &&
+	return s.StreamingCountryCode == o.StreamingCountryCode &&
 		s.MetadataLanguage == o.MetadataLanguage && s.MarkdownHistoryLimit == o.MarkdownHistoryLimit && sameRetention(s.TrashRetentionDays, o.TrashRetentionDays) &&
 		s.PreferredStore == o.PreferredStore && slices.Equal(s.OwnedStreamingServices, o.OwnedStreamingServices)
 }

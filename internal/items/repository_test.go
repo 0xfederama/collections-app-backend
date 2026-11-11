@@ -45,7 +45,7 @@ type env struct {
 func newEnv(t *testing.T) env {
 	t.Helper()
 	pool := testdb.NewMigrated(t, testdb.AdminURL(t))
-	ws, err := workspace.Bootstrap(t.Context(), pool, "Ours")
+	ws, err := workspace.Bootstrap(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
 	}

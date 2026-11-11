@@ -37,16 +37,16 @@ func count(t *testing.T, pool *pgxpool.Pool, table string) int {
 func TestAT02_BootstrapSequential(t *testing.T) {
 	pool := newPool(t)
 
-	first, err := workspace.Bootstrap(t.Context(), pool, "Collections")
+	first, err := workspace.Bootstrap(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Data from run 1 must survive: rename the workspace, then bootstrap again with another name.
+	// Data from run 1 must survive: rename the workspace row, then bootstrap again.
 	if _, err := pool.Exec(t.Context(), "UPDATE workspaces SET name = 'Renamed'"); err != nil {
 		t.Fatal(err)
 	}
 	for i := range 2 {
-		got, err := workspace.Bootstrap(t.Context(), pool, "Should Be Ignored")
+		got, err := workspace.Bootstrap(t.Context(), pool)
 		if err != nil {
 			t.Fatalf("run %d: %v", i+2, err)
 		}
@@ -83,7 +83,7 @@ func TestAT02_BootstrapConcurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			ids[i], errs[i] = workspace.Bootstrap(t.Context(), pool, "Collections")
+			ids[i], errs[i] = workspace.Bootstrap(t.Context(), pool)
 		}()
 	}
 	close(start)
@@ -110,29 +110,30 @@ func TestAT02_BootstrapFailsWithTwoWorkspaces(t *testing.T) {
 	if _, err := pool.Exec(t.Context(), "INSERT INTO workspaces (name) VALUES ('A'), ('B')"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := workspace.Bootstrap(t.Context(), pool, "Collections"); err == nil {
+	if _, err := workspace.Bootstrap(t.Context(), pool); err == nil {
 		t.Fatal("want an error with two workspaces")
 	}
 }
 
-func TestBootstrap_DefaultsAndInvalidName(t *testing.T) {
+// F-027 B5: a new workspace is named "Collections" and gets the default settings.
+func TestBootstrap_DefaultsForNewWorkspace(t *testing.T) {
 	pool := newPool(t)
-	if _, err := workspace.Bootstrap(t.Context(), pool, ""); err == nil {
-		t.Fatal("want an error for an empty workspace name")
-	}
-	if n := count(t, pool, "workspaces"); n != 0 {
-		t.Errorf("workspaces = %d after a failed bootstrap, want 0 (rolled back)", n)
-	}
-
-	id, err := workspace.Bootstrap(t.Context(), pool, "Ours")
+	id, err := workspace.Bootstrap(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
+	}
+	var name string
+	if err := pool.QueryRow(t.Context(), "SELECT name FROM workspaces WHERE id = $1", id).Scan(&name); err != nil {
+		t.Fatal(err)
+	}
+	if name != "Collections" {
+		t.Errorf("workspaces.name = %q, want Collections", name)
 	}
 	got, err := workspace.NewService(workspace.NewPostgres(pool)).Get(scope.With(t.Context(), id))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := workspace.Settings{WorkspaceName: "Ours", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 1}
+	want := workspace.Settings{StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 1}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("settings = %+v, want %+v", got, want)
 	}

@@ -15,7 +15,6 @@ in step with it.
 
 | Operation | Field | Constraint (old contract) |
 |---|---|---|
-| `updateSettings` | `workspace_name` | 1 to 200 characters |
 | `updateSettings` | `streaming_country_code` | `^[A-Z]{2}$` |
 | `updateSettings` | `markdown_history_limit` | 0 to 200 |
 | `updateSettings` | `trash_retention_days` | 1 to 365, or `null` |

@@ -14,7 +14,6 @@ import (
 )
 
 type settingsBody struct {
-	WorkspaceName        string `json:"workspace_name"`
 	StreamingCountryCode string `json:"streaming_country_code"`
 	MetadataLanguage     string `json:"metadata_language"`
 	LookupAvailable      bool   `json:"lookup_available"`
@@ -31,7 +30,7 @@ type settingsBody struct {
 func settingsRouter(t *testing.T) http.Handler {
 	t.Helper()
 	pool := testdb.NewMigrated(t, sharedPostgres(t))
-	id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
+	id, err := workspace.Bootstrap(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +67,7 @@ func TestAT02_GetSettings(t *testing.T) {
 	if got := rec.Header().Get("ETag"); got != `"s-1"` {
 		t.Errorf("ETag = %q, want \"s-1\"", got)
 	}
-	want := settingsBody{WorkspaceName: "Collections", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 20, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 1}
+	want := settingsBody{StreamingCountryCode: "IT", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 20, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 1}
 	if got := decodeSettings(t, rec); !reflect.DeepEqual(got, want) {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}
@@ -77,33 +76,44 @@ func TestAT02_GetSettings(t *testing.T) {
 func TestAT02_PatchSettings(t *testing.T) {
 	h := settingsRouter(t)
 
-	rec := patchSettings(t, h, `"s-1"`, `{"workspace_name":" Home ","streaming_country_code":"US","metadata_language":"it-IT","markdown_history_limit":0}`)
+	rec := patchSettings(t, h, `"s-1"`, `{"streaming_country_code":"US","metadata_language":"it-IT","markdown_history_limit":0}`)
 	if rec.Code != 200 {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body)
 	}
 	if got := rec.Header().Get("ETag"); got != `"s-2"` {
 		t.Errorf("ETag = %q, want \"s-2\"", got)
 	}
-	want := settingsBody{WorkspaceName: "Home", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 2}
+	want := settingsBody{StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 2}
 	if got := decodeSettings(t, rec); !reflect.DeepEqual(got, want) {
 		t.Errorf("body = %+v, want %+v", got, want)
 	}
 
-	// The name alone also bumps the one settings ETag stream.
-	rec = patchSettings(t, h, `"s-2"`, `{"workspace_name":"Ours"}`)
-	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-3"` {
-		t.Fatalf("rename: status = %d ETag = %q, want 200 \"s-3\"", rec.Code, rec.Header().Get("ETag"))
-	}
-
 	// A change-nothing PATCH answers 200 with the current version, no bump.
-	rec = patchSettings(t, h, `"s-3"`, `{}`)
-	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-3"` {
-		t.Fatalf("no-op: status = %d ETag = %q, want 200 \"s-3\"", rec.Code, rec.Header().Get("ETag"))
+	rec = patchSettings(t, h, `"s-2"`, `{}`)
+	if rec.Code != 200 || rec.Header().Get("ETag") != `"s-2"` {
+		t.Fatalf("no-op: status = %d ETag = %q, want 200 \"s-2\"", rec.Code, rec.Header().Get("ETag"))
 	}
 
 	get := do(t, h, req{method: "GET", path: "/api/v1/settings"})
-	if got, want := decodeSettings(t, get), (settingsBody{WorkspaceName: "Ours", StreamingCountryCode: "US", MetadataLanguage: "it-IT", LookupAvailable: true, MarkdownHistoryLimit: 0, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 3}); !reflect.DeepEqual(got, want) {
+	if got := decodeSettings(t, get); !reflect.DeepEqual(got, want) {
 		t.Errorf("GET after patches = %+v, want %+v", got, want)
+	}
+}
+
+// F-027 B5: the workspace name is gone from the settings. A PATCH that sends it is
+// the normal unknown-field 400 and changes nothing; GET has no such key.
+func TestF027B5_WorkspaceNameGone(t *testing.T) {
+	h := settingsRouter(t)
+	p := wantProblem(t, patchSettings(t, h, `"s-1"`, `{"workspace_name":"Ours"}`), 400, "unknown_field")
+	if p.Detail != `Unknown field "workspace_name".` {
+		t.Errorf("detail = %q, want the field name only", p.Detail)
+	}
+	get := do(t, h, req{method: "GET", path: "/api/v1/settings"})
+	if get.Code != 200 || get.Header().Get("ETag") != `"s-1"` {
+		t.Errorf("GET after the rejected PATCH: status = %d ETag = %q, want 200 \"s-1\"", get.Code, get.Header().Get("ETag"))
+	}
+	if strings.Contains(get.Body.String(), "workspace_name") {
+		t.Errorf("GET body = %s, want no workspace_name key", get.Body)
 	}
 }
 
@@ -127,12 +137,11 @@ func TestAT02_PatchSettingsValidation(t *testing.T) {
 		name, body string
 		fields     []string
 	}{
-		{"empty name", `{"workspace_name":"  "}`, []string{"workspace_name"}},
 		{"bad country", `{"streaming_country_code":"it"}`, []string{"streaming_country_code"}},
 		{"bad metadata language", `{"metadata_language":"IT-it"}`, []string{"metadata_language"}},
 		{"limit too high", `{"markdown_history_limit":201}`, []string{"markdown_history_limit"}},
-		{"several", `{"workspace_name":"","streaming_country_code":"x","markdown_history_limit":-1}`,
-			[]string{"workspace_name", "streaming_country_code", "markdown_history_limit"}},
+		{"several", `{"streaming_country_code":"x","markdown_history_limit":-1}`,
+			[]string{"streaming_country_code", "markdown_history_limit"}},
 		{"unknown preferred store", `{"preferred_store":"audible"}`, []string{"preferred_store"}},
 		{"open library is not a store", `{"preferred_store":"openlibrary"}`, []string{"preferred_store"}},
 	}
@@ -203,9 +212,9 @@ func TestF012_TrashRetentionSetting(t *testing.T) {
 	}
 
 	// An absent field leaves the retention alone.
-	rec = patchSettings(t, h, `"s-2"`, `{"workspace_name":"Ours"}`)
+	rec = patchSettings(t, h, `"s-2"`, `{"markdown_history_limit":5}`)
 	if rec.Code != 200 || decodeSettings(t, rec).TrashRetentionDays != float64(7) {
-		t.Fatalf("rename: status = %d body=%s, want retention kept at 7", rec.Code, rec.Body)
+		t.Fatalf("limit only: status = %d body=%s, want retention kept at 7", rec.Code, rec.Body)
 	}
 
 	rec = patchSettings(t, h, `"s-3"`, `{"trash_retention_days":null}`)

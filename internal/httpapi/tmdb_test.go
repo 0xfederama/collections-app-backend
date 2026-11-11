@@ -18,7 +18,7 @@ import (
 func tmdbRouter(t *testing.T, client *tmdb.Client) http.Handler {
 	t.Helper()
 	pool := testdb.NewMigrated(t, sharedPostgres(t))
-	workspaceID, err := workspace.Bootstrap(t.Context(), pool, "W")
+	workspaceID, err := workspace.Bootstrap(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
 	}

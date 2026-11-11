@@ -108,7 +108,7 @@ func TestAT10_IfMatchRequired(t *testing.T) {
 		{"SetItemImage", "PUT", "/api/v1/items/" + id1 + "/image", `{"url":"https://img.example/a.png"}`, "i"},
 		{"DeleteItemImage", "DELETE", "/api/v1/items/" + id1 + "/image", "", "i"},
 		{"LookupItemMetadata", "POST", "/api/v1/items/" + id1 + "/lookup", `{"mode":"fill"}`, "i"},
-		{"UpdateSettings", "PATCH", "/api/v1/settings", `{"workspace_name":"n"}`, "s"},
+		{"UpdateSettings", "PATCH", "/api/v1/settings", `{"markdown_history_limit":5}`, "s"},
 	}
 	for _, op := range ops {
 		ct := ""

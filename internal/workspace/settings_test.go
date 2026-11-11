@@ -16,28 +16,27 @@ import (
 func ptr[T any](v T) *T { return &v }
 
 func TestService_Update(t *testing.T) {
-	base := workspace.Settings{WorkspaceName: "Collections", StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 1}
+	base := workspace.Settings{StreamingCountryCode: "IT", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 20, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 1}
 	tests := []struct {
 		name  string
 		patch workspace.SettingsPatch
 		want  workspace.Settings
 	}{
-		{"name is trimmed", workspace.SettingsPatch{WorkspaceName: ptr("  Home  ")}, with(base, func(s *workspace.Settings) { s.WorkspaceName = "Home"; s.Version = 2 })},
 		{"country", workspace.SettingsPatch{StreamingCountryCode: ptr("US")}, with(base, func(s *workspace.Settings) { s.StreamingCountryCode = "US"; s.Version = 2 })},
 		{"metadata language", workspace.SettingsPatch{MetadataLanguage: ptr("en-US")}, with(base, func(s *workspace.Settings) { s.MetadataLanguage = "en-US"; s.Version = 2 })},
 		{"limit zero", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(0)}, with(base, func(s *workspace.Settings) { s.MarkdownHistoryLimit = 0; s.Version = 2 })},
 		{"limit max", workspace.SettingsPatch{MarkdownHistoryLimit: ptr(200)}, with(base, func(s *workspace.Settings) { s.MarkdownHistoryLimit = 200; s.Version = 2 })},
 		{"preferred store", workspace.SettingsPatch{PreferredStore: ptr("kobo")}, with(base, func(s *workspace.Settings) { s.PreferredStore = "kobo"; s.Version = 2 })},
 		{"the default preferred store is a no-op", workspace.SettingsPatch{PreferredStore: ptr("amazon")}, base},
-		{"all fields bump once", workspace.SettingsPatch{WorkspaceName: ptr("X"), StreamingCountryCode: ptr("DE"), MarkdownHistoryLimit: ptr(5)},
-			workspace.Settings{WorkspaceName: "X", StreamingCountryCode: "DE", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 5, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 2}},
+		{"all fields bump once", workspace.SettingsPatch{StreamingCountryCode: ptr("DE"), MarkdownHistoryLimit: ptr(5)},
+			workspace.Settings{StreamingCountryCode: "DE", MetadataLanguage: "it-IT", MarkdownHistoryLimit: 5, PreferredStore: "amazon", OwnedStreamingServices: []string{}, Version: 2}},
 		{"empty patch is a no-op", workspace.SettingsPatch{}, base},
-		{"same values are a no-op", workspace.SettingsPatch{WorkspaceName: ptr(" Collections "), StreamingCountryCode: ptr("IT"), MetadataLanguage: ptr("it-IT")}, base},
+		{"same values are a no-op", workspace.SettingsPatch{StreamingCountryCode: ptr("IT"), MetadataLanguage: ptr("it-IT")}, base},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pool := newPool(t)
-			id, err := workspace.Bootstrap(t.Context(), pool, base.WorkspaceName)
+			id, err := workspace.Bootstrap(t.Context(), pool)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -57,30 +56,24 @@ func TestService_Update(t *testing.T) {
 			if !reflect.DeepEqual(stored, tt.want) {
 				t.Errorf("Get = %+v, want %+v", stored, tt.want)
 			}
+			// The name column is never written by a PATCH.
 			var wsName string
 			if err := pool.QueryRow(t.Context(), "SELECT name FROM workspaces WHERE id = $1", id).Scan(&wsName); err != nil {
 				t.Fatal(err)
 			}
-			if wsName != tt.want.WorkspaceName {
-				t.Errorf("workspaces.name = %q, want %q", wsName, tt.want.WorkspaceName)
+			if wsName != "Collections" {
+				t.Errorf("workspaces.name = %q, want Collections", wsName)
 			}
 		})
 	}
 }
 
 func TestService_Update_Validation(t *testing.T) {
-	long := make([]rune, 201)
-	for i := range long {
-		long[i] = 'a'
-	}
 	tests := []struct {
 		name       string
 		patch      workspace.SettingsPatch
 		wantFields []string
 	}{
-		{"empty name", workspace.SettingsPatch{WorkspaceName: ptr("")}, []string{"workspace_name"}},
-		{"blank name", workspace.SettingsPatch{WorkspaceName: ptr("   ")}, []string{"workspace_name"}},
-		{"name too long", workspace.SettingsPatch{WorkspaceName: ptr(string(long))}, []string{"workspace_name"}},
 		{"country lowercase", workspace.SettingsPatch{StreamingCountryCode: ptr("it")}, []string{"streaming_country_code"}},
 		{"country three letters", workspace.SettingsPatch{StreamingCountryCode: ptr("ITA")}, []string{"streaming_country_code"}},
 		{"language uppercase", workspace.SettingsPatch{MetadataLanguage: ptr("EN")}, []string{"metadata_language"}},
@@ -91,11 +84,11 @@ func TestService_Update_Validation(t *testing.T) {
 		{"unknown preferred store", workspace.SettingsPatch{PreferredStore: ptr("audible")}, []string{"preferred_store"}},
 		{"open library is not a store", workspace.SettingsPatch{PreferredStore: ptr("openlibrary")}, []string{"preferred_store"}},
 		{"empty preferred store", workspace.SettingsPatch{PreferredStore: ptr("")}, []string{"preferred_store"}},
-		{"every field reported", workspace.SettingsPatch{WorkspaceName: ptr(""), StreamingCountryCode: ptr("x"), MetadataLanguage: ptr("EN_us"), MarkdownHistoryLimit: ptr(999), PreferredStore: ptr("nope")},
-			[]string{"workspace_name", "streaming_country_code", "metadata_language", "markdown_history_limit", "preferred_store"}},
+		{"every field reported", workspace.SettingsPatch{StreamingCountryCode: ptr("x"), MetadataLanguage: ptr("EN_us"), MarkdownHistoryLimit: ptr(999), PreferredStore: ptr("nope")},
+			[]string{"streaming_country_code", "metadata_language", "markdown_history_limit", "preferred_store"}},
 	}
 	pool := newPool(t)
-	id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
+	id, err := workspace.Bootstrap(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +122,7 @@ func TestService_Update_Validation(t *testing.T) {
 
 func TestService_Update_StaleVersion(t *testing.T) {
 	pool := newPool(t)
-	id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
+	id, err := workspace.Bootstrap(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +148,7 @@ func TestService_Update_StaleVersion(t *testing.T) {
 // Two PATCHes with the same If-Match race: exactly one wins, the other gets a conflict.
 func TestService_Update_ConcurrentSameVersion(t *testing.T) {
 	pool := newPool(t)
-	id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
+	id, err := workspace.Bootstrap(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +207,7 @@ func TestF022B3_OwnedStreamingServicesRoundTrip(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pool := newPool(t)
-			id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
+			id, err := workspace.Bootstrap(t.Context(), pool)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -242,7 +235,7 @@ func TestF022B3_OwnedStreamingServicesRoundTrip(t *testing.T) {
 // F-022 B3: a new workspace shows every service, so the list is [] and never nil.
 func TestF022B3_OwnedStreamingServicesDefaultEmpty(t *testing.T) {
 	pool := newPool(t)
-	id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
+	id, err := workspace.Bootstrap(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +251,7 @@ func TestF022B3_OwnedStreamingServicesDefaultEmpty(t *testing.T) {
 // F-022 B3: an absent list is unchanged, a repeat is a no-op, [] clears it (a version bump).
 func TestF022B3_OwnedStreamingServicesUnchangedRepeatClear(t *testing.T) {
 	pool := newPool(t)
-	id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
+	id, err := workspace.Bootstrap(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +304,7 @@ func TestF022B3_OwnedStreamingServicesInvalid(t *testing.T) {
 		{"sixty five entries", keysN(65)},
 	}
 	pool := newPool(t)
-	id, err := workspace.Bootstrap(t.Context(), pool, "Collections")
+	id, err := workspace.Bootstrap(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
 	}

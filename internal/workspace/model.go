@@ -1,13 +1,12 @@
 package workspace
 
-// Settings is the workspace name plus the workspace_settings row. Version is
+// Settings is the workspace_settings row of the workspace. Version is
 // workspace_settings.version, the single ETag stream "s-N" (API.md §3).
 // TrashRetentionDays nil means off: the trash is never purged automatically (F012-B3).
 // PreferredStore is the one default store key (F-016, 0.13.0); never empty.
 // OwnedStreamingServices are the provider keys the user subscribes to (F-022);
 // empty means every service is shown. Never nil.
 type Settings struct {
-	WorkspaceName          string
 	StreamingCountryCode   string
 	MetadataLanguage       string
 	MarkdownHistoryLimit   int
@@ -20,7 +19,6 @@ type Settings struct {
 // SettingsPatch holds the fields a PATCH supplied; nil means "leave as is".
 // TrashRetentionDays is an Optional: absent leaves it, an explicit null turns it off.
 type SettingsPatch struct {
-	WorkspaceName        *string
 	StreamingCountryCode *string
 	MetadataLanguage     *string
 	MarkdownHistoryLimit *int

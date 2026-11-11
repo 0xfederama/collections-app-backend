@@ -14,16 +14,14 @@ INSERT INTO workspaces (name) VALUES ($1) RETURNING id;
 INSERT INTO workspace_settings (workspace_id) VALUES ($1);
 
 -- name: GetSettings :one
-SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_store, s.owned_streaming_services, s.version
+SELECT s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_store, s.owned_streaming_services, s.version
 FROM workspace_settings s
-JOIN workspaces w ON w.id = s.workspace_id
 WHERE s.workspace_id = $1;
 
 -- name: LockSettings :one
 -- Row lock that serialises concurrent PATCHes of the same workspace.
-SELECT w.name AS workspace_name, s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_store, s.owned_streaming_services, s.version
+SELECT s.streaming_country_code, s.metadata_language, s.markdown_history_limit, s.trash_retention_days, s.preferred_store, s.owned_streaming_services, s.version
 FROM workspace_settings s
-JOIN workspaces w ON w.id = s.workspace_id
 WHERE s.workspace_id = $1
 FOR UPDATE OF s;
 
@@ -38,11 +36,6 @@ SET streaming_country_code = $2,
     version                = version + 1,
     updated_at             = now()
 WHERE workspace_id = $1;
-
--- name: UpdateWorkspaceName :exec
-UPDATE workspaces
-SET name = $2, version = version + 1, updated_at = now()
-WHERE id = $1;
 
 -- name: ClearItemStreamingLinks :exec
 -- The JustWatch page is per country: when the streaming country changes, every imported

@@ -83,7 +83,7 @@ type refreshEnv struct {
 func newRefreshEnv(t *testing.T, tmdbOff bool) *refreshEnv {
 	t.Helper()
 	pool := testdb.NewMigrated(t, sharedPostgres(t))
-	ws, err := workspace.Bootstrap(t.Context(), pool, "W")
+	ws, err := workspace.Bootstrap(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
 	}

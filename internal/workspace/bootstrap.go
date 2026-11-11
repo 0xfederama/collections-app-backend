@@ -16,12 +16,17 @@ import (
 // (DATA_MODEL §3). Any other bootstrap-like task must pick a different key.
 const bootstrapLockKey int64 = 0x436F6C6C41707001 // "CollApp" + 1
 
+// defaultWorkspaceName is the name a new workspace gets. The column is NOT NULL and
+// the name is no longer editable (F-027 B5), so it is a constant, not configuration.
+// It is only written on insert: an existing workspace is never renamed.
+const defaultWorkspaceName = "Collections"
+
 // Bootstrap makes sure exactly one workspace and its settings row exist and
 // returns the workspace ID. It is safe to call from several processes at once:
 // an advisory lock serialises the check-then-insert, and an existing workspace
-// is never modified (a later WORKSPACE_NAME does not rename it).
+// is never modified.
 // More than one workspace is a broken MVP invariant and fails loudly.
-func Bootstrap(ctx context.Context, db database.TxBeginner, name string) (uuid.UUID, error) {
+func Bootstrap(ctx context.Context, db database.TxBeginner) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := database.InTx(ctx, db, func(q *sqlc.Queries) error {
 		if err := q.LockWorkspaceBootstrap(ctx, bootstrapLockKey); err != nil {
@@ -33,7 +38,7 @@ func Bootstrap(ctx context.Context, db database.TxBeginner, name string) (uuid.U
 		}
 		switch len(ids) {
 		case 0:
-			if id, err = q.InsertWorkspace(ctx, name); err != nil {
+			if id, err = q.InsertWorkspace(ctx, defaultWorkspaceName); err != nil {
 				return fmt.Errorf("insert workspace: %w", err)
 			}
 			if err := q.InsertWorkspaceSettings(ctx, id); err != nil {

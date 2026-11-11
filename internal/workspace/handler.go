@@ -36,7 +36,7 @@ func Register(api huma.API, log *slog.Logger, svc *Service, reader settingsReade
 	huma.Register(api, huma.Operation{
 		OperationID: "getSettings", Method: http.MethodGet, Path: "/api/v1/settings", Tags: tags,
 		Summary:     "Get workspace settings",
-		Description: "The settings, including the workspace name.",
+		Description: "The workspace settings.",
 		Errors:      []int{http.StatusInternalServerError},
 	}, httpserver.Op(log, h.get))
 	huma.Register(api, huma.Operation{
@@ -61,7 +61,6 @@ type handler struct {
 // JSON suffix is stripped by the schema namer (httpserver.NewAPI), and the Go
 // name avoids the domain type Settings in this package.
 type SettingsJSON struct {
-	WorkspaceName        string `json:"workspace_name" minLength:"1" maxLength:"200"`
 	StreamingCountryCode string `json:"streaming_country_code" pattern:"^[A-Z]{2}$"`
 	MetadataLanguage     string `json:"metadata_language" pattern:"^[a-z]{2}(-[A-Z]{2})?$" example:"it-IT"`
 	LookupAvailable      bool   `json:"lookup_available" readOnly:"true" doc:"Whether this server has TMDB lookup (movies and TV) configured."`
@@ -86,7 +85,6 @@ type SettingsOutput struct {
 // purpose: Huma reports constraint errors of several fields in map order, so the
 // service validates them all, in its fixed order, as before the migration.
 type UpdateSettingsRequest struct {
-	WorkspaceName        *string `json:"workspace_name,omitempty"`
 	StreamingCountryCode *string `json:"streaming_country_code,omitempty"`
 	MetadataLanguage     *string `json:"metadata_language,omitempty"`
 	MarkdownHistoryLimit *int    `json:"markdown_history_limit,omitempty"`
@@ -100,7 +98,6 @@ type UpdateSettingsRequest struct {
 // patch maps the PATCH body to the service input.
 func (r UpdateSettingsRequest) patch() SettingsPatch {
 	return SettingsPatch{
-		WorkspaceName:          r.WorkspaceName,
 		StreamingCountryCode:   r.StreamingCountryCode,
 		MetadataLanguage:       r.MetadataLanguage,
 		MarkdownHistoryLimit:   r.MarkdownHistoryLimit,
@@ -118,7 +115,6 @@ func (h *handler) output(s Settings) *SettingsOutput {
 	return &SettingsOutput{
 		ETag: etag.Format(etag.Settings, s.Version),
 		Body: SettingsJSON{
-			WorkspaceName:          s.WorkspaceName,
 			StreamingCountryCode:   s.StreamingCountryCode,
 			MetadataLanguage:       s.MetadataLanguage,
 			LookupAvailable:        h.avail.Lookup,

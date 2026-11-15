@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Move at a position (D-158): an optional before_id on the folder and list move. It names the
+// Move at a position (D-159): an optional before_id on the folder and list move. It names the
 // sibling to insert in front of: a child folder of the target, or a list of the target folder (or of
 // the top level). Absent or null appends last. Everything else about a move is unchanged.
 

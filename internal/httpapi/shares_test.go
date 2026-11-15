@@ -470,7 +470,7 @@ func TestF027_Shares_MoveRacingAnUnshareIsStoppedInTheTransaction(t *testing.T) 
 	t.Run("folder", func(t *testing.T) {
 		svc := folders.NewService(folders.NewPostgres(e.pool), clock.System{})
 		unshare()
-		_, err := svc.Move(bctx, uuidOf(sub), 1, nil)
+		_, err := svc.Move(bctx, uuidOf(sub), 1, nil, nil)
 		wantNotFound(t, err)
 		if got := e.fresh("folders", sub); owner(got) != "" || got["parent_folder_id"] != fa["id"] {
 			t.Errorf("the folder left the box: %v", got)
@@ -480,7 +480,7 @@ func TestF027_Shares_MoveRacingAnUnshareIsStoppedInTheTransaction(t *testing.T) 
 	t.Run("list", func(t *testing.T) {
 		svc := lists.NewService(lists.NewPostgres(e.pool), noTypeSource{}, clock.System{})
 		unshare()
-		_, err := svc.Move(bctx, uuidOf(l), 1, nil)
+		_, err := svc.Move(bctx, uuidOf(l), 1, nil, nil)
 		wantNotFound(t, err)
 		if got := e.fresh("lists", l); owner(got) != "" || got["folder_id"] != fa["id"] {
 			t.Errorf("the list left the box: %v", got)
@@ -492,7 +492,7 @@ func TestF027_Shares_MoveRacingAnUnshareIsStoppedInTheTransaction(t *testing.T) 
 		bl := e.as("b").list("B list", nil)
 		svc := lists.NewService(lists.NewPostgres(e.pool), noTypeSource{}, clock.System{})
 		unshare()
-		_, err := svc.Move(bctx, uuidOf(bl), 1, uuidPtr(fa))
+		_, err := svc.Move(bctx, uuidOf(bl), 1, uuidPtr(fa), nil)
 		var un *apperr.ConflictError
 		if !asConflict(err, &un) || un.Code != apperr.CodeDestinationUnavailable {
 			t.Errorf("err = %v, want destination_unavailable", err)

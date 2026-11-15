@@ -3,7 +3,6 @@
 package tree
 
 import (
-	"cmp"
 	"context"
 	"log/slog"
 	"net/http"
@@ -15,6 +14,7 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/folders"
 	"github.com/0xfederama/collections-app-backend/internal/lists"
 	"github.com/0xfederama/collections-app-backend/internal/platform/httpserver"
+	"github.com/0xfederama/collections-app-backend/internal/platform/order"
 )
 
 // folderLister is satisfied by *folders.Postgres.
@@ -110,38 +110,22 @@ func (h *handler) get(ctx context.Context, _ *struct{}) (*TreeOutput, error) {
 }
 
 // orderTop puts the top-level entries of rows in the caller's order and numbers them 0, 1, 2...
-// in that order, so a client that sorts by (sort_order, id) shows the caller's order. Entries the
-// caller ordered come first by their position; the others follow by the shared sort_order, then
-// id (the rows arrive in that order). Nested entries keep their rows, positions and sort_order.
+// in that order, so a client that sorts by (sort_order, id) shows the caller's order (order.Caller
+// has the rule). Nested entries keep their rows, positions and sort_order.
 func orderTop[T any](rows []T, position map[uuid.UUID]int, top func(T) (uuid.UUID, bool), setOrder func(*T, int)) {
 	var slots []int
-	var entries []T
+	var ids []uuid.UUID
+	byID := make(map[uuid.UUID]T)
 	for i, r := range rows {
-		if _, isTop := top(r); isTop {
+		if id, isTop := top(r); isTop {
 			slots = append(slots, i)
-			entries = append(entries, r)
+			ids = append(ids, id)
+			byID[id] = r
 		}
 	}
-	rank := func(r T) (int, bool) {
-		id, _ := top(r)
-		p, ok := position[id]
-		return p, ok
-	}
-	slices.SortStableFunc(entries, func(a, b T) int {
-		pa, oka := rank(a)
-		pb, okb := rank(b)
-		switch {
-		case oka && okb:
-			return cmp.Compare(pa, pb)
-		case oka:
-			return -1
-		case okb:
-			return 1
-		}
-		return 0 // both unordered: keep the shared order
-	})
-	for n, slot := range slots {
-		setOrder(&entries[n], n)
-		rows[slot] = entries[n]
+	for n, id := range order.Caller(ids, position) {
+		r := byID[id]
+		setOrder(&r, n)
+		rows[slots[n]] = r
 	}
 }

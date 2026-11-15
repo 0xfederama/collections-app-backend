@@ -413,7 +413,7 @@ func TestMove_ErrorOrder(t *testing.T) {
 			db := newFakeDB()
 			l := db.seed(List{Name: "A"})
 			gone := uuid.New()
-			_, err := NewService(db, db, fixedClock{}).Move(t.Context(), l.ID, tt.version, &gone)
+			_, err := NewService(db, db, fixedClock{}).Move(t.Context(), l.ID, tt.version, &gone, nil)
 			var vc *apperr.VersionConflictError
 			if tt.wantVC {
 				if !errors.As(err, &vc) || vc.Current != 1 {
@@ -435,7 +435,7 @@ func TestMove_AppendsToTheDestination(t *testing.T) {
 	db.folders[folder] = fakeFolder{name: "Media"}
 	db.seed(List{Name: "Other", FolderID: &folder, SortOrder: 0})
 	l := db.seed(List{Name: "A"})
-	got, err := NewService(db, db, fixedClock{}).Move(t.Context(), l.ID, 1, &folder)
+	got, err := NewService(db, db, fixedClock{}).Move(t.Context(), l.ID, 1, &folder, nil)
 	if err != nil {
 		t.Fatalf("Move: %v", err)
 	}

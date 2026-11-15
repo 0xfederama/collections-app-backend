@@ -47,7 +47,11 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 	huma.Register(api, huma.Operation{
 		OperationID: "moveList", Method: http.MethodPost, Path: "/api/v1/lists/{id}/move", Tags: tags,
 		Summary: "Move a list to another folder", Description: "Requires `If-Match` (`\"l-N\"`). `folder_id: null` moves it to the root. " +
-			"Appended to the end of the new siblings.",
+			"Appended to the end of the new siblings when `before_id` is absent or `null`.\n\n" +
+			"`before_id` (optional) places it in front of that sibling: another active list of the same kind in the target folder " +
+			"(or at the top level a list the caller can see there). Absent or `null`: last. A sibling that is not one of those, or the " +
+			"list itself, is 422 `invalid_before_id`. A move within the same folder reorders it. Top level: the order is the caller's " +
+			"own; inside a folder: the shared order. One request, one version bump.",
 		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict,
 			http.StatusPreconditionFailed, http.StatusRequestEntityTooLarge,
 			http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
@@ -195,6 +199,7 @@ type moveInput struct {
 // MoveListRequest is the body of moveList.
 type MoveListRequest struct {
 	FolderID *uuid.UUID `json:"folder_id" format:"uuid" nullable:"true" required:"true"`
+	BeforeID *uuid.UUID `json:"before_id,omitempty" format:"uuid" nullable:"true" doc:"Place the list in front of this sibling (a list of the same kind in the target folder). Absent or null: last."`
 }
 
 func (h *handler) move(ctx context.Context, in *moveInput) (*ListOutput, error) {
@@ -202,7 +207,7 @@ func (h *handler) move(ctx context.Context, in *moveInput) (*ListOutput, error) 
 	if !ok {
 		return nil, problem.PreconditionRequired()
 	}
-	l, err := h.svc.Move(ctx, in.ID, version, in.Body.FolderID)
+	l, err := h.svc.Move(ctx, in.ID, version, in.Body.FolderID, in.Body.BeforeID)
 	if err != nil {
 		return nil, err
 	}

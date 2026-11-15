@@ -13,6 +13,7 @@ import (
 
 	"github.com/0xfederama/collections-app-backend/internal/apperr"
 	"github.com/0xfederama/collections-app-backend/internal/platform/clock"
+	"github.com/0xfederama/collections-app-backend/internal/platform/order"
 	"github.com/0xfederama/collections-app-backend/internal/platform/scope"
 )
 
@@ -31,6 +32,8 @@ type Access interface {
 	FolderVisible(ctx context.Context, id uuid.UUID) (bool, error)
 	// VisibleFolderIDs returns the active folders the caller may see.
 	VisibleFolderIDs(ctx context.Context) (map[uuid.UUID]bool, error)
+	// TopOrder returns the caller's own positions of their top-level folders and lists.
+	TopOrder(ctx context.Context) (folders, lists map[uuid.UUID]int, err error)
 }
 
 // Users finds a user who signed in before (internal/users, wired in httpapi). It is read before the
@@ -167,17 +170,24 @@ func (s *Service) Rename(ctx context.Context, id uuid.UUID, version int, name *s
 	return out, err
 }
 
-// Move re-parents a folder (nil = root), appended last. Errors in order: NotFound, Forbidden (a
-// top-level folder the caller does not own), VersionConflict, DestinationUnavailable, FolderShared
-// (a folder with members into a folder), Cycle.
+// Move re-parents a folder (nil = root). Without before it is appended last. With before it goes in
+// front of that sibling (see moveBefore). Errors in order: NotFound, Forbidden (a top-level folder
+// the caller does not own), VersionConflict, DestinationUnavailable, FolderShared (a folder with
+// members into a folder), Cycle, InvalidBeforeID.
 //
 // The path guard and the destination check read the access snapshot before the transaction; a
 // share can change meanwhile. With a user in the context the folder and the destination are read
 // again here, after the tree lock (which shares also take), so a move racing an unshare ends as
 // if it ran after it: NotFound / DestinationUnavailable.
-func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, parent *uuid.UUID) (Folder, error) {
+func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, parent, before *uuid.UUID) (Folder, error) {
 	destErr := s.destination(ctx, parent)
 	user, hasUser := scope.UserID(ctx)
+	// At the top level the caller's view is read before the transaction, like the destination.
+	var view topView
+	var viewErr error
+	if before != nil && parent == nil && s.access != nil {
+		view, viewErr = s.topView(ctx)
+	}
 	var out Folder
 	err := s.store.InTx(ctx, func(r Repo) error {
 		if err := r.LockTree(ctx); err != nil {
@@ -226,6 +236,13 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, parent *u
 				return apperr.Cycle()
 			}
 		}
+		if before != nil {
+			if viewErr != nil {
+				return viewErr
+			}
+			out, err = s.moveBefore(ctx, r, id, parent, *before, view)
+			return err
+		}
 		next, err := r.NextSortOrder(ctx, parent)
 		if err != nil {
 			return fmt.Errorf("next sort order: %w", err)
@@ -234,6 +251,88 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, parent *u
 		return wrap("move folder", err)
 	})
 	return out, err
+}
+
+// topView is what the caller sees at the top level and how they ordered it. It is read before the
+// transaction: the access rules belong to another feature and must not run inside it.
+type topView struct {
+	visible  map[uuid.UUID]bool
+	position map[uuid.UUID]int
+}
+
+func (s *Service) topView(ctx context.Context) (topView, error) {
+	visible, err := s.access.VisibleFolderIDs(ctx)
+	if err != nil {
+		return topView{}, fmt.Errorf("visible folders: %w", err)
+	}
+	position, _, err := s.access.TopOrder(ctx)
+	if err != nil {
+		return topView{}, fmt.Errorf("top-level order: %w", err)
+	}
+	return topView{visible: visible, position: position}, nil
+}
+
+// moveBefore moves id under parent in front of the sibling before. It runs inside the transaction,
+// after the tree lock.
+//
+// Nested (or without access): the siblings take shared sort_order 0..n-1 and the moved folder its
+// place in that order. At the top level with access the order is the caller's own (user_top_order):
+// the moved folder takes the shared sort_order it would get when appended, and the caller's visible
+// top-level folders are numbered 0..n-1 in the new order. Other users' positions stay as they are.
+func (s *Service) moveBefore(ctx context.Context, r Repo, id uuid.UUID, parent *uuid.UUID, before uuid.UUID, view topView) (Folder, error) {
+	siblings, err := s.siblings(ctx, r, parent, view)
+	if err != nil {
+		return Folder{}, err
+	}
+	ids, ok := order.Place(siblings, id, &before)
+	if !ok {
+		return Folder{}, apperr.InvalidBeforeID()
+	}
+	now := s.clock.Now()
+	if parent == nil && s.access != nil {
+		next, err := r.NextSortOrder(ctx, nil)
+		if err != nil {
+			return Folder{}, fmt.Errorf("next sort order: %w", err)
+		}
+		out, err := r.Move(ctx, id, nil, next, now)
+		if err != nil {
+			return Folder{}, wrap("move folder", err)
+		}
+		for i, sib := range ids {
+			if err := r.SetTopOrder(ctx, sib, i); err != nil {
+				return Folder{}, fmt.Errorf("set top-level order: %w", err)
+			}
+		}
+		return out, nil
+	}
+	var out Folder
+	for i, sib := range ids {
+		if sib == id {
+			if out, err = r.Move(ctx, id, parent, i, now); err != nil {
+				return Folder{}, wrap("move folder", err)
+			}
+			continue
+		}
+		if err := r.SetSortOrder(ctx, sib, i, now); err != nil {
+			return Folder{}, fmt.Errorf("set sort order: %w", err)
+		}
+	}
+	return out, nil
+}
+
+// siblings lists the folders the moved folder can be placed among, in their order: the active
+// children of parent in shared order. At the top level with access, only the folders the caller
+// sees, in the caller's own order.
+func (s *Service) siblings(ctx context.Context, r Repo, parent *uuid.UUID, view topView) ([]uuid.UUID, error) {
+	ids, err := r.ChildIDs(ctx, parent)
+	if err != nil {
+		return nil, fmt.Errorf("list children: %w", err)
+	}
+	if parent == nil && s.access != nil {
+		ids = slices.DeleteFunc(ids, func(id uuid.UUID) bool { return !view.visible[id] })
+		ids = order.Caller(ids, view.position)
+	}
+	return ids, nil
 }
 
 // AddMember shares a top-level folder with the user of email (known: they signed in once). Only

@@ -123,6 +123,7 @@ func From(err error, requestID string) (p *Problem, unexpected bool) {
 		upstream   *apperr.UpstreamUnavailableError
 		noFavicon  *apperr.FaviconNotFoundError
 		forbidden  *apperr.ForbiddenError
+		badBefore  *apperr.InvalidBeforeIDError
 		bodyTooBig *http.MaxBytesError
 	)
 	switch {
@@ -145,6 +146,9 @@ func From(err error, requestID string) (p *Problem, unexpected bool) {
 		return validationProblem(fields), false
 	case errors.As(err, &unknown):
 		return UnknownField(unknown.Path), false
+	case errors.As(err, &badBefore):
+		return New(http.StatusUnprocessableEntity, "invalid_before_id", "Invalid position",
+			"before_id must be another active sibling of the moved item in the target."), false
 	case errors.As(err, &conflict):
 		return conflictProblem(conflict), false
 	case errors.As(err, &tooLarge), errors.As(err, &bodyTooBig):

@@ -19,7 +19,7 @@ Serves `GET /api/v1/tree`: the active folders and lists the caller may see, flat
 ## Gotchas
 
 - Only active rows the caller may see: trashed, other users' and missing rows are absent. Without access the answer is empty arrays.
-- A top-level `sort_order` is the caller's own position, renumbered 0..n-1; top-level rows they never ordered follow by the shared `sort_order`, then id. Nested rows keep the shared order.
+- A top-level `sort_order` is the caller's own position, renumbered 0..n-1; top-level rows they never ordered follow by the shared `sort_order`, then id. Nested rows keep the shared order. The ranking is `platform/order.Caller`, the same rule the move with `before_id` uses.
 - Both arrays are always present, empty rather than `null`.
 - Folders and lists are read by two separate queries with no transaction, so a write between them can show in one array and not the other.
 - Lists in the response have no `path`; use `GET /api/v1/lists/{id}` for it.

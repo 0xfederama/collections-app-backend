@@ -42,7 +42,11 @@ func Register(api huma.API, log *slog.Logger, svc *Service) {
 		Summary: "Move a folder under another parent",
 		Description: "Requires `If-Match`. `parent_folder_id: null` moves it to the root. A top-level folder moves only by its owner " +
 			"(403 `forbidden`); a folder with members cannot go into a folder (409 `folder_shared`). Moving out of a shared folder " +
-			"to the top level makes the caller the owner.",
+			"to the top level makes the caller the owner.\n\n" +
+			"`before_id` (optional) places it in front of that sibling; absent or `null` appends it last. The sibling must be " +
+			"another active folder of the same kind: a child folder of the target parent, or at the top level a folder the caller " +
+			"can see there (422 `invalid_before_id` otherwise, also for the folder itself). A move within the same parent reorders it. " +
+			"Top level: the order is the caller's own; nested: the shared order. One request, one version bump.",
 		Errors: []int{http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound, http.StatusConflict,
 			http.StatusPreconditionFailed, http.StatusRequestEntityTooLarge,
 			http.StatusUnprocessableEntity, http.StatusPreconditionRequired},
@@ -155,6 +159,7 @@ type moveInput struct {
 // MoveFolderRequest is the body of moveFolder.
 type MoveFolderRequest struct {
 	ParentFolderID *uuid.UUID `json:"parent_folder_id" format:"uuid" nullable:"true" required:"true"`
+	BeforeID       *uuid.UUID `json:"before_id,omitempty" format:"uuid" nullable:"true" doc:"Place the folder in front of this sibling (a folder of the same kind in the target). Absent or null: last."`
 }
 
 func (h *handler) move(ctx context.Context, in *moveInput) (*FolderOutput, error) {
@@ -162,7 +167,7 @@ func (h *handler) move(ctx context.Context, in *moveInput) (*FolderOutput, error
 	if !ok {
 		return nil, problem.PreconditionRequired()
 	}
-	f, err := h.svc.Move(ctx, in.ID, version, in.Body.ParentFolderID)
+	f, err := h.svc.Move(ctx, in.ID, version, in.Body.ParentFolderID, in.Body.BeforeID)
 	if err != nil {
 		return nil, err
 	}

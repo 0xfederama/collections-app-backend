@@ -17,6 +17,7 @@ Shared infrastructure under `internal/platform/`, used by feature packages and n
 - `internal/platform/problem/codes.go`: `Codes`, the list rendered into the `Problem` schema
 - `internal/platform/scope/scope.go`: `With`, `WorkspaceID`, `WithUser`, `UserID`, `Middleware`
 - `internal/platform/testdb/testdb.go`: test-only shared Postgres container (see [database](database.md))
+- `internal/platform/order/order.go`: pure sibling-order rules shared by folders, lists and tree (`Caller`: the caller's top-level order; `Place`: insert before a sibling or last)
 - `internal/platform/archtest/layers_test.go`: layer and cross-feature import rules
 
 ## Interfaces

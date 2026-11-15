@@ -32,6 +32,7 @@ func TestCodesCoverEveryEmittedCode(t *testing.T) {
 		apperr.TypeMismatch(),
 		apperr.DuplicateTitle(),
 		apperr.OrderStale(),
+		apperr.InvalidBeforeID(),
 		apperr.Forbidden(),
 		apperr.FolderNotTopLevel(),
 		apperr.FolderShared(),

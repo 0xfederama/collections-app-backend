@@ -37,6 +37,7 @@ var Codes = []Code{
 	{"folder_shared", "A folder shared with others cannot be moved into another folder (409). Stop sharing it first."},
 	{"type_mismatch", "An item would move to a list of another type (409)."},
 	{"duplicate_title", "An item create, rename or move would repeat a title of the target list, ignoring case, accents and outer spaces (409)."},
+	{"invalid_before_id", "A move's `before_id` is not another active sibling of the moved item in the target: unknown, trashed, of the other kind, not in the target, not visible at the top level, or the item itself (422)."},
 	{"order_stale", "A reorder names an id set that no longer matches the stored one (409)."},
 	{"lookup_disabled", "A lookup was requested but its integration is not configured on this server (503)."},
 	{"upstream_unavailable", "A lookup provider could not be reached or answered in time (503)."},

@@ -19,6 +19,7 @@ Typed domain errors that services return and that `internal/httpapi` maps to pro
 - `DestinationUnavailable() error`: 409 `destination_unavailable`
 - `TypeMismatch() error`: 409 `type_mismatch` (item moved to a list of another type)
 - `OrderStale() error`: 409 `order_stale`
+- `InvalidBeforeID() error`: 422 `invalid_before_id` (`*InvalidBeforeIDError`): a move's `before_id` is not a sibling of the moved entry in the target
 - `Forbidden() error`: 403 `forbidden` (`*ForbiddenError`): the caller sees the resource but only its owner may do this
 - `FolderNotTopLevel() error`: 409 `folder_not_top_level`; `FolderShared() error`: 409 `folder_shared`
 - `DuplicateTitle() error`: 409 `duplicate_title` (items create/update/move, lookup enriched create)

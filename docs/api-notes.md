@@ -15,6 +15,7 @@ in step with it.
 
 | Operation | Field | Constraint (old contract) |
 |---|---|---|
+| `moveFolder`, `moveList` | `before_id` | a sibling of the moved entry's kind in the target (an active child folder of the parent, or a list of the folder); not the entry itself. Anything else is 422 `invalid_before_id`, checked in the transaction after the existing rules |
 | `updateSettings` | `streaming_country_code` | `^[A-Z]{2}$` |
 | `updateSettings` | `markdown_history_limit` | 0 to 200 |
 | `updateSettings` | `trash_retention_days` | 1 to 365, or `null` |

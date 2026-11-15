@@ -157,3 +157,13 @@ func FolderNotTopLevel() error { return &ConflictError{Code: CodeFolderNotTopLev
 
 // FolderShared reports a folder with members moved into another folder.
 func FolderShared() error { return &ConflictError{Code: CodeFolderShared} }
+
+// InvalidBeforeIDError means a move's before_id is not an active sibling of the moved entry in the
+// target (422 `invalid_before_id`): unknown, trashed, of the other kind, in another folder, not
+// visible at the top level, or the entry itself.
+type InvalidBeforeIDError struct{}
+
+func (e *InvalidBeforeIDError) Error() string { return "invalid before_id" }
+
+// InvalidBeforeID reports a before_id that does not name a sibling to insert in front of.
+func InvalidBeforeID() error { return &InvalidBeforeIDError{} }

@@ -17,9 +17,9 @@ Owns workspace folders: create, get, rename, move (cycle-checked) and reorder th
 
 - `NewService(store Store, clk clock.Clock) *Service`; `NewPostgres(db DB) *Postgres`
 - `Service.Create(ctx, name, parent *uuid.UUID) (Folder, error)`: appended last among siblings
-- `Service.Get(ctx, id)`, `Rename(ctx, id, version, name *string)`, `Move(ctx, id, version, parent *uuid.UUID)`
+- `Service.Get(ctx, id)`, `Rename(ctx, id, version, name *string)`, `Move(ctx, id, version, parent, before *uuid.UUID)`; `before` nil appends, else the folder goes in front of that sibling (`moveBefore`)
 - `Service.Reorder(ctx, parent *uuid.UUID, ids []uuid.UUID) error`: at the root, the caller's own order (`SetTopOrder`)
-- `WithAccess(a Access) *Service` (`Access`: `FolderVisible`, `VisibleFolderIDs`, see [access](access.md)); `FolderJSON.owner_user_id`, top-level only
+- `WithAccess(a Access) *Service` (`Access`: `FolderVisible`, `VisibleFolderIDs`, `TopOrder`, see [access](access.md)); `FolderJSON.owner_user_id`, top-level only
 - `Postgres.ListActive(ctx) ([]Folder, error)`: used by `internal/tree`
 - `AddMember(ctx, id, email)`, `RemoveMember(ctx, id, user)`; `WithUsers(u Users)` (`IDByEmail`, wired to `users.Service.Lookup`); `FolderJSON.shared`, `member_user_ids` (empty for nested or unshared)
 - `POST /api/v1/folders/{id}/members` (200 Folder), `DELETE /api/v1/folders/{id}/members/{user_id}` (204), both under `LockTree`, no `If-Match`, no version bump
@@ -38,5 +38,6 @@ Owns workspace folders: create, get, rename, move (cycle-checked) and reorder th
 - Rename with no `name` changes nothing and does not bump the version. Names are trimmed to 1 to 200 characters (422 otherwise).
 - Cycle walk is capped at the folder count, so corrupt parent chains still terminate.
 - Share order of errors: 404 (guard, or not visible in the tx), 409 `folder_not_top_level`, 403 `forbidden` (not the owner), 422 on `email` (unknown user, or the owner). Already a member: 200 unchanged. Unshare: owner removes anyone, a member only themself (403 otherwise), not a member 404; it also deletes that user's `user_top_order` row and works on a trashed folder.
-- Move: 404, 403 `forbidden` (top-level folder the caller does not own), 412, 409 `destination_unavailable`, 409 `folder_shared` (a folder with members into a folder), 409 `cycle_detected`. The folder and the destination are re-checked for visibility inside the tx.
+- Move: 404, 403 `forbidden` (top-level folder the caller does not own), 412, 409 `destination_unavailable`, 409 `folder_shared` (a folder with members into a folder), 409 `cycle_detected`, then 422 `invalid_before_id`. The folder and the destination are re-checked for visibility inside the tx.
+- `before_id` (D-158): a child folder of the target, or at the top level a folder the caller sees there; same-parent moves reorder. Nested target: the siblings take shared `sort_order` 0..n-1 (the moved one included, its `Move` sets its own). Top level with access: the caller's visible top-level folders are numbered 0..n-1 in `user_top_order` (`SetTopOrder`), the moved folder takes the appended shared `sort_order`. The caller's order is read before the tx (`topView`); the sibling list is read after `LockTree`.
 - Who changed: create sets `created_by_user_id` and `updated_by_user_id` to the caller; rename and move set `updated_by_user_id` (no user keeps the old value). Reorder leaves both alone.

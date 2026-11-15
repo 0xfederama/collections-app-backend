@@ -298,7 +298,8 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, folder, b
 	// At the top level the caller's view is read before the transaction, like the destination.
 	var view topView
 	var viewErr error
-	if before != nil && folder == nil && s.access != nil {
+	callerTop := folder == nil && s.access != nil
+	if callerTop {
 		view, viewErr = s.topView(ctx)
 	}
 	err := s.store.InTx(ctx, func(r Repo) error {
@@ -335,11 +336,11 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, folder, b
 		if err := requireFolder(ctx, r, folder); err != nil {
 			return err
 		}
-		if before != nil {
+		if callerTop || before != nil {
 			if viewErr != nil {
 				return viewErr
 			}
-			return s.moveBefore(ctx, r, id, folder, *before, view)
+			return s.moveBefore(ctx, r, id, folder, before, view)
 		}
 		next, err := r.NextSortOrder(ctx, folder)
 		if err != nil {
@@ -373,20 +374,20 @@ func (s *Service) topView(ctx context.Context) (topView, error) {
 	return topView{visible: visible, position: position}, nil
 }
 
-// moveBefore moves id into folder in front of the sibling before. It runs inside the transaction,
-// after the tree lock.
+// moveBefore moves id into folder in front of the sibling before, or last when before is nil. It
+// runs inside the transaction, after the tree lock.
 //
 // Inside a folder (or without access) the siblings take shared sort_order 0..n-1 and the moved list
 // its place in that order. At the top level with access the order is the caller's own
-// (user_top_order): the moved list takes the shared sort_order it would get when appended, and the
-// caller's visible top-level lists are numbered 0..n-1 in the new order. Other users' positions
-// stay as they are.
-func (s *Service) moveBefore(ctx context.Context, r Repo, id uuid.UUID, folder *uuid.UUID, before uuid.UUID, view topView) error {
+// (user_top_order), with or without before: the moved list takes the shared sort_order it would get
+// when appended, and the caller's visible top-level lists are numbered 0..n-1 in the new order.
+// Other users' positions stay as they are.
+func (s *Service) moveBefore(ctx context.Context, r Repo, id uuid.UUID, folder *uuid.UUID, before *uuid.UUID, view topView) error {
 	siblings, err := s.siblings(ctx, r, folder, view)
 	if err != nil {
 		return err
 	}
-	ids, ok := order.Place(siblings, id, &before)
+	ids, ok := order.Place(siblings, id, before)
 	if !ok {
 		return apperr.InvalidBeforeID()
 	}

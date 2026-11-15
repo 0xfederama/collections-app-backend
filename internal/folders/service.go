@@ -185,7 +185,8 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, parent, b
 	// At the top level the caller's view is read before the transaction, like the destination.
 	var view topView
 	var viewErr error
-	if before != nil && parent == nil && s.access != nil {
+	callerTop := parent == nil && s.access != nil
+	if callerTop {
 		view, viewErr = s.topView(ctx)
 	}
 	var out Folder
@@ -236,11 +237,11 @@ func (s *Service) Move(ctx context.Context, id uuid.UUID, version int, parent, b
 				return apperr.Cycle()
 			}
 		}
-		if before != nil {
+		if callerTop || before != nil {
 			if viewErr != nil {
 				return viewErr
 			}
-			out, err = s.moveBefore(ctx, r, id, parent, *before, view)
+			out, err = s.moveBefore(ctx, r, id, parent, before, view)
 			return err
 		}
 		next, err := r.NextSortOrder(ctx, parent)
@@ -272,19 +273,20 @@ func (s *Service) topView(ctx context.Context) (topView, error) {
 	return topView{visible: visible, position: position}, nil
 }
 
-// moveBefore moves id under parent in front of the sibling before. It runs inside the transaction,
-// after the tree lock.
+// moveBefore moves id under parent in front of the sibling before, or last when before is nil. It
+// runs inside the transaction, after the tree lock.
 //
 // Nested (or without access): the siblings take shared sort_order 0..n-1 and the moved folder its
-// place in that order. At the top level with access the order is the caller's own (user_top_order):
-// the moved folder takes the shared sort_order it would get when appended, and the caller's visible
-// top-level folders are numbered 0..n-1 in the new order. Other users' positions stay as they are.
-func (s *Service) moveBefore(ctx context.Context, r Repo, id uuid.UUID, parent *uuid.UUID, before uuid.UUID, view topView) (Folder, error) {
+// place in that order. At the top level with access the order is the caller's own (user_top_order),
+// with or without before: the moved folder takes the shared sort_order it would get when appended,
+// and the caller's visible top-level folders are numbered 0..n-1 in the new order. Other users'
+// positions stay as they are.
+func (s *Service) moveBefore(ctx context.Context, r Repo, id uuid.UUID, parent *uuid.UUID, before *uuid.UUID, view topView) (Folder, error) {
 	siblings, err := s.siblings(ctx, r, parent, view)
 	if err != nil {
 		return Folder{}, err
 	}
-	ids, ok := order.Place(siblings, id, &before)
+	ids, ok := order.Place(siblings, id, before)
 	if !ok {
 		return Folder{}, apperr.InvalidBeforeID()
 	}

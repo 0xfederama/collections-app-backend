@@ -324,3 +324,179 @@ func TestMoveBeforeID_ConcurrentMovesIntoOneFolderKeepAPermutation(t *testing.T)
 		t.Fatalf("last child = %v, want First (every mover went in front of it)", last)
 	}
 }
+
+// Absent or null before_id at the top level with access is the same as "last" in the caller's own
+// order: the caller's top-level entries are rewritten, so an entry that already has a caller order
+// row moves too (a shared sort_order alone would leave it where the caller had it).
+func TestMoveBeforeID_TopLevelWithoutBeforeLandsLastInTheCallersOwnOrder(t *testing.T) {
+	e := newAccountsEnv(t)
+
+	t.Run("folders", func(t *testing.T) {
+		a1 := e.folder("A1", nil)
+		b1 := e.folder("B1", nil)
+		c1 := e.folder("C1", nil)
+		x := e.folder("X", nil)
+		wantStatus(t, e.call("PUT", "/api/v1/folders/order", fmt.Sprintf(`{"parent_folder_id":null,"ids":[%q,%q,%q,%q]}`,
+			str(a1, "id"), str(b1, "id"), str(c1, "id"), str(x, "id")), ""), 204)
+
+		// A1 has a caller row at 0: moving it to the top without before must still put it last.
+		wantStatus(t, e.moveTo("folders", a1, "parent_folder_id", nil), 200)
+		if got := e.childNames("folders", "parent_folder_id", nil); !slices.Equal(got, []string{"B1", "C1", "X", "A1"}) {
+			t.Fatalf("top level after absent before_id = %v, want [B1 C1 X A1]", got)
+		}
+		wantStatus(t, e.moveTo("folders", b1, "parent_folder_id", nil, nil), 200)
+		if got := e.childNames("folders", "parent_folder_id", nil); !slices.Equal(got, []string{"C1", "X", "A1", "B1"}) {
+			t.Fatalf("top level after null before_id = %v, want [C1 X A1 B1]", got)
+		}
+
+		// A nested folder moved to the top without before is last too.
+		nested := e.folder("N", c1["id"])
+		wantStatus(t, e.moveTo("folders", nested, "parent_folder_id", nil), 200)
+		if got := e.childNames("folders", "parent_folder_id", nil); !slices.Equal(got, []string{"C1", "X", "A1", "B1", "N"}) {
+			t.Fatalf("top level after a nested folder moved up = %v", got)
+		}
+		if got := e.count(`SELECT count(*) FROM user_top_order WHERE user_id = $1 AND entry_type = 'folder'`, testUsers["a"]); got != 5 {
+			t.Fatalf("a has %d folder order rows, want the 5 top-level folders", got)
+		}
+	})
+
+	t.Run("lists", func(t *testing.T) {
+		l1 := e.list("L1", nil)
+		l2 := e.list("L2", nil)
+		l3 := e.list("L3", nil)
+		lx := e.list("LX", nil)
+		f := e.folder("F", nil)
+		inF := e.list("In F", f["id"])
+		wantStatus(t, e.call("PUT", "/api/v1/lists/order", fmt.Sprintf(`{"folder_id":null,"ids":[%q,%q,%q,%q]}`,
+			str(l1, "id"), str(l2, "id"), str(l3, "id"), str(lx, "id")), ""), 204)
+
+		wantStatus(t, e.moveTo("lists", l1, "folder_id", nil), 200)
+		if got := e.childNames("lists", "folder_id", nil); !slices.Equal(got, []string{"L2", "L3", "LX", "L1"}) {
+			t.Fatalf("top-level lists after absent before_id = %v, want [L2 L3 LX L1]", got)
+		}
+		wantStatus(t, e.moveTo("lists", l2, "folder_id", nil, nil), 200)
+		if got := e.childNames("lists", "folder_id", nil); !slices.Equal(got, []string{"L3", "LX", "L1", "L2"}) {
+			t.Fatalf("top-level lists after null before_id = %v, want [L3 LX L1 L2]", got)
+		}
+
+		wantStatus(t, e.moveTo("lists", inF, "folder_id", nil), 200)
+		if got := e.childNames("lists", "folder_id", nil); !slices.Equal(got, []string{"L3", "LX", "L1", "L2", "In F"}) {
+			t.Fatalf("top-level lists after a nested list moved up = %v", got)
+		}
+	})
+}
+
+// concurrentTopMoves moves n entries of one kind at once within the top level of a (they are created
+// there first): half in front of First, a quarter with before_id absent, a quarter with it null.
+// Every move must answer 200, and a's caller order must stay a permutation: the top-level entries
+// have distinct positions 0..n, none lost or doubled.
+func concurrentTopMoves(t *testing.T, e *imageEnv, typ, field string, create func(string, any) obj) {
+	t.Helper()
+	first := create("First", nil)
+	const n = 8
+	movers := make([]obj, 0, n)
+	for i := range n {
+		movers = append(movers, create(fmt.Sprintf("X%d", i), nil))
+	}
+	codes := make([]int, n)
+	var wg sync.WaitGroup
+	for i, x := range movers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			switch {
+			case i%2 == 0:
+				codes[i] = e.moveTo(typ, x, field, nil, first["id"]).Code
+			case i%4 == 1:
+				codes[i] = e.moveTo(typ, x, field, nil).Code
+			default:
+				codes[i] = e.moveTo(typ, x, field, nil, nil).Code
+			}
+		}()
+	}
+	wg.Wait()
+	for i, c := range codes {
+		if c != 200 {
+			t.Fatalf("move %d answered %d, want 200", i, c)
+		}
+	}
+
+	kids := e.childrenOf(typ, field, nil)
+	if len(kids) != n+1 {
+		t.Fatalf("top level has %d entries, want %d", len(kids), n+1)
+	}
+	seen := map[string]bool{}
+	for _, k := range kids {
+		seen[k["name"].(string)] = true
+	}
+	if len(seen) != n+1 || !seen["First"] {
+		t.Fatalf("top level is not a permutation of the movers and First: %v", names(kids))
+	}
+
+	kind := map[string]string{"folders": "folder", "lists": "list"}[typ]
+	uid := testUsers["a"]
+	if got := e.count(`SELECT count(*) FROM user_top_order WHERE user_id = $1 AND entry_type = $2`, uid, kind); got != n+1 {
+		t.Fatalf("a has %d %s order rows, want %d", got, kind, n+1)
+	}
+	if got := e.count(`SELECT count(DISTINCT sort_order) FROM user_top_order WHERE user_id = $1 AND entry_type = $2
+		AND sort_order BETWEEN 0 AND $3`, uid, kind, n); got != n+1 {
+		t.Fatalf("a's %s positions are not 0..%d, each used once", kind, n)
+	}
+}
+
+func TestMoveBeforeID_ConcurrentMovesIntoANestedListFolderKeepAPermutation(t *testing.T) {
+	e := newTreeEnv(t)
+	p := e.folder("P", nil)
+	q := e.folder("Q", p["id"]) // nested: the target is inside another folder
+	first := e.list("First", q["id"])
+	const n = 8
+	movers := make([]obj, 0, n)
+	for i := range n {
+		movers = append(movers, e.list(fmt.Sprintf("L%d", i), nil))
+	}
+
+	codes := make([]int, n)
+	var wg sync.WaitGroup
+	for i, x := range movers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			codes[i] = e.moveTo("lists", x, "folder_id", q["id"], first["id"]).Code
+		}()
+	}
+	wg.Wait()
+	for i, c := range codes {
+		if c != 200 {
+			t.Fatalf("move %d answered %d, want 200", i, c)
+		}
+	}
+
+	kids := e.childrenOf("lists", "folder_id", q["id"])
+	if len(kids) != n+1 {
+		t.Fatalf("Q has %d lists, want %d", len(kids), n+1)
+	}
+	seen := map[string]bool{}
+	for i, k := range kids {
+		if k["sort_order"].(float64) != float64(i) {
+			t.Errorf("list %v has sort_order %v, want %d", k["name"], k["sort_order"], i)
+		}
+		seen[k["name"].(string)] = true
+	}
+	if len(seen) != n+1 || !seen["First"] {
+		t.Fatalf("lists are not a permutation of the movers and First: %v", names(kids))
+	}
+	if last := kids[len(kids)-1]["name"]; last != "First" {
+		t.Fatalf("last list = %v, want First (every mover went in front of it)", last)
+	}
+}
+
+func TestMoveBeforeID_ConcurrentTopLevelMovesKeepACallerPermutation(t *testing.T) {
+	t.Run("folders", func(t *testing.T) {
+		e := newAccountsEnv(t)
+		concurrentTopMoves(t, e, "folders", "parent_folder_id", e.folder)
+	})
+	t.Run("lists", func(t *testing.T) {
+		e := newAccountsEnv(t)
+		concurrentTopMoves(t, e, "lists", "folder_id", e.list)
+	})
+}

@@ -2,7 +2,7 @@
 
 Backend releases (`vX.Y.Z` tags, D-043). Contract milestones are `api-vX.Y.Z` tags; see [api-contract](docs/modules/api-contract.md).
 
-## 3.2.0 (not yet tagged)
+## 3.2.0 (2026-11-16)
 
 Contract: `api-v4.3.0` (additive). Migration 000003 (expand-only, D-118).
 
@@ -19,3 +19,6 @@ Contract: `api-v4.3.0` (additive). Migration 000003 (expand-only, D-118).
 
 ### Migration
 - `000003_synopsis_rating_genres`: `lookup_imports` gains `description_version`, `description_sha256` and `import_generation`; `item_content_versions` gains `origin` with a check for `'lookup'`. Nothing is backfilled in SQL: the generic backfill re-reads the items.
+
+### Fixed
+- `PATCH /items/{id}`: a metadata object without `tmdb_id`, `openlibrary_id` or `lookup_disabled` keeps the stored value instead of dropping it (an edit used to unlink the item from its provider). An explicit value, `null` included, is still written.

@@ -22,6 +22,18 @@ func isLookupOwned(key string) bool {
 	return false
 }
 
+// keptWhenOmitted reports the fields a PATCH keeps when the client leaves them out of the metadata
+// object: the lookup-owned ones, plus the provider ids and the lookup opt-out, which clients may
+// write but used to lose on every edit that did not echo them (the web dropped them). An explicit
+// value, null included, is still written.
+func keptWhenOmitted(key string) bool {
+	switch key {
+	case "tmdb_id", "openlibrary_id", "lookup_disabled":
+		return true
+	}
+	return isLookupOwned(key)
+}
+
 // sameJSONValue compares two metadata values by their JSON form (a missing one is null).
 func sameJSONValue(a, b any) bool {
 	ja, errA := json.Marshal(a)
@@ -52,12 +64,12 @@ func RejectLookupOwned(fields []types.Field, in map[string]any) error {
 	return checkLookupOwned(fields, in, nil)
 }
 
-// keepLookupOwned copies the stored value of every lookup-owned field the client omitted, so the
+// keepLookupOwned copies the stored value of every keptWhenOmitted field the client omitted, so the
 // replacement of the whole object keeps it. It returns in unchanged when there is nothing to keep.
 func keepLookupOwned(fields []types.Field, in, stored map[string]any) map[string]any {
 	var out map[string]any
 	for _, f := range fields {
-		if !isLookupOwned(f.Key) {
+		if !keptWhenOmitted(f.Key) {
 			continue
 		}
 		if _, sent := in[f.Key]; sent || stored[f.Key] == nil {

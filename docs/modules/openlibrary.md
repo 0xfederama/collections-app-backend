@@ -30,3 +30,4 @@ Provides a bounded, server-side Open Library client for book search, work detail
 - A missing or failed cover keeps the metadata and imports without an image (Warn log).
 - Settings expose availability as read-only `book_lookup_available`.
 - The adapter fills `author`, `pages` and `isbn` only. `openlibrary_id` is stored and read-only by convention; the web builds the link from it.
+- F-028 (D-162): `WorkDescription` reads the work description from `/works/{id}.json` (a string, or an object with `value`), a second request made only by the book lookup. `ErrRateLimited` is returned for a 429 and stops a backfill pass. The test-stack book has a fixed description without HTTP.

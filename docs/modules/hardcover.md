@@ -31,3 +31,4 @@ An optional, bounded, server-side Hardcover GraphQL client, used as a best-effor
 - Every failure is swallowed: WARN log, DEBUG when the context was cancelled. Errors and logs never contain the token or URL.
 - `TMDB_MOCK_FIXTURE` enables no Hardcover fixture; tests use fake servers.
 - Terms allow storing data for personal projects and hot-linking images. The API is in beta and the token expires; renew `HARDCOVER_API_KEY`.
+- F-028 (D-162): `Book.Description` is the document's description when it is a string (trimmed). Any other JSON type leaves it empty, so a bad field never fails the search. Used only on automatic creates, which are untracked.

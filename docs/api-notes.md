@@ -67,3 +67,6 @@ check nothing.
 - `created_by_user_id` and `updated_by_user_id` (folders, lists, items) and `author_user_id` (content versions) are `null` when unknown: rows written before F-027 B4 have no author, and the migration does not backfill them.
 - Arrays in responses are never `null`: always `[]` when empty (`Tree.folders`, `Tree.lists`, `*Page.data`, `TypeDefinition.fields`, `path`, `former_path`, suggestion `results`). `TrashEntry.former_path: []` means top level; the path is never "unknown". Item `metadata` is always an object.
 - `Item.price`, `Item.image`, `ItemSummary.price` and `ItemSummary.image` are `null` when absent, and the spec says so. `TestWireNullabilityMatchesSpec` fails when a response field can be nil but the spec says non-null.
+
+- `GET /lists/{id}/items`: `sort=rating` on a list that is not movie or TV, and a `genre` filter there or with an empty or out-of-range value, are 422 `invalid_sort` and 422 `invalid_filter` (F-028 B3, D-163). Other unknown sorts and filters stay 400 `invalid_parameter`.
+- `GET /lists/{id}/genres` answers 404 for an unknown list and `[]` for a list that is not movie or TV.

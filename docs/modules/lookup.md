@@ -15,6 +15,8 @@ Merges values imported from a metadata provider (TMDB for movie and TV, Open Lib
 - `internal/lookup/merge.go`, `paths.go`: pure merge and path rules
 - `internal/lookup/validate_import.go`: `validateImport`, which drops invalid provider fields instead of failing the write
 - `internal/lookup/maintenance.go`: the weekly TMDB refresh pass, its retry state and its loop
+- `internal/lookup/backfill.go`: the generic backfill pass (D-164): `DBStore.Backfill`, its ticker `RunBackfill`, and the book step `Service.BackfillFill`
+- `internal/lookup/description.go`: the provider summary as the item's description: `normalizeSynopsis`, the tracking rules of `writeDescription`, `currentImportGeneration`
 - `internal/lookup/refresh.go`: `RefreshScheduled` (the one-item TMDB refresh both paths share), the explicit `refresh` mode and `RefreshList` (the list refresh)
 - `internal/lookup/handler.go`, `wire.go`: Huma operations and their JSON types
 - `db/queries/lookup_imports.sql`: provenance and scheduled-item queries
@@ -25,6 +27,7 @@ Merges values imported from a metadata provider (TMDB for movie and TV, Open Lib
 - `(*Service).Create`, `Apply` (fill, rematch or refresh), `RefreshScheduled` (the weekly refresh of one item), `RefreshList` (the refresh of a list)
 - `NewStore(db, fileStore, clk, items, log, workspaceID) *DBStore`; `DBStore` implements `Store` (`ListType`, `Read`, `Apply`)
 - `(*DBStore).Maintain` and `Run`; `MaintenanceInterval` (one hour) is the tick. `cmd/api` runs one pass at startup
+- `(*DBStore).Backfill(ctx, tmdb, openLibrary RefreshFunc)` and `RunBackfill`; `BackfillInterval` (ten minutes) is its tick, with no startup pass. `(*Service).BackfillFill` is the book step
 - `Register(api, log, svc, tmdb, books, settings)`: `listTmdbSuggestions`, `searchBookSuggestions`, `lookupItemMetadata`
 - `POST /api/v1/items/{id}/lookup`: explicit fill, rematch or refresh with item `If-Match`
 - `POST /api/v1/lists/{id}/lookup-refresh` (`refreshListLookups`, tag `lookup`): the list refresh, no `If-Match`; answers `{updated, skipped, failed, remaining}`
@@ -36,6 +39,11 @@ Merges values imported from a metadata provider (TMDB for movie and TV, Open Lib
 - Books are never refreshed (D-095, D-123). Open Library rows have NULL deadlines.
 - TMDB rows still get `refresh_after`, `expires_at` and the poster deadlines (five and six months after the fetch) because `lookup_imports_retention_check` requires them. Nothing in this release reads them. An older release on the same database (rollback) does read them and would expire TMDB values the weekly refresh no longer touches (`lookup_disabled`, trashed). A later contract migration drops them.
 - Attachment queries reach `apply` through `Repo` methods, so the merge and apply rules are testable with a fake repository.
+- Summary (F-028, D-162): `Details.Synopsis` (normalized: one paragraph, leading Markdown escaped, at most 5,000 characters) is written inside `Apply`'s transaction as an `item_content_versions` row with `origin = 'lookup'`, pruned to `ApplyParams.HistoryLimit` (read before the transaction). It fills an item with no content version (version 0) in every mode. A user-saved body, even `""`, is never filled. While the text is still the lookup's (`lookup_imports.description_version` and `description_sha256` match the current version), rematch and refresh replace it when it changed; fill leaves it. A user save makes a new version, which clears the tracking. A missing summary changes nothing. An untracked Hardcover create writes origin NULL with the caller as author.
+- Lookup-owned fields (F-028, D-162): `tmdb_rating`, `tmdb_vote_count` and `genres` are written only by the lookup. The item rules (`items.ValidateMetadata`) refuse a client value that differs from the stored one with 422, keep the stored value when the client omits the key, and accept an equal value. `RejectLookupOwned` refuses them on a lookup create.
+- TMDB details (F-028 B1): `overview` (English fallback: one extra `en-US` details call only when the requested language is not English and the overview is empty), `vote_average` rounded to one decimal only from ten votes or more, `vote_count` always, and `genres` (at most ten names of at most 100 characters).
+- Open Library work description (F-028 B2): one extra request to `/works/{id}.json` per book lookup, best effort. A 429 maps to `ErrProviderRateLimited`.
+- Backfill (F-028 B4, D-164): a pass re-reads at most 25 items whose `lookup_imports.import_generation` is below `currentImportGeneration`, oldest fetch first. A movie or TV item uses the weekly refresh rule; a book uses `BackfillFill` (fill only). Trashed and `lookup_disabled` items are skipped and stay below, so they do not block completion. A rate limit or disabled lookup stops the pass. Failures wait in memory for the same retry intervals (a separate map, since the pass runs on its own goroutine). Logs: `lookup backfill progress` (done, remaining, failed, stopped) every pass and `lookup backfill complete` once per process. Bump `currentImportGeneration` to re-read every provider-linked item again.
 - Who changed: an explicit lookup create or apply records the request's user on the item. The weekly refresh runs with no user, so it keeps the item's `updated_by_user_id`.
 - Poster files are written before the transaction and their rows inside it. Replaced files are deleted after commit.
 - `FillOnly` values (book `stores: [preferred_store]`, D-096) apply only on create and fill, never overwrite chosen stores and are never tracked as imported.

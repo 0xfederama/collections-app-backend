@@ -85,15 +85,22 @@ func TestF028B2_EmptyDescriptionIsFilledButAUserTextIsNot(t *testing.T) {
 	empty := e.addItem("Empty", nil)
 	filled := e.addItem("Filled", nil)
 	e.repo.content[filled] = []fakeContent{{version: 1, body: "My own words.", sha: []byte("x")}}
+	// A body the user saved as "" is a version: the description is theirs, not empty.
+	blanked := e.addItem("Blanked", nil)
+	e.repo.content[blanked] = []fakeContent{{version: 1, body: "", sha: []byte("e")}}
 
 	e.apply(t, empty, ModeFill, "The summary.")
 	e.apply(t, filled, ModeFill, "The summary.")
+	e.apply(t, blanked, ModeRematch, "The summary.")
 
 	if got := e.repo.content[empty]; len(got) != 1 || got[0].body != "The summary." {
 		t.Errorf("empty description = %+v, want the summary", got)
 	}
 	if got := e.repo.content[filled]; len(got) != 1 || got[0].body != "My own words." {
 		t.Errorf("user description = %+v, want untouched", got)
+	}
+	if got := e.repo.content[blanked]; len(got) != 1 || got[0].body != "" {
+		t.Errorf("user-blanked description = %+v, want untouched (never filled again)", got)
 	}
 	// The import row still records the provider fields; only the description is untracked.
 	if row := e.repo.imports[filled]; row.DescriptionVersion != nil || row.DescriptionSHA256 != nil {

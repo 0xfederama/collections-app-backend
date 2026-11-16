@@ -215,7 +215,7 @@ func (f *fakeRepo) ContentHead(_ context.Context, itemID uuid.UUID) (contentHead
 		return contentHead{}, nil
 	}
 	last := versions[len(versions)-1]
-	return contentHead{Version: last.version, SHA256: last.sha, Size: len(last.body)}, nil
+	return contentHead{Version: last.version, SHA256: last.sha}, nil
 }
 
 func (f *fakeRepo) InsertContent(_ context.Context, w contentWrite) error {

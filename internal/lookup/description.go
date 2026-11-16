@@ -69,7 +69,8 @@ type descriptionTrack struct {
 // transaction and returns the tracking the import records. old is the import before this apply.
 //
 // The text is fetched and written only when:
-//   - the current content is empty (version 0 or an empty body), for every mode;
+//   - the item has no content version yet (version 0), for every mode. A body the user saved as ""
+//     is a user edit with a version, so it is never filled;
 //   - or the text is still the import's (tracked: the current version and its SHA-256 match what the
 //     lookup wrote) and the mode is a re-match or a refresh, and the summary changed.
 //
@@ -95,7 +96,7 @@ func (s *DBStore) writeDescription(ctx context.Context, r Repo, itemID uuid.UUID
 		return keep, nil
 	}
 	sum := sha256.Sum256([]byte(p.Synopsis))
-	empty := head.Version == 0 || head.Size == 0
+	empty := head.Version == 0
 	replace := tracked && (p.Mode == ModeRematch || p.Mode == ModeScheduled)
 	if !empty && !replace {
 		return keep, nil

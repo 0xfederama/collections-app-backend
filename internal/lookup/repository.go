@@ -81,7 +81,6 @@ type Repo interface {
 type contentHead struct {
 	Version int
 	SHA256  []byte
-	Size    int
 }
 
 // contentWrite is one content version the lookup writes. Origin is nil for a user's own text (an
@@ -304,7 +303,7 @@ func (r *repo) ContentHead(ctx context.Context, itemID uuid.UUID) (contentHead, 
 	if err != nil {
 		return contentHead{}, fmt.Errorf("get content head: %w", err)
 	}
-	return contentHead{Version: int(row.Version), SHA256: row.Sha256, Size: int(row.SizeBytes)}, nil
+	return contentHead{Version: int(row.Version), SHA256: row.Sha256}, nil
 }
 
 func (r *repo) InsertContent(ctx context.Context, w contentWrite) error {

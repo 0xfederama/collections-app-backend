@@ -30,6 +30,7 @@ Owns the Markdown body of an item: the current content, saved versions, restore 
 - A body identical to the current one (sha256) returns the current version with no insert and no `updated_at` bump.
 - A new version bumps `items.updated_at` and `items.updated_by_user_id` but never `items.version`.
 - `author_user_id` on each version (`Content`, version list) is the caller who saved it; null for version 0 and for versions saved before F-027 B4. Restore saves through the same path, so it records the caller too.
+- `origin` (read-only, F-028, D-162) is `lookup` for a version the provider's summary wrote and `user` otherwise: a save, a restore, version 0 and any row with a NULL origin. The lookup writes its versions in its own queries (`db/queries/lookup_imports.sql`), not through this service.
 - Prune deletes versions `<= new - (limit + 1)` using the workspace `markdown_history_limit`. Limit 0 keeps only the latest; lowering the limit prunes on the next save of each item.
 - Restore reads the old body inside the transaction; a pruned or unknown version is 404.
 - Body over 1 MiB of UTF-8 bytes is 413; invalid UTF-8 or a NUL character is 422. The operation's transport limit (2 MiB, `contentBodyBytes`) applies first.

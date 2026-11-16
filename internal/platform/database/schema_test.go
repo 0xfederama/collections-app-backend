@@ -267,6 +267,18 @@ func schemaCases() []schemaCase {
 				contentVersionSQL(itemA, 1)},
 			wantCode: "23505", wantConstr: "item_content_versions_pkey",
 		},
+		// F-028 (migration 000003): a content version's origin is NULL (a user save) or 'lookup'.
+		{
+			name: "content version with an origin other than lookup",
+			stmts: append(with(itemParents, itemSQL(itemA, "", "")),
+				`INSERT INTO item_content_versions (item_id, version, body, size_bytes, sha256, origin) VALUES ('`+itemA+`', 1, 'hi', 2, '\x00', 'user')`),
+			wantCode: "23514", wantConstr: "item_content_versions_origin_check",
+		},
+		{
+			name: "content version written by the lookup",
+			stmts: append(with(itemParents, itemSQL(itemA, "", "")),
+				`INSERT INTO item_content_versions (item_id, version, body, size_bytes, sha256, origin) VALUES ('`+itemA+`', 1, 'hi', 2, '\x00', 'lookup')`),
+		},
 		{
 			name: "valid item with price range and currency",
 			stmts: with(itemParents,

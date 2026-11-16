@@ -144,7 +144,8 @@ func (s *Service) createFromHardcover(ctx context.Context, provider Provider, li
 		Mode: ModeCreateUntracked, ListID: listID, Type: typ, CreateInput: &in,
 		Title: in.Title, OriginalTitle: in.Title,
 		Fields: fields, FillOnly: defaultStoreFill(provider, nil, settings.PreferredStore),
-		Poster: poster,
+		Poster:   poster,
+		Synopsis: normalizeSynopsis(book.Description), HistoryLimit: settings.MarkdownHistoryLimit,
 	})
 	if err != nil {
 		logHardcover(ctx, "hardcover create failed; creating without lookup", err)

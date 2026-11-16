@@ -30,11 +30,13 @@ WHERE t.item_id = @item_id AND t.workspace_id = @workspace_id;
 -- name: UpsertLookupImport :exec
 INSERT INTO lookup_imports (
   workspace_id, item_id, provider, source_id, type, imported_fields, imported_title, original_title,
-  attachment_id, poster_path, poster_fetched_at, poster_refresh_after, poster_expires_at, fetched_at, refresh_after, expires_at
+  attachment_id, poster_path, poster_fetched_at, poster_refresh_after, poster_expires_at, fetched_at, refresh_after, expires_at,
+  description_version, description_sha256, import_generation
 ) VALUES (
   @workspace_id, @item_id, @provider, @source_id, @type, @imported_fields, sqlc.narg(imported_title), @original_title,
   sqlc.narg(attachment_id), sqlc.narg(poster_path), sqlc.narg(poster_fetched_at), sqlc.narg(poster_refresh_after), sqlc.narg(poster_expires_at),
-  @fetched_at, sqlc.narg(refresh_after), sqlc.narg(expires_at)
+  @fetched_at, sqlc.narg(refresh_after), sqlc.narg(expires_at),
+  sqlc.narg(description_version), sqlc.narg(description_sha256), @import_generation
 )
 ON CONFLICT (item_id) DO UPDATE SET
   provider = EXCLUDED.provider,
@@ -50,7 +52,10 @@ ON CONFLICT (item_id) DO UPDATE SET
   poster_expires_at = EXCLUDED.poster_expires_at,
   fetched_at = EXCLUDED.fetched_at,
   refresh_after = EXCLUDED.refresh_after,
-  expires_at = EXCLUDED.expires_at
+  expires_at = EXCLUDED.expires_at,
+  description_version = EXCLUDED.description_version,
+  description_sha256 = EXCLUDED.description_sha256,
+  import_generation = EXCLUDED.import_generation
 WHERE lookup_imports.workspace_id = EXCLUDED.workspace_id;
 
 -- name: ListScheduledTMDBItems :many
@@ -92,3 +97,55 @@ WHERE i.workspace_id = @workspace_id
   AND i.list_id = @list_id
   AND i.deleted_at IS NULL
 ORDER BY t.fetched_at NULLS FIRST, i.sort_order, i.id;
+
+-- name: GetLookupContentHead :one
+-- The current content of an item as the lookup sees it: the highest version, and the SHA-256 and size
+-- of its body (D-162 decision 3). No rows is version 0, the never-saved content. The item row is locked
+-- by the caller, so a user save cannot land in between.
+SELECT version, sha256, size_bytes FROM item_content_versions
+WHERE item_id = @item_id
+ORDER BY version DESC
+LIMIT 1;
+
+-- name: InsertLookupContentVersion :exec
+-- A description the lookup wrote: origin 'lookup'. A user-authored text (an untracked Hardcover create)
+-- passes a NULL origin and the caller as author.
+INSERT INTO item_content_versions (item_id, version, body, size_bytes, sha256, created_at, author_user_id, origin)
+VALUES (@item_id, @version, @body, @size_bytes, @sha256, @created_at, sqlc.narg(author_user_id), sqlc.narg(origin));
+
+-- name: PruneLookupContentVersions :exec
+-- Deletes every version up to and including @up_to, as the content save does (the history limit).
+DELETE FROM item_content_versions
+WHERE item_id = @item_id AND version <= @up_to;
+
+-- name: TouchLookupItemContent :exec
+-- A description write bumps updated_at like a content save does, but not items.version.
+UPDATE items SET updated_at = @now, updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
+WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;
+
+-- name: ListBackfillItems :many
+-- The generic lookup backfill (D-164): provider-linked items whose import an older generation wrote (import_generation
+-- below @generation), oldest fetch first. Trashed and lookup_disabled items are skipped and stay below the generation.
+SELECT i.id AS item_id, i.version AS item_version, t.provider
+FROM lookup_imports t
+JOIN items i ON i.id = t.item_id AND i.workspace_id = t.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
+WHERE t.workspace_id = @workspace_id
+  AND t.import_generation < @generation
+  AND i.deleted_at IS NULL
+  AND l.deleted_at IS NULL
+  AND i.metadata -> 'lookup_disabled' IS DISTINCT FROM 'true'::jsonb
+ORDER BY t.fetched_at, i.id
+LIMIT @batch_limit;
+
+-- name: CountBackfillItems :one
+-- The eligible items the backfill still has to reach (the same filter as ListBackfillItems, unlimited).
+SELECT count(*)
+FROM lookup_imports t
+JOIN items i ON i.id = t.item_id AND i.workspace_id = t.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
+WHERE t.workspace_id = @workspace_id
+  AND t.import_generation < @generation
+  AND i.deleted_at IS NULL
+  AND l.deleted_at IS NULL
+  AND i.metadata -> 'lookup_disabled' IS DISTINCT FROM 'true'::jsonb;

@@ -134,8 +134,12 @@ func validateDefinitionSort(typ *string, sortMode string, allowsPrice bool, fiel
 	if sortMode == "manual" || sortMode == "title" || sortMode == "updated" || (sortMode == "price" && allowsPrice) {
 		return nil
 	}
+	// The score sort (F-028, D-163) is offered by the movie and TV types only.
+	if sortMode == "rating" && typ != nil && (*typ == "movie" || *typ == "tv_show") {
+		return nil
+	}
 	for _, f := range fields {
-		if f.Key == sortMode && f.FieldType != "stores" && sortMode != "manual" && sortMode != "title" && sortMode != "updated" && sortMode != "price" {
+		if f.Key == sortMode && f.FieldType != "stores" && f.FieldType != "text_list" && sortMode != "manual" && sortMode != "title" && sortMode != "updated" && sortMode != "price" {
 			return nil
 		}
 	}

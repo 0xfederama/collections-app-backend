@@ -184,7 +184,7 @@ func (s *Service) write(ctx context.Context, itemID uuid.UUID, ifMatch, limit in
 		}
 		sum := sha256.Sum256([]byte(next))
 		if cur.Version == 0 && next == "" {
-			out = Content{ItemID: itemID} // version 0 already is the empty content
+			out = Content{ItemID: itemID, Origin: OriginUser} // version 0 already is the empty content
 			return nil
 		}
 		if cur.Version > 0 && bytes.Equal(cur.SHA256, sum[:]) {
@@ -202,7 +202,7 @@ func (s *Service) write(ctx context.Context, itemID uuid.UUID, ifMatch, limit in
 		if err := r.TouchItem(ctx, itemID, now); err != nil {
 			return err
 		}
-		out = Content{ItemID: itemID, Version: newVersion, Body: next, UpdatedAt: &now}
+		out = Content{ItemID: itemID, Version: newVersion, Body: next, UpdatedAt: &now, Origin: OriginUser}
 		if user, ok := scope.UserID(ctx); ok {
 			out.AuthorUserID = &user
 		}

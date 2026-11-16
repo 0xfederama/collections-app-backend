@@ -32,6 +32,8 @@ const (
 	SortManual  = "manual"
 	SortTitle   = "title"
 	SortUpdated = "updated"
+	// SortRating orders movie and TV items by tmdb_rating, highest first, unrated last (F-028, D-163).
+	SortRating = "rating"
 )
 
 // Image sources.
@@ -48,6 +50,13 @@ var ErrInvalidAvailability = errors.New("items: availability filter is only for 
 
 // ErrInvalidFilter means a field filter is not valid for the list's type.
 var ErrInvalidFilter = errors.New("items: field filter is not valid for this list")
+
+// ErrRatingSort means sort=rating on a list that is not movie or TV (F-028, D-163): 422 invalid_sort.
+var ErrRatingSort = errors.New("items: rating sort is only for movie and TV lists")
+
+// ErrInvalidGenre means a genre filter on a list that is not movie or TV, or with values out of
+// range (1 to 10 values of at most 100 characters): 422 invalid_filter (D-163).
+var ErrInvalidGenre = errors.New("items: genre filter is only for movie and TV lists, with 1 to 10 values of at most 100 characters")
 
 // Item is an item as the API shows it. Path is filled by Get only.
 type Item struct {
@@ -146,8 +155,10 @@ type ListParams struct {
 	FilterMax   string
 	// Availability is "", AvailabilityAvailable or AvailabilityIncluded (movie and TV lists only).
 	Availability string
-	Limit        int
-	Offset       int
+	// Genres keeps the items with any of these genres (movie and TV lists only, F-028 B3).
+	Genres []string
+	Limit  int
+	Offset int
 }
 
 // Normalized applies the defaults: an empty Sort is defaultSort (the list's

@@ -283,3 +283,22 @@ func TestCleanToken(t *testing.T) {
 		}
 	}
 }
+
+// F-028 (D-162): the description of a Hardcover document is read when it is a string, and a document
+// whose description is of another JSON type still searches.
+func TestF028B2_SearchReadsDescriptionLeniently(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(resultsBody(
+			`{"title":"Dune","description":"  A desert planet.  ","author_names":["F"]}`,
+			`{"title":"Other","description":42}`,
+			`{"title":"Third","description":null}`,
+		)))
+	}, nil)
+	books, err := c.SearchTitle(t.Context(), "Dune")
+	if err != nil || len(books) != 3 {
+		t.Fatalf("books = %d err = %v, want three documents", len(books), err)
+	}
+	if books[0].Description != "A desert planet." || books[1].Description != "" || books[2].Description != "" {
+		t.Errorf("descriptions = %q, %q, %q", books[0].Description, books[1].Description, books[2].Description)
+	}
+}

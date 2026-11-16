@@ -54,6 +54,10 @@ type Record struct {
 	// because a poster can be replaced on its own.
 	PosterFetchedAt *time.Time
 	FetchedAt       time.Time
+	// DescriptionVersion and DescriptionSHA256 identify the content version the lookup
+	// wrote for the description, while it is still that text (nil otherwise; F-028).
+	DescriptionVersion *int
+	DescriptionSHA256  []byte
 }
 
 // ApplyParams is a fully fetched and image-processed lookup candidate. Network
@@ -80,6 +84,11 @@ type ApplyParams struct {
 	FillOnly   map[string]any
 	PosterPath string
 	Poster     *images.Processed
+	// Synopsis is the provider's summary as the item's description (normalizeSynopsis); "" writes nothing.
+	Synopsis string
+	// HistoryLimit is the workspace's markdown_history_limit, read before the transaction: a
+	// description write prunes the content history to it, as a content save does.
+	HistoryLimit int
 	// RefreshPoster distinguishes "preserve the current image" from a checked
 	// TMDB response with no poster. In scheduled mode the latter removes a
 	// TMDB-sourced poster; manual modes still preserve every existing image.

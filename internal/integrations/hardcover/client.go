@@ -62,6 +62,8 @@ type Book struct {
 	Pages             int
 	ISBNs             []string
 	ImageURL          string
+	// Description is the work's summary as Hardcover gives it (F-028); "" when none.
+	Description string
 }
 
 // Client is safe for concurrent use.
@@ -188,6 +190,8 @@ type document struct {
 	Pages             float64         `json:"pages"`
 	ISBNs             []string        `json:"isbns"`
 	Image             json.RawMessage `json:"image"`
+	// Description is read leniently: a document whose description is not a string must not fail the search.
+	Description json.RawMessage `json:"description"`
 }
 
 func (c *Client) search(ctx context.Context, q string, perPage int) ([]Book, error) {
@@ -257,6 +261,10 @@ func (c *Client) search(ctx context.Context, q string, perPage int) ([]Book, err
 		}
 		if len(d.Image) > 0 && json.Unmarshal(d.Image, &img) == nil {
 			b.ImageURL = strings.TrimSpace(img.URL)
+		}
+		var description string
+		if len(d.Description) > 0 && json.Unmarshal(d.Description, &description) == nil {
+			b.Description = strings.TrimSpace(description)
 		}
 		books = append(books, b)
 	}

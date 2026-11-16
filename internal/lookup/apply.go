@@ -112,6 +112,10 @@ func (s *DBStore) applyCreate(ctx context.Context, r Repo, p ApplyParams, poster
 	if err != nil {
 		return uuid.Nil, false, err
 	}
+	// A client may not set the lookup-owned fields (F-028): its values would override the provider's.
+	if err := items.RejectLookupOwned(fields, p.CreateInput.Metadata); err != nil {
+		return uuid.Nil, false, err
+	}
 	keep := map[string]bool{idKey: true}
 	for path := range flatten(p.CreateInput.Metadata) {
 		keep[topKey(path)] = true
@@ -154,6 +158,10 @@ func (s *DBStore) applyCreate(ctx context.Context, r Repo, p ApplyParams, poster
 	if err != nil {
 		return uuid.Nil, false, fmt.Errorf("insert lookup item: %w", err)
 	}
+	track, err := s.writeDescription(ctx, r, id, p, Record{})
+	if err != nil {
+		return uuid.Nil, false, err
+	}
 	if untracked {
 		return id, poster != nil, nil
 	}
@@ -169,7 +177,7 @@ func (s *DBStore) applyCreate(ctx context.Context, r Repo, p ApplyParams, poster
 	if poster != nil {
 		posterFetchedAt = &now
 	}
-	if err := s.saveProvenance(ctx, r, id, p, original, snapshots, &title, attachmentID, now, poster != nil, p.PosterPath, posterFetchedAt); err != nil {
+	if err := s.saveProvenance(ctx, r, id, p, original, snapshots, &title, attachmentID, now, poster != nil, p.PosterPath, posterFetchedAt, track); err != nil {
 		return uuid.Nil, false, err
 	}
 	return id, poster != nil, nil
@@ -268,7 +276,11 @@ func (s *DBStore) applyExisting(ctx context.Context, r Repo, p ApplyParams, post
 		// the earlier fetch time, so the weekly refresh counts from the last real one.
 		fetchedAt = old.FetchedAt
 	}
-	if err := s.saveProvenance(ctx, r, p.ItemID, p, originalTitle, snapshots, importedTitle, attachmentID, fetchedAt, usedPoster, posterPath, posterFetchedAt); err != nil {
+	track, err := s.writeDescription(ctx, r, p.ItemID, p, old)
+	if err != nil {
+		return false, nil, err
+	}
+	if err := s.saveProvenance(ctx, r, p.ItemID, p, originalTitle, snapshots, importedTitle, attachmentID, fetchedAt, usedPoster, posterPath, posterFetchedAt, track); err != nil {
 		return false, nil, err
 	}
 	var oldFiles []string
@@ -282,7 +294,7 @@ func (s *DBStore) applyExisting(ctx context.Context, r Repo, p ApplyParams, post
 	return usedPoster, oldFiles, nil
 }
 
-func (s *DBStore) saveProvenance(ctx context.Context, r Repo, itemID uuid.UUID, p ApplyParams, originalTitle string, snapshots map[string]any, importedTitle *string, attachmentID uuid.NullUUID, now time.Time, newPoster bool, retainedPosterPath string, posterFetchedAt *time.Time) error {
+func (s *DBStore) saveProvenance(ctx context.Context, r Repo, itemID uuid.UUID, p ApplyParams, originalTitle string, snapshots map[string]any, importedTitle *string, attachmentID uuid.NullUUID, now time.Time, newPoster bool, retainedPosterPath string, posterFetchedAt *time.Time, desc descriptionTrack) error {
 	// streaming.country comes from workspace settings and is required whenever
 	// any streaming leaf remains. It is structural context rather than TMDB
 	// content, so it is not tracked as an imported value.
@@ -323,6 +335,7 @@ func (s *DBStore) saveProvenance(ctx context.Context, r Repo, itemID uuid.UUID, 
 		AttachmentID: attachmentID, PosterPath: posterPath, PosterFetchedAt: posterFetchedAt,
 		PosterRefreshAfter: posterRefresh, PosterExpiresAt: posterExpiry,
 		FetchedAt: now, RefreshAfter: refreshAfter, ExpiresAt: expiresAt,
+		DescriptionVersion: desc.version, DescriptionSHA256: desc.sha256, ImportGeneration: currentImportGeneration,
 	}); err != nil {
 		return fmt.Errorf("save lookup import: %w", err)
 	}

@@ -3,6 +3,7 @@ package lookup
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -77,6 +78,16 @@ func (p openLibraryProvider) Details(ctx context.Context, typ, sourceID, languag
 	if m.CoverID > 0 {
 		d.ImagePath = strconv.Itoa(m.CoverID)
 	}
+	// The summary is best effort (F-028): a failed work record imports the book without one.
+	description, err := p.client.WorkDescription(ctx, m.WorkID)
+	switch {
+	case err == nil:
+	case ctx.Err() != nil:
+		return Details{}, ctx.Err()
+	default:
+		slog.WarnContext(ctx, "open library work description failed; importing without a summary", "err", err)
+	}
+	d.Synopsis = normalizeSynopsis(description)
 	return d, nil
 }
 
@@ -93,6 +104,8 @@ func openLibraryError(err error) error {
 	switch {
 	case errors.Is(err, openlibrary.ErrDisabled):
 		return ErrDisabled
+	case errors.Is(err, openlibrary.ErrRateLimited):
+		return ErrProviderRateLimited
 	case errors.Is(err, openlibrary.ErrNoCover):
 		return ErrNoImage
 	}

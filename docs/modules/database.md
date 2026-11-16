@@ -13,6 +13,7 @@ Owns the PostgreSQL layer: connection pool, transaction helper, migrations, and 
 - `db/queries/trash.sql`, `search.sql`: trash batch and purge queries, search and recent reads (see [trash](trash.md), [search](search.md))
 - `db/queries/schema.sql`: smoke query, sqlc input
 - `db/queries/workspace.sql`: workspace bootstrap and settings queries (see `workspace` module)
+- `db/migrations/000003_synopsis_rating_genres.{up,down}.sql` (F-028, D-162, D-164): expand-only. `lookup_imports` gains `description_version`, `description_sha256` and `import_generation` (NOT NULL DEFAULT 0); `item_content_versions` gains `origin` with a CHECK that allows only `'lookup'` (NULL is a user save)
 - `db/migrations/000002_accounts.{up,down}.sql`, `db/queries/users.sql`: the `users` table (see [users](users.md)), nullable `owner_user_id` on folders and lists, the who-changed columns (`created_by_user_id`, `updated_by_user_id` on folders, lists, items; `author_user_id` on `item_content_versions`), and `user_top_order` (see [access](access.md))
 - `db/queries/lookup_imports.sql`: lookup provenance queries (see [lookup](lookup.md))
 - `db/migrations.go`: package `db`, embeds `migrations/*.sql` (`db.Migrations()`); the Dockerfile copies `db/`

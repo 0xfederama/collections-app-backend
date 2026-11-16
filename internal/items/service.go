@@ -219,6 +219,23 @@ func (s *Service) List(ctx context.Context, listID uuid.UUID, p ListParams) (Ite
 	return ItemPage{Items: rows, Limit: p.Limit, Offset: p.Offset, Total: total}, nil
 }
 
+// Genres returns the genres of a list's active items (F-028 B3, D-163): empty for a list that is not
+// movie or TV. The list is read first and NotFound when it is missing or trashed.
+func (s *Service) Genres(ctx context.Context, listID uuid.UUID) ([]GenreCount, error) {
+	info, err := s.store.ListInfo(ctx, listID)
+	if err != nil {
+		return nil, err
+	}
+	if !movieOrTV(info.Type) {
+		return []GenreCount{}, nil
+	}
+	all, err := s.store.ListByList(ctx, listID)
+	if err != nil {
+		return nil, err
+	}
+	return GenreCounts(all, info.Type)
+}
+
 // Update applies a partial update. version is the caller's If-Match version.
 // Errors in order: the field rules (422), NotFound item, VersionConflict, NotFound
 // list, the price rule of the list's type (422), then the metadata rules (400, 422).

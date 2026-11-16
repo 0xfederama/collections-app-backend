@@ -114,7 +114,8 @@ func run() error {
 	if _, err := lookupStore.Maintain(ctx, lookupSvc.RefreshScheduled); err != nil {
 		logger.Warn("lookup weekly refresh failed at startup", "err", err)
 	}
-	go lookupStore.Run(ctx, lookup.MaintenanceInterval, lookupSvc.RefreshScheduled) // stops when ctx is cancelled on shutdown
+	go lookupStore.Run(ctx, lookup.MaintenanceInterval, lookupSvc.RefreshScheduled)                              // stops when ctx is cancelled on shutdown
+	go lookupStore.RunBackfill(ctx, lookup.BackfillInterval, lookupSvc.RefreshScheduled, lookupSvc.BackfillFill) // D-164; stops on shutdown
 
 	userSvc := users.NewService(users.NewPostgres(pool), clock.System{})
 	idOpts := identity.Options{

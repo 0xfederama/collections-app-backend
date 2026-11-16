@@ -59,12 +59,12 @@ func (r *repo) LockItem(ctx context.Context, itemID uuid.UUID) error {
 func (r *repo) Current(ctx context.Context, itemID uuid.UUID) (Stored, error) {
 	row, err := r.q.GetLatestContentVersion(ctx, itemID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Stored{Content: Content{ItemID: itemID}}, nil
+		return Stored{Content: Content{ItemID: itemID, Origin: OriginUser}}, nil
 	}
 	if err != nil {
 		return Stored{}, fmt.Errorf("get latest content version: %w", err)
 	}
-	return storedOf(itemID, row.Version, row.Body, row.Sha256, row.CreatedAt, row.AuthorUserID), nil
+	return storedOf(itemID, row.Version, row.Body, row.Sha256, row.CreatedAt, row.AuthorUserID, row.Origin), nil
 }
 
 func (r *repo) GetVersion(ctx context.Context, itemID uuid.UUID, version int) (Stored, error) {
@@ -72,7 +72,7 @@ func (r *repo) GetVersion(ctx context.Context, itemID uuid.UUID, version int) (S
 	if err != nil {
 		return Stored{}, notFound(err, "content version")
 	}
-	return storedOf(itemID, row.Version, row.Body, row.Sha256, row.CreatedAt, row.AuthorUserID), nil
+	return storedOf(itemID, row.Version, row.Body, row.Sha256, row.CreatedAt, row.AuthorUserID, row.Origin), nil
 }
 
 // ListVersions returns the saved versions, newest first.
@@ -83,7 +83,7 @@ func (r *repo) ListVersions(ctx context.Context, itemID uuid.UUID) ([]VersionInf
 	}
 	out := make([]VersionInfo, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, VersionInfo{Version: int(row.Version), SizeBytes: int(row.SizeBytes), CreatedAt: row.CreatedAt, AuthorUserID: ptrNull(row.AuthorUserID)})
+		out = append(out, VersionInfo{Version: int(row.Version), SizeBytes: int(row.SizeBytes), CreatedAt: row.CreatedAt, AuthorUserID: ptrNull(row.AuthorUserID), Origin: originOf(row.Origin)})
 	}
 	return out, nil
 }
@@ -113,11 +113,19 @@ func (r *repo) TouchItem(ctx context.Context, itemID uuid.UUID, now time.Time) e
 }
 
 // storedOf maps a saved version row. The item id comes from the caller.
-func storedOf(itemID uuid.UUID, version int32, body string, sum []byte, createdAt time.Time, author uuid.NullUUID) Stored {
+func storedOf(itemID uuid.UUID, version int32, body string, sum []byte, createdAt time.Time, author uuid.NullUUID, origin *string) Stored {
 	return Stored{
-		Content: Content{ItemID: itemID, Version: int(version), Body: body, UpdatedAt: &createdAt, AuthorUserID: ptrNull(author)},
+		Content: Content{ItemID: itemID, Version: int(version), Body: body, UpdatedAt: &createdAt, AuthorUserID: ptrNull(author), Origin: originOf(origin)},
 		SHA256:  sum,
 	}
+}
+
+// originOf maps the stored origin: NULL is a user save.
+func originOf(origin *string) string {
+	if origin != nil {
+		return *origin
+	}
+	return OriginUser
 }
 
 func notFound(err error, resource string) error {

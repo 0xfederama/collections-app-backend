@@ -132,6 +132,7 @@ func (s *Service) refreshTMDB(ctx context.Context, itemID uuid.UUID, it items.It
 		Title: details.Title, OriginalTitle: it.Title,
 		Fields: details.Fields, PosterPath: details.ImagePath, Poster: poster,
 		RefreshPoster: refreshPoster,
+		Synopsis:      details.Synopsis, HistoryLimit: settings.MarkdownHistoryLimit,
 	})
 }
 

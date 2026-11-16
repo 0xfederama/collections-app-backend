@@ -13,7 +13,7 @@ import (
 )
 
 const getContentVersion = `-- name: GetContentVersion :one
-SELECT item_id, version, body, size_bytes, sha256, created_at, author_user_id FROM item_content_versions
+SELECT item_id, version, body, size_bytes, sha256, created_at, author_user_id, origin FROM item_content_versions
 WHERE item_id = $1 AND version = $2
 `
 
@@ -33,12 +33,13 @@ func (q *Queries) GetContentVersion(ctx context.Context, arg GetContentVersionPa
 		&i.Sha256,
 		&i.CreatedAt,
 		&i.AuthorUserID,
+		&i.Origin,
 	)
 	return i, err
 }
 
 const getLatestContentVersion = `-- name: GetLatestContentVersion :one
-SELECT item_id, version, body, size_bytes, sha256, created_at, author_user_id FROM item_content_versions
+SELECT item_id, version, body, size_bytes, sha256, created_at, author_user_id, origin FROM item_content_versions
 WHERE item_id = $1
 ORDER BY version DESC
 LIMIT 1
@@ -55,6 +56,7 @@ func (q *Queries) GetLatestContentVersion(ctx context.Context, itemID uuid.UUID)
 		&i.Sha256,
 		&i.CreatedAt,
 		&i.AuthorUserID,
+		&i.Origin,
 	)
 	return i, err
 }
@@ -105,7 +107,7 @@ func (q *Queries) ItemIsActive(ctx context.Context, arg ItemIsActiveParams) (uui
 }
 
 const listContentVersions = `-- name: ListContentVersions :many
-SELECT version, size_bytes, created_at, author_user_id FROM item_content_versions
+SELECT version, size_bytes, created_at, author_user_id, origin FROM item_content_versions
 WHERE item_id = $1
 ORDER BY version DESC
 `
@@ -115,6 +117,7 @@ type ListContentVersionsRow struct {
 	SizeBytes    int32
 	CreatedAt    time.Time
 	AuthorUserID uuid.NullUUID
+	Origin       *string
 }
 
 func (q *Queries) ListContentVersions(ctx context.Context, itemID uuid.UUID) ([]ListContentVersionsRow, error) {
@@ -131,6 +134,7 @@ func (q *Queries) ListContentVersions(ctx context.Context, itemID uuid.UUID) ([]
 			&i.SizeBytes,
 			&i.CreatedAt,
 			&i.AuthorUserID,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}

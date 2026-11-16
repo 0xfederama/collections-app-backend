@@ -18,6 +18,7 @@ type ContentJSON struct {
 	Body         string     `json:"body" doc:"Markdown source, up to 1 MiB UTF-8."`
 	UpdatedAt    *time.Time `json:"updated_at" nullable:"true" doc:"When this version was saved. null for version 0."`
 	AuthorUserID *uuid.UUID `json:"author_user_id" format:"uuid" nullable:"true" doc:"The user who saved this version. null for version 0 and for versions saved before authorship was recorded."`
+	Origin       string     `json:"origin" enum:"user,lookup" doc:"Who wrote this version: user (a save or restore, and version 0) or lookup (a provider's description). Read-only."`
 }
 
 // UpdateContentRequest is the body of updateItemContent. The schema carries no
@@ -38,6 +39,7 @@ type ContentVersionInfoJSON struct {
 	SizeBytes    int        `json:"size_bytes" minimum:"0"`
 	Version      int        `json:"version"`
 	AuthorUserID *uuid.UUID `json:"author_user_id" format:"uuid" nullable:"true" doc:"The user who saved this version; null when unknown."`
+	Origin       string     `json:"origin" enum:"user,lookup" doc:"Who wrote this version: user or lookup. Read-only."`
 }
 
 // ContentVersionListJSON is the listContentVersions answer (published as "ContentVersionList").
@@ -55,7 +57,7 @@ func contentJSON(c Content) ContentJSON {
 func versionListJSON(vs []VersionInfo) ContentVersionListJSON {
 	data := make([]ContentVersionInfoJSON, 0, len(vs))
 	for _, v := range vs {
-		data = append(data, ContentVersionInfoJSON{CreatedAt: v.CreatedAt, SizeBytes: v.SizeBytes, Version: v.Version, AuthorUserID: v.AuthorUserID})
+		data = append(data, ContentVersionInfoJSON{CreatedAt: v.CreatedAt, SizeBytes: v.SizeBytes, Version: v.Version, AuthorUserID: v.AuthorUserID, Origin: v.Origin})
 	}
 	return ContentVersionListJSON{Data: data}
 }

@@ -43,6 +43,7 @@ const (
 	mockBookQuery = "[mock] book name"
 	mockWorkID    = "OL900001W"
 	mockCoverID   = 900001
+	mockSynopsis  = "A mock description of the test-stack book."
 )
 
 var (
@@ -50,6 +51,9 @@ var (
 	ErrInvalid  = errors.New("invalid Open Library request")
 	// ErrNoCover means the work has no cover (the covers API answers 404 for default=false).
 	ErrNoCover = errors.New("open library has no cover")
+	// ErrRateLimited is returned for an HTTP 429 (the client has also paused itself). The lookup
+	// backfill stops its pass on it (D-164).
+	ErrRateLimited = errors.New("open library rate limit exceeded")
 
 	workIDRe  = regexp.MustCompile(`^OL[0-9]+W$`)
 	workKeyRe = regexp.MustCompile(`^/works/(OL[0-9]+W)$`)
@@ -266,6 +270,44 @@ func (c *Client) Work(ctx context.Context, workID, language string) (Match, erro
 	return Match{}, errors.New("open library returned no such work")
 }
 
+// WorkDescription returns the description of a work from its record (/works/{id}.json), "" when the
+// work has none (F-028). The search API does not return it, so it is a second request, made only by
+// the book lookup.
+func (c *Client) WorkDescription(ctx context.Context, workID string) (string, error) {
+	if !workIDRe.MatchString(workID) {
+		return "", ErrInvalid
+	}
+	if c.Enabled() && c.mockFixture && workID == mockWorkID {
+		return mockSynopsis, nil
+	}
+	if c == nil || c.disabled {
+		return "", ErrDisabled
+	}
+	var work struct {
+		Description json.RawMessage `json:"description"`
+	}
+	if err := c.getJSON(ctx, "/works/"+workID+".json", nil, &work); err != nil {
+		return "", err
+	}
+	return descriptionText(work.Description), nil
+}
+
+// descriptionText reads a work description, which Open Library stores either as a string or as an
+// object {"type", "value"}. Anything else is no description.
+func descriptionText(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var obj struct {
+		Value string `json:"value"`
+	}
+	if json.Unmarshal(raw, &obj) == nil {
+		return obj.Value
+	}
+	return ""
+}
+
 func (c *Client) search(ctx context.Context, q, lang string, limit int) ([]Match, error) {
 	params := url.Values{"q": {q}, "limit": {strconv.Itoa(limit)}, "fields": {searchFields}}
 	if lang != "" {
@@ -357,7 +399,7 @@ func (c *Client) coverOnce(ctx context.Context, rawURL string) ([]byte, bool, er
 		return nil, false, ErrNoCover
 	case response.StatusCode == http.StatusTooManyRequests:
 		c.note429(response.Header.Get("Retry-After"))
-		return nil, false, errors.New("open library rate limit exceeded")
+		return nil, false, ErrRateLimited
 	case response.StatusCode < 200 || response.StatusCode >= 300:
 		return nil, response.StatusCode >= 500, fmt.Errorf("open library cover request failed (HTTP %d)", response.StatusCode)
 	}
@@ -422,7 +464,7 @@ func (c *Client) jsonOnce(ctx context.Context, rawURL string, out any) (bool, er
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusTooManyRequests {
 		c.note429(response.Header.Get("Retry-After"))
-		return false, errors.New("open library rate limit exceeded")
+		return false, ErrRateLimited
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return response.StatusCode >= 500, fmt.Errorf("open library request failed (HTTP %d)", response.StatusCode)

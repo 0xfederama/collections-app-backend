@@ -32,10 +32,20 @@ type fakeRepo struct {
 	items       map[uuid.UUID]fakeItem
 	imports     map[uuid.UUID]importSave
 	attachments map[uuid.UUID]images.Attachment
+	content     map[uuid.UUID][]fakeContent
 	nextOrder   int32
 
 	// failInsertItem makes InsertItem fail (a rollback test).
 	failInsertItem error
+}
+
+// fakeContent is one saved content version of an item, as the content table keeps it.
+type fakeContent struct {
+	version int
+	body    string
+	sha     []byte
+	origin  *string
+	author  uuid.NullUUID
 }
 
 // fakeItem is one item row as the fake stores it.
@@ -56,6 +66,7 @@ func newFakeRepo() *fakeRepo {
 		items:       map[uuid.UUID]fakeItem{},
 		imports:     map[uuid.UUID]importSave{},
 		attachments: map[uuid.UUID]images.Attachment{},
+		content:     map[uuid.UUID][]fakeContent{},
 	}
 }
 
@@ -70,6 +81,7 @@ type fakeSnapshot struct {
 	items       map[uuid.UUID]fakeItem
 	imports     map[uuid.UUID]importSave
 	attachments map[uuid.UUID]images.Attachment
+	content     map[uuid.UUID][]fakeContent
 }
 
 func (f *fakeRepo) snapshot() fakeSnapshot {
@@ -77,6 +89,7 @@ func (f *fakeRepo) snapshot() fakeSnapshot {
 		items:       make(map[uuid.UUID]fakeItem, len(f.items)),
 		imports:     make(map[uuid.UUID]importSave, len(f.imports)),
 		attachments: make(map[uuid.UUID]images.Attachment, len(f.attachments)),
+		content:     make(map[uuid.UUID][]fakeContent, len(f.content)),
 	}
 	for k, v := range f.items {
 		s.items[k] = v
@@ -87,11 +100,14 @@ func (f *fakeRepo) snapshot() fakeSnapshot {
 	for k, v := range f.attachments {
 		s.attachments[k] = v
 	}
+	for k, v := range f.content {
+		s.content[k] = append([]fakeContent(nil), v...)
+	}
 	return s
 }
 
 func (f *fakeRepo) restore(s fakeSnapshot) {
-	f.items, f.imports, f.attachments = s.items, s.imports, s.attachments
+	f.items, f.imports, f.attachments, f.content = s.items, s.imports, s.attachments, s.content
 }
 
 func (f *fakeRepo) InTx(_ context.Context, fn func(Repo) error) error {
@@ -129,6 +145,7 @@ func (f *fakeRepo) Import(_ context.Context, itemID uuid.UUID) (Record, bool, er
 		ImportedFields: fields, ImportedTitle: row.ImportedTitle, OriginalTitle: row.OriginalTitle,
 		AttachmentID: nullUUIDPtr(row.AttachmentID), PosterPath: valueOrEmpty(row.PosterPath),
 		PosterFetchedAt: row.PosterFetchedAt, FetchedAt: row.FetchedAt,
+		DescriptionVersion: row.DescriptionVersion, DescriptionSHA256: row.DescriptionSHA256,
 	}, true, nil
 }
 
@@ -189,6 +206,89 @@ func (f *fakeRepo) SaveImport(_ context.Context, in importSave) error {
 	f.write("save import")
 	f.imports[in.ItemID] = in
 	return nil
+}
+
+// ContentHead mirrors GetLookupContentHead: the highest version, or 0 when none was saved.
+func (f *fakeRepo) ContentHead(_ context.Context, itemID uuid.UUID) (contentHead, error) {
+	versions := f.content[itemID]
+	if len(versions) == 0 {
+		return contentHead{}, nil
+	}
+	last := versions[len(versions)-1]
+	return contentHead{Version: last.version, SHA256: last.sha}, nil
+}
+
+func (f *fakeRepo) InsertContent(_ context.Context, w contentWrite) error {
+	f.write("insert content")
+	f.content[w.ItemID] = append(f.content[w.ItemID], fakeContent{version: w.Version, body: w.Body, sha: w.SHA256, origin: w.Origin, author: w.Author})
+	return nil
+}
+
+// PruneContent mirrors PruneLookupContentVersions: every version up to and including upTo.
+func (f *fakeRepo) PruneContent(_ context.Context, itemID uuid.UUID, upTo int) error {
+	f.write("prune content")
+	kept := f.content[itemID][:0:0]
+	for _, c := range f.content[itemID] {
+		if c.version > upTo {
+			kept = append(kept, c)
+		}
+	}
+	f.content[itemID] = kept
+	return nil
+}
+
+func (f *fakeRepo) TouchContent(_ context.Context, _ uuid.UUID, _ time.Time) error {
+	f.write("touch content")
+	return nil
+}
+
+// backfillDue mirrors ListBackfillItems: the imports below the generation, of items not trashed and not
+// lookup_disabled, oldest fetch first.
+func (f *fakeRepo) backfillDue(generation int) []backfillItem {
+	type due struct {
+		item backfillItem
+		at   time.Time
+	}
+	var out []due
+	for id, row := range f.imports {
+		if row.ImportGeneration >= generation {
+			continue
+		}
+		it := f.items[id]
+		if it.deleted {
+			continue
+		}
+		var metadata map[string]any
+		if json.Unmarshal(it.metadata, &metadata) == nil {
+			if disabled, _ := metadata["lookup_disabled"].(bool); disabled {
+				continue
+			}
+		}
+		out = append(out, due{item: backfillItem{ItemID: id, ItemVersion: it.version, Provider: row.Provider}, at: row.FetchedAt})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].at.Equal(out[j].at) {
+			return out[i].at.Before(out[j].at)
+		}
+		return out[i].item.ItemID.String() < out[j].item.ItemID.String()
+	})
+	items := make([]backfillItem, 0, len(out))
+	for _, d := range out {
+		items = append(items, d.item)
+	}
+	return items
+}
+
+func (f *fakeRepo) BackfillItems(_ context.Context, generation int, limit int32) ([]backfillItem, error) {
+	items := f.backfillDue(generation)
+	if len(items) > int(limit) {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+func (f *fakeRepo) BackfillRemaining(_ context.Context, generation int) (int, error) {
+	return len(f.backfillDue(generation)), nil
 }
 
 func (f *fakeRepo) InsertAttachment(_ context.Context, a images.Attachment, _ time.Time) error {

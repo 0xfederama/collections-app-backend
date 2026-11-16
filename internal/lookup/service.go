@@ -157,6 +157,7 @@ func (s *Service) Create(ctx context.Context, listID uuid.UUID, in items.CreateI
 		Fields: candidate.details.Fields, FillOnly: defaultStoreFill(provider, candidate.details.FillOnly, settings.PreferredStore),
 		PosterPath: candidate.details.ImagePath, Poster: poster,
 		RefreshPoster: true,
+		Synopsis:      candidate.details.Synopsis, HistoryLimit: settings.MarkdownHistoryLimit,
 	})
 }
 
@@ -222,6 +223,7 @@ func (s *Service) Apply(ctx context.Context, itemID uuid.UUID, expectedVersion i
 		Fields: candidate.details.Fields, FillOnly: defaultStoreFill(provider, candidate.details.FillOnly, settings.PreferredStore),
 		PosterPath: candidate.details.ImagePath, Poster: poster,
 		RefreshPoster: refreshPoster,
+		Synopsis:      candidate.details.Synopsis, HistoryLimit: settings.MarkdownHistoryLimit,
 	})
 }
 

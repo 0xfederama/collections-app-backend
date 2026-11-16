@@ -12,17 +12,17 @@ SELECT id FROM items
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;
 
 -- name: GetLatestContentVersion :one
-SELECT item_id, version, body, size_bytes, sha256, created_at, author_user_id FROM item_content_versions
+SELECT item_id, version, body, size_bytes, sha256, created_at, author_user_id, origin FROM item_content_versions
 WHERE item_id = @item_id
 ORDER BY version DESC
 LIMIT 1;
 
 -- name: GetContentVersion :one
-SELECT item_id, version, body, size_bytes, sha256, created_at, author_user_id FROM item_content_versions
+SELECT item_id, version, body, size_bytes, sha256, created_at, author_user_id, origin FROM item_content_versions
 WHERE item_id = @item_id AND version = @version;
 
 -- name: ListContentVersions :many
-SELECT version, size_bytes, created_at, author_user_id FROM item_content_versions
+SELECT version, size_bytes, created_at, author_user_id, origin FROM item_content_versions
 WHERE item_id = @item_id
 ORDER BY version DESC;
 

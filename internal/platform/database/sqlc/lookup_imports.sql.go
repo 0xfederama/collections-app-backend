@@ -13,8 +13,31 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getLookupContentHead = `-- name: GetLookupContentHead :one
+SELECT version, sha256, size_bytes FROM item_content_versions
+WHERE item_id = $1
+ORDER BY version DESC
+LIMIT 1
+`
+
+type GetLookupContentHeadRow struct {
+	Version   int32
+	Sha256    []byte
+	SizeBytes int32
+}
+
+// The current content of an item as the lookup sees it: the highest version, and the SHA-256 and size
+// of its body (D-162 decision 3). No rows is version 0, the never-saved content. The item row is locked
+// by the caller, so a user save cannot land in between.
+func (q *Queries) GetLookupContentHead(ctx context.Context, itemID uuid.UUID) (GetLookupContentHeadRow, error) {
+	row := q.db.QueryRow(ctx, getLookupContentHead, itemID)
+	var i GetLookupContentHeadRow
+	err := row.Scan(&i.Version, &i.Sha256, &i.SizeBytes)
+	return i, err
+}
+
 const getLookupImport = `-- name: GetLookupImport :one
-SELECT t.workspace_id, t.item_id, t.type, t.imported_fields, t.imported_title, t.original_title, t.attachment_id, t.poster_path, t.poster_fetched_at, t.poster_refresh_after, t.poster_expires_at, t.fetched_at, t.refresh_after, t.expires_at, t.provider, t.source_id, i.version AS item_version
+SELECT t.workspace_id, t.item_id, t.type, t.imported_fields, t.imported_title, t.original_title, t.attachment_id, t.poster_path, t.poster_fetched_at, t.poster_refresh_after, t.poster_expires_at, t.fetched_at, t.refresh_after, t.expires_at, t.provider, t.source_id, t.description_version, t.description_sha256, t.import_generation, i.version AS item_version
 FROM lookup_imports t
 JOIN items i ON i.id = t.item_id AND i.workspace_id = t.workspace_id
 WHERE t.item_id = $1 AND t.workspace_id = $2
@@ -42,6 +65,9 @@ type GetLookupImportRow struct {
 	ExpiresAt          *time.Time
 	Provider           string
 	SourceID           string
+	DescriptionVersion *int32
+	DescriptionSha256  []byte
+	ImportGeneration   int32
 	ItemVersion        int32
 }
 
@@ -65,6 +91,9 @@ func (q *Queries) GetLookupImport(ctx context.Context, arg GetLookupImportParams
 		&i.ExpiresAt,
 		&i.Provider,
 		&i.SourceID,
+		&i.DescriptionVersion,
+		&i.DescriptionSha256,
+		&i.ImportGeneration,
 		&i.ItemVersion,
 	)
 	return i, err
@@ -90,6 +119,38 @@ func (q *Queries) GetLookupListType(ctx context.Context, arg GetLookupListTypePa
 	var type_ *string
 	err := row.Scan(&type_)
 	return type_, err
+}
+
+const insertLookupContentVersion = `-- name: InsertLookupContentVersion :exec
+INSERT INTO item_content_versions (item_id, version, body, size_bytes, sha256, created_at, author_user_id, origin)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+`
+
+type InsertLookupContentVersionParams struct {
+	ItemID       uuid.UUID
+	Version      int32
+	Body         string
+	SizeBytes    int32
+	Sha256       []byte
+	CreatedAt    time.Time
+	AuthorUserID uuid.NullUUID
+	Origin       *string
+}
+
+// A description the lookup wrote: origin 'lookup'. A user-authored text (an untracked Hardcover create)
+// passes a NULL origin and the caller as author.
+func (q *Queries) InsertLookupContentVersion(ctx context.Context, arg InsertLookupContentVersionParams) error {
+	_, err := q.db.Exec(ctx, insertLookupContentVersion,
+		arg.ItemID,
+		arg.Version,
+		arg.Body,
+		arg.SizeBytes,
+		arg.Sha256,
+		arg.CreatedAt,
+		arg.AuthorUserID,
+		arg.Origin,
+	)
+	return err
 }
 
 const insertLookupItem = `-- name: InsertLookupItem :one
@@ -292,6 +353,45 @@ func (q *Queries) LockLookupItem(ctx context.Context, arg LockLookupItemParams) 
 	return i, err
 }
 
+const pruneLookupContentVersions = `-- name: PruneLookupContentVersions :exec
+DELETE FROM item_content_versions
+WHERE item_id = $1 AND version <= $2
+`
+
+type PruneLookupContentVersionsParams struct {
+	ItemID uuid.UUID
+	UpTo   int32
+}
+
+// Deletes every version up to and including @up_to, as the content save does (the history limit).
+func (q *Queries) PruneLookupContentVersions(ctx context.Context, arg PruneLookupContentVersionsParams) error {
+	_, err := q.db.Exec(ctx, pruneLookupContentVersions, arg.ItemID, arg.UpTo)
+	return err
+}
+
+const touchLookupItemContent = `-- name: TouchLookupItemContent :exec
+UPDATE items SET updated_at = $1, updated_by_user_id = COALESCE($2::uuid, updated_by_user_id)
+WHERE id = $3 AND workspace_id = $4 AND deleted_at IS NULL
+`
+
+type TouchLookupItemContentParams struct {
+	Now          time.Time
+	CallerUserID uuid.NullUUID
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+}
+
+// A description write bumps updated_at like a content save does, but not items.version.
+func (q *Queries) TouchLookupItemContent(ctx context.Context, arg TouchLookupItemContentParams) error {
+	_, err := q.db.Exec(ctx, touchLookupItemContent,
+		arg.Now,
+		arg.CallerUserID,
+		arg.ID,
+		arg.WorkspaceID,
+	)
+	return err
+}
+
 const updateLookupItem = `-- name: UpdateLookupItem :exec
 UPDATE items
 SET title = $1,
@@ -332,11 +432,13 @@ func (q *Queries) UpdateLookupItem(ctx context.Context, arg UpdateLookupItemPara
 const upsertLookupImport = `-- name: UpsertLookupImport :exec
 INSERT INTO lookup_imports (
   workspace_id, item_id, provider, source_id, type, imported_fields, imported_title, original_title,
-  attachment_id, poster_path, poster_fetched_at, poster_refresh_after, poster_expires_at, fetched_at, refresh_after, expires_at
+  attachment_id, poster_path, poster_fetched_at, poster_refresh_after, poster_expires_at, fetched_at, refresh_after, expires_at,
+  description_version, description_sha256, import_generation
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8,
   $9, $10, $11, $12, $13,
-  $14, $15, $16
+  $14, $15, $16,
+  $17, $18, $19
 )
 ON CONFLICT (item_id) DO UPDATE SET
   provider = EXCLUDED.provider,
@@ -352,7 +454,10 @@ ON CONFLICT (item_id) DO UPDATE SET
   poster_expires_at = EXCLUDED.poster_expires_at,
   fetched_at = EXCLUDED.fetched_at,
   refresh_after = EXCLUDED.refresh_after,
-  expires_at = EXCLUDED.expires_at
+  expires_at = EXCLUDED.expires_at,
+  description_version = EXCLUDED.description_version,
+  description_sha256 = EXCLUDED.description_sha256,
+  import_generation = EXCLUDED.import_generation
 WHERE lookup_imports.workspace_id = EXCLUDED.workspace_id
 `
 
@@ -373,6 +478,9 @@ type UpsertLookupImportParams struct {
 	FetchedAt          time.Time
 	RefreshAfter       *time.Time
 	ExpiresAt          *time.Time
+	DescriptionVersion *int32
+	DescriptionSha256  []byte
+	ImportGeneration   int32
 }
 
 func (q *Queries) UpsertLookupImport(ctx context.Context, arg UpsertLookupImportParams) error {
@@ -393,6 +501,9 @@ func (q *Queries) UpsertLookupImport(ctx context.Context, arg UpsertLookupImport
 		arg.FetchedAt,
 		arg.RefreshAfter,
 		arg.ExpiresAt,
+		arg.DescriptionVersion,
+		arg.DescriptionSha256,
+		arg.ImportGeneration,
 	)
 	return err
 }

@@ -79,6 +79,7 @@ type ItemContentVersion struct {
 	Sha256       []byte
 	CreatedAt    time.Time
 	AuthorUserID uuid.NullUUID
+	Origin       *string
 }
 
 type List struct {
@@ -120,6 +121,9 @@ type LookupImport struct {
 	ExpiresAt          *time.Time
 	Provider           string
 	SourceID           string
+	DescriptionVersion *int32
+	DescriptionSha256  []byte
+	ImportGeneration   int32
 }
 
 type TrashBatch struct {

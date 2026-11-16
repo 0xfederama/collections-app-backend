@@ -96,6 +96,12 @@ components:
         item_id:
           format: uuid
           type: string
+        origin:
+          description: "Who wrote this version: user (a save or restore, and version 0) or lookup (a provider's description). Read-only."
+          enum:
+            - user
+            - lookup
+          type: string
         updated_at:
           description: When this version was saved. null for version 0.
           format: date-time
@@ -113,6 +119,7 @@ components:
         - body
         - updated_at
         - author_user_id
+        - origin
       type: object
     ContentVersionInfo:
       additionalProperties: false
@@ -126,6 +133,12 @@ components:
         created_at:
           format: date-time
           type: string
+        origin:
+          description: "Who wrote this version: user or lookup. Read-only."
+          enum:
+            - user
+            - lookup
+          type: string
         size_bytes:
           format: int64
           minimum: 0
@@ -138,6 +151,7 @@ components:
         - size_bytes
         - version
         - author_user_id
+        - origin
       type: object
     ContentVersionList:
       additionalProperties: false
@@ -1382,6 +1396,7 @@ components:
             - link
             - streaming
             - stores
+            - text_list
           type: string
       required:
         - key

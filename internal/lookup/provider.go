@@ -46,6 +46,9 @@ type Suggestion struct {
 type Details struct {
 	SourceID string
 	Title    string
+	// Synopsis is the summary as the item's description, normalized (normalizeSynopsis); "" when the
+	// provider has none. Written only into an empty description, or a tracked one (F-028).
+	Synopsis string
 	// Fields is the provider metadata object, replaced by rematch and the weekly refresh and
 	// tracked as imported values.
 	Fields map[string]any

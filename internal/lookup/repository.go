@@ -65,6 +65,35 @@ type Repo interface {
 	ScheduledItems(ctx context.Context, fetchedBefore time.Time, limit int32) ([]scheduledItem, error)
 	// ListItems returns the active items of a list in refresh order (the list refresh, refreshListLookups).
 	ListItems(ctx context.Context, listID uuid.UUID) ([]listedItem, error)
+
+	// ContentHead returns the current content of an item: its highest version (0 when never saved),
+	// and the SHA-256 and size of its body. The item row is locked by the caller (LockItem).
+	ContentHead(ctx context.Context, itemID uuid.UUID) (contentHead, error)
+	// InsertContent writes one content version (see contentWrite).
+	InsertContent(ctx context.Context, w contentWrite) error
+	// PruneContent deletes the content versions of the item up to and including upTo.
+	PruneContent(ctx context.Context, itemID uuid.UUID, upTo int) error
+	// TouchContent bumps the item's updated_at, not its version, as a content save does.
+	TouchContent(ctx context.Context, itemID uuid.UUID, now time.Time) error
+}
+
+// contentHead is the current content of an item as the description rules read it.
+type contentHead struct {
+	Version int
+	SHA256  []byte
+	Size    int
+}
+
+// contentWrite is one content version the lookup writes. Origin is nil for a user's own text (an
+// untracked Hardcover create), which then carries Author; a lookup write has no author (D-162).
+type contentWrite struct {
+	ItemID  uuid.UUID
+	Version int
+	Body    string
+	SHA256  []byte
+	Origin  *string
+	Author  uuid.NullUUID
+	Now     time.Time
 }
 
 // lockedItem is an item row read under FOR UPDATE.
@@ -101,16 +130,21 @@ type itemUpdate struct {
 // importSave is one lookup_imports row. Deadlines are nil for Open Library (D-095);
 // TMDB rows carry the legacy deadlines (see legacyDeadlines).
 type importSave struct {
-	ItemID          uuid.UUID
-	Provider        string
-	SourceID        string
-	Type            string
-	ImportedFields  []byte
-	ImportedTitle   *string
-	OriginalTitle   string
-	AttachmentID    uuid.NullUUID
-	PosterPath      *string
-	PosterFetchedAt *time.Time
+	// DescriptionVersion and DescriptionSHA256 track the description the lookup wrote (nil when not tracked).
+	DescriptionVersion *int
+	DescriptionSHA256  []byte
+	// ImportGeneration is the generation the row was written with (D-164).
+	ImportGeneration int
+	ItemID           uuid.UUID
+	Provider         string
+	SourceID         string
+	Type             string
+	ImportedFields   []byte
+	ImportedTitle    *string
+	OriginalTitle    string
+	AttachmentID     uuid.NullUUID
+	PosterPath       *string
+	PosterFetchedAt  *time.Time
 	// PosterRefreshAfter and PosterExpiresAt are the poster deadlines.
 	PosterRefreshAfter *time.Time
 	PosterExpiresAt    *time.Time
@@ -182,11 +216,17 @@ func (r *repo) Import(ctx context.Context, itemID uuid.UUID) (Record, bool, erro
 	if err := json.Unmarshal(row.ImportedFields, &fields); err != nil {
 		return Record{}, false, fmt.Errorf("decode lookup import fields: %w", err)
 	}
+	var descVersion *int
+	if row.DescriptionVersion != nil {
+		v := int(*row.DescriptionVersion)
+		descVersion = &v
+	}
 	return Record{
 		ItemID: row.ItemID, ItemVersion: int(row.ItemVersion), Provider: row.Provider, SourceID: row.SourceID, Type: row.Type,
 		ImportedFields: fields, ImportedTitle: row.ImportedTitle, OriginalTitle: row.OriginalTitle,
 		AttachmentID: nullUUIDPtr(row.AttachmentID), PosterPath: valueOrEmpty(row.PosterPath),
 		PosterFetchedAt: row.PosterFetchedAt, FetchedAt: row.FetchedAt,
+		DescriptionVersion: descVersion, DescriptionSHA256: row.DescriptionSha256,
 	}, true, nil
 }
 
@@ -241,12 +281,46 @@ func (r *repo) UpdateItem(ctx context.Context, itemID uuid.UUID, u itemUpdate) e
 }
 
 func (r *repo) SaveImport(ctx context.Context, in importSave) error {
+	var descVersion *int32
+	if in.DescriptionVersion != nil {
+		v := int32(*in.DescriptionVersion)
+		descVersion = &v
+	}
 	return r.q.UpsertLookupImport(ctx, sqlc.UpsertLookupImportParams{
 		WorkspaceID: scope.WorkspaceID(ctx), ItemID: in.ItemID, Provider: in.Provider, SourceID: in.SourceID, Type: in.Type,
 		ImportedFields: in.ImportedFields, ImportedTitle: in.ImportedTitle, OriginalTitle: in.OriginalTitle,
 		AttachmentID: in.AttachmentID, PosterPath: in.PosterPath, PosterFetchedAt: in.PosterFetchedAt,
 		PosterRefreshAfter: in.PosterRefreshAfter, PosterExpiresAt: in.PosterExpiresAt,
 		FetchedAt: in.FetchedAt, RefreshAfter: in.RefreshAfter, ExpiresAt: in.ExpiresAt,
+		DescriptionVersion: descVersion, DescriptionSha256: in.DescriptionSHA256, ImportGeneration: int32(in.ImportGeneration), //nolint:gosec // a small constant generation
+	})
+}
+
+func (r *repo) ContentHead(ctx context.Context, itemID uuid.UUID) (contentHead, error) {
+	row, err := r.q.GetLookupContentHead(ctx, itemID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return contentHead{}, nil
+	}
+	if err != nil {
+		return contentHead{}, fmt.Errorf("get content head: %w", err)
+	}
+	return contentHead{Version: int(row.Version), SHA256: row.Sha256, Size: int(row.SizeBytes)}, nil
+}
+
+func (r *repo) InsertContent(ctx context.Context, w contentWrite) error {
+	return r.q.InsertLookupContentVersion(ctx, sqlc.InsertLookupContentVersionParams{
+		ItemID: w.ItemID, Version: int32(w.Version), Body: w.Body, SizeBytes: int32(len(w.Body)), //nolint:gosec // a description is at most 5,000 characters
+		Sha256: w.SHA256, CreatedAt: w.Now, AuthorUserID: w.Author, Origin: w.Origin,
+	})
+}
+
+func (r *repo) PruneContent(ctx context.Context, itemID uuid.UUID, upTo int) error {
+	return r.q.PruneLookupContentVersions(ctx, sqlc.PruneLookupContentVersionsParams{ItemID: itemID, UpTo: int32(upTo)}) //nolint:gosec // a history limit is at most 200
+}
+
+func (r *repo) TouchContent(ctx context.Context, itemID uuid.UUID, now time.Time) error {
+	return r.q.TouchLookupItemContent(ctx, sqlc.TouchLookupItemContentParams{
+		ID: itemID, WorkspaceID: scope.WorkspaceID(ctx), Now: now, CallerUserID: callerID(ctx),
 	})
 }
 

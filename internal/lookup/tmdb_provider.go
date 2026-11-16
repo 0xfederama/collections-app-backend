@@ -45,7 +45,7 @@ func (p tmdbProvider) Details(ctx context.Context, typ, sourceID, language, coun
 	if err != nil {
 		return Details{}, tmdbError(err)
 	}
-	return Details{SourceID: strconv.Itoa(d.ID), Title: d.Title, Fields: d.Metadata, ImagePath: d.PosterPath}, nil
+	return Details{SourceID: strconv.Itoa(d.ID), Title: d.Title, Fields: d.Metadata, ImagePath: d.PosterPath, Synopsis: normalizeSynopsis(d.Overview)}, nil
 }
 
 func (p tmdbProvider) DownloadImage(ctx context.Context, imagePath string) ([]byte, error) {

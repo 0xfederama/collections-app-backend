@@ -56,6 +56,10 @@ func TestOpenLibraryProviderSearchMapsSuggestions(t *testing.T) {
 
 func TestOpenLibraryProviderDetails(t *testing.T) {
 	p := openLibraryProviderFor(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/works/OL27482W.json" {
+			_, _ = w.Write([]byte(`{"description":{"type":"/type/text","value":"A hobbit goes on a journey."}}`))
+			return
+		}
 		if r.URL.Query().Get("q") != "key:/works/OL27482W" {
 			t.Errorf("query = %s", r.URL.RawQuery)
 		}

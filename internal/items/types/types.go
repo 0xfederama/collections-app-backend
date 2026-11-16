@@ -30,6 +30,9 @@ const (
 	maxLinkLen     = 2048
 	maxPlatforms   = 30
 	maxPlatformLen = 60
+	// A text_list (genres, F-028): 1 to maxListEntries names of 1 to maxListEntryLen characters.
+	maxListEntries  = 10
+	maxListEntryLen = 100
 )
 
 var (
@@ -113,6 +116,8 @@ func ruleFor(field Field) rule {
 		return streaming
 	case "stores":
 		return storeKeys
+	case "text_list":
+		return textList
 	default:
 		return func(path string, _ any) outcome { return fail(path, "has an unsupported field type") }
 	}
@@ -304,6 +309,39 @@ func storeKeys(path string, v any) outcome {
 		return fail(path, "%s", err.Error())
 	}
 	return outcome{val: keys}
+}
+
+// textList checks a text_list value (F-028, D-162): an array of 1 to 10 strings, each 1 to 100
+// characters after trimming. Its entries are stored trimmed, in the order given.
+func textList(path string, v any) outcome {
+	var list []string
+	switch raw := v.(type) {
+	case []string:
+		list = raw
+	case []any:
+		list = make([]string, 0, len(raw))
+		for i, item := range raw {
+			s, ok := item.(string)
+			if !ok {
+				return outcome{errs: []apperr.FieldError{{Field: fmt.Sprintf("%s[%d]", path, i), Message: "must be a string"}}}
+			}
+			list = append(list, s)
+		}
+	default:
+		return fail(path, "must be an array of strings")
+	}
+	if n := len(list); n < 1 || n > maxListEntries {
+		return fail(path, "must have 1 to %d entries", maxListEntries)
+	}
+	out := make([]string, 0, len(list))
+	for i, s := range list {
+		s = strings.TrimSpace(s)
+		if n := utf8.RuneCountInString(s); n < 1 || n > maxListEntryLen {
+			return outcome{errs: []apperr.FieldError{{Field: fmt.Sprintf("%s[%d]", path, i), Message: fmt.Sprintf("must be 1 to %d characters", maxListEntryLen)}}}
+		}
+		out = append(out, s)
+	}
+	return outcome{val: out}
 }
 
 func platformList(path string, raw any) ([]string, []apperr.FieldError) {

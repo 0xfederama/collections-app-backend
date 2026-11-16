@@ -4,7 +4,7 @@ package types
 type Field struct {
 	Key   string
 	Label string
-	Type  string // text, number, date, boolean, link, streaming or stores
+	Type  string // text, number, date, boolean, link, streaming, stores or text_list
 }
 
 // Def is one built-in type: the fixed facts every workspace shares. A nil
@@ -31,6 +31,9 @@ var builtins = []Def{
 			{"streaming", "Streaming", "streaming"},
 			{"tmdb_id", "TMDB ID", "number"},
 			{"lookup_disabled", "Disable lookup", "boolean"},
+			{"tmdb_rating", "TMDB score", "number"},
+			{"tmdb_vote_count", "TMDB votes", "number"},
+			{"genres", "Genres", "text_list"},
 		},
 	},
 	{
@@ -45,6 +48,9 @@ var builtins = []Def{
 			{"streaming", "Streaming", "streaming"},
 			{"tmdb_id", "TMDB ID", "number"},
 			{"lookup_disabled", "Disable lookup", "boolean"},
+			{"tmdb_rating", "TMDB score", "number"},
+			{"tmdb_vote_count", "TMDB votes", "number"},
+			{"genres", "Genres", "text_list"},
 		},
 	},
 	{

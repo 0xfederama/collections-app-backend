@@ -9,6 +9,74 @@ import (
 	"github.com/0xfederama/collections-app-backend/internal/items/types"
 )
 
+// isLookupOwned reports the imported fields of movie and TV items that only the TMDB lookup writes
+// (F-028, D-162): the score, its vote count and the genres. A client may not change them. A value it
+// sends equal to the stored one is accepted, and an omitted one keeps the stored value: the web sends
+// the whole metadata object back, and only the values it shows, so a refused or dropped key would
+// break every edit of a scored movie.
+func isLookupOwned(key string) bool {
+	switch key {
+	case "tmdb_rating", "tmdb_vote_count", "genres":
+		return true
+	}
+	return false
+}
+
+// sameJSONValue compares two metadata values by their JSON form (a missing one is null).
+func sameJSONValue(a, b any) bool {
+	ja, errA := json.Marshal(a)
+	jb, errB := json.Marshal(b)
+	return errA == nil && errB == nil && bytes.Equal(ja, jb)
+}
+
+// checkLookupOwned answers 422 for every lookup-owned field of fields that the client sends with a
+// value other than the stored one (stored is nil on create, so any value is refused).
+func checkLookupOwned(fields []types.Field, in, stored map[string]any) error {
+	var errs []apperr.FieldError
+	for _, f := range fields {
+		if !isLookupOwned(f.Key) {
+			continue
+		}
+		v, sent := in[f.Key]
+		if !sent || sameJSONValue(v, stored[f.Key]) {
+			continue
+		}
+		errs = append(errs, apperr.FieldError{Field: "metadata." + f.Key, Message: "is set by the TMDB lookup and cannot be written"})
+	}
+	return validate(errs)
+}
+
+// RejectLookupOwned is checkLookupOwned for a create that carries no stored metadata, for the lookup
+// create path, whose client values would otherwise override the provider's.
+func RejectLookupOwned(fields []types.Field, in map[string]any) error {
+	return checkLookupOwned(fields, in, nil)
+}
+
+// keepLookupOwned copies the stored value of every lookup-owned field the client omitted, so the
+// replacement of the whole object keeps it. It returns in unchanged when there is nothing to keep.
+func keepLookupOwned(fields []types.Field, in, stored map[string]any) map[string]any {
+	var out map[string]any
+	for _, f := range fields {
+		if !isLookupOwned(f.Key) {
+			continue
+		}
+		if _, sent := in[f.Key]; sent || stored[f.Key] == nil {
+			continue
+		}
+		if out == nil {
+			out = make(map[string]any, len(in)+1)
+			for k, v := range in {
+				out[k] = v
+			}
+		}
+		out[f.Key] = stored[f.Key]
+	}
+	if out == nil {
+		return in
+	}
+	return out
+}
+
 // typeFields returns the fields a metadata object is checked against: a list
 // with no type (nil) has none, so only an empty object is valid.
 func typeFields(typ *string, fields []types.Field) []types.Field {
@@ -29,6 +97,10 @@ func ValidateMetadata(typ *string, fields []types.Field, in, stored map[string]a
 	if in == nil {
 		in = map[string]any{}
 	}
+	if err := checkLookupOwned(fields, in, stored); err != nil {
+		return nil, err
+	}
+	in = keepLookupOwned(fields, in, stored)
 	var out map[string]any
 	for _, f := range fields {
 		if f.Type != "streaming" {

@@ -8,7 +8,7 @@ import "github.com/0xfederama/collections-app-backend/internal/items/types"
 type TypeFieldJSON struct {
 	Key      string `json:"key"`
 	Label    string `json:"label"`
-	Type     string `json:"type" enum:"text,number,date,boolean,link,streaming,stores"`
+	Type     string `json:"type" enum:"text,number,date,boolean,link,streaming,stores,text_list"`
 	Position int    `json:"position" minimum:"0"`
 }
 

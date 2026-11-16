@@ -40,8 +40,9 @@ func Query(all []Item, typ *string, defs ListDefs, p ListParams) ([]Item, int, e
 	sortType := ""
 	if !builtinSort(p.Sort) {
 		ft, ok := fieldType(typ, defs.Fields, p.Sort)
-		if !ok || ft == "stores" {
-			// A stores field is neither sortable nor filterable (F-016).
+		if !ok || ft == "stores" || ft == "text_list" {
+			// A stores field is neither sortable nor filterable (F-016); a text_list (genres) is not
+			// sortable either, and its filter is a later rule (F-028).
 			return nil, 0, ErrInvalidSort
 		}
 		sortType = ft

@@ -516,23 +516,23 @@ func strPtr(s string) *string { return &s }
 
 func TestQueryFieldSortAndCombinedFilter(t *testing.T) {
 	rated := "rated"
-	defs := ListDefs{SortMode: SortManual, Fields: []types.Field{{Key: "rating", Type: "number"}}}
+	defs := ListDefs{SortMode: SortManual, Fields: []types.Field{{Key: "score", Type: "number"}}}
 	all := []Item{
-		mkItem(1, "Match ten", `{"rating":10}`),
-		mkItem(2, "Match two", `{"rating":2}`),
-		mkItem(3, "Match five", `{"rating":5}`),
+		mkItem(1, "Match ten", `{"score":10}`),
+		mkItem(2, "Match two", `{"score":2}`),
+		mkItem(3, "Match five", `{"score":5}`),
 		mkItem(4, "Match missing", ""),
 	}
-	page, _ := mustQuery(t, all, &rated, defs, ListParams{Sort: "rating"})
+	page, _ := mustQuery(t, all, &rated, defs, ListParams{Sort: "score"})
 	inOrderTitles(t, page, "Match two", "Match five", "Match ten", "Match missing")
 
-	page, total := mustQuery(t, all, &rated, defs, ListParams{Sort: "rating", Q: "match", FilterField: "rating", FilterMin: "4", FilterMax: "10"})
+	page, total := mustQuery(t, all, &rated, defs, ListParams{Sort: "score", Q: "match", FilterField: "score", FilterMin: "4", FilterMax: "10"})
 	inOrderTitles(t, page, "Match five", "Match ten")
 	if total != 2 {
 		t.Fatalf("combined total = %d", total)
 	}
 
-	if _, _, err := Query(all, &rated, defs, ListParams{FilterField: "rating", FilterMin: "10", FilterMax: "2"}); !errors.Is(err, ErrInvalidFilter) {
+	if _, _, err := Query(all, &rated, defs, ListParams{FilterField: "score", FilterMin: "10", FilterMax: "2"}); !errors.Is(err, ErrInvalidFilter) {
 		t.Fatalf("reversed range: err = %v", err)
 	}
 }

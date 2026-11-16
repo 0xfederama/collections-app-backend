@@ -1,6 +1,7 @@
 package openlibrary
 
 import (
+	"errors"
 	"net/http"
 	"testing"
 )
@@ -38,7 +39,7 @@ func TestF028B2_WorkDescriptionRejectsBadIDAndMocksWithoutRequests(t *testing.T)
 		t.Error("unexpected request")
 	})
 	c := testClient(s, Options{})
-	if _, err := c.WorkDescription(t.Context(), "../etc"); err != ErrInvalid {
+	if _, err := c.WorkDescription(t.Context(), "../etc"); !errors.Is(err, ErrInvalid) {
 		t.Errorf("bad id error = %v, want ErrInvalid", err)
 	}
 	mock := testClient(s, Options{MockFixture: true})

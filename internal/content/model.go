@@ -18,6 +18,13 @@ import (
 // MaxBodyBytes is the largest Markdown body: 1 MiB of UTF-8 bytes (API.md §6).
 const MaxBodyBytes = 1 << 20
 
+// Origins of a content version (F-028, D-162 decision 5). A NULL origin in the table is a user save,
+// including every version written before the column existed.
+const (
+	OriginUser   = "user"
+	OriginLookup = "lookup"
+)
+
 // Content is one version of an item's Markdown. Version 0 is the empty,
 // never-saved content: Body is "" and UpdatedAt is nil.
 type Content struct {
@@ -27,6 +34,8 @@ type Content struct {
 	UpdatedAt *time.Time
 	// AuthorUserID is who saved this version; nil for version 0 and for versions saved before authorship was recorded.
 	AuthorUserID *uuid.UUID
+	// Origin is OriginUser or OriginLookup. Version 0 reads as OriginUser.
+	Origin string
 }
 
 // VersionInfo describes one saved version without its body.
@@ -36,6 +45,8 @@ type VersionInfo struct {
 	CreatedAt time.Time
 	// AuthorUserID is nil when unknown.
 	AuthorUserID *uuid.UUID
+	// Origin is OriginUser or OriginLookup.
+	Origin string
 }
 
 // Stored is a saved version with the SHA-256 of its body, which a save compares

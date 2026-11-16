@@ -52,6 +52,7 @@ func TestRuleForMatchesWholeSegments(t *testing.T) {
 		{"/api/v1/folders/{id}/move", true},
 		{"/api/v1/folders/order", false},
 		{"/api/v1/lists/{id}/items/order", true},
+		{"/api/v1/lists/{id}/genres", true},
 		{"/api/v1/items/{id}/content/versions/{version}", true},
 		{"/api/v1/attachments/{id}/thumbnail", true},
 		{"/api/v1/trash/{batch_id}/restore", true},

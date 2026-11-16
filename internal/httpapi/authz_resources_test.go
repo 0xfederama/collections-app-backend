@@ -164,6 +164,7 @@ var pathCases = []pathCase{
 	{"deleteList", "list", "DELETE", "/api/v1/lists/{id}", "", "res"},
 	{"moveList", "list", "POST", "/api/v1/lists/{id}/move", `{"folder_id":null}`, "res"},
 	{"listItems", "list", "GET", "/api/v1/lists/{id}/items", "", ""},
+	{"listGenres", "list", "GET", "/api/v1/lists/{id}/genres", "", ""},
 	{"createItem", "list", "POST", "/api/v1/lists/{id}/items", `{"title":"hacked"}`, ""},
 	{"reorderListItems", "list", "PUT", "/api/v1/lists/{id}/items/order", `{"ids":[]}`, ""},
 	{"refreshListLookups", "list", "POST", "/api/v1/lists/{id}/lookup-refresh", "", ""},

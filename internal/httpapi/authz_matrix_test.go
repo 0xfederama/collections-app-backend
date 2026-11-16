@@ -67,6 +67,7 @@ var authzOps = map[string]authzOp{
 	"deleteList":             {class: clsPath},
 	"moveList":               {class: clsPath, body: true},
 	"listItems":              {class: clsPath},
+	"listGenres":             {class: clsPath},
 	"createItem":             {class: clsPath},
 	"reorderListItems":       {class: clsPath, body: true},
 	"refreshListLookups":     {class: clsPath},

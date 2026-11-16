@@ -123,7 +123,7 @@ func TestDetailsMetadataAndProviders(t *testing.T) {
 		if r.URL.Path != "/3/movie/42" || !strings.Contains(r.URL.Query().Get("append_to_response"), "credits") {
 			t.Errorf("request = %s?%s", r.URL.Path, r.URL.RawQuery)
 		}
-		_, _ = w.Write([]byte(`{"id":42,"title":"Example","release_date":"2001-01-01","runtime":123,"poster_path":"/poster.jpg","credits":{"crew":[{"job":"Director","name":"One"},{"job":"Director","name":"Two"}]},"external_ids":{"imdb_id":"tt1234567"},"watch/providers":{"results":{"IT":{"link":"https://www.justwatch.com/it/movie/example","flatrate":[{"provider_name":"Netflix","provider_id":1},{"provider_name":"Prime Video","provider_id":2}],"rent":[{"provider_name":"Prime Video","provider_id":2},{"provider_name":"Apple TV","provider_id":3}],"buy":[{"provider_name":"Apple TV","provider_id":3}],"free":[{"provider_name":"Pluto TV","provider_id":4}],"ads":[{"provider_name":"Pluto TV","provider_id":4}]}}}}`))
+		_, _ = w.Write([]byte(`{"id":42,"overview":"A summary.","title":"Example","release_date":"2001-01-01","runtime":123,"poster_path":"/poster.jpg","credits":{"crew":[{"job":"Director","name":"One"},{"job":"Director","name":"Two"}]},"external_ids":{"imdb_id":"tt1234567"},"watch/providers":{"results":{"IT":{"link":"https://www.justwatch.com/it/movie/example","flatrate":[{"provider_name":"Netflix","provider_id":1},{"provider_name":"Prime Video","provider_id":2}],"rent":[{"provider_name":"Prime Video","provider_id":2},{"provider_name":"Apple TV","provider_id":3}],"buy":[{"provider_name":"Apple TV","provider_id":3}],"free":[{"provider_name":"Pluto TV","provider_id":4}],"ads":[{"provider_name":"Pluto TV","provider_id":4}]}}}}`))
 	})
 	d, err := c.Details(context.Background(), "movie", 42, "it-IT", "IT")
 	if err != nil {

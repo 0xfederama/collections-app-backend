@@ -43,6 +43,7 @@ const (
 	mockBookQuery = "[mock] book name"
 	mockWorkID    = "OL900001W"
 	mockCoverID   = 900001
+	mockSynopsis  = "A mock description of the test-stack book."
 )
 
 var (
@@ -264,6 +265,44 @@ func (c *Client) Work(ctx context.Context, workID, language string) (Match, erro
 		}
 	}
 	return Match{}, errors.New("open library returned no such work")
+}
+
+// WorkDescription returns the description of a work from its record (/works/{id}.json), "" when the
+// work has none (F-028). The search API does not return it, so it is a second request, made only by
+// the book lookup.
+func (c *Client) WorkDescription(ctx context.Context, workID string) (string, error) {
+	if !workIDRe.MatchString(workID) {
+		return "", ErrInvalid
+	}
+	if c.Enabled() && c.mockFixture && workID == mockWorkID {
+		return mockSynopsis, nil
+	}
+	if c == nil || c.disabled {
+		return "", ErrDisabled
+	}
+	var work struct {
+		Description json.RawMessage `json:"description"`
+	}
+	if err := c.getJSON(ctx, "/works/"+workID+".json", nil, &work); err != nil {
+		return "", err
+	}
+	return descriptionText(work.Description), nil
+}
+
+// descriptionText reads a work description, which Open Library stores either as a string or as an
+// object {"type", "value"}. Anything else is no description.
+func descriptionText(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var obj struct {
+		Value string `json:"value"`
+	}
+	if json.Unmarshal(raw, &obj) == nil {
+		return obj.Value
+	}
+	return ""
 }
 
 func (c *Client) search(ctx context.Context, q, lang string, limit int) ([]Match, error) {

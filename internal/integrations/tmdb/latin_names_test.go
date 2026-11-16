@@ -12,6 +12,13 @@ import (
 // parameter for search, and counts every request.
 func latinFixture(t *testing.T, responses map[string]string) (*Client, *[]string) {
 	t.Helper()
+	// The fixtures carry an overview, so the English overview fallback (F-028) adds no call: these
+	// tests pin the names and the calls for them.
+	for key, body := range responses {
+		if strings.HasPrefix(key, "/3/movie/") || strings.HasPrefix(key, "/3/tv/") {
+			responses[key] = strings.Replace(body, `{"id"`, `{"overview":"A summary.","id"`, 1)
+		}
+	}
 	var paths []string
 	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		key := r.URL.Path

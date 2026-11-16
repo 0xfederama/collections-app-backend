@@ -37,6 +37,8 @@ var Codes = []Code{
 	{"folder_shared", "A folder shared with others cannot be moved into another folder (409). Stop sharing it first."},
 	{"type_mismatch", "An item would move to a list of another type (409)."},
 	{"duplicate_title", "An item create, rename or move would repeat a title of the target list, ignoring case, accents and outer spaces (409)."},
+	{"invalid_sort", "A list sort the list's type does not offer: `sort=rating` on a list that is not movie or TV (422)."},
+	{"invalid_filter", "A `genre` filter on a list that is not movie or TV, or with values out of range (422). Field filters that do not match their field's type stay `invalid_parameter` (400)."},
 	{"invalid_before_id", "A move's `before_id` is not another active sibling of the moved item in the target: unknown, trashed, of the other kind, not in the target, not visible at the top level, or the item itself (422)."},
 	{"order_stale", "A reorder names an id set that no longer matches the stored one (409)."},
 	{"lookup_disabled", "A lookup was requested but its integration is not configured on this server (503)."},

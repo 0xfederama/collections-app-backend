@@ -38,14 +38,26 @@ func Query(all []Item, typ *string, defs ListDefs, p ListParams) ([]Item, int, e
 		return nil, 0, ErrInvalidSort
 	}
 	sortType := ""
-	if !builtinSort(p.Sort) {
+	switch {
+	case builtinSort(p.Sort):
+	case p.Sort == SortRating:
+		// The score sort is the list's own rule (D-163), not a field sort: movie and TV only.
+		if !movieOrTV(typ) {
+			return nil, 0, ErrRatingSort
+		}
+		sortType = SortRating
+	default:
 		ft, ok := fieldType(typ, defs.Fields, p.Sort)
 		if !ok || ft == "stores" || ft == "text_list" {
 			// A stores field is neither sortable nor filterable (F-016); a text_list (genres) is not
-			// sortable either, and its filter is a later rule (F-028).
+			// sortable either (F-028).
 			return nil, 0, ErrInvalidSort
 		}
 		sortType = ft
+	}
+	genres, err := genreFilter(typ, p.Genres)
+	if err != nil {
+		return nil, 0, err
 	}
 	filterType := ""
 	if p.FilterField != "" {
@@ -76,7 +88,8 @@ func Query(all []Item, typ *string, defs ListDefs, p ListParams) ([]Item, int, e
 		}
 		r := row{item: it, meta: meta}
 		if matches(r, typ, p, filterType) &&
-			(p.Availability == "" || matchesAvailability(meta["streaming"], p.Availability, owned)) {
+			(p.Availability == "" || matchesAvailability(meta["streaming"], p.Availability, owned)) &&
+			matchesGenres(meta["genres"], genres) {
 			rows = append(rows, r)
 		}
 	}
@@ -206,6 +219,10 @@ func sortKeyOf(r row, sortMode, sortType string) sortKey {
 		n, ok := new(big.Rat).SetString(*r.item.Price.Min)
 		return sortKey{null: !ok, num: n}
 	}
+	if sortType == SortRating {
+		n, ok := numberOf(r.meta["tmdb_rating"])
+		return sortKey{null: !ok, num: n}
+	}
 	if sortType == "" {
 		return sortKey{}
 	}
@@ -256,8 +273,23 @@ func compareMain(a, b row, sortMode, sortType string) int {
 			return c
 		}
 		return strings.Compare(strings.ToLower(a.item.Title), strings.ToLower(b.item.Title))
+	case SortRating:
+		return compareRatingDesc(a.key, b.key)
 	}
 	return compareKeys(a.key, b.key, sortType)
+}
+
+// compareRatingDesc orders scores highest first, with unrated items last (F-028, D-163).
+func compareRatingDesc(a, b sortKey) int {
+	switch {
+	case a.null && b.null:
+		return 0
+	case a.null:
+		return 1
+	case b.null:
+		return -1
+	}
+	return b.num.Cmp(a.num)
 }
 
 // compareKeys orders two sort keys ascending with NULLs last. Booleans sort

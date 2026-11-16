@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -680,10 +681,10 @@ func TestNormalizedParams(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.in.Normalized(SortManual)
-			if got != tt.want {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("got %+v, want %+v", got, tt.want)
 			}
-			if again := got.Normalized(SortTitle); again != got {
+			if again := got.Normalized(SortTitle); !reflect.DeepEqual(again, got) {
 				t.Fatalf("not idempotent: %+v", again)
 			}
 		})

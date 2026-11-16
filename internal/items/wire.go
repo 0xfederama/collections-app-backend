@@ -91,6 +91,17 @@ type ItemPageJSON struct {
 	Page httpserver.Page   `json:"page"`
 }
 
+// GenresJSON is the listGenres answer (published as "Genres"). genres is never null.
+type GenresJSON struct {
+	Genres []GenreCountJSON `json:"genres" nullable:"false"`
+}
+
+// GenreCountJSON is one genre of a list and the number of its items that carry it (published as "GenreCount").
+type GenreCountJSON struct {
+	Name  string `json:"name"`
+	Count int    `json:"count" minimum:"0"`
+}
+
 // PriceJSON is a price in responses: always min, max and currency (published as "Price").
 type PriceJSON struct {
 	Currency string  `json:"currency"`

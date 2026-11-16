@@ -43,9 +43,17 @@ func Register(api huma.API, log *slog.Logger, svc *Service, lk Importer) {
 		OperationID: "listItems", Method: http.MethodGet, Path: "/api/v1/lists/{id}/items", Tags: tags,
 		Summary: "List the items of a list",
 		Description: "Sorted by `sort` (default: the list's `sort_mode`), tie-break `id`. `q` filters by title and, on movie lists, director. " +
-			"`price` sorts by `price.min` and is available only when the type allows price. Field filters and `availability` combine with `q` and each other.",
-		Errors: []int{http.StatusBadRequest, http.StatusNotFound},
+			"`price` sorts by `price.min` and is available only when the type allows price. `rating` (movie and TV only) sorts by `tmdb_rating`, " +
+			"highest first, unrated last. Field filters, `availability` and `genre` (movie and TV only) combine with `q` and each other, before paging.",
+		Errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusUnprocessableEntity},
 	}, httpserver.Op(log, h.list))
+	huma.Register(api, huma.Operation{
+		OperationID: "listGenres", Method: http.MethodGet, Path: "/api/v1/lists/{id}/genres", Tags: tags,
+		Summary: "List the genres of a list",
+		Description: "The genres of the active items of a movie or TV list, each with the number of items that carry it, " +
+			"sorted by name (case-insensitive). The first spelling seen is the name. Any other list type answers an empty array.",
+		Errors: []int{http.StatusNotFound},
+	}, httpserver.Op(log, h.genres))
 	huma.Register(api, huma.Operation{
 		OperationID: "createItem", Method: http.MethodPost, Path: "/api/v1/lists/{id}/items", Tags: tags,
 		Summary: "Create an item", DefaultStatus: http.StatusCreated,
@@ -124,15 +132,20 @@ type ItemPageOutput struct {
 // old rule that a present but empty parameter is a 400.
 type ListItemsInput struct {
 	IDParam
-	Sort         string `query:"sort" minLength:"1" maxLength:"32" doc:"Defaults to the list's sort_mode; may be a field key of the list type."`
-	Q            string `query:"q" minLength:"1" maxLength:"200" doc:"Case-insensitive title filter; on movie lists it also matches metadata.director."`
-	FilterField  string `query:"filter_field" minLength:"1" maxLength:"32" doc:"Type field key to filter. Requires value or range parameters matching the field type."`
-	FilterValue  string `query:"filter_value" maxLength:"200" doc:"Text/link substring or boolean (true/false) filter value."`
-	FilterMin    string `query:"filter_min" maxLength:"64" doc:"Inclusive lower bound for number or ISO date field filters."`
-	FilterMax    string `query:"filter_max" maxLength:"64" doc:"Inclusive upper bound for number or ISO date field filters."`
-	Availability string `query:"availability" enum:"available,included" doc:"Movie and TV lists only. available: at least one streaming platform on an owned service (any service when settings.owned_streaming_services is empty). included: the same, counting only platforms not paid per title (subscription, free or ads; no rent or buy)."`
-	Limit        int    `query:"limit" default:"50" minimum:"1" maximum:"200" doc:"Page size."`
-	Offset       int    `query:"offset" default:"0" minimum:"0" doc:"Number of rows to skip."`
+	Sort         string   `query:"sort" minLength:"1" maxLength:"32" doc:"Defaults to the list's sort_mode; may be a field key of the list type."`
+	Q            string   `query:"q" minLength:"1" maxLength:"200" doc:"Case-insensitive title filter; on movie lists it also matches metadata.director."`
+	FilterField  string   `query:"filter_field" minLength:"1" maxLength:"32" doc:"Type field key to filter. Requires value or range parameters matching the field type."`
+	FilterValue  string   `query:"filter_value" maxLength:"200" doc:"Text/link substring or boolean (true/false) filter value."`
+	FilterMin    string   `query:"filter_min" maxLength:"64" doc:"Inclusive lower bound for number or ISO date field filters."`
+	FilterMax    string   `query:"filter_max" maxLength:"64" doc:"Inclusive upper bound for number or ISO date field filters."`
+	Availability string   `query:"availability" enum:"available,included" doc:"Movie and TV lists only. available: at least one streaming platform on an owned service (any service when settings.owned_streaming_services is empty). included: the same, counting only platforms not paid per title (subscription, free or ads; no rent or buy)."`
+	Genre        []string `query:"genre,explode" doc:"Movie and TV lists only. Repeatable, 1 to 10 values of at most 100 characters: keeps the items with any of them (trimmed, case-insensitive). 422 invalid_filter otherwise."`
+	Limit        int      `query:"limit" default:"50" minimum:"1" maximum:"200" doc:"Page size."`
+	Offset       int      `query:"offset" default:"0" minimum:"0" doc:"Number of rows to skip."`
+
+	// emptyGenre is set by Resolve when a genre parameter is present but empty: a 422 invalid_filter
+	// (D-163), not the 400 of the other parameters.
+	emptyGenre bool
 }
 
 // emptyRejected are the query parameters the old spec rejected when present and empty.
@@ -149,13 +162,22 @@ func (in *ListItemsInput) Resolve(ctx huma.Context) []error {
 			errs = append(errs, &huma.ErrorDetail{Location: "query." + name, Message: "must not be empty"})
 		}
 	}
+	for _, v := range query["genre"] {
+		if v == "" {
+			in.emptyGenre = true
+		}
+	}
 	return errs
 }
 
 func (h *handler) list(ctx context.Context, in *ListItemsInput) (*ItemPageOutput, error) {
+	if in.emptyGenre {
+		return nil, queryProblem(ErrInvalidGenre)
+	}
 	page, err := h.svc.List(ctx, in.ID, ListParams{
 		Sort: in.Sort, Q: in.Q, FilterField: in.FilterField, FilterValue: in.FilterValue,
-		FilterMin: in.FilterMin, FilterMax: in.FilterMax, Availability: in.Availability, Limit: in.Limit, Offset: in.Offset,
+		FilterMin: in.FilterMin, FilterMax: in.FilterMax, Availability: in.Availability, Genres: in.Genre,
+		Limit: in.Limit, Offset: in.Offset,
 	})
 	if err != nil {
 		return nil, queryProblem(err)
@@ -180,8 +202,36 @@ func queryProblem(err error) error {
 	case errors.Is(err, ErrInvalidFilter):
 		return problem.New(http.StatusBadRequest, "invalid_parameter", "Invalid parameter",
 			"field filter parameters must match a sortable field's type.")
+	case errors.Is(err, ErrRatingSort):
+		return problem.New(http.StatusUnprocessableEntity, "invalid_sort", "Invalid sort",
+			"sort=rating is only available on movie and TV lists.")
+	case errors.Is(err, ErrInvalidGenre):
+		return problem.New(http.StatusUnprocessableEntity, "invalid_filter", "Invalid filter",
+			"genre is only available on movie and TV lists, with 1 to 10 values of at most 100 characters.")
 	}
 	return err
+}
+
+// ListGenresInput is the listGenres path.
+type ListGenresInput struct {
+	IDParam
+}
+
+// GenresOutput is the listGenres answer.
+type GenresOutput struct {
+	Body GenresJSON
+}
+
+func (h *handler) genres(ctx context.Context, in *ListGenresInput) (*GenresOutput, error) {
+	gs, err := h.svc.Genres(ctx, in.ID)
+	if err != nil {
+		return nil, queryProblem(err)
+	}
+	out := GenresJSON{Genres: make([]GenreCountJSON, 0, len(gs))}
+	for _, g := range gs {
+		out.Genres = append(out.Genres, GenreCountJSON{Name: g.Name, Count: g.Count})
+	}
+	return &GenresOutput{Body: out}, nil
 }
 
 // CreateItemInput is the createItem path and body.

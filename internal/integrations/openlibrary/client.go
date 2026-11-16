@@ -51,6 +51,9 @@ var (
 	ErrInvalid  = errors.New("invalid Open Library request")
 	// ErrNoCover means the work has no cover (the covers API answers 404 for default=false).
 	ErrNoCover = errors.New("open library has no cover")
+	// ErrRateLimited is returned for an HTTP 429 (the client has also paused itself). The lookup
+	// backfill stops its pass on it (D-164).
+	ErrRateLimited = errors.New("open library rate limit exceeded")
 
 	workIDRe  = regexp.MustCompile(`^OL[0-9]+W$`)
 	workKeyRe = regexp.MustCompile(`^/works/(OL[0-9]+W)$`)
@@ -396,7 +399,7 @@ func (c *Client) coverOnce(ctx context.Context, rawURL string) ([]byte, bool, er
 		return nil, false, ErrNoCover
 	case response.StatusCode == http.StatusTooManyRequests:
 		c.note429(response.Header.Get("Retry-After"))
-		return nil, false, errors.New("open library rate limit exceeded")
+		return nil, false, ErrRateLimited
 	case response.StatusCode < 200 || response.StatusCode >= 300:
 		return nil, response.StatusCode >= 500, fmt.Errorf("open library cover request failed (HTTP %d)", response.StatusCode)
 	}
@@ -461,7 +464,7 @@ func (c *Client) jsonOnce(ctx context.Context, rawURL string, out any) (bool, er
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusTooManyRequests {
 		c.note429(response.Header.Get("Retry-After"))
-		return false, errors.New("open library rate limit exceeded")
+		return false, ErrRateLimited
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return response.StatusCode >= 500, fmt.Errorf("open library request failed (HTTP %d)", response.StatusCode)

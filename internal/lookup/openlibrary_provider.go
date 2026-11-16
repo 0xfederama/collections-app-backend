@@ -104,6 +104,8 @@ func openLibraryError(err error) error {
 	switch {
 	case errors.Is(err, openlibrary.ErrDisabled):
 		return ErrDisabled
+	case errors.Is(err, openlibrary.ErrRateLimited):
+		return ErrProviderRateLimited
 	case errors.Is(err, openlibrary.ErrNoCover):
 		return ErrNoImage
 	}

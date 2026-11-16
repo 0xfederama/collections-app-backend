@@ -242,6 +242,55 @@ func (f *fakeRepo) TouchContent(_ context.Context, _ uuid.UUID, _ time.Time) err
 	return nil
 }
 
+// backfillDue mirrors ListBackfillItems: the imports below the generation, of items not trashed and not
+// lookup_disabled, oldest fetch first.
+func (f *fakeRepo) backfillDue(generation int) []backfillItem {
+	type due struct {
+		item backfillItem
+		at   time.Time
+	}
+	var out []due
+	for id, row := range f.imports {
+		if row.ImportGeneration >= generation {
+			continue
+		}
+		it := f.items[id]
+		if it.deleted {
+			continue
+		}
+		var metadata map[string]any
+		if json.Unmarshal(it.metadata, &metadata) == nil {
+			if disabled, _ := metadata["lookup_disabled"].(bool); disabled {
+				continue
+			}
+		}
+		out = append(out, due{item: backfillItem{ItemID: id, ItemVersion: it.version, Provider: row.Provider}, at: row.FetchedAt})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].at.Equal(out[j].at) {
+			return out[i].at.Before(out[j].at)
+		}
+		return out[i].item.ItemID.String() < out[j].item.ItemID.String()
+	})
+	items := make([]backfillItem, 0, len(out))
+	for _, d := range out {
+		items = append(items, d.item)
+	}
+	return items
+}
+
+func (f *fakeRepo) BackfillItems(_ context.Context, generation int, limit int32) ([]backfillItem, error) {
+	items := f.backfillDue(generation)
+	if len(items) > int(limit) {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+func (f *fakeRepo) BackfillRemaining(_ context.Context, generation int) (int, error) {
+	return len(f.backfillDue(generation)), nil
+}
+
 func (f *fakeRepo) InsertAttachment(_ context.Context, a images.Attachment, _ time.Time) error {
 	f.write("insert attachment")
 	f.attachments[a.ID] = a

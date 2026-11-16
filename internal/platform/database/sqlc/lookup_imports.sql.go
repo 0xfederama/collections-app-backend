@@ -13,6 +13,31 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countBackfillItems = `-- name: CountBackfillItems :one
+SELECT count(*)
+FROM lookup_imports t
+JOIN items i ON i.id = t.item_id AND i.workspace_id = t.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
+WHERE t.workspace_id = $1
+  AND t.import_generation < $2
+  AND i.deleted_at IS NULL
+  AND l.deleted_at IS NULL
+  AND i.metadata -> 'lookup_disabled' IS DISTINCT FROM 'true'::jsonb
+`
+
+type CountBackfillItemsParams struct {
+	WorkspaceID uuid.UUID
+	Generation  int32
+}
+
+// The eligible items the backfill still has to reach (the same filter as ListBackfillItems, unlimited).
+func (q *Queries) CountBackfillItems(ctx context.Context, arg CountBackfillItemsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countBackfillItems, arg.WorkspaceID, arg.Generation)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getLookupContentHead = `-- name: GetLookupContentHead :one
 SELECT version, sha256, size_bytes FROM item_content_versions
 WHERE item_id = $1
@@ -194,6 +219,54 @@ func (q *Queries) InsertLookupItem(ctx context.Context, arg InsertLookupItemPara
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const listBackfillItems = `-- name: ListBackfillItems :many
+SELECT i.id AS item_id, i.version AS item_version, t.provider
+FROM lookup_imports t
+JOIN items i ON i.id = t.item_id AND i.workspace_id = t.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
+WHERE t.workspace_id = $1
+  AND t.import_generation < $2
+  AND i.deleted_at IS NULL
+  AND l.deleted_at IS NULL
+  AND i.metadata -> 'lookup_disabled' IS DISTINCT FROM 'true'::jsonb
+ORDER BY t.fetched_at, i.id
+LIMIT $3
+`
+
+type ListBackfillItemsParams struct {
+	WorkspaceID uuid.UUID
+	Generation  int32
+	BatchLimit  int32
+}
+
+type ListBackfillItemsRow struct {
+	ItemID      uuid.UUID
+	ItemVersion int32
+	Provider    string
+}
+
+// The generic lookup backfill (D-164): provider-linked items whose import an older generation wrote (import_generation
+// below @generation), oldest fetch first. Trashed and lookup_disabled items are skipped and stay below the generation.
+func (q *Queries) ListBackfillItems(ctx context.Context, arg ListBackfillItemsParams) ([]ListBackfillItemsRow, error) {
+	rows, err := q.db.Query(ctx, listBackfillItems, arg.WorkspaceID, arg.Generation, arg.BatchLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBackfillItemsRow{}
+	for rows.Next() {
+		var i ListBackfillItemsRow
+		if err := rows.Scan(&i.ItemID, &i.ItemVersion, &i.Provider); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listLookupItems = `-- name: ListLookupItems :many

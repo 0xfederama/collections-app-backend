@@ -122,3 +122,30 @@ WHERE item_id = @item_id AND version <= @up_to;
 -- A description write bumps updated_at like a content save does, but not items.version.
 UPDATE items SET updated_at = @now, updated_by_user_id = COALESCE(sqlc.narg(caller_user_id)::uuid, updated_by_user_id)
 WHERE id = @id AND workspace_id = @workspace_id AND deleted_at IS NULL;
+
+-- name: ListBackfillItems :many
+-- The generic lookup backfill (D-164): provider-linked items whose import an older generation wrote (import_generation
+-- below @generation), oldest fetch first. Trashed and lookup_disabled items are skipped and stay below the generation.
+SELECT i.id AS item_id, i.version AS item_version, t.provider
+FROM lookup_imports t
+JOIN items i ON i.id = t.item_id AND i.workspace_id = t.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
+WHERE t.workspace_id = @workspace_id
+  AND t.import_generation < @generation
+  AND i.deleted_at IS NULL
+  AND l.deleted_at IS NULL
+  AND i.metadata -> 'lookup_disabled' IS DISTINCT FROM 'true'::jsonb
+ORDER BY t.fetched_at, i.id
+LIMIT @batch_limit;
+
+-- name: CountBackfillItems :one
+-- The eligible items the backfill still has to reach (the same filter as ListBackfillItems, unlimited).
+SELECT count(*)
+FROM lookup_imports t
+JOIN items i ON i.id = t.item_id AND i.workspace_id = t.workspace_id
+JOIN lists l ON l.id = i.list_id AND l.workspace_id = i.workspace_id
+WHERE t.workspace_id = @workspace_id
+  AND t.import_generation < @generation
+  AND i.deleted_at IS NULL
+  AND l.deleted_at IS NULL
+  AND i.metadata -> 'lookup_disabled' IS DISTINCT FROM 'true'::jsonb;

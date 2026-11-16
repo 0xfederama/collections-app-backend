@@ -1,6 +1,7 @@
 package lookup
 
 import (
+	"errors"
 	"net/http"
 	"reflect"
 	"strings"
@@ -57,5 +58,16 @@ func TestF028B2_OpenLibraryDescriptionFailureKeepsTheBook(t *testing.T) {
 	}
 	if d.Title != "The Hobbit" || d.Synopsis != "" || d.Fields["author"] != "J.R.R. Tolkien" {
 		t.Errorf("details = %+v", d)
+	}
+}
+
+// An Open Library 429 reaches the lookup as a rate limit, which stops the backfill pass (D-164).
+func TestB4_OpenLibraryRateLimitIsAProviderRateLimit(t *testing.T) {
+	p := openLibraryProviderFor(t, func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "slow down", http.StatusTooManyRequests)
+	}, false)
+	_, err := p.Details(t.Context(), "book", "OL27482W", "en-US", "")
+	if !errors.Is(err, ErrProviderRateLimited) {
+		t.Fatalf("error = %v, want ErrProviderRateLimited", err)
 	}
 }

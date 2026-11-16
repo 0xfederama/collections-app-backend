@@ -75,6 +75,19 @@ type Repo interface {
 	PruneContent(ctx context.Context, itemID uuid.UUID, upTo int) error
 	// TouchContent bumps the item's updated_at, not its version, as a content save does.
 	TouchContent(ctx context.Context, itemID uuid.UUID, now time.Time) error
+
+	// BackfillItems lists up to limit provider-linked items whose import an older generation wrote,
+	// oldest fetch first; trashed and lookup_disabled items are skipped (D-164).
+	BackfillItems(ctx context.Context, generation int, limit int32) ([]backfillItem, error)
+	// BackfillRemaining counts the items BackfillItems reaches, without the limit.
+	BackfillRemaining(ctx context.Context, generation int) (int, error)
+}
+
+// backfillItem is an item the backfill still has to re-read, with the provider its import came from.
+type backfillItem struct {
+	ItemID      uuid.UUID
+	ItemVersion int
+	Provider    string
 }
 
 // contentHead is the current content of an item as the description rules read it.
@@ -315,6 +328,30 @@ func (r *repo) InsertContent(ctx context.Context, w contentWrite) error {
 
 func (r *repo) PruneContent(ctx context.Context, itemID uuid.UUID, upTo int) error {
 	return r.q.PruneLookupContentVersions(ctx, sqlc.PruneLookupContentVersionsParams{ItemID: itemID, UpTo: int32(upTo)}) //nolint:gosec // a history limit is at most 200
+}
+
+func (r *repo) BackfillItems(ctx context.Context, generation int, limit int32) ([]backfillItem, error) {
+	rows, err := r.q.ListBackfillItems(ctx, sqlc.ListBackfillItemsParams{
+		WorkspaceID: scope.WorkspaceID(ctx), Generation: int32(generation), BatchLimit: limit, //nolint:gosec // a small constant generation
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list backfill items: %w", err)
+	}
+	out := make([]backfillItem, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, backfillItem{ItemID: row.ItemID, ItemVersion: int(row.ItemVersion), Provider: row.Provider})
+	}
+	return out, nil
+}
+
+func (r *repo) BackfillRemaining(ctx context.Context, generation int) (int, error) {
+	n, err := r.q.CountBackfillItems(ctx, sqlc.CountBackfillItemsParams{
+		WorkspaceID: scope.WorkspaceID(ctx), Generation: int32(generation), //nolint:gosec // a small constant generation
+	})
+	if err != nil {
+		return 0, fmt.Errorf("count backfill items: %w", err)
+	}
+	return int(n), nil
 }
 
 func (r *repo) TouchContent(ctx context.Context, itemID uuid.UUID, now time.Time) error {

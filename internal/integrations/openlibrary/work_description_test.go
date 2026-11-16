@@ -59,3 +59,14 @@ func TestF028B2_WorkDescriptionFailureIsAnError(t *testing.T) {
 		t.Fatal("a 404 work record was not an error")
 	}
 }
+
+// An HTTP 429 is ErrRateLimited, so the lookup backfill can stop its pass on it (D-164).
+func TestB4_WorkDescriptionRateLimitIsErrRateLimited(t *testing.T) {
+	s, _ := fakeServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "slow down", http.StatusTooManyRequests)
+	})
+	_, err := testClient(s, Options{}).WorkDescription(t.Context(), "OL27482W")
+	if !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("error = %v, want ErrRateLimited", err)
+	}
+}

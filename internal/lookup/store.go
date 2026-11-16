@@ -33,6 +33,11 @@ type DBStore struct {
 	// retryAt holds the items whose weekly refresh failed, until when they wait
 	// (see maintenance.go). It is in memory on purpose.
 	retryAt map[uuid.UUID]time.Time
+	// backfillRetryAt is the same for the backfill pass (backfill.go). It has its own map because
+	// that pass runs on its own goroutine.
+	backfillRetryAt map[uuid.UUID]time.Time
+	// backfillDone is set once a pass found nothing left, so the completion is logged once.
+	backfillDone bool
 }
 
 var _ Store = (*DBStore)(nil)
@@ -43,7 +48,10 @@ func NewStore(db DB, fileStore storage.FileStore, clk clock.Clock, itemSvc *item
 }
 
 func newStore(repo Repo, fileStore storage.FileStore, clk clock.Clock, itemSvc itemReader, log *slog.Logger, workspaceID uuid.UUID) *DBStore {
-	return &DBStore{repo: repo, store: fileStore, clock: clk, items: itemSvc, log: log, workspaceID: workspaceID, retryAt: map[uuid.UUID]time.Time{}}
+	return &DBStore{
+		repo: repo, store: fileStore, clock: clk, items: itemSvc, log: log, workspaceID: workspaceID,
+		retryAt: map[uuid.UUID]time.Time{}, backfillRetryAt: map[uuid.UUID]time.Time{},
+	}
 }
 
 // ListType returns the type of an active list, "" for a list with no type.

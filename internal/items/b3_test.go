@@ -3,6 +3,7 @@ package items
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -87,7 +88,7 @@ func TestF028B3_GenreFilterAnyOfCaseInsensitiveAndTrimmed(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			page, total := mustQuery(t, all, &movie, ratedDefs, ListParams{Genres: tc.genres})
-			if !reflect.DeepEqual(nums(page), tc.want) && !(len(tc.want) == 0 && len(page) == 0) || total != len(tc.want) {
+			if !slices.Equal(nums(page), tc.want) || total != len(tc.want) {
 				t.Errorf("genre %v = %v (total %d), want %v", tc.genres, nums(page), total, tc.want)
 			}
 		})

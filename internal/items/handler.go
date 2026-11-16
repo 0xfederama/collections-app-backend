@@ -229,7 +229,7 @@ func (h *handler) genres(ctx context.Context, in *ListGenresInput) (*GenresOutpu
 	}
 	out := GenresJSON{Genres: make([]GenreCountJSON, 0, len(gs))}
 	for _, g := range gs {
-		out.Genres = append(out.Genres, GenreCountJSON{Name: g.Name, Count: g.Count})
+		out.Genres = append(out.Genres, GenreCountJSON(g))
 	}
 	return &GenresOutput{Body: out}, nil
 }
